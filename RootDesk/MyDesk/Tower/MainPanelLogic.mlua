@@ -1,0 +1,713 @@
+@Logic
+script MainPanelLogic extends Logic
+
+	-- MainPanel.ui 바인딩 (UIBuilder injectBindings로 주입). 탭: 캐릭터 / 특성 / 장비 / 스킬
+	property Entity panelRoot = "9f053eab-de7e-4938-8a4b-4b8b5c6d5f05"
+	property ButtonComponent tabInfo = "0dd3dcfd-ac7f-4cd2-915f-65e2b7132e36"
+	property ButtonComponent tabStat = "ac433eb4-9bef-4b9a-a50c-79b4ec5a95f4"
+	property ButtonComponent tabSkill = "f85b81b5-c148-4f6a-872d-273f8923367a"
+	-- 특성 탭 (캐릭터와 장비 사이)
+	property ButtonComponent tabTrait = "c4267683-1a80-432c-8eb7-3217734bae3a"
+	property Entity contentTrait = "a7038d4d-8c16-466a-898a-2310fd8f9f8e"
+	property Entity contentInfo = "2d769f0f-db05-42b5-aa1b-0a7f687a8f98"
+	property Entity contentStat = "8c118952-9f30-4a35-906d-a40e6f65621a"
+	property Entity contentSkill = "1d04a710-976c-4eff-8daf-c2345a6567a2"
+	property TextGUIRendererComponent infoText = "572f3c2b-6003-426b-8d3b-bb36e0b96f62"
+	property TextGUIRendererComponent equipMesoText = "cc7d4c9b-588f-460d-b61d-b0f49032cd68"
+	property TextGUIRendererComponent equipMsgText = "c49dd84a-9bb3-493f-aee8-7d5b5e7c7c72"
+	-- 탭 바로 아래 경험치 바 (SpriteGUIRenderer Filled + FillAmount)
+	property SpriteGUIRendererComponent expFill = "ef0fbf00-5db1-46cf-bba5-b897f8f34146"
+	property TextGUIRendererComponent expText = "23323398-5c89-4684-9767-3f62a3fcf40f"
+	property number ExpFillSpeed = 4
+	-- 스킬 탭 (스킬석 수치 / 메시지 / 스크롤 목록 줄은 경로로 찾는다)
+	property TextGUIRendererComponent stoneText = "4837108d-cbf5-4524-ad27-1e0fb967356b"
+	property TextGUIRendererComponent skillMsgText = "47f3c450-6aca-4725-b08b-5597dc4f672c"
+	property string SkillRowPath = "/ui/MainPanel/Panel/Content/Skill/List/Row_"
+	property string SkillTableName = "SkillTable"
+	-- 강화 결과 이펙트: 패널 맨 앞 레이어의 이펙트 하나를 강화한 줄 위치로 옮겨 재생 (다른 줄에 가려지지 않게)
+	property Entity fxEntity = "5b2c879d-ef15-41d8-99f8-3c6887235908"
+	-- 강화 이펙트 칸 2개를 번갈아 사용 (연속 강화 시 이전 이펙트는 즉시 숨기고 새 칸에서 처음부터 재생)
+	property Entity fxEntity2 = "6633714e-ae90-4233-9936-e6cc0a6aa6c9"
+	property UITransformComponent fxLayer = "370599f5-f2d2-43bc-b0b5-b3b90a21571a"
+	-- 강화 결과 이펙트 (midnightChaser 메시지: "SUCCESS!" / "FAILED" 애니메이션)
+	property string FxSuccessRUID = "6d5a507b49764376bc71df113c5d7cf2"
+	property string FxFailRUID = "9431812f102a414f81bd677701623ce1"
+	-- 애니메이션 마지막 프레임(SpriteGUIAnimPlayerEndEvent)에서 바로 끄고, 이벤트가 안 오면 이 시간 뒤에 끈다
+	property number FxDuration = 4
+	-- 클립 피봇 보정 (SUCCESS 클립은 위·오른쪽으로 치우쳐 그려짐)
+	property Vector2 FxSuccessOffset = Vector2(-24, -51)
+	property Vector2 FxFailOffset = Vector2(0, 0)
+	-- 실패 이펙트 크기 배율 (성공은 1)
+	property number FxFailScale = 0.7
+	property string EquipRowPath = "/ui/MainPanel/Panel/Content/Stat/Row_"
+	property string EquipTableName = "EquipTable"
+
+	-- 가로 화면: 왼쪽 세로 탭 + 밀려나오는 패널, 하단 정보 바
+	property Entity sideTabsRoot = "78968938-e653-491e-af51-62db15224f47"
+	property Entity bottomBarRoot = "4ab4771e-72ad-49e8-b2b2-c9ea76400d03"
+	property TextGUIRendererComponent headerText = "48f228bd-84b4-47a8-b735-2d072270df02"
+	property ButtonComponent closeBtn = "c1816458-ff21-486a-bf38-506b211175fe"
+	property TextGUIRendererComponent levelText = "88eb395c-bbe2-471b-b55d-ea29294df8c9"
+	property TextGUIRendererComponent barMesoText = "559357e6-7881-47ee-a5d8-68a954cd7ffd"
+	property TextGUIRendererComponent barJobText = "b78837c4-6c88-45ed-b60b-e37a27b8214b"
+	-- [중단하기] 버튼(왼쪽 위) + 확인 창 (ConfirmUI.ui)
+	property ButtonComponent giveUpBtn = "244905ea-1a47-4f61-9d1f-8c6e7a524dab"
+	property Entity confirmRoot = "fae5000b-5bd0-464b-9165-2befcf82d648"
+	property ButtonComponent confirmYes = "ea6d0389-755b-4f29-9dfb-3ae535f0c01f"
+	property ButtonComponent confirmNo = "c3cc6611-3acf-4571-b390-8c9949e28ca2"
+	-- 패널 위치(1920 기준 왼쪽에서 x): 열림 / 닫힘, 미끄러지는 시간(초). 실제 화면 폭에 맞춰 ApplyScreenLayout이 보정
+	property number PanelOpenX = 154
+	property number PanelClosedX = -1200
+	property number SlideTime = 0.25
+	-- 패널이 열리면 전투 카메라를 이만큼(월드 단위) 왼쪽으로 옮겨 전투가 남은 화면 가운데에 보이게
+	property number PanelCamShift = 2.0
+	-- 패널이 열리면 층 이름을 이만큼(px) 오른쪽으로
+	property number PanelFloorTextShift = 420
+
+	property Color TabOnColor = Color(1, 1, 1, 1)
+	property Color TabOffColor = Color(0.43, 0.43, 0.46, 1)
+	property Color BuyOnColor = Color(1, 1, 1, 1)
+	property Color BuyOffColor = Color(0.42, 0.42, 0.46, 1)
+
+	@HideFromInspector
+	property integer SelectedTab = 1
+	@HideFromInspector
+	property table clickHandlers = {}
+	@HideFromInspector
+	property integer LastEnhanceSeq = 0
+	@HideFromInspector
+	property number MsgTimer = 0
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 탭·강화 버튼 연결 후 캐릭터 정보 탭을 기본으로 연다.
+		self.clickHandlers = {}
+		local tabs = { self.tabInfo, self.tabTrait, self.tabStat, self.tabSkill }
+		for i, tab in ipairs(tabs) do
+			local index = i
+			self:Bind(tab, function() self:SelectTab(index) end)
+		end
+		self:SetupEquipRows()
+		self:SetupSkillRows()
+		self._T.fxTimers = {}
+		self:SetupFxEndEvents()
+		self:Bind(self.closeBtn, function() self:SetPanelOpen(false) end)
+		self:Bind(self.giveUpBtn, function() self:ShowConfirm(true) end)
+		self:Bind(self.confirmNo, function() self:ShowConfirm(false) end)
+		self:Bind(self.confirmYes, function() self:ConfirmGiveUp() end)
+		self:ShowConfirm(false)
+		self._T.screenKey = ""
+		self:ApplyScreenLayout()
+		-- 처음엔 패널을 닫아 둔 상태(캐릭터 탭 내용만 준비)
+		self._T.open = false
+		self:ShowTab(1)
+		if isvalid(self.panelRoot) then
+			local rt = self.panelRoot.UITransformComponent
+			rt.anchoredPosition = Vector2(self:ClosedX(), rt.anchoredPosition.y)
+			self.panelRoot:SetEnable(false)
+		end
+		self._T.slideT = 1
+		log("[VRF] MainPanelLogic begin handlers=" .. tostring(#self.clickHandlers))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(ButtonComponent button, any fn)
+		-- 버튼 클릭 이벤트 연결 + 해제용 기록.
+		if not isvalid(button) then return end
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then
+				if rec.isFx then
+					rec.entity:DisconnectEvent(SpriteGUIAnimPlayerEndEvent, rec.eventHandler)
+				else
+					rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler)
+				end
+			end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 탑 진행 매니저 (로비에서는 nil).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetupEquipRows()
+		-- 장비 테이블을 읽고, 부위별 줄(아이콘/이름/능력치/버튼)을 찾아 버튼을 연결한다.
+		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Shoes", "Cape" }
+		self._T.statLabel = { Weapon = { "공격력 +", "" }, Cap = { "체력 +", "" }, Coat = { "방어력 +", "" }, Glove = { "크리티컬 확률 +", "%" }, Shoes = { "크리티컬 데미지 +", "%" }, Cape = { "명중률 +", "%" } }
+		self._T.slotName = { Weapon = "무기", Cap = "투구", Coat = "옷", Glove = "장갑", Shoes = "신발", Cape = "망토" }
+		self._T.equip = {}
+		self._T.rows = {}
+		self._T.shownTier = {}
+		for _, slot in ipairs(self._T.slots) do self._T.equip[slot] = {} end
+		local ds = _DataService:GetTable(self.EquipTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local slot = ds:GetCell(i, "Slot")
+				if self._T.equip[slot] ~= nil then
+					self._T.equip[slot][tonumber(ds:GetCell(i, "Tier")) or 1] = {
+						name = ds:GetCell(i, "Name"), ruid = ds:GetCell(i, "ItemRUID"),
+						value = tonumber(ds:GetCell(i, "StatValue")) or 0, req = tonumber(ds:GetCell(i, "ReqLevel")) or 0,
+					}
+				end
+			end
+		end
+		-- 부위 해금 조건 (최고 기록 층)
+		self._T.unlockFloor = {}
+		local slotDs = _DataService:GetTable("EquipSlotTable")
+		if slotDs ~= nil then
+			for i = 1, slotDs:GetRowCount() do
+				self._T.unlockFloor[slotDs:GetCell(i, "Slot")] = tonumber(slotDs:GetCell(i, "UnlockBestFloor")) or 0
+			end
+		end
+		for _, slot in ipairs(self._T.slots) do
+			local base = self.EquipRowPath .. slot
+			local row = {
+				icon = _EntityService:GetEntityByPath(base .. "/Icon"),
+				name = _EntityService:GetEntityByPath(base .. "/Name"),
+				stat = _EntityService:GetEntityByPath(base .. "/Stat"),
+				btn = _EntityService:GetEntityByPath(base .. "/Btn"),
+				lock = _EntityService:GetEntityByPath(base .. "/Lock"),
+				lockText = _EntityService:GetEntityByPath(base .. "/Lock/Text"),
+			}
+			self._T.rows[slot] = row
+			if isvalid(row.btn) then
+				local s = slot
+				local h = row.btn:ConnectEvent(ButtonClickEvent, function() self:RequestEnhance(s) end)
+				table.insert(self.clickHandlers, { entity = row.btn, eventHandler = h })
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetupSkillRows()
+		-- 스킬 테이블을 읽고, 스크롤 목록의 스킬 줄(이름/설명/버튼/잠금/이펙트)을 찾아 강화 버튼을 연결한다.
+		self._T.skills = {}
+		self._T.skillRows = {}
+		local ds = _DataService:GetTable(self.SkillTableName)
+		if ds == nil then return end
+		for i = 1, ds:GetRowCount() do
+			local s = {
+				id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), unlock = tonumber(ds:GetCell(i, "UnlockLevel")) or 1,
+				base = tonumber(ds:GetCell(i, "Base")) or 0, per = tonumber(ds:GetCell(i, "PerLv")) or 0, desc = ds:GetCell(i, "Desc"),
+			}
+			table.insert(self._T.skills, s)
+			local base = self.SkillRowPath .. s.id
+			local row = {
+				name = _EntityService:GetEntityByPath(base .. "/Name"),
+				desc = _EntityService:GetEntityByPath(base .. "/Desc"),
+				btn = _EntityService:GetEntityByPath(base .. "/Btn"),
+				lock = _EntityService:GetEntityByPath(base .. "/Lock"),
+			}
+			self._T.skillRows[s.id] = row
+			if isvalid(row.btn) then
+				local id = s.id
+				local h = row.btn:ConnectEvent(ButtonClickEvent, function() self:RequestSkillEnhance(id) end)
+				table.insert(self.clickHandlers, { entity = row.btn, eventHandler = h })
+			end
+		end
+		log("[VRF] skill rows=" .. tostring(#self._T.skills))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RequestSkillEnhance(string skillId)
+		-- 서버에 스킬 강화 요청 (스킬석·확률 검증은 서버).
+		local mgr = self:GetManager()
+		if mgr ~= nil then mgr:RequestSkillEnhance(skillId) end
+		log("[VRF] skill enhance clicked " .. skillId)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FormatSkillValue(number v)
+		-- 소수 첫째 자리까지, 정수면 정수로.
+		if math.abs(v - math.floor(v)) < 0.001 then return tostring(math.floor(v)) end
+		return string.format("%.1f", v)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateSkillTab(Component mgr)
+		-- 스킬석 수치와 스킬별 레벨/효과/강화 버튼/잠금 상태를 갱신한다.
+		if isvalid(self.stoneText) then self.stoneText.Text = ": " .. tostring(mgr.Stones) end
+		for _, s in ipairs(self._T.skills) do
+			local row = self._T.skillRows[s.id]
+			local lv = mgr.SkillLv[s.id] or 0
+			local locked = lv <= 0
+			if isvalid(row.lock) and row.lock.Enable ~= locked then row.lock:SetEnable(locked) end
+			if isvalid(row.name) then
+				local label = s.name
+				if lv > 0 then label = s.name .. "  Lv." .. tostring(lv) end
+				row.name.TextGUIRendererComponent.Text = label
+			end
+			if isvalid(row.desc) then
+				local shown = math.max(1, lv)
+				local v = s.base + s.per * (shown - 1)
+				local text = (string.gsub(s.desc, "{v}", self:FormatSkillValue(v)))
+				if lv > 0 and lv < 10 then
+					text = text .. "  (다음 " .. self:FormatSkillValue(v + s.per) .. ")"
+				end
+				row.desc.TextGUIRendererComponent.Text = text
+			end
+			if isvalid(row.btn) then
+				local cost = mgr.SkillCost[s.id] or 1
+				local label = ""
+				local canBuy = mgr.Stones >= cost and lv > 0
+				if lv >= 10 then
+					label = "최고 레벨"
+					canBuy = false
+				else
+					label = "강화 " .. self:FormatSkillValue(math.max(5, 50 - 5 * (math.max(1, lv) - 1)) + mgr.SkillRateBonus) .. "%\n스킬석 " .. tostring(cost)
+				end
+				row.btn.TextGUIRendererComponent.Text = label
+				if canBuy then row.btn.SpriteGUIRendererComponent.Color = self.BuyOnColor else row.btn.SpriteGUIRendererComponent.Color = self.BuyOffColor end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PlayFx(string target, boolean ok)
+		-- 강화한 장비/스킬 줄 가운데에 성공 또는 실패 애니메이션을 재생한다 (패널 맨 앞 레이어라 다른 줄에 가려지지 않음).
+		local rowPath = ""
+		if string.sub(target, 1, 6) == "skill:" then
+			rowPath = self.SkillRowPath .. string.sub(target, 7)
+		else
+			rowPath = self.EquipRowPath .. target
+		end
+		local row = _EntityService:GetEntityByPath(rowPath)
+		if not isvalid(row) or not isvalid(self.fxLayer) then return end
+		-- 이전에 재생 중이던 이펙트는 바로 숨기고, 꺼져 있던 다른 칸에서 새로 재생 (같은 프레임 껐다 켜기로는 재시작이 안 됨)
+		local slots = { self.fxEntity, self.fxEntity2 }
+		self._T.fxSlot = ((self._T.fxSlot or 0) % 2) + 1
+		local fx = slots[self._T.fxSlot]
+		for i, e in ipairs(slots) do
+			if isvalid(e) and i ~= self._T.fxSlot then
+				e:SetEnable(false)
+				self._T.fxTimers["fx" .. tostring(i)] = nil
+			end
+		end
+		if not isvalid(fx) then return end
+		local ruid = self.FxFailRUID
+		local offset = self.FxFailOffset
+		if ok then
+			ruid = self.FxSuccessRUID
+			offset = self.FxSuccessOffset
+		end
+		-- 줄의 중심(피봇 보정)을 이펙트 레이어 좌표로 변환
+		local rt = row.UITransformComponent
+		local local3 = self.fxLayer:ToLocalPoint(rt.WorldPosition)
+		local cy = local3.y - rt.RectSize.y * (rt.Pivot.y - 0.5)
+		local cx = local3.x - rt.RectSize.x * (rt.Pivot.x - 0.5)
+		-- 스크롤 목록(스킬) 안의 줄은 WorldPosition에 스크롤 이동량이 반영되지 않으므로 직접 더한다
+		cy = cy + self:ScrollOffset(row)
+		fx:SetEnable(false)
+		local sr = fx.SpriteGUIRendererComponent
+		sr.AnimClipPlayType = SpriteAnimClipPlayType.Onetime
+		sr.PlayRate = 1
+		sr.ImageRUID = DataRef(ruid)
+		fx.UITransformComponent.anchoredPosition = Vector2(cx + offset.x, cy + offset.y)
+		local scale = 1
+		if not ok then scale = self.FxFailScale end
+		fx.UITransformComponent.UIScale = Vector3(scale, scale, 1)
+		fx:SetEnable(true)
+		self._T.fxTimers["fx" .. tostring(self._T.fxSlot)] = { entity = fx, time = self.FxDuration }
+		log("[VRF] enhance fx " .. target .. " ok=" .. tostring(ok) .. " slot=" .. tostring(self._T.fxSlot) .. " at " .. string.format("%.0f,%.0f", cx, cy))
+	end
+
+	@ExecSpace("ClientOnly")
+	method number ScrollOffset(Entity row)
+		-- 줄의 부모가 세로 스크롤 목록이면, 맨 위 기준 위치에서 현재 스크롤만큼 위로 올라간 거리(px)를 돌려준다.
+		local list = row.Parent
+		if not isvalid(list) or not isvalid(list.ScrollLayoutGroupComponent) then return 0 end
+		local slg = list.ScrollLayoutGroupComponent
+		local contentH = 0
+		for _, child in ipairs(list.Children:ToTable()) do
+			local crt = child.UITransformComponent
+			if child.Enable and isvalid(crt) then contentH = math.max(contentH, -crt.anchoredPosition.y + crt.RectSize.y) end
+		end
+		contentH = contentH + slg.Padding.bottom
+		local range = math.max(0, contentH - list.UITransformComponent.RectSize.y)
+		-- 이 목록은 정규화 위치 0 = 맨 위, 1 = 맨 아래
+		local norm = slg:GetScrollNormalizedPosition(UITransformAxis.Vertical)
+		return norm * range
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetupFxEndEvents()
+		-- 강화 이펙트: 각 칸은 자기 애니메이션이 끝나는 순간(마지막 프레임) 자기만 숨긴다.
+		for i, fx in ipairs({ self.fxEntity, self.fxEntity2 }) do
+			if isvalid(fx) then
+				local slot = i
+				local h = fx:ConnectEvent(SpriteGUIAnimPlayerEndEvent, function()
+					if isvalid(fx) then fx:SetEnable(false) end
+					self._T.fxTimers["fx" .. tostring(slot)] = nil
+				end)
+				table.insert(self.clickHandlers, { entity = fx, eventHandler = h, isFx = true })
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateFx(number delta)
+		-- 재생이 끝난 이펙트를 끈다.
+		for path, rec in pairs(self._T.fxTimers) do
+			rec.time = rec.time - delta
+			if rec.time <= 0 then
+				if isvalid(rec.entity) then rec.entity:SetEnable(false) end
+				self._T.fxTimers[path] = nil
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RequestEnhance(string slot)
+		-- 서버에 장비 강화/업그레이드 요청 (확률·메소 검증은 서버가 한다).
+		local mgr = self:GetManager()
+		if mgr ~= nil then mgr:RequestEnhance(slot) end
+		log("[VRF] enhance clicked " .. slot)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateEquipTab(Component mgr)
+		-- 부위별 장비 이름/능력치/버튼 상태를 갱신한다.
+		if isvalid(self.equipMesoText) then self.equipMesoText.Text = ": " .. tostring(mgr.Meso) end
+		for _, slot in ipairs(self._T.slots) do
+			local row = self._T.rows[slot]
+			local tier = mgr.EquipTier[slot] or 1
+			local enh = mgr.EquipEnh[slot] or 0
+			local cost = mgr.EquipCost[slot] or 0
+			local info = self._T.equip[slot][tier]
+			-- 잠긴 부위: 검은 반투명 덮개 + 붉은 해금 조건
+			local locked = mgr.EquipUnlocked[slot] ~= 1
+			if row ~= nil and isvalid(row.lock) then
+				if row.lock.Enable ~= locked then row.lock:SetEnable(locked) end
+				if locked and isvalid(row.lockText) then
+					row.lockText.TextGUIRendererComponent.Text = "최고 기록 " .. tostring(self._T.unlockFloor[slot] or 0) .. "층 달성 시 해금"
+				end
+			end
+			if info ~= nil and row ~= nil then
+				if isvalid(row.icon) and self._T.shownTier[slot] ~= tier then
+					self._T.shownTier[slot] = tier
+					row.icon.SpriteGUIRendererComponent.ImageRUID = "thumbnail://" .. info.ruid
+				end
+				if isvalid(row.name) then
+					row.name.TextGUIRendererComponent.Text = "[" .. self._T.slotName[slot] .. "] " .. info.name .. "  +" .. tostring(enh)
+				end
+				if isvalid(row.stat) then
+					local v = info.value * (1 + 0.1 * enh)
+					local fmt = self._T.statLabel[slot]
+					local vs = tostring(math.floor(v + 0.5))
+					if slot == "Glove" or slot == "Cape" then vs = string.format("%.1f", v) end
+					local extra = ""
+					-- 무기: 기본 공격 속도 (1티어 1.0, 티어마다 +0.1)
+					if slot == "Weapon" then extra = "   공속 " .. string.format("%.1f", mgr.WeaponBaseSpeed + mgr.WeaponSpeedPerTier * (tier - 1)) end
+					row.stat.TextGUIRendererComponent.Text = "티어 " .. tostring(tier - 1) .. "   " .. fmt[1] .. vs .. fmt[2] .. extra
+				end
+				if isvalid(row.btn) then
+					local label = ""
+					local canBuy = mgr.Meso >= cost
+					if enh >= 10 then
+						if self._T.equip[slot][tier + 1] == nil then
+							label = "최고 등급"
+							canBuy = false
+						else
+							label = "업그레이드\n" .. tostring(cost) .. " 메소"
+						end
+					else
+						label = "강화 " .. self:FormatSkillValue(math.max(0, mgr.EnhanceBaseRate - mgr.EnhanceRateStep * enh) + mgr.EnhanceBonus) .. "%\n" .. tostring(cost) .. " 메소"
+					end
+					row.btn.TextGUIRendererComponent.Text = label
+					if canBuy then row.btn.SpriteGUIRendererComponent.Color = self.BuyOnColor else row.btn.SpriteGUIRendererComponent.Color = self.BuyOffColor end
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectTab(integer index)
+		-- 왼쪽 탭 클릭: 닫혀 있으면 그 탭으로 열고, 열린 탭을 다시 누르면 닫는다. 다른 탭이면 내용만 바꾼다.
+		if self._T.open and self.SelectedTab == index then
+			self:SetPanelOpen(false)
+		else
+			self:ShowTab(index)
+			self:SetPanelOpen(true)
+		end
+		log("[VRF] tab selected=" .. tostring(index) .. " open=" .. tostring(self._T.open))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowTab(integer index)
+		-- 선택한 탭의 내용만 켜고 패널 제목을 바꾼다.
+		self.SelectedTab = index
+		local contents = { self.contentInfo, self.contentTrait, self.contentStat, self.contentSkill }
+		for i = 1, 4 do
+			if isvalid(contents[i]) then contents[i]:SetEnable(i == index) end
+		end
+		local titles = { "캐릭터 정보", "특성", "장비", "스킬" }
+		if isvalid(self.headerText) then self.headerText.Text = titles[index] or "" end
+		self:UpdateTabColors()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateTabColors()
+		-- 열려 있는 탭만 밝게.
+		local tabs = { self.tabInfo, self.tabTrait, self.tabStat, self.tabSkill }
+		for i = 1, 4 do
+			if isvalid(tabs[i]) then
+				local sprite = tabs[i].Entity.SpriteGUIRendererComponent
+				if isvalid(sprite) then
+					if self._T.open and i == self.SelectedTab then sprite.Color = self.TabOnColor else sprite.Color = self.TabOffColor end
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetPanelOpen(boolean open)
+		-- 패널 열기/닫기: 지금 위치에서 목표 위치까지 SlideTime 동안 감속하며 미끄러진다.
+		if not isvalid(self.panelRoot) then return end
+		self._T.open = open
+		if open and not self.panelRoot.Enable then self.panelRoot:SetEnable(true) end
+		self._T.slideFrom = self.panelRoot.UITransformComponent.anchoredPosition.x
+		if open then self._T.slideTo = self:OpenX() else self._T.slideTo = self:ClosedX() end
+		self._T.slideT = 0
+		self:UpdateTabColors()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateSlide(number delta)
+		-- 패널 미끄러짐(ease-out) + 열린 정도만큼 전투 카메라를 옆으로 옮긴다.
+		if not isvalid(self.panelRoot) then return end
+		local rt = self.panelRoot.UITransformComponent
+		if (self._T.slideT or 1) < 1 then
+			self._T.slideT = math.min(1, self._T.slideT + delta / self.SlideTime)
+			local e = 1 - (1 - self._T.slideT) ^ 3
+			rt.anchoredPosition = Vector2(self._T.slideFrom + (self._T.slideTo - self._T.slideFrom) * e, rt.anchoredPosition.y)
+			-- 다 닫히면 패널을 꺼서 넓은 화면 왼쪽 끝에 비쳐 보이지 않게
+			if self._T.slideT >= 1 and not self._T.open then self.panelRoot:SetEnable(false) end
+		end
+		local openness = (rt.anchoredPosition.x - self:ClosedX()) / (self:OpenX() - self:ClosedX())
+		openness = math.max(0, math.min(1, openness))
+		local player = _UserService.LocalPlayer
+		local map = isvalid(player) and player.CurrentMap or nil
+		local cam = isvalid(map) and map:GetChildByName(_BattleHUDLogic.BattleCameraName) or nil
+		if isvalid(cam) then
+			local base = _BattleHUDLogic.BattleCamPos
+			cam.TransformComponent.Position = Vector3(base.x - self.PanelCamShift * openness, base.y, base.z)
+		end
+		-- 화면 위 층 이름도 패널에 가리지 않게 남은 화면 가운데로
+		local floorText = _BattleHUDLogic.floorText
+		if isvalid(floorText) then
+			local frt = floorText.Entity.UITransformComponent
+			frt.anchoredPosition = Vector2(self.PanelFloorTextShift * openness, frt.anchoredPosition.y)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowConfirm(boolean show)
+		-- 중단 확인 창 열기/닫기.
+		if isvalid(self.confirmRoot) and self.confirmRoot.Enable ~= show then self.confirmRoot:SetEnable(show) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ConfirmGiveUp()
+		-- 확인: 서버에 중단 요청 (바로 패배 → 결과 팝업).
+		self:ShowConfirm(false)
+		local mgr = self:GetManager()
+		if mgr ~= nil then mgr:RequestGiveUp() end
+		log("[VRF] give up confirmed")
+	end
+
+	@ExecSpace("ClientOnly")
+	method number EdgeShift()
+		-- 실제 화면 왼쪽 끝과 1920 기준 왼쪽 끝의 차이(px). 16:9보다 좁은 화면(태블릿 4:3 등)은 UI가 높이 1080 기준으로 맞춰져
+		-- 보이는 폭이 1080 × 화면비로 줄어든다. 더 넓은 화면은 UI가 16:9 영역 안에 그려지므로 보정하지 않음.
+		local halfW = 540 * _UILogic.ScreenWidth / math.max(1, _UILogic.ScreenHeight)
+		return math.max(0, 960 - halfW)
+	end
+
+	@ExecSpace("ClientOnly")
+	method number OpenX()
+		-- 패널 열린 위치 (화면 왼쪽 끝 기준으로 보정).
+		return self.PanelOpenX + self:EdgeShift()
+	end
+
+	@ExecSpace("ClientOnly")
+	method number ClosedX()
+		-- 패널 닫힌 위치 (화면 밖).
+		return self.PanelClosedX + self:EdgeShift()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyScreenLayout()
+		-- 화면 비율에 맞춰 왼쪽 탭 위치·하단 바 폭과 칸 배치를 다시 잡는다 (화면 크기가 바뀔 때만).
+		local key = tostring(_UILogic.ScreenWidth) .. "x" .. tostring(_UILogic.ScreenHeight)
+		if self._T.screenKey == key then return end
+		self._T.screenKey = key
+		local dx = self:EdgeShift()
+		if isvalid(self.giveUpBtn) then
+			local grt = self.giveUpBtn.Entity.UITransformComponent
+			grt.anchoredPosition = Vector2(12 + dx, grt.anchoredPosition.y)
+		end
+		if isvalid(self.sideTabsRoot) then
+			local trt = self.sideTabsRoot.UITransformComponent
+			trt.anchoredPosition = Vector2(8 + dx, trt.anchoredPosition.y)
+		end
+		if isvalid(self.panelRoot) then
+			local prt = self.panelRoot.UITransformComponent
+			if self._T.open then prt.anchoredPosition = Vector2(self:OpenX(), prt.anchoredPosition.y) else prt.anchoredPosition = Vector2(self:ClosedX(), prt.anchoredPosition.y) end
+		end
+		-- 하단 바: 1.5배 확대 기준 폭 = 보이는 폭 / 1.5
+		if isvalid(self.bottomBarRoot) then
+			local baseW = (1920 - 2 * dx) / 1.5
+			local brt = self.bottomBarRoot.UITransformComponent
+			brt.RectSize = Vector2(baseW, brt.RectSize.y)
+			local path = "/ui/MainPanel/BottomBar/"
+			local jobW = math.min(360, baseW * 0.28)
+			local expW = math.max(150, baseW - 118 - 14 - jobW - 30 - 150 - 50)
+			local function place(name, x, w)
+				local e = _EntityService:GetEntityByPath(path .. name)
+				if not isvalid(e) then return end
+				local rt = e.UITransformComponent
+				rt.anchoredPosition = Vector2(x, rt.anchoredPosition.y)
+				if w ~= nil then rt.RectSize = Vector2(w, rt.RectSize.y) end
+			end
+			place("Exp", 118, expW)
+			place("Exp/Fill", 0, expW - 6)
+			place("Exp/Text", 0, expW - 6)
+			place("MesoIcon", 118 + expW + 34, nil)
+			place("Meso", 118 + expW + 70, 150)
+			place("Job", -14, jobW)
+		end
+		log("[VRF] screen layout " .. key .. " edgeShift=" .. string.format("%.0f", dx))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateBottomBar(Component mgr)
+		-- 하단 정보 바: 레벨 / (경험치 바는 UpdateExpBar) / 메소 / 직업.
+		if isvalid(self.levelText) then
+			local s = "Lv." .. tostring(mgr.Level)
+			if self.levelText.Text ~= s then self.levelText.Text = s end
+		end
+		if isvalid(self.barMesoText) then
+			local s = tostring(mgr.Meso)
+			if self.barMesoText.Text ~= s then self.barMesoText.Text = s end
+		end
+		if isvalid(self.barJobText) then
+			local s = "직업  " .. _TarotLogic:GetJobLabel(mgr)
+			if self.barJobText.Text ~= s then self.barJobText.Text = s end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateExpBar(Component mgr, number delta)
+		-- 경험치 바: FillAmount를 목표 비율로 부드럽게 채우고, 레벨이 오르면 0부터 다시 채운다.
+		if not isvalid(self.expFill) then return end
+		local target = 0
+		if mgr.ExpToNext > 0 then target = math.max(0, math.min(1, mgr.Exp / mgr.ExpToNext)) end
+		local shown = self._T.expShown or 0
+		if self._T.expLevel ~= mgr.Level then
+			if self._T.expLevel ~= nil and mgr.Level > self._T.expLevel then
+				shown = 0
+				log("[VRF] exp bar reset on level up Lv" .. tostring(mgr.Level))
+			end
+			self._T.expLevel = mgr.Level
+		end
+		shown = shown + (target - shown) * math.min(1, self.ExpFillSpeed * delta)
+		if math.abs(target - shown) < 0.002 then shown = target end
+		self._T.expShown = shown
+		self.expFill.FillAmount = shown
+		if isvalid(self.expText) then
+			local label = "EXP " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. " (" .. string.format("%.1f", target * 100) .. "%)"
+			if self.expText.Text ~= label then self.expText.Text = label end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 탑 맵에서만 패널을 보이고, 열린 탭 내용을 판 상태(@Sync)로 갱신한다.
+		local mgr = self:GetManager()
+		local inTower = mgr ~= nil
+		for _, root in ipairs({ self.sideTabsRoot, self.bottomBarRoot }) do
+			if isvalid(root) and root.Enable ~= inTower then root:SetEnable(inTower) end
+		end
+		-- 중단하기: 전투 진행 중에만 보이고, 패배·결과 상태가 되면 확인 창도 닫는다
+		-- (왼쪽 패널이 열려 있으면 패널 제목과 겹치므로 버튼만 숨긴다)
+		local canGiveUp = inTower and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		local showGiveUp = canGiveUp and not self._T.open and (self._T.slideT or 1) >= 1
+		if isvalid(self.giveUpBtn) and self.giveUpBtn.Entity.Enable ~= showGiveUp then self.giveUpBtn.Entity:SetEnable(showGiveUp) end
+		if not canGiveUp then self:ShowConfirm(false) end
+		-- 패널은 열려 있거나 미끄러지는 중일 때만 켠다 (닫힌 패널이 넓은 화면 끝에 비치지 않게)
+		if isvalid(self.panelRoot) then
+			local want = inTower and (self._T.open or (self._T.slideT or 1) < 1)
+			if self.panelRoot.Enable ~= want then self.panelRoot:SetEnable(want) end
+		end
+		if not inTower then return end
+		self:ApplyScreenLayout()
+		self:UpdateExpBar(mgr, delta)
+		self:UpdateBottomBar(mgr)
+		self:UpdateSlide(delta)
+
+		if self.SelectedTab == 1 and isvalid(self.infoText) then
+			local speed = 0
+			if mgr.PlayerAttackInterval > 0 then speed = 1 / mgr.PlayerAttackInterval end
+			self.infoText.Text = "레벨        Lv." .. tostring(mgr.Level) .. "\n"
+				.. "경험치      " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. "\n"
+				.. "메소        " .. tostring(mgr.Meso) .. "\n"
+				.. "직업        " .. _TarotLogic:GetJobLabel(mgr) .. "\n\n"
+				.. "공격력      " .. tostring(math.floor(mgr.PlayerAtkMin)) .. " ~ " .. tostring(math.floor(mgr.PlayerAtk)) .. "\n"
+				.. "숙련도      " .. self:FormatSkillValue(mgr.Mastery) .. "%\n"
+				.. "HP          " .. tostring(math.floor(mgr.PlayerHp)) .. " / " .. tostring(math.floor(mgr.PlayerMaxHp)) .. "\n"
+				.. "방어력      " .. tostring(math.floor(mgr.PlayerDef)) .. "\n"
+				.. "크리티컬    " .. string.format("%.1f", mgr.CritRate) .. "% / " .. tostring(math.floor(mgr.CritDmg)) .. "%\n"
+				.. "명중률      " .. string.format("%.1f", mgr.Accuracy) .. "%\n"
+				.. "공격 속도   " .. string.format("%.2f", speed) .. "회/초\n"
+				.. "현재 층      " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
+				.. "최고 층      " .. tostring(mgr.BestFloor) .. "층"
+			-- 악마의 거래 대가 (진행 중일 때만)
+			if mgr.CurseText ~= "" then self.infoText.Text = self.infoText.Text .. "\n대가        " .. mgr.CurseText end
+		elseif self.SelectedTab == 2 then
+			_TarotLogic:UpdateTraitTab(mgr)
+		elseif self.SelectedTab == 3 then
+			self:UpdateEquipTab(mgr)
+		elseif self.SelectedTab == 4 then
+			self:UpdateSkillTab(mgr)
+		end
+
+		-- 강화 결과 메시지 (2초 표시, 장비·스킬 탭 공용)
+		if mgr.EnhanceSeq ~= self.LastEnhanceSeq then
+			self.LastEnhanceSeq = mgr.EnhanceSeq
+			if mgr.EnhanceMsg ~= "" then
+				if isvalid(self.equipMsgText) then self.equipMsgText.Text = mgr.EnhanceMsg end
+				if isvalid(self.skillMsgText) then self.skillMsgText.Text = mgr.EnhanceMsg end
+				self.MsgTimer = 2
+			end
+		end
+		if self.MsgTimer > 0 then
+			self.MsgTimer = self.MsgTimer - delta
+			if self.MsgTimer <= 0 then
+				if isvalid(self.equipMsgText) then self.equipMsgText.Text = "" end
+				if isvalid(self.skillMsgText) then self.skillMsgText.Text = "" end
+			end
+		end
+
+		-- 강화 성공/실패 이펙트 (처음 들어왔을 때의 값은 무시)
+		if self._T.lastFxSeq == nil then
+			self._T.lastFxSeq = mgr.FxSeq
+		elseif mgr.FxSeq ~= self._T.lastFxSeq then
+			self._T.lastFxSeq = mgr.FxSeq
+			self:PlayFx(mgr.FxTarget, mgr.FxOk)
+		end
+		self:UpdateFx(delta)
+	end
+
+end

@@ -1,0 +1,19 @@
+@Component
+script MonsterManager extends Component
+	
+	property any monsterDeadEventHandler = nil
+	
+	method void OnBeginPlay()
+		self.monsterDeadEventHandler = self.Entity:ConnectEvent(MonsterDeadEvent, self.DeadCheck)
+	end
+	
+	method void DeadCheck()
+		log("몬스터가 죽었다는 이벤트를 받았다.")
+	end
+	
+	method void OnEndPlay()
+		if isvalid(self.monsterDeadEventHandler) then
+			self.Entity:DisconnectEvent(MonsterDeadEvent, self.monsterDeadEventHandler)
+		end
+	end
+end

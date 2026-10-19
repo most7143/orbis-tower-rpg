@@ -1,0 +1,345 @@
+@Logic
+script SymbolUILogic extends Logic
+
+	-- 심볼 화면 (SymbolUI.ui): 층마다 1~3단계 심볼, 20층씩 페이지. 데이터는 로컬 플레이어의 PlayerEngrave(SymbolLv 동기화)에서 읽는다.
+	property Entity dimEntity = "62d72bf8-73e9-4989-a3a9-78f2e9e73535"
+	property Entity panelEntity = "5fe924bc-b966-4442-90eb-889e5c03cb65"
+	property ButtonComponent btnClose = "04a94533-0fd5-4f34-bcf9-62d7f0c8ad76"
+	property ButtonComponent btnPrev = "3a25e138-2b80-4031-ab07-6b52a1bcd165"
+	property ButtonComponent btnNext = "ad397fb6-17cc-455f-b0df-b785e92fb84c"
+	property TextGUIRendererComponent pageText = "0518b35c-9df9-43ad-9cab-da010a6df252"
+	property TextGUIRendererComponent countText = "828d5589-caf3-4d7e-8d45-4c5a3f291b94"
+	property TextGUIRendererComponent permText = "b1936884-fa0e-4791-bd24-fb6bc4c6ff27"
+	property TextGUIRendererComponent infoTitle = "c625aef4-0bc9-4e10-9e5f-1d22319875df"
+	property TextGUIRendererComponent infoTier = "0f4915ba-0d78-49f4-ac8e-d1f69ce306d3"
+	property TextGUIRendererComponent tier1Text = "b3924f19-9733-4081-87e4-bee1b95aeaed"
+	property TextGUIRendererComponent tier2Text = "a6bd0470-bb75-4b34-a3ba-2b54516ebf8f"
+	property TextGUIRendererComponent tier3Text = "9ad87b1c-61e8-42c3-b35f-f2d5df0a6412"
+	property SpriteGUIRendererComponent infoIcon = "2347765b-d5ab-4bda-b67b-46729a84cc9e"
+	property string CellPath = "/ui/SymbolUI/Panel/Grid/Cell_"
+	property integer PageSize = 20
+	property string TierTableName = "SymbolTierTable"
+	property string PermTableName = "SymbolPermTable"
+	property string FloorTableName = "FloorTable"
+	property string MonsterTableName = "MonsterTable"
+	-- 단계 효과 칸: 가진 단계 이하(밝게) / 아직 없는 단계(어둡게)
+	property Color OwnedTextColor = Color(0.95, 0.95, 0.95, 1)
+	property Color DimTextColor = Color(0.5, 0.5, 0.55, 1)
+	-- 단계 글자 색 / 미획득 아이콘 색
+	property Color Tier1Color = Color(0.6, 0.9, 1, 1)
+	property Color Tier2Color = Color(0.85, 0.6, 1, 1)
+	property Color Tier3Color = Color(1, 0.85, 0.35, 1)
+	property Color LockedIconColor = Color(0.12, 0.12, 0.15, 0.9)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 단계표·영구 능력치표·층 수를 읽고 버튼을 연결한 뒤 닫힌 상태로 시작한다.
+		self._T.tiers = {}
+		local ts = _DataService:GetTable(self.TierTableName)
+		if ts ~= nil then
+			for i = 1, ts:GetRowCount() do
+				local t = tonumber(ts:GetCell(i, "Tier")) or i
+				self._T.tiers[t] = {
+					chance = tonumber(ts:GetCell(i, "Chance")) or 0, dmg = tonumber(ts:GetCell(i, "DmgPct")) or 0,
+					cut = tonumber(ts:GetCell(i, "DmgCut")) or 0, gain = tonumber(ts:GetCell(i, "GainPct")) or 0, icon = ts:GetCell(i, "IconRUID"),
+					prefix = ts:GetCell(i, "NamePrefix") or "",
+				}
+			end
+		end
+		self._T.perm = {}
+		local ps = _DataService:GetTable(self.PermTableName)
+		if ps ~= nil then
+			for i = 1, ps:GetRowCount() do
+				table.insert(self._T.perm, { type = ps:GetCell(i, "Type"), value = tonumber(ps:GetCell(i, "Value")) or 0, label = ps:GetCell(i, "Label") })
+			end
+		end
+		-- 층별 몬스터 이름 (FloorTable.MonsterId → MonsterTable.Name)
+		local monName = {}
+		local ms = _DataService:GetTable(self.MonsterTableName)
+		if ms ~= nil then
+			for i = 1, ms:GetRowCount() do monName[ms:GetCell(i, "id")] = ms:GetCell(i, "Name") end
+		end
+		self._T.floorMonster = {}
+		self._T.floorCount = 1
+		local fs = _DataService:GetTable(self.FloorTableName)
+		if fs ~= nil then
+			self._T.floorCount = math.max(1, fs:GetRowCount())
+			for i = 1, fs:GetRowCount() do
+				self._T.floorMonster[tonumber(fs:GetCell(i, "Floor")) or i] = monName[fs:GetCell(i, "MonsterId")] or ""
+			end
+		end
+		self.clickHandlers = {}
+		self:Bind(self.btnClose, function() self:Close() end)
+		self:Bind(self.btnPrev, function() self:Turn(-1) end)
+		self:Bind(self.btnNext, function() self:Turn(1) end)
+		for i = 1, self.PageSize do
+			local idx = i
+			local cell = _EntityService:GetEntityByPath(self.CellPath .. tostring(i))
+			if isvalid(cell) and isvalid(cell.ButtonComponent) then self:Bind(cell.ButtonComponent, function() self:SelectCell(idx) end) end
+		end
+		self._T.page = 1
+		self._T.selected = 1
+		self._T.open = true
+		self:SetOpen(false)
+		log("[VRF] SymbolUILogic begin floors=" .. tostring(self._T.floorCount))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(ButtonComponent button, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(button) then return end
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 로컬 플레이어의 저장 컴포넌트 (심볼 포함).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [심볼] 버튼: 최고 클리어 층이 있는 페이지로 연다.
+		local eng = self:GetEngrave()
+		if eng == nil or not eng.SymbolLoaded then return end
+		local floor = math.max(1, math.min(self._T.floorCount, eng.ClearedFloor))
+		self._T.page = math.floor((floor - 1) / self.PageSize) + 1
+		self._T.selected = floor
+		self:SetOpen(true)
+		self:Refresh()
+		log("[VRF] symbol open count=" .. tostring(eng.SymbolCount) .. " page=" .. tostring(self._T.page))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기.
+		self:SetOpen(false)
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsOpen()
+		-- 심볼 화면이 열려 있는지.
+		return self._T.open == true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOpen(boolean open)
+		-- 배경·패널 표시 전환.
+		if self._T.open == open then return end
+		self._T.open = open
+		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(open) end
+		if isvalid(self.panelEntity) then self.panelEntity:SetEnable(open) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Turn(integer dir)
+		-- 페이지 넘기기 (20층씩).
+		local pages = math.floor((self._T.floorCount - 1) / self.PageSize) + 1
+		self._T.page = math.max(1, math.min(pages, self._T.page + dir))
+		self._T.selected = (self._T.page - 1) * self.PageSize + 1
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectCell(integer idx)
+		-- 칸 선택: 오른쪽에 그 층 심볼 정보.
+		local floor = (self._T.page - 1) * self.PageSize + idx
+		if floor > self._T.floorCount then return end
+		self._T.selected = floor
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method table PermOf(integer floor)
+		-- 그 층 3단계 심볼의 영구 능력치 (층 번호 순환).
+		local n = #self._T.perm
+		if n == 0 then return nil end
+		return self._T.perm[((floor - 1) % n) + 1]
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FormatNum(number v)
+		-- 정수면 정수, 아니면 소수 한 자리.
+		if math.abs(v - math.floor(v)) < 0.001 then return tostring(math.floor(v)) end
+		return string.format("%.1f", v)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string SymbolName(integer floor, integer tier)
+		-- 심볼 이름: "<단계 접두사> <그 층 몬스터>의 심볼" (예: 불완전한 달팽이의 심볼).
+		local t = self._T.tiers[math.max(1, tier)]
+		local prefix = t ~= nil and t.prefix or ""
+		local mon = self._T.floorMonster[floor] or ""
+		if mon == "" then mon = tostring(floor) .. "층" end
+		return prefix .. " " .. mon .. "의 심볼"
+	end
+
+	@ExecSpace("ClientOnly")
+	method string TierEffect(integer tier, integer floor)
+		-- 단계 효과 문구 (두 줄).
+		local t = self._T.tiers[tier]
+		if t == nil then return "" end
+		if tier >= 3 then
+			local p = self:PermOf(floor)
+			local perm = ""
+			if p ~= nil then perm = "모든 층 영구 " .. p.label .. " +" .. self:FormatNum(p.value) .. "%" end
+			return "2단계 효과 유지\n" .. perm
+		end
+		return "이 층에서 주는 피해 +" .. self:FormatNum(t.dmg) .. "% · 받는 피해 -" .. self:FormatNum(t.cut) .. "%\n메소·경험치 +" .. self:FormatNum(t.gain) .. "%"
+	end
+
+	@ExecSpace("ClientOnly")
+	method Color TierColor(integer tier)
+		-- 단계별 글자 색.
+		if tier >= 3 then return self.Tier3Color end
+		if tier == 2 then return self.Tier2Color end
+		return self.Tier1Color
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 칸(아이콘·층·단계)과 오른쪽 정보, 획득 수·영구 효과 합계를 갱신한다.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local base = (self._T.page - 1) * self.PageSize
+		for i = 1, self.PageSize do
+			local floor = base + i
+			local path = self.CellPath .. tostring(i)
+			local cell = _EntityService:GetEntityByPath(path)
+			if isvalid(cell) then
+				local exists = floor <= self._T.floorCount
+				if cell.Enable ~= exists then cell:SetEnable(exists) end
+				if exists then
+					local tier = eng.SymbolLv[tostring(floor)] or 0
+					local icon = _EntityService:GetEntityByPath(path .. "/Icon")
+					if isvalid(icon) then
+						local t = self._T.tiers[math.max(1, tier)]
+						if t ~= nil then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon) end
+						if tier > 0 then icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1) else icon.SpriteGUIRendererComponent.Color = self.LockedIconColor end
+					end
+					local label = _EntityService:GetEntityByPath(path .. "/Label")
+					if isvalid(label) then
+						local txt = label.TextGUIRendererComponent
+						if tier > 0 then
+							txt.Text = tostring(floor) .. "층 · " .. tostring(tier) .. "단계"
+							txt.FontColor = self:TierColor(tier)
+						else
+							txt.Text = tostring(floor) .. "층"
+							txt.FontColor = Color(0.5, 0.5, 0.55, 1)
+						end
+					end
+					local sel = _EntityService:GetEntityByPath(path .. "/Sel")
+					if isvalid(sel) then
+						local on = floor == self._T.selected
+						if sel.Enable ~= on then sel:SetEnable(on) end
+					end
+				end
+			end
+		end
+		local pages = math.floor((self._T.floorCount - 1) / self.PageSize) + 1
+		if isvalid(self.pageText) then
+			self.pageText.Text = tostring(base + 1) .. " ~ " .. tostring(math.min(self._T.floorCount, base + self.PageSize)) .. "층  (" .. tostring(self._T.page) .. "/" .. tostring(pages) .. ")"
+		end
+		if isvalid(self.countText) then self.countText.Text = "획득 " .. tostring(eng.SymbolCount) .. " / " .. tostring(self._T.floorCount) end
+		self:RefreshInfo(eng)
+		self:RefreshPerm(eng)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshInfo(Component eng)
+		-- 선택한 층: 심볼 이름(몬스터 이름)·지금 단계, [1단계]~[3단계] 효과와 확률 (가진 단계는 밝게).
+		local floor = self._T.selected or 1
+		local tier = eng.SymbolLv[tostring(floor)] or 0
+		if isvalid(self.infoTitle) then self.infoTitle.Text = self:SymbolName(floor, tier) end
+		if isvalid(self.infoIcon) then
+			local t = self._T.tiers[math.max(1, tier)]
+			if t ~= nil then self.infoIcon.ImageRUID = DataRef(t.icon) end
+			if tier > 0 then self.infoIcon.Color = Color(1, 1, 1, 1) else self.infoIcon.Color = self.LockedIconColor end
+		end
+		if isvalid(self.infoTier) then
+			if tier > 0 then
+				self.infoTier.Text = tostring(floor) .. "층 · " .. tostring(tier) .. "단계"
+				self.infoTier.FontColor = self:TierColor(tier)
+			else
+				self.infoTier.Text = tostring(floor) .. "층 · 미획득"
+				self.infoTier.FontColor = Color(0.6, 0.6, 0.65, 1)
+			end
+		end
+		local texts = { self.tier1Text, self.tier2Text, self.tier3Text }
+		for t = 1, 3 do
+			local txt = texts[t]
+			if isvalid(txt) then
+				local info = self._T.tiers[t]
+				local chance = info ~= nil and self:FormatNum(info.chance) or "0"
+				txt.Text = "[" .. tostring(t) .. "단계]  획득 확률 " .. chance .. "%\n" .. self:TierEffect(t, floor)
+				if t <= tier then txt.FontColor = self:TierColor(t) else txt.FontColor = self.DimTextColor end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshPerm(Component eng)
+		-- 3단계 심볼로 얻은 모든 층 영구 능력치 합계.
+		if not isvalid(self.permText) then return end
+		local sums = {}
+		local order = {}
+		for floor = 1, self._T.floorCount do
+			if (eng.SymbolLv[tostring(floor)] or 0) >= 3 then
+				local p = self:PermOf(floor)
+				if p ~= nil then
+					if sums[p.label] == nil then
+						sums[p.label] = 0
+						table.insert(order, p.label)
+					end
+					sums[p.label] = sums[p.label] + p.value
+				end
+			end
+		end
+		local parts = {}
+		for _, label in ipairs(order) do table.insert(parts, label .. " +" .. self:FormatNum(sums[label]) .. "%") end
+		if #parts == 0 then
+			self.permText.Text = "아직 없음\n(3단계 심볼을 모으면 모든 층에 적용됩니다)"
+		else
+			-- 한 줄에 둘씩
+			local lines = {}
+			for i = 1, #parts, 2 do
+				local line = parts[i]
+				if parts[i + 1] ~= nil then line = line .. "     " .. parts[i + 1] end
+				table.insert(lines, line)
+			end
+			self.permText.Text = table.concat(lines, "\n")
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있는 동안 서버 동기화 값으로 갱신 (로비를 벗어나면 닫음).
+		if not self._T.open then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= "Lobby" then
+			self:Close()
+			return
+		end
+		self._T.refreshT = (self._T.refreshT or 0) + delta
+		if self._T.refreshT >= 0.5 then
+			self._T.refreshT = 0
+			self:Refresh()
+		end
+	end
+
+end

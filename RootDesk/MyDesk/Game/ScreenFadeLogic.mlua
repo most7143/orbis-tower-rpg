@@ -1,0 +1,106 @@
+@Logic
+script ScreenFadeLogic extends Logic
+
+	-- ScreenFade.ui 바인딩 (UIBuilder injectBindings로 주입)
+	property SpriteGUIRendererComponent overlay = "06675e84-0aa0-41fd-b687-e325216ae421"
+
+	property number FadeOutTime = 1.0
+	property number FadeInTime = 1.0
+	property number MaxHoldTime = 2.0
+
+	-- IDLE / OUT(어두워지는 중) / HOLD(검은 화면 유지, 맵 로드 대기) / IN(밝아지는 중)
+	@HideFromInspector
+	property string Phase = "HOLD"
+	@HideFromInspector
+	property number Alpha = 1
+	@HideFromInspector
+	property number HoldTimer = 0
+	@HideFromInspector
+	property string LastMapName = ""
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 첫 입장은 검은 화면에서 시작해 맵이 준비되면 밝아진다.
+		self._T.onFadedOut = nil
+		self.Phase = "HOLD"
+		self.Alpha = 1
+		self.HoldTimer = 0
+		self:ApplyAlpha()
+		log("[VRF] ScreenFadeLogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyAlpha()
+		-- 오버레이 투명도 반영. 완전히 투명하면 꺼서 클릭을 막지 않게 한다.
+		if not isvalid(self.overlay) then return end
+		self.overlay.Color = Color(0, 0, 0, self.Alpha)
+		local visible = self.Alpha > 0.001
+		if self.overlay.Entity.Enable ~= visible then self.overlay.Entity:SetEnable(visible) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FadeOut(any onFadedOut)
+		-- 화면을 검게 덮은 뒤 콜백(맵 이동 요청 등)을 실행한다.
+		if self.Phase == "OUT" or self.Phase == "HOLD" then return end
+		self._T.onFadedOut = onFadedOut
+		self.Phase = "OUT"
+		log("[VRF] fade out start")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void BeginFadeIn(Entity map)
+		-- 검은 화면을 걷어내기 시작. 탑 맵이면 이 순간 서버에 전투 시작을 요청한다.
+		self.Phase = "IN"
+		local mgr = map:GetComponent("script.TowerRunManager")
+		if mgr ~= nil then mgr:RequestStart() end
+		log("[VRF] fade in start map=" .. map.Name .. " battleStart=" .. tostring(mgr ~= nil))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 페이드 단계 진행 + 맵 변경 감지.
+		local player = _UserService.LocalPlayer
+		local map = nil
+		if isvalid(player) then map = player.CurrentMap end
+		local mapName = ""
+		if isvalid(map) then mapName = map.Name end
+
+		if mapName ~= "" and mapName ~= self.LastMapName then
+			-- 새 맵에 도착: 검은 화면으로 고정하고 준비를 기다린다.
+			self.LastMapName = mapName
+			self.Phase = "HOLD"
+			self.Alpha = 1
+			self.HoldTimer = 0
+		end
+
+		if self.Phase == "OUT" then
+			self.Alpha = math.min(1, self.Alpha + delta / self.FadeOutTime)
+			if self.Alpha >= 1 then
+				self.Phase = "WAIT_MAP"
+				self.HoldTimer = 0
+				local cb = self._T.onFadedOut
+				self._T.onFadedOut = nil
+				if cb ~= nil then cb() end
+			end
+		elseif self.Phase == "HOLD" then
+			self.Alpha = 1
+			self.HoldTimer = self.HoldTimer + delta
+			if isvalid(map) then
+				local mgr = map:GetComponent("script.TowerRunManager")
+				local ready = mgr == nil or mgr.RunState == "READY"
+				if (ready and self.HoldTimer >= 0.15) or self.HoldTimer >= self.MaxHoldTime then
+					self:BeginFadeIn(map)
+				end
+			end
+		elseif self.Phase == "WAIT_MAP" then
+			-- 맵 이동이 일어나지 않으면(실패 등) 일정 시간 뒤 화면을 되살린다.
+			self.HoldTimer = self.HoldTimer + delta
+			if self.HoldTimer >= 5 and isvalid(map) then self:BeginFadeIn(map) end
+		elseif self.Phase == "IN" then
+			self.Alpha = math.max(0, self.Alpha - delta / self.FadeInTime)
+			if self.Alpha <= 0 then self.Phase = "IDLE" end
+		end
+		self:ApplyAlpha()
+	end
+
+end

@@ -1,0 +1,35 @@
+@Component
+script LobbyManager extends Component
+
+	property string TowerMapName = "OrbisTower"
+	property Vector3 TowerPos = Vector3(-1.2, 0.2, 0)
+	property string SkillTestMapName = "SkillTest"
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 로비 맵 서버 진입점.
+		log("[VRF] LobbyManager begin map=" .. self.Entity.Name)
+	end
+
+	@ExecSpace("Server")
+	method void RequestPlay()
+		-- 로비 '플레이' 버튼: 요청한 플레이어를 탑 맵으로 보낸다.
+		local player = _UserService:GetUserEntityByUserId(senderUserId)
+		if not isvalid(player) or player.CurrentMap ~= self.Entity then return end
+		-- 각인 변경분이 남아 있으면 탑에 들어가기 전에 저장
+		local engrave = player:GetComponent("script.PlayerEngrave")
+		if engrave ~= nil then engrave:Flush() end
+		_TeleportService:TeleportToMapPosition(player, self.TowerPos, self.TowerMapName)
+		log("[VRF] play requested -> teleport to " .. self.TowerMapName)
+	end
+
+	@ExecSpace("Server")
+	method void RequestSkillTest()
+		-- 테스트용 '스킬 테스트' 버튼: 요청한 플레이어를 스킬 이펙트 테스트 맵으로 보낸다.
+		local player = _UserService:GetUserEntityByUserId(senderUserId)
+		if not isvalid(player) or player.CurrentMap ~= self.Entity then return end
+		_TeleportService:TeleportToMapPosition(player, self.TowerPos, self.SkillTestMapName)
+		log("[VRF] skill test requested -> teleport to " .. self.SkillTestMapName)
+	end
+
+end

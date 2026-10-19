@@ -1,0 +1,82 @@
+@Logic
+script ResultPopupLogic extends Logic
+
+	-- ResultPopup.ui 바인딩 (UIBuilder injectBindings로 주입)
+	property Entity popupRoot = "77c3b0ad-3691-4ce2-80f2-b1794fa3dd26"
+	property TextGUIRendererComponent bodyText = "baad52fb-9c19-4e54-a8e2-60d2793641b9"
+	property ButtonComponent btnRetry = "0d85da3a-b2c2-43dd-94aa-37303323e945"
+	property ButtonComponent btnLobby = "8ff0ec59-5e5c-4a88-9ae3-e75870cc3624"
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 결과 팝업 버튼 연결. 처음엔 숨긴다.
+		self.clickHandlers = {}
+		if isvalid(self.btnRetry) then
+			local h = self.btnRetry.Entity:ConnectEvent(ButtonClickEvent, function() self:OnRetry() end)
+			table.insert(self.clickHandlers, { entity = self.btnRetry.Entity, eventHandler = h })
+		end
+		if isvalid(self.btnLobby) then
+			local h = self.btnLobby.Entity:ConnectEvent(ButtonClickEvent, function() self:OnLobby() end)
+			table.insert(self.clickHandlers, { entity = self.btnLobby.Entity, eventHandler = h })
+		end
+		if isvalid(self.popupRoot) then self.popupRoot:SetEnable(false) end
+		log("[VRF] ResultPopupLogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 탑 진행 매니저.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnRetry()
+		-- 다시 도전 요청.
+		local mgr = self:GetManager()
+		if mgr ~= nil then mgr:RequestRetry() end
+		log("[VRF] retry clicked")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnLobby()
+		-- 로비로 이동 요청.
+		local mgr = self:GetManager()
+		if mgr ~= nil then _ScreenFadeLogic:FadeOut(function() mgr:RequestLobby() end) end
+		log("[VRF] lobby clicked")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 판 상태가 RESULT일 때만 팝업을 띄우고 결과를 채운다.
+		if not isvalid(self.popupRoot) then return end
+		local mgr = self:GetManager()
+		local show = mgr ~= nil and mgr.RunState == "RESULT"
+		if self.popupRoot.Enable ~= show then
+			self.popupRoot:SetEnable(show)
+			if show then log("[VRF] result popup shown floor=" .. tostring(mgr.Floor)) end
+		end
+		if show and isvalid(self.bodyText) then
+			local best = "최고 기록 " .. tostring(mgr.BestFloor) .. "층"
+			if mgr.IsNewBest then best = best .. " (신기록!)" end
+			self.bodyText.Text = "도달   " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
+				.. "레벨   Lv." .. tostring(mgr.Level) .. "\n"
+				.. "획득 메소   " .. tostring(mgr.RunMeso) .. "\n"
+				.. "여신의 깃털   +" .. tostring(mgr.RunFeathers) .. "\n" .. best
+		end
+	end
+
+end

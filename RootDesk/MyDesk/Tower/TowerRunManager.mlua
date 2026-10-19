@@ -1,0 +1,1784 @@
+@Component
+script TowerRunManager extends Component
+
+	-- 몬스터 모델 / 배치 위치 (월드 단위)
+	property string MonsterModelId = "towerstarpixie"
+	property Vector3 PlayerPos = Vector3(-1.0, 0.2, 0)
+	property Vector3 MonsterPos = Vector3(1.0, -0.04, 0)
+	property string LobbyMapName = "Lobby"
+	property Vector3 LobbyPos = Vector3(0, 0.2, 0)
+	property string StorageKey = "OrbisTower"
+
+	-- 밸런스 (Phase 3에서 UserDataSet으로 이전 예정)
+	-- 몬스터 능력치 = (기본 + 레벨당 증가 × 몬스터 레벨) × 타입 배율 (MonsterTable / MonsterTypeTable)
+	property string MonsterTableName = "MonsterTable"
+	property string MonsterTypeTableName = "MonsterTypeTable"
+	property number MonsterHpBase = 20
+	property number MonsterHpPerLevel = 10
+	property number MonsterAtkBase = 5
+	property number MonsterAtkPerLevel = 1
+	property number MonsterAttackInterval = 1.6
+	-- 층 / 스테이지: 층마다 한 종류 몬스터(FloorTable), 층당 10스테이지, 마지막 스테이지는 접두사 강화 몬스터
+	property string FloorTableName = "FloorTable"
+	property string PrefixTableName = "MonsterPrefixTable"
+	property integer StagesPerFloor = 10
+	property number LastStageStatMul = 2.5
+	property number EliteScale = 1.5
+	property number EliteRewardMul = 3
+	property number MonsterCritDmg = 150
+	property number BasePlayerAtk = 10
+	property number BasePlayerMaxHp = 100
+	-- 레벨업마다 기본 공격력 +2 / 방어력 +1 / 체력 +10
+	property number LevelAtkBonus = 2
+	property number LevelDefBonus = 1
+	property number LevelHpBonus = 10
+	-- 장비 (EquipTable): 부위별 30단계, 0~10강, 10강에서 다음 장비로 업그레이드
+	property string EquipTableName = "EquipTable"
+	property string EquipSlotTableName = "EquipSlotTable"
+	property number BaseCritDmg = 150
+	-- 숙련도: 최소 공격력 = 최대 × (0.2 + 0.8 × 숙련도%). 0%면 5배 차이, 100%면 같음
+	property number BaseMastery = 10
+	-- 처치 메소: 기본값 × 0.5 ~ 1.5 무작위
+	property number MesoMinRate = 0.5
+	property number MesoMaxRate = 1.5
+	property number DefConstant = 100
+	-- 장비 강화 확률: 70%에서 강화 수치마다 5%씩 감소 (9→10강 25%)
+	@Sync
+	property number EnhanceBaseRate = 70
+	@Sync
+	property number EnhanceRateStep = 5
+	property integer MaxEnhance = 10
+	property number EnhanceStatStep = 0.1
+	-- 강화 수치가 올라도 비용은 그대로 (티어가 오를 때만 비용 상승)
+	property number EnhanceCostStep = 0
+	property number UpgradeCostMul = 3
+	property number BaseMesoReward = 5
+	property number MesoGrowth = 1.10
+	property number BaseExpReward = 10
+	property number ExpGrowth = 1.08
+	-- 필요 경험치: 이전(40 기준)의 1/1.5
+	property number BaseExpToNext = 26.6667
+	property number ExpToNextGrowth = 1.25
+	property string LevelUpEffectRUID = "d92f2ec742d94285af771d33086773d3"
+	-- 발동 연출 이펙트 (텍스트 대신): 전직(effect/basiceff JobChangedCygnusKnights 뒤·앞), 처형, 불사, 최후의 저항
+	property string JobChangeBackFxRUID = "a1132babccd64942a3afc920976ea4f0"
+	property string JobChangeFrontFxRUID = "0806b2e8a1124ac7b15d8aacd11a77d5"
+	property string ExecuteFxRUID = "63b7f4807e4748eda2d57f1ca055e8e8"
+	property string UndyingFxRUID = "c6f54657879448b496daecc8a15c2918"
+	property string LastStandFxRUID = "5044542ed02947009eff46ea1e86a5a1"
+	-- 패시브 스킬 (SkillTable): 레벨 도달 시 1레벨로 해금, 스킬석으로 확률 강화 (최대 10레벨)
+	property string SkillTableName = "SkillTable"
+	property integer SkillMaxLevel = 10
+	property number SkillBaseRate = 50
+	property number SkillRateStep = 5
+	property number StoneDropChance = 50
+	property number MesoProcRatio = 0.25
+	property number ExecuteHpRatio = 0.2
+	property number DoubleHitDelay = 0.2
+	-- 특성 / 직업 (TraitTable · TraitGradeTable) — 타로 메이저 아르카나 21장
+	property string TraitTableName = "TraitTable"
+	property string TraitGradeTableName = "TraitGradeTable"
+	property integer PointsPerJobTier = 100
+	-- 테스트용: 판의 첫 특성 선택에서 카드 1장을 최고 등급(미스틱)으로 확정 (테스트 끝나면 false)
+	property boolean TestFirstPickTopGrade = true
+	-- 테스트용: 매 특성 선택마다 카드 1장을 미스틱으로 확정 (테스트 끝나면 false)
+	property boolean TestAlwaysTopGrade = true
+	property integer MaxJobTier = 3
+	-- 한 판에 나오는 특성 수 (7계열 중 무작위 계열에서 1장씩)
+	property integer RunTraitCount = 5
+	-- 직업 스킬 (JobSkillTable): 특성(직업 계통)·차수별 패시브
+	property string JobSkillTableName = "JobSkillTable"
+	-- 직업 스킬 '콜드 빔' 빙결 시간(초), '메소 투척' 메소 = 처치 메소 × 비율
+	property number JobFreezeSec = 2
+	property number JobMesoStrikeRatio = 0.2
+	-- 연타 직업 스킬의 타격 간격(초)
+	property number ProcHitInterval = 0.12
+	-- 각인 (PlayerEngrave): 판 시작 시 효과 합계를 받아 Bonus에 더한다
+	property number WeaponBaseSpeed = 1.0
+	property number WeaponSpeedPerTier = 0.1
+	property number LowHpDmgRatio = 0.3
+	property number BulwarkHpRatio = 0.5
+	-- 보스 처치 후 거래 (DealTable): 천사(이로움·낮은 수치) / 악마(높은 수치·대가) / 상인(메소로 중간 수치)
+	property string DealTableName = "DealTable"
+	-- 몬스터 처치 후 다음 몬스터 등장까지 대기(초)
+	property number NextSpawnDelay = 0.3
+	-- 여신의 깃털: 일반 몬스터 확률(%)로 1개, 층 보스는 최소~최대 확정
+	property number FeatherChance = 8
+	property integer BossFeatherMin = 2
+	property integer BossFeatherMax = 4
+	property number DeathDelay = 1.2
+	property number ReadyTimeout = 3.0
+
+	-- 클라이언트 UI가 읽는 판 상태
+	@Sync
+	property integer Floor = 1
+	@Sync
+	property integer Stage = 1
+	@Sync
+	property string FloorTitle = ""
+	@Sync
+	property boolean MonsterElite = false
+	@Sync
+	property integer KillSeq = 0
+	@Sync
+	property integer LastKillMeso = 0
+	@Sync
+	property string RunState = "WAIT"
+	@Sync
+	property number PlayerHp = 0
+	@Sync
+	property number PlayerMaxHp = 0
+	@Sync
+	property number PlayerAtk = 0
+	@Sync
+	property number PlayerAtkMin = 0
+	@Sync
+	property number Mastery = 10
+	@Sync
+	property number PlayerAttackInterval = 1.0
+	-- 무기 기본 공격 속도(초당 공격 횟수): 1티어 1.0, 티어가 오를 때마다 +0.1
+	@Sync
+	property number WeaponSpeed = 1.0
+	@Sync
+	property number MonsterHp = 0
+	@Sync
+	property number MonsterMaxHp = 0
+	@Sync
+	property string MonsterName = ""
+	@Sync
+	property string MonsterLabel = ""
+	@Sync
+	property integer Level = 1
+	@Sync
+	property integer Exp = 0
+	@Sync
+	property integer ExpToNext = 27
+	@Sync
+	property integer Stones = 0
+	@Sync
+	property SyncTable<string, integer> SkillLv
+	@Sync
+	property SyncTable<string, integer> SkillCost
+	-- 강화 결과 연출 신호: FxTarget = 장비 부위 이름 또는 "skill:<Id>"
+	@Sync
+	property integer FxSeq = 0
+	@Sync
+	property string FxTarget = ""
+	@Sync
+	property boolean FxOk = false
+	-- 특성 발현 (타로 카드): 판 시작 시 계열마다 1장씩 7장, 레벨업마다 3장 중 1장 선택
+	@Sync
+	property SyncTable<string, string> RunTraits
+	@Sync
+	property SyncTable<string, integer> TraitPoints
+	@Sync
+	property SyncTable<string, string> ChoiceTrait
+	@Sync
+	property SyncTable<string, integer> ChoiceGrade
+	@Sync
+	property integer ChoiceSeq = 0
+	@Sync
+	property integer PendingPicks = 0
+	@Sync
+	property integer Rerolls = 0
+	-- 전직 경로: "1"/"2"/"3" 차수 → 그 차수로 전직한 특성 Id (차수마다 다른 특성일 수 있음)
+	@Sync
+	property SyncTable<string, string> JobPath
+	@Sync
+	property string JobTrait = ""
+	@Sync
+	property integer JobTier = 0
+	@Sync
+	property number EnhanceBonus = 0
+	@Sync
+	property number SkillRateBonus = 0
+	@Sync
+	property integer MesoProcSeq = 0
+	@Sync
+	property string ProcText = ""
+	@Sync
+	property integer ProcSeq = 0
+	@Sync
+	property integer Meso = 0
+	@Sync
+	property integer RunMeso = 0
+	@Sync
+	property number PlayerDef = 0
+	@Sync
+	property number CritRate = 0
+	@Sync
+	property number CritDmg = 150
+	@Sync
+	property number Accuracy = 0
+	@Sync
+	property SyncTable<string, integer> EquipTier
+	@Sync
+	property SyncTable<string, integer> EquipEnh
+	@Sync
+	property SyncTable<string, integer> EquipCost
+	@Sync
+	property SyncTable<string, integer> EquipUnlocked
+	-- 보스 거래: 종류("Angel"/"Devil"/"Merchant") → 이번에 제안된 DealTable Id, 상인 가격, 진행 중인 대가 표시
+	@Sync
+	property SyncTable<string, string> DealIds
+	@Sync
+	property integer DealCost = 0
+	@Sync
+	property string CurseText = ""
+	-- 심볼 획득 연출 신호 (BattleHUD가 SymbolGetSeq 변화를 보고 배너 표시), 현재 층 심볼 단계
+	@Sync
+	property integer SymbolGetSeq = 0
+	@Sync
+	property integer SymbolGetFloor = 0
+	@Sync
+	property integer SymbolGetTier = 0
+	@Sync
+	property integer FloorSymbolTier = 0
+	-- 이번 판에 얻은 여신의 깃털 (결과 팝업 표시용)
+	@Sync
+	property integer RunFeathers = 0
+	@Sync
+	property string EnhanceMsg = ""
+	@Sync
+	property integer EnhanceSeq = 0
+	@Sync
+	property integer BestFloor = 0
+	@Sync
+	property boolean IsNewBest = false
+
+	@HideFromInspector
+	property number MonsterAtk = 0
+	@HideFromInspector
+	property number PlayerAttackTimer = 0
+	@HideFromInspector
+	property number MonsterAttackTimer = 0
+	@HideFromInspector
+	property number StateTimer = 0
+	@HideFromInspector
+	property integer SpawnSeq = 0
+	@HideFromInspector
+	property integer SavedBestFloor = 0
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 서버에서 판 진행을 시작한다. 플레이어가 들어오면 OnUpdate에서 판을 연다.
+		self._T.player = nil
+		self._T.monster = nil
+		self.RunState = "WAIT"
+		self:LoadMonsterTables()
+		self:LoadEquipTable()
+		self:LoadDealTable()
+		self:LoadSkillTable()
+		self:LoadTraitTables()
+		log("[VRF] TowerRunManager begin map=" .. self.Entity.Name .. " monsters=" .. tostring(#self._T.monsters) .. " floors=" .. tostring(#self._T.floors) .. " prefixes=" .. tostring(#self._T.prefixes))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 남아 있는 몬스터를 정리한다.
+		self:DestroyMonster()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadMonsterTables()
+		-- 몬스터 테이블에서 RUID가 있는 몬스터만 레벨 순으로 모으고, 타입별 배율 / 층 / 접두사 테이블을 읽는다.
+		self._T.monsters = {}
+		self._T.monsterById = {}
+		self._T.typeMul = {}
+		self._T.floors = {}
+		self._T.prefixes = {}
+		local floorDs = _DataService:GetTable(self.FloorTableName)
+		if floorDs ~= nil then
+			for i = 1, floorDs:GetRowCount() do
+				table.insert(self._T.floors, { name = floorDs:GetCell(i, "FloorName"), monsterId = floorDs:GetCell(i, "MonsterId") })
+			end
+		end
+		local prefixDs = _DataService:GetTable(self.PrefixTableName)
+		if prefixDs ~= nil then
+			for i = 1, prefixDs:GetRowCount() do
+				table.insert(self._T.prefixes, { name = prefixDs:GetCell(i, "Prefix"), stat = prefixDs:GetCell(i, "Stat"), value = tonumber(prefixDs:GetCell(i, "Value")) or 0 })
+			end
+		end
+		local types = _DataService:GetTable(self.MonsterTypeTableName)
+		if types ~= nil then
+			for i = 1, types:GetRowCount() do
+				local t = types:GetCell(i, "Type")
+				self._T.typeMul[t] = { hp = tonumber(types:GetCell(i, "HpMul")) or 1, atk = tonumber(types:GetCell(i, "AtkMul")) or 1, evade = tonumber(types:GetCell(i, "EvadeRate")) or 0 }
+			end
+		end
+		local ds = _DataService:GetTable(self.MonsterTableName)
+		if ds == nil then
+			log_error("[VRF] MonsterTable not found")
+			return
+		end
+		for i = 1, ds:GetRowCount() do
+			local stand = ds:GetCell(i, "StandRUID")
+			if stand ~= nil and stand ~= "" then
+				local entry = {
+					name = ds:GetCell(i, "Name"),
+					level = tonumber(ds:GetCell(i, "Level")) or 1,
+					type = ds:GetCell(i, "Type"),
+					stand = stand,
+					attack = ds:GetCell(i, "AttackRUID"),
+					hit = ds:GetCell(i, "HitRUID"),
+					die = ds:GetCell(i, "DieRUID"),
+					hitSound = ds:GetCell(i, "HitSoundRUID"),
+					dieSound = ds:GetCell(i, "DieSoundRUID"),
+				}
+				table.insert(self._T.monsters, entry)
+				self._T.monsterById[ds:GetCell(i, "id")] = entry
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadEquipTable()
+		-- 장비 테이블을 부위·단계별로 읽는다.
+		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Shoes", "Cape" }
+		self._T.equip = {}
+		for _, slot in ipairs(self._T.slots) do self._T.equip[slot] = {} end
+		-- 부위 해금 조건 (최고 기록 층)
+		self._T.unlockFloor = {}
+		self._T.costMul = {}
+		local slotDs = _DataService:GetTable(self.EquipSlotTableName)
+		if slotDs ~= nil then
+			for i = 1, slotDs:GetRowCount() do
+				self._T.unlockFloor[slotDs:GetCell(i, "Slot")] = tonumber(slotDs:GetCell(i, "UnlockBestFloor")) or 0
+				-- 부위별 강화 비용 배율 (공격력·방어력·체력 부위 1배, 나머지는 더 비쌈)
+				self._T.costMul[slotDs:GetCell(i, "Slot")] = tonumber(slotDs:GetCell(i, "CostMul")) or 1
+			end
+		end
+		local ds = _DataService:GetTable(self.EquipTableName)
+		if ds == nil then
+			log_error("[VRF] EquipTable not found")
+			return
+		end
+		for i = 1, ds:GetRowCount() do
+			local slot = ds:GetCell(i, "Slot")
+			local tier = tonumber(ds:GetCell(i, "Tier")) or 1
+			if self._T.equip[slot] ~= nil then
+				self._T.equip[slot][tier] = {
+					name = ds:GetCell(i, "Name"),
+					ruid = ds:GetCell(i, "ItemRUID"),
+					value = tonumber(ds:GetCell(i, "StatValue")) or 0,
+					cost = tonumber(ds:GetCell(i, "EnhCostBase")) or 10,
+				}
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSkillTable()
+		-- 패시브 스킬 테이블: 해금 레벨, 효과 타입, 1레벨 수치 + 레벨당 증가, 스킬석 기본 비용.
+		self._T.skills = {}
+		local ds = _DataService:GetTable(self.SkillTableName)
+		if ds == nil then
+			log_error("[VRF] SkillTable not found")
+			return
+		end
+		for i = 1, ds:GetRowCount() do
+			table.insert(self._T.skills, {
+				id = ds:GetCell(i, "Id"),
+				name = ds:GetCell(i, "Name"),
+				unlock = tonumber(ds:GetCell(i, "UnlockLevel")) or 1,
+				type = ds:GetCell(i, "Type"),
+				base = tonumber(ds:GetCell(i, "Base")) or 0,
+				per = tonumber(ds:GetCell(i, "PerLv")) or 0,
+				cost = tonumber(ds:GetCell(i, "CostBase")) or 1,
+			})
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SkillValue(string skillType)
+		-- 해당 효과 타입 스킬의 현재 수치 (미해금이면 0). 수치 = 기본 + 레벨당 증가 × (레벨 - 1)
+		local total = 0
+		for _, s in ipairs(self._T.skills) do
+			if s.type == skillType then
+				local lv = self.SkillLv[s.id] or 0
+				if lv > 0 then total = total + s.base + s.per * (lv - 1) end
+			end
+		end
+		return total
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadTraitTables()
+		-- 특성(타로 메이저 아르카나 21장)과 등급(일반~미스틱) 테이블을 읽는다.
+		self._T.traits = {}
+		self._T.traitById = {}
+		self._T.families = { "Warrior", "Archer", "Thief", "Mage", "Pirate", "Merchant", "Smith" }
+		self._T.grades = {}
+		local ds = _DataService:GetTable(self.TraitTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local t = {
+					id = ds:GetCell(i, "Id"), family = ds:GetCell(i, "Family"), trait = ds:GetCell(i, "Trait"),
+					jobs = { ds:GetCell(i, "Job1"), ds:GetCell(i, "Job2"), ds:GetCell(i, "Job3") },
+					baseStat = ds:GetCell(i, "BaseStat"),
+					eff1 = ds:GetCell(i, "Eff1"), eff1Val = tonumber(ds:GetCell(i, "Eff1Val")) or 0,
+					eff2 = ds:GetCell(i, "Eff2"), eff2Val = tonumber(ds:GetCell(i, "Eff2Val")) or 0,
+				}
+				table.insert(self._T.traits, t)
+				self._T.traitById[t.id] = t
+			end
+		end
+		local gs = _DataService:GetTable(self.TraitGradeTableName)
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do
+				table.insert(self._T.grades, { grade = tonumber(gs:GetCell(i, "Grade")) or i, points = tonumber(gs:GetCell(i, "Points")) or 5, weight = tonumber(gs:GetCell(i, "Weight")) or 1 })
+			end
+		end
+		-- 직업 스킬: jobSkills[특성 Id][차수] = { 스킬, ... } (차수마다 1~3개), 스킬 = { name, effects = { {type, value}, ... }, proc }
+		self._T.jobSkills = {}
+		local js = _DataService:GetTable(self.JobSkillTableName)
+		if js ~= nil then
+			for i = 1, js:GetRowCount() do
+				local id = js:GetCell(i, "TraitId")
+				local tier = tonumber(js:GetCell(i, "Tier")) or 1
+				local effects = {}
+				for k = 1, 2 do
+					local ty = js:GetCell(i, "Type" .. tostring(k))
+					if ty ~= nil and ty ~= "" then table.insert(effects, { type = ty, value = tonumber(js:GetCell(i, "Value" .. tostring(k))) or 0 }) end
+				end
+				-- 공격 시 발동형: ProcType(Strike/CritStrike/Pierce/Double/Freeze/Heal/MesoStrike/Dice), 확률 %, 수치 %
+				local proc = nil
+				local pt = js:GetCell(i, "ProcType")
+				if pt ~= nil and pt ~= "" then
+					-- ProcHits: 연타 수 (0이면 Double은 2, 나머지는 1)
+					local hits = tonumber(js:GetCell(i, "ProcHits")) or 0
+					if hits <= 0 then
+						hits = 1
+						if pt == "Double" then hits = 2 end
+					end
+					proc = { type = pt, chance = tonumber(js:GetCell(i, "ProcChance")) or 0, pct = tonumber(js:GetCell(i, "ProcPct")) or 0, hits = hits,
+						fx = js:GetCell(i, "EffectRUID") or "", fxScale = tonumber(js:GetCell(i, "EffectScale")) or 1 }
+				end
+				if self._T.jobSkills[id] == nil then self._T.jobSkills[id] = {} end
+				if self._T.jobSkills[id][tier] == nil then self._T.jobSkills[id][tier] = {} end
+				table.insert(self._T.jobSkills[id][tier], { name = js:GetCell(i, "Name"), effects = effects, proc = proc })
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table JobSkill(integer tier)
+		-- 그 차수로 전직한 직업의 스킬 목록 (없으면 빈 목록).
+		local id = self.JobPath[tostring(tier)] or ""
+		if id == "" or self._T.jobSkills == nil or self._T.jobSkills[id] == nil then return {} end
+		return self._T.jobSkills[id][tier] or {}
+	end
+
+
+	@ExecSpace("ServerOnly")
+	method number Bonus(string effType)
+		-- 효과 합계 = 패시브 스킬 수치 + 직업 전직 효과(효과값 × 전직 차수) + 각인 효과.
+		local total = self:SkillValue(effType)
+		local engrave = self._T.engrave
+		if engrave ~= nil and engrave[effType] ~= nil then total = total + engrave[effType] end
+		-- 미네르바의 은총
+		local grace = self._T.grace
+		if grace ~= nil and grace[effType] ~= nil then total = total + grace[effType] end
+		-- 심볼 3단계 영구 능력치
+		local sym = self._T.symbolPerm
+		if sym ~= nil and sym[effType] ~= nil then total = total + sym[effType] end
+		-- 보스 거래로 얻은 이번 판 효과 + 진행 중인 대가(받는 피해 증가 등)
+		local deal = self._T.deal
+		if deal ~= nil and deal[effType] ~= nil then total = total + deal[effType] end
+		for _, c in ipairs(self._T.curses or {}) do
+			if c.type == effType then total = total + c.value end
+		end
+		-- 직업 스킬 (차수마다 전직한 직업의 그 차수 스킬)
+		for tier = 1, self.JobTier do
+			for _, sk in ipairs(self:JobSkill(tier)) do
+				for _, e in ipairs(sk.effects) do
+					if e.type == effType then total = total + e.value end
+				end
+			end
+		end
+		return total
+	end
+
+
+	@ExecSpace("ServerOnly")
+	method void DrawRunTraits()
+		-- 판 시작: 특성 포인트·직업 초기화 후, 7계열 중 무작위 RunTraitCount(5)계열에서 특성 카드 1장씩 뽑는다.
+		for _, t in ipairs(self._T.traits) do self.TraitPoints[t.id] = 0 end
+		self.JobTrait = ""
+		self.JobTier = 0
+		for tier = 1, self.MaxJobTier do self.JobPath[tostring(tier)] = "" end
+		self.PendingPicks = 0
+		local fams = {}
+		for _, fam in ipairs(self._T.families) do table.insert(fams, fam) end
+		local names = ""
+		for i = 1, #self._T.families do
+			self.RunTraits[tostring(i)] = ""
+			if i <= self.RunTraitCount and #fams > 0 then
+				local fam = table.remove(fams, _UtilLogic:RandomIntegerRange(1, #fams))
+				local pool = {}
+				for _, t in ipairs(self._T.traits) do
+					if t.family == fam then table.insert(pool, t) end
+				end
+				if #pool > 0 then
+					local pick = pool[_UtilLogic:RandomIntegerRange(1, #pool)]
+					self.RunTraits[tostring(i)] = pick.id
+					names = names .. pick.trait .. " "
+				end
+			end
+		end
+		log("[VRF] run traits drawn: " .. names)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer RollGrade()
+		-- 등급 가중치 추첨 (일반 50 / 희귀 30 / 에픽 14 / 레전더리 5 / 미스틱 1). 각인 '운명의 손'은 희귀 이상 가중치를 올린다.
+		local luck = 1 + self:Bonus("GradeLuck") / 100
+		local function weight(g)
+			if g.grade >= 2 then return g.weight * luck end
+			return g.weight
+		end
+		local sum = 0
+		for _, g in ipairs(self._T.grades) do sum = sum + weight(g) end
+		local r = _UtilLogic:RandomDouble() * sum
+		for _, g in ipairs(self._T.grades) do
+			r = r - weight(g)
+			if r < 0 then return g.grade end
+		end
+		return 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RollChoices()
+		-- 이번 판의 특성(5장) 중 서로 다른 3장을 뽑고, 장마다 등급을 정한다.
+		local pool = {}
+		for i = 1, #self._T.families do
+			local id = self.RunTraits[tostring(i)]
+			if id ~= nil and id ~= "" then table.insert(pool, id) end
+		end
+		for slot = 1, 3 do
+			if #pool == 0 then break end
+			local k = _UtilLogic:RandomIntegerRange(1, #pool)
+			self.ChoiceTrait[tostring(slot)] = pool[k]
+			self.ChoiceGrade[tostring(slot)] = self:RollGrade()
+			table.remove(pool, k)
+		end
+		if self.TestAlwaysTopGrade or (self.TestFirstPickTopGrade and not self._T.topGradeShown) then
+			self._T.topGradeShown = true
+			local top = #self._T.grades
+			self.ChoiceGrade[tostring(_UtilLogic:RandomIntegerRange(1, 3))] = top
+			log("[VRF] test: first choice forced top grade=" .. tostring(top))
+		end
+		self.ChoiceSeq = self.ChoiceSeq + 1
+		self.RunState = "CHOICE"
+		log("[VRF] choices " .. tostring(self.ChoiceTrait["1"]) .. "(" .. tostring(self.ChoiceGrade["1"]) .. ") " .. tostring(self.ChoiceTrait["2"]) .. "(" .. tostring(self.ChoiceGrade["2"]) .. ") " .. tostring(self.ChoiceTrait["3"]) .. "(" .. tostring(self.ChoiceGrade["3"]) .. ") pending=" .. tostring(self.PendingPicks))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer GradePoints(integer grade)
+		-- 등급별 특성 포인트 (일반 5 / 희귀 10 / 에픽 20 / 레전더리 45 / 미스틱 100).
+		for _, g in ipairs(self._T.grades) do
+			if g.grade == grade then return g.points end
+		end
+		return 5
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyTraitPick(string traitId, integer grade)
+		-- 선택한 특성 카드의 포인트를 더한다. 어떤 특성이든 100포인트가 되면 그 특성의 다음 차수 직업으로 전직하고,
+		-- 전직할 때마다 모든 특성 포인트를 0으로 초기화한다 (그래서 1·2·3차가 서로 다른 특성일 수 있음, 최대 3차).
+		local t = self._T.traitById[traitId]
+		if t == nil then return end
+		local pts = (self.TraitPoints[traitId] or 0) + self:GradePoints(grade)
+		self.TraitPoints[traitId] = pts
+		local advanced = false
+		if pts >= self.PointsPerJobTier and self.JobTier < self.MaxJobTier then
+			local tier = self.JobTier + 1
+			self.JobPath[tostring(tier)] = traitId
+			self.JobTrait = traitId
+			self.JobTier = tier
+			for _, other in ipairs(self._T.traits) do self.TraitPoints[other.id] = 0 end
+			advanced = true
+			local jobName = t.jobs[tier] or t.jobs[1]
+			local names = {}
+			for _, sk in ipairs(self:JobSkill(tier)) do table.insert(names, sk.name) end
+			local msg = tostring(tier) .. "차 전직! [" .. jobName .. "]"
+			if #names > 0 then msg = msg .. " 스킬: " .. table.concat(names, ", ") end
+			self:SetEnhanceMsg(msg)
+			-- 전직 전용 이펙트 (빛기둥 + 문양, 캐릭터를 따라감)
+			local player = self._T.player
+			if isvalid(player) then
+				_EffectService:PlayEffectAttached(self.JobChangeBackFxRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+				_EffectService:PlayEffectAttached(self.JobChangeFrontFxRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+			end
+			log("[VRF] job advance " .. traitId .. " tier=" .. tostring(tier) .. " " .. jobName .. " skills=" .. table.concat(names, ",") .. " points reset")
+		end
+		self:RecalcStats()
+		-- 전직하면 체력 가득
+		if advanced then self.PlayerHp = self.PlayerMaxHp end
+		log("[VRF] trait pick " .. traitId .. " grade=" .. tostring(grade) .. " points=" .. tostring(pts))
+	end
+
+	@ExecSpace("Server")
+	method void RequestConfirmDraft()
+		-- 판 시작 카드 펼침 확인: 전투 시작.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "DRAFT" then return end
+		log("[VRF] draft confirmed pending=" .. tostring(self.PendingPicks))
+		-- 각인 '선행 학습'으로 시작 레벨이 높으면 그만큼 특성 선택부터
+		if self.PendingPicks > 0 then
+			self:RollChoices()
+		else
+			self:SpawnMonster()
+		end
+	end
+
+	@ExecSpace("Server")
+	method void RequestPick(integer slot)
+		-- 레벨업 특성 카드 선택 (1~3). 남은 선택이 있으면 다시 3장, 없으면 다음 몬스터.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "CHOICE" then return end
+		local key = tostring(slot)
+		local traitId = self.ChoiceTrait[key]
+		if traitId == nil or traitId == "" then return end
+		self:ApplyTraitPick(traitId, self.ChoiceGrade[key] or 1)
+		self.PendingPicks = math.max(0, self.PendingPicks - 1)
+		-- 이 선택으로 3차 전직을 마쳤으면 남은 선택은 버린다
+		if self.JobTier >= self.MaxJobTier then self.PendingPicks = 0 end
+		if self.PendingPicks > 0 then
+			self:RollChoices()
+		else
+			self:SpawnMonster()
+		end
+	end
+
+	@ExecSpace("Server")
+	method void RequestReroll()
+		-- 각인 '재추첨': 판마다 정해진 횟수만큼 지금 3장을 다시 뽑는다.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "CHOICE" or self.Rerolls <= 0 then return end
+		self.Rerolls = self.Rerolls - 1
+		log("[VRF] reroll left=" .. tostring(self.Rerolls))
+		self:RollChoices()
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component GetEngrave()
+		-- 플레이어 각인 컴포넌트 (PlayerEngrave).
+		local player = self._T.player
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer PlayerHitDamage()
+		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
+		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
+		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - self:Bonus("DefIgnore") / 100)
+		local dmg = self:RollPlayerAtk() * (1 - monDef / (monDef + self.DefConstant))
+		local mul = 1
+		-- 직업 스킬 '투혼': 내 체력 50% 이하일 때 주는 피해 증가
+		if self.PlayerHp < self.PlayerMaxHp * 0.5 then mul = mul + self:Bonus("LowHpAtk") / 100 end
+		if self.MonsterHp <= self.MonsterMaxHp * self.LowHpDmgRatio then mul = mul + self:Bonus("LowHpDmg") / 100 end
+		if self.MonsterElite then mul = mul + self:Bonus("EliteDmg") / 100 end
+		-- 이 층 심볼: 주는 피해 증가
+		mul = mul + (self._T.symDmg or 0) / 100
+		return math.max(1, math.floor(dmg * mul + 0.5))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer BasicHitDamage()
+		-- 기본 공격 피해: 타격 피해 × 은총 '기본 공격 피해' × (몬스터마다 첫 타격이면) 은총 '첫 타격 피해'.
+		local mul = 1 + self:Bonus("BasicDmg") / 100
+		if not self._T.firstHitDone then
+			self._T.firstHitDone = true
+			mul = mul * (1 + self:Bonus("FirstHitDmg") / 100)
+		end
+		return math.max(1, math.floor(self:PlayerHitDamage() * mul + 0.5))
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollJobProcs()
+		-- 이번 공격에서 발동할 직업 스킬(공격 시 확률)을 정하고 결과(피해·회복·빙결·메소)를 미리 계산한다.
+		-- 실제 적용은 기본 타격과 같은 순간(TowerPlayer가 대기 타격을 적용할 때 ApplyJobProcs).
+		local list = {}
+		for tier = 1, self.JobTier do
+			for _, sk in ipairs(self:JobSkill(tier)) do
+				local p = sk.proc
+				-- 은총 '공격 시 발동 확률': 스킬 발동 확률에 합연산
+				if p ~= nil and _UtilLogic:RandomDouble() * 100 < p.chance + self:Bonus("ProcChance") then
+					local r = { name = sk.name, dmg = 0, hits = p.hits or 1, freeze = 0, heal = 0, meso = 0, crit = false, fx = p.fx, fxScale = p.fxScale }
+					local atk = self:RollPlayerAtk()
+					if p.type == "Strike" or p.type == "MesoStrike" or p.type == "Freeze" then
+						r.dmg = math.floor(self:PlayerHitDamage() * p.pct / 100 + 0.5)
+					elseif p.type == "CritStrike" then
+						r.dmg = math.floor(self:PlayerHitDamage() * p.pct / 100 * self.CritDmg / 100 + 0.5)
+						r.crit = true
+					elseif p.type == "Pierce" then
+						r.dmg = math.floor(atk * p.pct / 100 + 0.5)
+					elseif p.type == "Double" then
+						r.dmg = math.floor(self:PlayerHitDamage() * p.pct / 100 + 0.5)
+					elseif p.type == "Dice" then
+						r.dmg = math.floor(atk * (0.5 + _UtilLogic:RandomDouble() * 2.5) + 0.5)
+					elseif p.type == "Heal" then
+						r.heal = math.max(1, math.floor(self.PlayerMaxHp * p.pct / 100 + 0.5))
+					end
+					if p.type == "Freeze" then r.freeze = self.JobFreezeSec end
+					if p.type == "MesoStrike" then r.meso = math.max(1, math.floor(self:KillMeso() * self.JobMesoStrikeRatio + 0.5)) end
+					if r.dmg > 0 then r.dmg = math.max(1, r.dmg) end
+					table.insert(list, r)
+				end
+			end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyJobProcs(table procs, Entity target)
+		-- 발동한 직업 스킬 적용: 스킬 이펙트(몬스터 위, 회복은 캐릭터 위) + 추가 피해 숫자·회복·빙결(몬스터 공격 지연)·메소.
+		if procs == nil or #procs == 0 or self.RunState ~= "FIGHT" then return end
+		local pc = self:GetPlayerAttack()
+		for _, r in ipairs(procs) do
+			-- 연타 스킬은 0.12초 간격으로 한 대씩 (첫 타는 기본 타격과 같은 순간)
+			self:ApplyProcHit(r, target, 1)
+			for h = 2, r.hits do
+				local hit = h
+				_TimerService:SetTimerOnce(function() self:ApplyProcHit(r, target, hit) end, (h - 1) * self.ProcHitInterval)
+			end
+			if r.heal > 0 then
+				self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + r.heal)
+				if pc ~= nil then pc:ShowHeal(r.heal) end
+			end
+			-- 빙결: 몬스터 다음 공격까지 최소 freeze초 (중첩되지 않음)
+			if r.freeze > 0 and self.RunState == "FIGHT" then self.MonsterAttackTimer = math.max(self.MonsterAttackTimer, r.freeze) end
+			if r.meso > 0 then
+				self.Meso = self.Meso + r.meso
+				self.RunMeso = self.RunMeso + r.meso
+				self.MesoProcSeq = self.MesoProcSeq + 1
+			end
+			log("[VRF] job proc " .. r.name .. " dmg=" .. tostring(r.dmg) .. "x" .. tostring(r.hits) .. " heal=" .. tostring(r.heal) .. " freeze=" .. tostring(r.freeze) .. " meso=" .. tostring(r.meso))
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyProcHit(table r, Entity target, integer h)
+		-- 발동 스킬 한 대: 스킬 이펙트(회복만 있는 스킬은 캐릭터 위) + 추가 피해 숫자. 그사이 몬스터가 쓰러졌으면 건너뛴다.
+		local onPlayer = r.heal > 0 and r.dmg <= 0
+		if not onPlayer then
+			if self.RunState ~= "FIGHT" or not isvalid(target) or target ~= self._T.monster then return end
+		end
+		local who = target
+		if onPlayer then who = self._T.player end
+		if r.fx ~= nil and r.fx ~= "" and isvalid(who) then
+			local wp = who.TransformComponent.WorldPosition
+			-- 연타 이펙트는 조금씩 다른 자리에 (좌우·위아래로 번갈아)
+			local ox = ((h - 1) % 3 - 1) * 0.12
+			local oy = (math.floor((h - 1) / 3) % 2) * 0.12
+			if h == 1 then ox = 0 end
+			_EffectService:PlayEffect(r.fx, who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(r.fxScale, r.fxScale, 1), false)
+		end
+		if r.dmg > 0 then
+			local pc = self:GetPlayerAttack()
+			if pc ~= nil then pc:ShowProcDamage(target, r.dmg, r.crit) end
+			self:ApplyMonsterDamage(r.dmg)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean RollSkill(string skillType)
+		-- 확률 발동형 패시브 판정 (수치 = 발동 확률 %, 직업 효과 포함).
+		local chance = self:Bonus(skillType)
+		return chance > 0 and _UtilLogic:RandomDouble() * 100 < chance
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateSkillCosts()
+		-- 스킬 강화 비용 = 테이블 CostBase (현재 전부 1개 고정)
+		for _, s in ipairs(self._T.skills) do
+			self.SkillCost[s.id] = s.cost
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateSkillUnlocks(boolean announce)
+		-- 레벨에 도달한 스킬을 1레벨로 해금한다.
+		local changed = false
+		for _, s in ipairs(self._T.skills) do
+			local lv = self.SkillLv[s.id] or 0
+			if lv == 0 and self.Level >= s.unlock then
+				self.SkillLv[s.id] = 1
+				changed = true
+				if announce then self:SetEnhanceMsg("스킬 [" .. s.name .. "] 해금!") end
+				log("[VRF] skill unlocked " .. s.id .. " at Lv" .. tostring(self.Level))
+			elseif self.SkillLv[s.id] == nil then
+				self.SkillLv[s.id] = 0
+			end
+		end
+		self:UpdateSkillCosts()
+		if changed then self:RecalcStats() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SignalFx(string target, boolean ok)
+		-- 클라이언트 강화 성공/실패 이펙트 신호.
+		self.FxTarget = target
+		self.FxOk = ok
+		self.FxSeq = self.FxSeq + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component GetPlayerAttack()
+		-- 플레이어 공격 컴포넌트 (TowerPlayer).
+		local player = self._T.player
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.TowerPlayer")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ShowPlayerText(string text)
+		-- 패시브 발동 문구를 캐릭터 머리 위에 띄우는 신호 (클라이언트 BattleHUD가 표시).
+		self.ProcText = text
+		self.ProcSeq = self.ProcSeq + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method number RollPlayerAtk()
+		-- 이번 공격의 공격력: 최소 ~ 최대 사이 무작위 (숙련도가 높을수록 최소가 최대에 가까움).
+		return self.PlayerAtkMin + _UtilLogic:RandomDouble() * (self.PlayerAtk - self.PlayerAtkMin)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer KillMeso()
+		-- 현재 층의 기본 처치 메소.
+		return math.floor(self.BaseMesoReward * (self.MesoGrowth ^ (self.Floor - 1)) + 0.5)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number EquipStat(string slot)
+		-- 장비 능력치 = 단계 기본값 × (1 + 강화 수치 × 0.1). 잠긴 부위는 0.
+		if self.EquipUnlocked[slot] ~= 1 then return 0 end
+		local row = self._T.equip[slot][self.EquipTier[slot] or 1]
+		if row == nil then return 0 end
+		return row.value * (1 + self.EnhanceStatStep * (self.EquipEnh[slot] or 0))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer CalcEquipCost(string slot)
+		-- 강화 비용 = 단계 기본 비용 × 부위 배율, 10강에서 업그레이드는 × 3
+		local enh = self.EquipEnh[slot] or 0
+		local row = self._T.equip[slot][self.EquipTier[slot] or 1]
+		if row == nil then return 0 end
+		local cost = row.cost * (1 + self.EnhanceCostStep * enh) * (self._T.costMul[slot] or 1)
+		if enh >= self.MaxEnhance then cost = cost * self.UpgradeCostMul end
+		cost = cost * math.max(0.1, 1 - self:Bonus("EquipCostDown") / 100)
+		return math.floor(cost + 0.5)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyCostume()
+		-- 현재 장비 단계의 아바타 아이템을 캐릭터에 입힌다.
+		local player = self._T.player
+		if not isvalid(player) or not isvalid(player.CostumeManagerComponent) then return end
+		local cm = player.CostumeManagerComponent
+		local cats = { Weapon = MapleAvatarItemCategory.OneHandedWeapon, Cap = MapleAvatarItemCategory.Cap, Coat = MapleAvatarItemCategory.Coat, Glove = MapleAvatarItemCategory.Glove, Shoes = MapleAvatarItemCategory.Shoes, Cape = MapleAvatarItemCategory.Cape }
+		for _, slot in ipairs(self._T.slots) do
+			local row = self._T.equip[slot][self.EquipTier[slot] or 1]
+			if self.EquipUnlocked[slot] == 1 and row ~= nil and row.ruid ~= "" then cm:SetEquip(cats[slot], row.ruid) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateUnlocks(boolean announce)
+		-- 최고 기록(또는 이번 판 도달 층)이 조건 층에 닿은 부위를 해금한다. 해금은 최고 기록 기준이라 영구.
+		local reach = math.max(self.BestFloor, self.Floor)
+		local changed = false
+		for _, slot in ipairs(self._T.slots) do
+			local need = self._T.unlockFloor[slot] or 0
+			if self.EquipUnlocked[slot] ~= 1 and reach >= need then
+				self.EquipUnlocked[slot] = 1
+				changed = true
+				if announce then self:SetEnhanceMsg(self:SlotKoName(slot) .. " 부위가 해금되었습니다!") end
+			elseif self.EquipUnlocked[slot] == nil then
+				self.EquipUnlocked[slot] = 0
+			end
+		end
+		if changed and announce then
+			self:RecalcStats()
+			self:ApplyCostume()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method string SlotKoName(string slot)
+		-- 부위 한글 이름.
+		local names = { Weapon = "무기", Cap = "투구", Coat = "옷", Glove = "장갑", Shoes = "신발", Cape = "망토" }
+		return names[slot] or slot
+	end
+
+	@ExecSpace("ServerOnly")
+	method Entity FindPlayer()
+		-- 이 맵에 있는 첫 번째 플레이어를 찾는다 (솔로 게임).
+		local mapComp = self.Entity.MapComponent
+		if not isvalid(mapComp) then return nil end
+		local users = _UserService:GetUsersByMapComponent(mapComp)
+		if users == nil then return nil end
+		for _, user in ipairs(users) do
+			if isvalid(user) then return user end
+		end
+		return nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetupPlayer(Entity player)
+		-- 플레이어를 좌측에 고정하고 조작(이동/점프)을 막는다. 최고 층 기록을 불러온다.
+		self._T.player = player
+		local movement = player.MovementComponent
+		if isvalid(movement) then
+			movement.InputSpeed = 0
+			movement.JumpForce = 0
+		end
+		local controller = player.PlayerControllerComponent
+		if isvalid(controller) then
+			controller.LookDirectionX = 1
+		end
+		local playerHit = player:GetComponent("script.PlayerHit")
+		if playerHit ~= nil then
+			playerHit.ImmuneCooldown = 0
+		end
+		player.PlayerComponent:SetWorldPosition(self.PlayerPos)
+		self:LoadBestFloor(player)
+		log("[VRF] player setup user=" .. tostring(player.PlayerComponent.UserId) .. " best=" .. tostring(self.BestFloor))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadBestFloor(Entity player)
+		-- 입장 시 1회만 DataStorage에서 최고 층을 읽는다.
+		local ds = _DataStorageService:GetUserDataStorage(player.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.StorageKey)
+		local best = 0
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			local t = _HttpService:JSONDecode(raw)
+			if t ~= nil and t["best"] ~= nil then best = math.floor(t["best"]) end
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] best floor load failed code=" .. tostring(errorCode))
+		end
+		self.BestFloor = best
+		self.SavedBestFloor = best
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveBestFloor()
+		-- 패배 시 최고 층이 갱신됐을 때만 저장한다 (값이 같으면 저장하지 않음).
+		local player = self._T.player
+		if not isvalid(player) or self.BestFloor <= self.SavedBestFloor then return end
+		local ds = _DataStorageService:GetUserDataStorage(player.PlayerComponent.ProfileCode)
+		local value = _HttpService:JSONEncode({ best = self.BestFloor })
+		local target = self.BestFloor
+		ds:SetAsync(self.StorageKey, value, function(errorCode, key)
+			if errorCode == 0 then
+				self.SavedBestFloor = target
+				log("[VRF] best floor saved=" .. tostring(target))
+			else
+				log_warning("[VRF] best floor save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RecalcStats()
+		-- 레벨·장비로 능력치를 다시 계산한다. 최대 HP 증가분만큼 현재 HP도 올린다.
+		local oldMax = self.PlayerMaxHp
+		-- 패시브 스킬 + 직업 스킬 + 각인 (Bonus). 전직 자체로 오르는 기본 스탯은 없음
+		local weapon = self:EquipStat("Weapon") * (1 + self:Bonus("WeaponPct") / 100)
+		local armorMul = 1 + self:Bonus("ArmorPct") / 100
+		local atk = self.BasePlayerAtk + self.LevelAtkBonus * (self.Level - 1) + weapon
+		local hp = self.BasePlayerMaxHp + self.LevelHpBonus * (self.Level - 1) + self:EquipStat("Cap") * armorMul
+		self.PlayerAtk = math.floor(atk * (1 + (self:Bonus("AtkPct")) / 100) + 0.5)
+		self.Mastery = math.min(100, self.BaseMastery + self:Bonus("Mastery"))
+		self.PlayerAtkMin = math.max(1, math.floor(self.PlayerAtk * (0.2 + 0.8 * self.Mastery / 100) + 0.5))
+		self.PlayerMaxHp = math.floor(hp * (1 + (self:Bonus("HpPct")) / 100) + 0.5)
+		local def = self.LevelDefBonus * (self.Level - 1) + self:EquipStat("Coat") * armorMul
+		self.PlayerDef = math.floor(def * (1 + (self:Bonus("DefPct")) / 100) + 0.5)
+		self.CritRate = self:EquipStat("Glove") + self:Bonus("Crit")
+		-- 공격 간격 = 1 / (무기 기본 공격 속도 × (1 + 공격 속도 보너스%))
+		self.WeaponSpeed = self.WeaponBaseSpeed + self.WeaponSpeedPerTier * ((self.EquipTier["Weapon"] or 1) - 1)
+		self.PlayerAttackInterval = 1 / (self.WeaponSpeed * (1 + self:Bonus("Speed") / 100))
+		self.CritDmg = self.BaseCritDmg + self:EquipStat("Shoes") + self:Bonus("CritDmg")
+		self.Accuracy = self:EquipStat("Cape") + self:Bonus("Acc")
+		self.EnhanceBonus = self:Bonus("EnhRate")
+		self.SkillRateBonus = self:Bonus("SkillRate")
+		if oldMax > 0 and self.PlayerMaxHp > oldMax then
+			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + (self.PlayerMaxHp - oldMax))
+		end
+		for _, slot in ipairs(self._T.slots) do self.EquipCost[slot] = self:CalcEquipCost(slot) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StartRun()
+		-- 판 시작: 1층 1스테이지, 판 안 성장치(레벨·경험치·메소·강화) 전부 초기화.
+		-- 각인 효과는 판 시작 시점 값으로 고정 (각인은 로비에서만 바뀜)
+		self._T.engrave = {}
+		local engrave = self:GetEngrave()
+		if engrave ~= nil then self._T.engrave = engrave:BuildValues() end
+		-- 심볼 3단계: 모든 층 영구 능력치
+		self._T.symbolPerm = {}
+		if engrave ~= nil then self._T.symbolPerm = engrave:SymbolPermValues() end
+		-- 미네르바의 은총: 지금 프리셋 옵션 합계
+		self._T.grace = {}
+		if engrave ~= nil then self._T.grace = engrave:GraceValues() end
+		self.RunFeathers = 0
+		local startLevel = 1 + math.floor(self:Bonus("StartLevel"))
+		self.Floor = 1
+		self.Stage = 1
+		self.Level = startLevel
+		self.Exp = 0
+		self.ExpToNext = math.floor(self.BaseExpToNext * (self.ExpToNextGrowth ^ (startLevel - 1)) + 0.5)
+		self.Meso = math.floor(self:Bonus("StartMeso"))
+		self.RunMeso = 0
+		self.IsNewBest = false
+		self.EnhanceMsg = ""
+		for _, slot in ipairs(self._T.slots) do
+			self.EquipTier[slot] = 1
+			self.EquipEnh[slot] = 0
+		end
+		self:UpdateUnlocks(false)
+		-- 스킬도 판 안 성장: 전부 0레벨로 되돌린 뒤 현재 레벨(1)로 해금
+		self.Stones = 0
+		self._T.undyingUsed = false
+		self._T.lastStandUsed = false
+		self._T.topGradeShown = false
+		self._T.deal = {}
+		self._T.curses = {}
+		self.CurseText = ""
+		self._T.extraHitTimer = 0
+		for _, s in ipairs(self._T.skills) do self.SkillLv[s.id] = 0 end
+		-- 특성/직업 초기화 + 이번 판의 운명 카드 7장(계열마다 1장) 뽑기
+		self:DrawRunTraits()
+		self.PendingPicks = startLevel - 1
+		self.Rerolls = math.floor(self:Bonus("Reroll"))
+		self.PlayerMaxHp = 0
+		self:UpdateSkillUnlocks(false)
+		self:RecalcStats()
+		self:ApplyCostume()
+		self.PlayerHp = self.PlayerMaxHp
+		self:DestroyMonster()
+		local player = self._T.player
+		if isvalid(player) then
+			local sc = player.StateComponent
+			if isvalid(sc) and sc.CurrentStateName == "DEAD" then sc:ChangeState("IDLE") end
+			player.PlayerComponent:SetWorldPosition(self.PlayerPos)
+		end
+		log("[VRF] run start floor=1 lv=" .. tostring(self.Level) .. " meso=" .. tostring(self.Meso) .. " rerolls=" .. tostring(self.Rerolls) .. " atk=" .. tostring(self.PlayerAtk) .. " hp=" .. tostring(self.PlayerHp))
+		-- 운명 카드 펼침을 보여주고, 확인을 누르면(RequestConfirmDraft) 전투 시작
+		self.RunState = "DRAFT"
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SpawnMonster()
+		-- 현재 층·스테이지 능력치로 몬스터를 우측에 스폰한다.
+		-- 층 몬스터 = FloorTable의 MonsterId (테이블 끝을 넘으면 마지막 층 유지)
+		-- 스테이지 배율: 1스테이지 1배 → 마지막 스테이지 2.5배, 마지막 스테이지는 접두사 강화 + 1.5배 크기
+		local list = self._T.monsters
+		if list == nil or #list == 0 then
+			log_error("[VRF] no monster data")
+			self.RunState = "WAIT"
+			return
+		end
+		local floorName = ""
+		local info = nil
+		local floors = self._T.floors
+		if #floors > 0 then
+			local f = floors[math.min(self.Floor, #floors)]
+			floorName = f.name
+			info = self._T.monsterById[f.monsterId]
+		end
+		if info == nil then info = list[math.min(self.Floor, #list)] end
+		self.FloorTitle = tostring(self.Floor) .. "층 - " .. floorName .. " " .. tostring(self.Stage)
+
+		local mul = self._T.typeMul[info.type] or { hp = 1, atk = 1, evade = 0 }
+		local stageMul = 1
+		if self.StagesPerFloor > 1 then
+			stageMul = 1 + (self.LastStageStatMul - 1) * (self.Stage - 1) / (self.StagesPerFloor - 1)
+		end
+		local atk = (self.MonsterAtkBase + self.MonsterAtkPerLevel * info.level) * mul.atk * stageMul
+		local evade = mul.evade
+		local def = 0
+		local crit = 0
+		local interval = self.MonsterAttackInterval
+		local prefix = ""
+		self.MonsterElite = self.Stage >= self.StagesPerFloor
+		self:UpdateFloorSymbol()
+		self._T.firstHitDone = false
+		if self.MonsterElite and #self._T.prefixes > 0 then
+			-- 접두사 무작위 1개: 강력한(공격력) / 단단한(방어력) / 치명적인(치명타) / 재빠른(공격 속도) / 날렵한(회피율)
+			local p = self._T.prefixes[_UtilLogic:RandomIntegerRange(1, #self._T.prefixes)]
+			prefix = p.name .. " "
+			if p.stat == "Atk" then atk = atk * p.value
+			elseif p.stat == "Def" then def = p.value
+			elseif p.stat == "Crit" then crit = p.value
+			elseif p.stat == "Speed" then interval = interval / p.value
+			elseif p.stat == "Evade" then evade = evade + p.value
+			end
+		end
+		self._T.monsterEvade = evade
+		self._T.monsterDef = def
+		self._T.monsterCrit = crit
+		self._T.monsterInterval = interval
+		self.MonsterMaxHp = math.max(1, math.floor((self.MonsterHpBase + self.MonsterHpPerLevel * info.level) * mul.hp * stageMul + 0.5))
+		self.MonsterHp = self.MonsterMaxHp
+		self.MonsterAtk = math.max(1, math.floor(atk + 0.5))
+		-- 몬스터 레벨은 표시하지 않는다 (캐릭터 레벨과 기준이 달라 혼동됨)
+		self.MonsterLabel = prefix .. info.name
+
+		self.SpawnSeq = self.SpawnSeq + 1
+		local name = "TowerMonster_" .. tostring(self.SpawnSeq)
+		local monster = _SpawnService:SpawnByModelId(self.MonsterModelId, name, self.MonsterPos, self.Entity)
+		if monster == nil then
+			log_error("[VRF] SpawnByModelId returned nil id=" .. self.MonsterModelId)
+			self.RunState = "WAIT"
+			return
+		end
+		self._T.monster = monster
+		self.MonsterName = name
+		local mc = monster:GetComponent("script.TowerMonster")
+		if mc ~= nil then mc:ApplyLook(info.stand, info.attack, info.hit, info.die, info.hitSound, info.dieSound) end
+		if self.MonsterElite then
+			monster.TransformComponent.Scale = Vector3(self.EliteScale, self.EliteScale, 1)
+		end
+		self.PlayerAttackTimer = 0.5
+		self.MonsterAttackTimer = interval
+		self.RunState = "FIGHT"
+		log("[VRF] " .. self.FloorTitle .. " monster " .. self.MonsterLabel .. " lv=" .. tostring(info.level) .. " (" .. info.type .. ") elite=" .. tostring(self.MonsterElite) .. " hp=" .. tostring(self.MonsterMaxHp) .. " atk=" .. tostring(self.MonsterAtk) .. " def=" .. tostring(def) .. " crit=" .. tostring(crit) .. " interval=" .. tostring(interval) .. " evade=" .. tostring(evade))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DestroyMonster()
+		-- 현재 몬스터 엔티티를 제거한다.
+		local monster = self._T.monster
+		if isvalid(monster) then monster:Destroy() end
+		self._T.monster = nil
+		self.MonsterName = ""
+		self.MonsterLabel = ""
+		self.MonsterElite = false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void GiveKillReward()
+		-- 처치 보상: 메소 + 경험치 (강화 몬스터는 3배), 경험치가 차면 레벨업.
+		local rewardMul = 1
+		if self.MonsterElite then rewardMul = self.EliteRewardMul end
+		local mesoRate = self.MesoMinRate + _UtilLogic:RandomDouble() * (self.MesoMaxRate - self.MesoMinRate)
+		-- 이 층 심볼: 메소·경험치 증가
+		local symGain = 1 + (self._T.symGain or 0) / 100
+		local meso = math.max(1, math.floor(self:KillMeso() * rewardMul * mesoRate * (1 + self:Bonus("MesoPct") / 100) * symGain + 0.5))
+		-- 스킬석: 몬스터 처치 시 50% 확률로 1개
+		local stones = 0
+		if _UtilLogic:RandomDouble() * 100 < self.StoneDropChance + self:Bonus("StoneChance") then
+			stones = 1
+		end
+		self.Stones = self.Stones + stones
+		local exp = math.floor(self.BaseExpReward * (self.ExpGrowth ^ (self.Floor - 1)) * rewardMul * (1 + self:Bonus("ExpPct") / 100) * symGain + 0.5)
+		self.Meso = self.Meso + meso
+		self.RunMeso = self.RunMeso + meso
+		-- 클라이언트 메소 드롭 연출 신호 (KillSeq 변화 감지)
+		self.LastKillMeso = meso
+		self.KillSeq = self.KillSeq + 1
+		self.Exp = self.Exp + exp
+		-- 각인 '재생': 처치 시 최대 체력의 일부 회복
+		local killHeal = math.floor(self.PlayerMaxHp * self:Bonus("KillHeal") / 100 + 0.5)
+		if killHeal > 0 and self.PlayerHp < self.PlayerMaxHp then
+			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + killHeal)
+			local pc = self:GetPlayerAttack()
+			if pc ~= nil then pc:ShowHeal(killHeal) end
+		end
+		local leveled = false
+		while self.Exp >= self.ExpToNext do
+			self.Exp = self.Exp - self.ExpToNext
+			self.Level = self.Level + 1
+			self.ExpToNext = math.floor(self.BaseExpToNext * (self.ExpToNextGrowth ^ (self.Level - 1)) + 0.5)
+			leveled = true
+			-- 레벨업마다 특성 카드 선택 1회 (다음 몬스터가 나오기 전에). 3차 전직을 마치면 더는 나오지 않음
+			if self.JobTier < self.MaxJobTier then self.PendingPicks = self.PendingPicks + 1 end
+		end
+		if leveled then
+			self:RecalcStats()
+			-- 레벨업 시 체력 최대 회복 + 스킬 해금
+			self:UpdateSkillUnlocks(true)
+			self.PlayerHp = self.PlayerMaxHp
+			-- 메이플 레벨업 이펙트 (effect/basiceff.img/LevelUp_Fast)를 캐릭터에 붙여 재생
+			local player = self._T.player
+			if isvalid(player) then
+				_EffectService:PlayEffectAttached(self.LevelUpEffectRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+			end
+			log("[VRF] level up -> Lv" .. tostring(self.Level) .. " atk=" .. tostring(self.PlayerAtk) .. " maxHp=" .. tostring(self.PlayerMaxHp))
+		end
+		log("[VRF] reward meso+" .. tostring(meso) .. " exp+" .. tostring(exp) .. " stones+" .. tostring(stones) .. " total meso=" .. tostring(self.Meso) .. " stones=" .. tostring(self.Stones))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyMonsterDamage(integer damage)
+		-- 플레이어 공격이 몬스터에 맞았을 때 HP를 깎고 처치를 판정한다.
+		if self.RunState ~= "FIGHT" then return end
+		-- 처형: HP 20% 이하 몬스터는 확률로 즉시 처치
+		if self.MonsterHp - damage > 0 and self.MonsterHp <= self.MonsterMaxHp * self.ExecuteHpRatio and self:RollSkill("Execute") then
+			damage = math.ceil(self.MonsterHp)
+			local monster = self._T.monster
+			if isvalid(monster) then
+				local wp = monster.TransformComponent.WorldPosition
+				_EffectService:PlayEffect(self.ExecuteFxRUID, monster, Vector3(wp.x, wp.y + 0.4, wp.z), 0, Vector3(0.35, 0.35, 1), false)
+			end
+			log("[VRF] proc execute")
+		end
+		local dealt = math.min(self.MonsterHp, damage)
+		self.MonsterHp = math.max(0, self.MonsterHp - damage)
+		-- 각인 '흡혈': 준 피해의 일정 %를 항상 회복
+		local drain = dealt * self:Bonus("LifestealPct") / 100
+		if drain > 0 then self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + drain) end
+		-- 흡혈: 확률로 준 피해만큼 회복
+		if dealt > 0 and self.PlayerHp < self.PlayerMaxHp and self:RollSkill("Lifesteal") then
+			local heal = math.floor(dealt + 0.5)
+			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + heal)
+			local pc = self:GetPlayerAttack()
+			if pc ~= nil then pc:ShowHeal(heal) end
+			log("[VRF] proc lifesteal heal=" .. tostring(heal))
+		end
+		if self.MonsterHp > 0 then return end
+
+		-- 게임 템포: 처치 후 잠깐(NextSpawnDelay) 뒤 다음 몬스터 (쓰러진 몬스터는 사망 애니메이션 1회 뒤 따로 제거)
+		self.RunState = "CLEAR"
+		self.StateTimer = self.NextSpawnDelay
+		local monster = self._T.monster
+		if isvalid(monster) then
+			local dieDur = 0
+			local mc = monster:GetComponent("script.TowerMonster")
+			if mc ~= nil then dieDur = mc:PlayDie() end
+			self._T.monster = nil
+			local corpse = monster
+			_TimerService:SetTimerOnce(function()
+				if isvalid(corpse) then corpse:Destroy() end
+			end, math.max(0.1, dieDur))
+		end
+		local bossKilled = self.MonsterElite
+		self:GiveKillReward()
+		self:DropFeathers(bossKilled)
+		if bossKilled then self:RollFloorSymbol() end
+		log("[VRF] " .. self.FloorTitle .. " cleared")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyPlayerDamage(integer damage)
+		-- 몬스터 공격이 플레이어에 맞았을 때 HP를 깎고 패배를 판정한다.
+		if self.RunState ~= "FIGHT" then return end
+		self.PlayerHp = math.max(0, self.PlayerHp - damage)
+		if self.PlayerHp > 0 then
+			-- 각인 '가시': 받은 피해의 일부를 몬스터에게 반사
+			local reflect = math.floor(damage * self:Bonus("Thorns") / 100 + 0.5)
+			if reflect > 0 then self:ApplyMonsterDamage(reflect) end
+			return
+		end
+		-- 불사: 층마다 1회 쓰러지는 대신 HP 일부로 부활
+		-- 불사: 패시브 스킬 + 직업 스킬(불멸의 맹세·대주교의 가호)
+		local revive = self:Bonus("Undying")
+		if revive > 0 and not self._T.undyingUsed then
+			self._T.undyingUsed = true
+			self.PlayerHp = math.max(1, math.floor(self.PlayerMaxHp * revive / 100))
+			local player = self._T.player
+			if isvalid(player) then
+				_EffectService:PlayEffectAttached(self.UndyingFxRUID, player, Vector3(0, 0.25, 0), 0, Vector3(0.9, 0.9, 1), false)
+			end
+			log("[VRF] proc undying hp=" .. tostring(self.PlayerHp))
+			return
+		end
+		-- 각인 '최후의 저항': 판마다 1회 쓰러지는 대신 체력 일부로 버팀
+		local lastStand = self:Bonus("LastStand")
+		if lastStand > 0 and not self._T.lastStandUsed then
+			self._T.lastStandUsed = true
+			self.PlayerHp = math.max(1, math.floor(self.PlayerMaxHp * lastStand / 100))
+			local player = self._T.player
+			if isvalid(player) then
+				_EffectService:PlayEffectAttached(self.LastStandFxRUID, player, Vector3(0, 0.5, 0), 0, Vector3(1.3, 1.3, 1), false)
+			end
+			log("[VRF] proc last stand hp=" .. tostring(self.PlayerHp))
+			return
+		end
+
+		self:Defeat()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Defeat()
+		-- 패배 확정: 사망 모션 → 결과 팝업, 최고 층·깃털 저장 (부활 판정은 호출하기 전에 끝남).
+		self.RunState = "DEFEAT"
+		self.StateTimer = self.DeathDelay
+		self.PlayerHp = 0
+		local player = self._T.player
+		if isvalid(player) and isvalid(player.StateComponent) then
+			player.StateComponent:ChangeState("DEAD")
+		end
+		if self.Floor > self.BestFloor then
+			self.BestFloor = self.Floor
+			self.IsNewBest = true
+		end
+		self:SaveBestFloor()
+		-- 이번 판에 모은 깃털 저장
+		local eng = self:GetEngrave()
+		if eng ~= nil then eng:FlushGrace() end
+		log("[VRF] defeat at floor " .. tostring(self.Floor) .. " best=" .. tostring(self.BestFloor) .. " runMeso=" .. tostring(self.RunMeso))
+	end
+
+	@ExecSpace("Server")
+	method void RequestGiveUp()
+		-- [중단하기] 확인: 불사·최후의 저항 등 부활 효과 없이 바로 패배 처리 → 결과 팝업.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		local s = self.RunState
+		if s ~= "FIGHT" and s ~= "CLEAR" and s ~= "CHOICE" and s ~= "DEAL" then return end
+		log("[VRF] give up at floor " .. tostring(self.Floor) .. " stage=" .. tostring(self.Stage))
+		self:Defeat()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DropFeathers(boolean boss)
+		-- 여신의 깃털: 보스는 2~4개 확정, 일반 몬스터는 확률로 1개. 판이 끝날 때 저장.
+		local n = 0
+		if boss then
+			n = _UtilLogic:RandomIntegerRange(self.BossFeatherMin, self.BossFeatherMax)
+		elseif _UtilLogic:RandomDouble() * 100 < self.FeatherChance then
+			n = 1
+		end
+		if n <= 0 then return end
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		eng:AddFeathers(n)
+		self.RunFeathers = self.RunFeathers + n
+		log("[VRF] feather +" .. tostring(n) .. " run=" .. tostring(self.RunFeathers))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateFloorSymbol()
+		-- 지금 층 심볼 단계의 층 효과(주는 피해·받는 피해·메소/경험치)를 캐시한다.
+		local engrave = self:GetEngrave()
+		local tier = 0
+		local info = nil
+		if engrave ~= nil then
+			tier = engrave:SymbolTier(self.Floor)
+			if tier > 0 then info = engrave:SymbolTierInfo(tier) end
+		end
+		self.FloorSymbolTier = tier
+		self._T.symDmg = info ~= nil and info.dmg or 0
+		self._T.symCut = info ~= nil and info.cut or 0
+		self._T.symGain = info ~= nil and info.gain or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RollFloorSymbol()
+		-- 층 보스 처치: 그 층 심볼 획득 판정. 얻으면 배너 신호, 3단계면 영구 능력치 즉시 반영.
+		local engrave = self:GetEngrave()
+		if engrave == nil then return end
+		local tier = engrave:RollSymbol(self.Floor)
+		if tier <= 0 then return end
+		self.SymbolGetFloor = self.Floor
+		self.SymbolGetTier = tier
+		self.SymbolGetSeq = self.SymbolGetSeq + 1
+		if tier >= 3 then
+			self._T.symbolPerm = engrave:SymbolPermValues()
+			self:RecalcStats()
+		end
+		self:UpdateFloorSymbol()
+		log("[VRF] floor symbol " .. tostring(self.Floor) .. " -> tier " .. tostring(tier))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadDealTable()
+		-- 거래 테이블: 종류별 목록 + Id 색인.
+		self._T.deals = { Angel = {}, Devil = {}, Merchant = {} }
+		self._T.dealById = {}
+		local ds = _DataService:GetTable(self.DealTableName)
+		if ds == nil then
+			log_error("[VRF] DealTable not found")
+			return
+		end
+		for i = 1, ds:GetRowCount() do
+			local d = {
+				id = ds:GetCell(i, "Id"), kind = ds:GetCell(i, "Type"), name = ds:GetCell(i, "Name"),
+				effects = {}, stages = tonumber(ds:GetCell(i, "Stages")) or 0, costMul = tonumber(ds:GetCell(i, "CostMul")) or 0,
+			}
+			for k = 1, 2 do
+				local eff = ds:GetCell(i, "Eff" .. tostring(k))
+				if eff ~= nil and eff ~= "" then table.insert(d.effects, { type = eff, value = tonumber(ds:GetCell(i, "Val" .. tostring(k))) or 0 }) end
+			end
+			if self._T.deals[d.kind] ~= nil then table.insert(self._T.deals[d.kind], d) end
+			self._T.dealById[d.id] = d
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RollDeals()
+		-- 보스 처치: 천사·악마·상인 거래를 하나씩 뽑아 보여준다 (상인 가격은 층이 오를수록 비싸짐).
+		for _, kind in ipairs({ "Angel", "Devil", "Merchant" }) do
+			local list = self._T.deals[kind]
+			if #list > 0 then self.DealIds[kind] = list[_UtilLogic:RandomIntegerRange(1, #list)].id else self.DealIds[kind] = "" end
+		end
+		local m = self._T.dealById[self.DealIds["Merchant"] or ""]
+		self.DealCost = 0
+		if m ~= nil then self.DealCost = math.max(1, math.floor(self:KillMeso() * m.costMul + 0.5)) end
+		self.RunState = "DEAL"
+		log("[VRF] deals angel=" .. tostring(self.DealIds["Angel"]) .. " devil=" .. tostring(self.DealIds["Devil"]) .. " merchant=" .. tostring(self.DealIds["Merchant"]) .. " cost=" .. tostring(self.DealCost))
+	end
+
+	@ExecSpace("Server")
+	method void RequestDeal(string kind)
+		-- 거래 선택 ("" = 아무것도 고르지 않기). 상인은 메소를 지불해야 한다.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "DEAL" then return end
+		if kind ~= "" then
+			local d = self._T.dealById[self.DealIds[kind] or ""]
+			if d == nil then return end
+			if kind == "Merchant" then
+				if self.Meso < self.DealCost then
+					self:SetEnhanceMsg("메소가 부족합니다")
+					return
+				end
+				self.Meso = self.Meso - self.DealCost
+			end
+			self:ApplyDeal(d)
+		else
+			log("[VRF] deal skipped")
+		end
+		self:ContinueAfterReward()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyDeal(table d)
+		-- 거래 효과 적용: 즉시 효과(회복·체력 소모·스킬석·메소)와 이번 판 능력치, 기간제 대가.
+		local healed = 0
+		for _, e in ipairs(d.effects) do
+			if e.type == "Heal" then
+				local before = self.PlayerHp
+				self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + math.floor(self.PlayerMaxHp * e.value / 100 + 0.5))
+				healed = healed + (self.PlayerHp - before)
+			elseif e.type == "HpCost" then
+				self.PlayerHp = math.max(1, self.PlayerHp - math.floor(self.PlayerHp * e.value / 100 + 0.5))
+			elseif e.type == "Stones" then
+				self.Stones = self.Stones + math.floor(e.value)
+			elseif e.type == "MesoGain" then
+				local gain = math.floor(self:KillMeso() * e.value + 0.5)
+				self.Meso = self.Meso + gain
+				self.RunMeso = self.RunMeso + gain
+				self.MesoProcSeq = self.MesoProcSeq + 1
+			elseif e.type == "DmgTaken" then
+				table.insert(self._T.curses, { type = e.type, value = e.value, stages = d.stages })
+			else
+				self._T.deal[e.type] = (self._T.deal[e.type] or 0) + e.value
+			end
+		end
+		self:RecalcStats()
+		self.PlayerHp = math.min(self.PlayerHp, self.PlayerMaxHp)
+		self:UpdateCurseText()
+		if healed > 0 then
+			local pc = self:GetPlayerAttack()
+			if pc ~= nil then pc:ShowHeal(math.floor(healed)) end
+		end
+		log("[VRF] deal applied " .. d.id .. " hp=" .. tostring(self.PlayerHp) .. "/" .. tostring(self.PlayerMaxHp) .. " meso=" .. tostring(self.Meso) .. " curse='" .. self.CurseText .. "'")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickCurses()
+		-- 스테이지를 하나 깰 때마다 기간제 대가의 남은 스테이지를 줄이고, 끝난 것은 지운다.
+		local curses = self._T.curses or {}
+		if #curses == 0 then return end
+		local left = {}
+		for _, c in ipairs(curses) do
+			c.stages = c.stages - 1
+			if c.stages > 0 then table.insert(left, c) end
+		end
+		self._T.curses = left
+		self:UpdateCurseText()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateCurseText()
+		-- 캐릭터 정보 탭에 보여줄 진행 중인 대가.
+		local parts = {}
+		for _, c in ipairs(self._T.curses or {}) do
+			if c.type == "DmgTaken" then
+				table.insert(parts, "받는 피해 " .. string.format("%.1f", 1 + c.value / 100) .. "배 (" .. tostring(c.stages) .. "스테이지)")
+			end
+		end
+		self.CurseText = table.concat(parts, ", ")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ContinueAfterReward()
+		-- 보상(거래) 처리 후: 쌓인 특성 선택이 있으면 카드, 없으면 다음 몬스터.
+		if self.PendingPicks > 0 then
+			self:RollChoices()
+		else
+			self:SpawnMonster()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetEnhanceMsg(string msg)
+		-- 강화 결과 메시지 (클라이언트가 EnhanceSeq 변화를 보고 표시).
+		self.EnhanceMsg = msg
+		self.EnhanceSeq = self.EnhanceSeq + 1
+		log("[VRF] enhance: " .. msg)
+	end
+
+	@ExecSpace("Server")
+	method void RequestEnhance(string slot)
+		-- 장비 강화 요청: 0~9강은 확률 강화(90%에서 5%씩 감소), 10강은 다음 장비로 업그레이드.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "FIGHT" and self.RunState ~= "CLEAR" then return end
+		local list = self._T.equip[slot]
+		if list == nil then return end
+		if self.EquipUnlocked[slot] ~= 1 then
+			self:SetEnhanceMsg(self:SlotKoName(slot) .. " 부위는 아직 잠겨 있습니다")
+			return
+		end
+		local tier = self.EquipTier[slot] or 1
+		local enh = self.EquipEnh[slot] or 0
+		local row = list[tier]
+		local cost = self.EquipCost[slot] or 0
+		if enh >= self.MaxEnhance and list[tier + 1] == nil then
+			self:SetEnhanceMsg(row.name .. " : 최고 등급입니다")
+			return
+		end
+		if self.Meso < cost then
+			self:SetEnhanceMsg("메소가 부족합니다 (" .. tostring(cost) .. " 필요)")
+			return
+		end
+		self.Meso = self.Meso - cost
+		if enh >= self.MaxEnhance then
+			self.EquipTier[slot] = tier + 1
+			self.EquipEnh[slot] = 0
+			self:ApplyCostume()
+			self:SetEnhanceMsg(list[tier + 1].name .. " (으)로 업그레이드!")
+			self:SignalFx(slot, true)
+		else
+			local rate = math.max(0, self.EnhanceBaseRate - self.EnhanceRateStep * enh) + self.EnhanceBonus
+			if _UtilLogic:RandomDouble() * 100 < rate then
+				self.EquipEnh[slot] = enh + 1
+				self:SetEnhanceMsg(row.name .. " +" .. tostring(enh + 1) .. " 강화 성공!")
+				self:SignalFx(slot, true)
+			else
+				self:SetEnhanceMsg(row.name .. " 강화 실패 (+" .. tostring(enh) .. " 유지)")
+				self:SignalFx(slot, false)
+			end
+		end
+		self:RecalcStats()
+	end
+
+	@ExecSpace("Server")
+	method void RequestSkillEnhance(string skillId)
+		-- 스킬 강화 요청: 스킬석 소모, 성공 확률 50%에서 레벨마다 5%씩 감소 (장비보다 2배 이상 어렵게), 실패 시 레벨 유지.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "FIGHT" and self.RunState ~= "CLEAR" then return end
+		local skill = nil
+		for _, s in ipairs(self._T.skills) do
+			if s.id == skillId then skill = s end
+		end
+		if skill == nil then return end
+		local lv = self.SkillLv[skillId] or 0
+		if lv <= 0 then
+			self:SetEnhanceMsg("Lv." .. tostring(skill.unlock) .. " 달성 시 해금되는 스킬입니다")
+			return
+		end
+		if lv >= self.SkillMaxLevel then
+			self:SetEnhanceMsg(skill.name .. " : 최고 레벨입니다")
+			return
+		end
+		local cost = self.SkillCost[skillId] or 1
+		if self.Stones < cost then
+			self:SetEnhanceMsg("스킬석이 부족합니다 (" .. tostring(cost) .. " 필요)")
+			return
+		end
+		self.Stones = self.Stones - cost
+		local rate = math.max(5, self.SkillBaseRate - self.SkillRateStep * (lv - 1)) + self.SkillRateBonus
+		local ok = _UtilLogic:RandomDouble() * 100 < rate
+		if ok then
+			self.SkillLv[skillId] = lv + 1
+			self:SetEnhanceMsg(skill.name .. " Lv." .. tostring(lv + 1) .. " 강화 성공!")
+		else
+			self:SetEnhanceMsg(skill.name .. " 강화 실패 (Lv." .. tostring(lv) .. " 유지)")
+		end
+		self:SignalFx("skill:" .. skillId, ok)
+		self:UpdateSkillCosts()
+		self:RecalcStats()
+	end
+
+	@ExecSpace("Server")
+	method void RequestStart()
+		-- 클라이언트 페이드 인 시작 신호: 대기 중이면 전투 시작.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "READY" then return end
+		log("[VRF] start requested by fade-in")
+		self:StartRun()
+	end
+
+	@ExecSpace("Server")
+	method void RequestRetry()
+		-- 결과 팝업 '다시 도전': 1층부터 새 판.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "RESULT" then return end
+		log("[VRF] retry requested")
+		self:StartRun()
+	end
+
+	@ExecSpace("Server")
+	method void RequestLobby()
+		-- 결과 팝업 '로비로': 판을 정리하고 플레이어를 로비 맵으로 보낸다.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		self:DestroyMonster()
+		self.RunState = "WAIT"
+		self._T.player = nil
+		local sc = player.StateComponent
+		if isvalid(sc) and sc.CurrentStateName == "DEAD" then sc:ChangeState("IDLE") end
+		_TeleportService:TeleportToMapPosition(player, self.LobbyPos, self.LobbyMapName)
+		log("[VRF] lobby requested -> teleport")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 판 상태 머신: WAIT → FIGHT ⇄ CLEAR, FIGHT → DEFEAT → RESULT(팝업 대기)
+		local player = self._T.player
+		if isvalid(player) and player.CurrentMap ~= self.Entity then
+			self:DestroyMonster()
+			self.RunState = "WAIT"
+			self._T.player = nil
+			player = nil
+		end
+		if not isvalid(player) then
+			local found = self:FindPlayer()
+			if found ~= nil then
+				self:SetupPlayer(found)
+				-- 클라이언트 페이드 인이 시작될 때 전투를 시작한다 (RequestStart). 응답이 없으면 시간 초과로 시작.
+				self.RunState = "READY"
+				self.StateTimer = self.ReadyTimeout
+			end
+			return
+		end
+
+		if self.RunState == "FIGHT" then
+			local monster = self._T.monster
+			if not isvalid(monster) then return end
+
+			self.PlayerAttackTimer = self.PlayerAttackTimer - delta
+			if self.PlayerAttackTimer <= 0 then
+				self.PlayerAttackTimer = self.PlayerAttackInterval
+				local pc = player:GetComponent("script.TowerPlayer")
+				if pc ~= nil then
+					-- 명중 판정: 몬스터 회피율 - 명중률 확률로 빗나감
+					local missRate = math.max(0, (self._T.monsterEvade or 0) - self.Accuracy)
+					if _UtilLogic:RandomDouble() * 100 < missRate then
+						pc:DoMiss(monster)
+					else
+						-- 몬스터 방어력(단단한)도 플레이어와 같은 공식으로 피해 감소
+						pc:DoAttack(monster, self:BasicHitDamage(), self.CritRate, self.CritDmg, self:RollJobProcs())
+						-- 연속 베기: 확률로 잠시 뒤 한 번 더 공격
+						if self:RollSkill("DoubleHit") then
+							self._T.extraHitTimer = self.DoubleHitDelay
+							log("[VRF] proc double hit")
+						end
+						-- 메소 사냥꾼: 확률로 처치 메소의 일부 획득 (동전 연출)
+						if self:RollSkill("MesoProc") then
+							local gain = math.max(1, math.floor(self:KillMeso() * self.MesoProcRatio + 0.5))
+							self.Meso = self.Meso + gain
+							self.RunMeso = self.RunMeso + gain
+							self.MesoProcSeq = self.MesoProcSeq + 1
+							log("[VRF] proc meso +" .. tostring(gain))
+						end
+					end
+				end
+			end
+
+			-- 연속 베기 추가 타격
+			if (self._T.extraHitTimer or 0) > 0 then
+				self._T.extraHitTimer = self._T.extraHitTimer - delta
+				if self._T.extraHitTimer <= 0 then
+					local pc = player:GetComponent("script.TowerPlayer")
+					if pc ~= nil then
+						pc:DoAttack(monster, self:BasicHitDamage(), self.CritRate, self.CritDmg, {})
+					end
+				end
+			end
+
+			self.MonsterAttackTimer = self.MonsterAttackTimer - delta
+			if self.MonsterAttackTimer <= 0 and self.RunState == "FIGHT" then
+				-- 직업 스킬 '서리 갑옷': 몬스터 공격 간격 증가
+				self.MonsterAttackTimer = (self._T.monsterInterval or self.MonsterAttackInterval) * (1 + self:Bonus("MonSlow") / 100)
+				local mc = monster:GetComponent("script.TowerMonster")
+				if mc ~= nil then
+					-- 각인 '회피': 확률로 몬스터 공격을 피한다
+					if _UtilLogic:RandomDouble() * 100 < self:Bonus("Evade") then
+						-- 회피: 캐릭터 위에 MISS 데미지 스킨
+						local pc = self:GetPlayerAttack()
+						if pc ~= nil then pc:ShowMiss(player, player.PlayerComponent.UserId) end
+					else
+						-- 방어력: 받는 피해 = 공격력 × (1 - 방어 / (방어 + 상수)), 치명타(치명적인)는 TowerMonster가 판정
+						-- 각인 '철벽': 체력 50% 이하일 때 방어력 증가
+						local def = self.PlayerDef
+						if self.PlayerHp < self.PlayerMaxHp * self.BulwarkHpRatio then def = def * (1 + self:Bonus("Bulwark") / 100) end
+						local reduce = def / (def + self.DefConstant)
+						-- 직업 스킬 '철벽 자세': 받는 피해 감소
+						local cut = math.max(0, 1 - self:Bonus("DmgReduce") / 100)
+						-- 악마의 거래 대가: 받는 피해 증가
+						cut = cut * (1 + self:Bonus("DmgTaken") / 100)
+						-- 이 층 심볼: 받는 피해 감소
+						cut = cut * math.max(0, 1 - (self._T.symCut or 0) / 100)
+						mc:DoAttack(player, math.max(1, math.floor(self.MonsterAtk * (1 - reduce) * cut + 0.5)), self._T.monsterCrit or 0, self.MonsterCritDmg)
+					end
+				end
+			end
+		elseif self.RunState == "CLEAR" then
+			self.StateTimer = self.StateTimer - delta
+			if self.StateTimer <= 0 then
+				-- 다음 스테이지, 마지막 스테이지를 깨면 다음 층 1스테이지
+				self:DestroyMonster()
+				self:TickCurses()
+				local bossCleared = self.Stage >= self.StagesPerFloor
+				if self.Stage < self.StagesPerFloor then
+					self.Stage = self.Stage + 1
+				else
+					self.Stage = 1
+					self.Floor = self.Floor + 1
+					self._T.undyingUsed = false
+					self:UpdateUnlocks(true)
+					-- 층 클리어: 최고 클리어 층을 넘으면 각인 포인트 +1 (영구)
+					local engrave = self:GetEngrave()
+					if engrave ~= nil and engrave:ReportCleared(self.Floor - 1) then
+						self:SetEnhanceMsg("각인 포인트 +1! (총 " .. tostring(self.Floor - 1) .. ")")
+					end
+				end
+				-- 보스를 잡았으면 거래부터, 그다음 레벨업으로 쌓인 특성 선택, 없으면 바로 다음 몬스터
+				if bossCleared then
+					self:RollDeals()
+				else
+					self:ContinueAfterReward()
+				end
+			end
+		elseif self.RunState == "READY" then
+			self.StateTimer = self.StateTimer - delta
+			if self.StateTimer <= 0 then
+				log("[VRF] ready timeout -> start")
+				self:StartRun()
+			end
+		elseif self.RunState == "DEFEAT" then
+			self.StateTimer = self.StateTimer - delta
+			if self.StateTimer <= 0 then
+				self.RunState = "RESULT"
+				log("[VRF] result popup state")
+			end
+		end
+	end
+
+end

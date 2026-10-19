@@ -1,0 +1,269 @@
+@Component
+script SkillTestManager extends Component
+
+	-- 스킬 이펙트 테스트 맵: 탑과 같은 자리에 캐릭터·몬스터를 세워 두고,
+	-- 클라이언트가 고른 직업의 발동 스킬 이펙트를 실제 게임과 같은 방식(위치·크기·연타 간격)으로 재생한다.
+	property string MonsterModelId = "towerstarpixie"
+	property Vector3 PlayerPos = Vector3(-1.0, 0.2, 0)
+	property Vector3 MonsterPos = Vector3(1.0, -0.04, 0)
+	property string LobbyMapName = "Lobby"
+	property Vector3 LobbyPos = Vector3(0, 0.2, 0)
+	property string JobSkillTableName = "JobSkillTable"
+	property string MonsterTableName = "MonsterTable"
+	property string FloorTableName = "FloorTable"
+	-- 스킬 하나 재생 후 다음 스킬까지 간격(초), 연타 간격(TowerRunManager.ProcHitInterval과 같게)
+	property number SkillGap = 1.6
+	property number ProcHitInterval = 0.12
+	-- 공격 동작 시작 후 이펙트가 나올 때까지 (TowerPlayer.HitSyncDelay와 같게)
+	property number HitDelay = 0.3
+
+	-- 화면 표시용 (클라이언트 SkillTestUILogic이 읽음)
+	@Sync
+	property string InfoTitle = ""
+	@Sync
+	property string InfoDesc = ""
+	@Sync
+	property string MonsterLabel = ""
+	@Sync
+	property integer PlaySeq = 0
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 직업 스킬(이펙트 있는 발동 스킬)과 층 몬스터 목록을 읽는다.
+		self._T.player = nil
+		self._T.monster = nil
+		self._T.timers = {}
+		self._T.monsterIndex = 1
+		self:LoadTables()
+		log("[VRF] SkillTestManager begin fxSkills=" .. tostring(self._T.fxCount) .. " monsters=" .. tostring(#self._T.floorMonsters))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 재생 중인 타이머와 몬스터 정리.
+		self:ClearTimers()
+		self:DestroyMonster()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadTables()
+		-- skills[특성 Id][차수] = { {name, desc, type, pct, hits, fx, fxScale}, ... } (이펙트 RUID가 있는 스킬만)
+		self._T.skills = {}
+		self._T.fxCount = 0
+		local js = _DataService:GetTable(self.JobSkillTableName)
+		if js ~= nil then
+			for i = 1, js:GetRowCount() do
+				local fx = js:GetCell(i, "EffectRUID") or ""
+				local pt = js:GetCell(i, "ProcType") or ""
+				if fx ~= "" and pt ~= "" then
+					local id = js:GetCell(i, "TraitId")
+					local tier = tonumber(js:GetCell(i, "Tier")) or 1
+					-- ProcHits: 연타 수 (0이면 Double은 2, 나머지는 1) — TowerRunManager와 같은 규칙
+					local hits = tonumber(js:GetCell(i, "ProcHits")) or 0
+					if hits <= 0 then
+						hits = 1
+						if pt == "Double" then hits = 2 end
+					end
+					if self._T.skills[id] == nil then self._T.skills[id] = {} end
+					if self._T.skills[id][tier] == nil then self._T.skills[id][tier] = {} end
+					table.insert(self._T.skills[id][tier], { name = js:GetCell(i, "Name"), desc = js:GetCell(i, "Desc") or "", type = pt,
+						pct = tonumber(js:GetCell(i, "ProcPct")) or 0, hits = hits, fx = fx, fxScale = tonumber(js:GetCell(i, "EffectScale")) or 1 })
+					self._T.fxCount = self._T.fxCount + 1
+				end
+			end
+		end
+		-- 층 순서대로 몬스터 외형 (몬스터 변경 버튼으로 돌려 본다)
+		local looks = {}
+		local ms = _DataService:GetTable(self.MonsterTableName)
+		if ms ~= nil then
+			for i = 1, ms:GetRowCount() do
+				local stand = ms:GetCell(i, "StandRUID")
+				if stand ~= nil and stand ~= "" then
+					looks[ms:GetCell(i, "id")] = { name = ms:GetCell(i, "Name"), stand = stand, attack = ms:GetCell(i, "AttackRUID"), hit = ms:GetCell(i, "HitRUID"),
+						die = ms:GetCell(i, "DieRUID"), hitSound = ms:GetCell(i, "HitSoundRUID"), dieSound = ms:GetCell(i, "DieSoundRUID") }
+				end
+			end
+		end
+		self._T.floorMonsters = {}
+		local fs = _DataService:GetTable(self.FloorTableName)
+		if fs ~= nil then
+			for i = 1, fs:GetRowCount() do
+				local look = looks[fs:GetCell(i, "MonsterId")]
+				if look ~= nil then table.insert(self._T.floorMonsters, look) end
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method Entity FindPlayer()
+		-- 이 맵에 있는 첫 번째 플레이어 (솔로 테스트).
+		local users = _UserService:GetUsersByMapComponent(self.Entity.MapComponent)
+		if users == nil then return nil end
+		for _, user in ipairs(users) do
+			if isvalid(user) then return user end
+		end
+		return nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetupPlayer(Entity player)
+		-- 탑과 같은 자리에 고정하고 이동·점프를 막는다.
+		self._T.player = player
+		if isvalid(player.MovementComponent) then
+			player.MovementComponent.InputSpeed = 0
+			player.MovementComponent.JumpForce = 0
+		end
+		if isvalid(player.PlayerControllerComponent) then player.PlayerControllerComponent.LookDirectionX = 1 end
+		player.PlayerComponent:SetWorldPosition(self.PlayerPos)
+		self.InfoTitle = "직업을 고르세요"
+		self.InfoDesc = "고른 직업의 이펙트 스킬이 차례로 재생됩니다"
+		self:SpawnMonster()
+		log("[VRF] skill test player setup user=" .. tostring(player.PlayerComponent.UserId))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SpawnMonster()
+		-- 지금 고른 층 몬스터를 오른쪽에 세운다 (공격하지 않는 허수아비).
+		self:DestroyMonster()
+		local list = self._T.floorMonsters
+		if #list == 0 then return end
+		local look = list[math.min(self._T.monsterIndex, #list)]
+		local monster = _SpawnService:SpawnByModelId(self.MonsterModelId, "TestMonster", self.MonsterPos, self.Entity)
+		if monster == nil then
+			log_error("[VRF] skill test monster spawn failed id=" .. self.MonsterModelId)
+			return
+		end
+		self._T.monster = monster
+		local mc = monster:GetComponent("script.TowerMonster")
+		if mc ~= nil then mc:ApplyLook(look.stand, look.attack, look.hit, look.die, look.hitSound, look.dieSound) end
+		self.MonsterLabel = tostring(self._T.monsterIndex) .. "층 " .. look.name
+		log("[VRF] skill test monster " .. self.MonsterLabel)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DestroyMonster()
+		-- 허수아비 몬스터 제거.
+		if isvalid(self._T.monster) then self._T.monster:Destroy() end
+		self._T.monster = nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ClearTimers()
+		-- 재생 대기 중인 스킬 타이머를 모두 취소한다.
+		for _, id in ipairs(self._T.timers or {}) do _TimerService:ClearTimer(id) end
+		self._T.timers = {}
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Later(any fn, number delay)
+		-- 취소할 수 있게 기록해 두는 1회 타이머.
+		table.insert(self._T.timers, _TimerService:SetTimerOnce(fn, math.max(0.01, delay)))
+	end
+
+	@ExecSpace("Server")
+	method void RequestPlayJob(string traitId, integer tier, string jobName)
+		-- 직업 버튼: 그 직업(특성·차수)의 이펙트 스킬을 하나씩 재생한다. 재생 중이면 끊고 새로 시작.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		self:ClearTimers()
+		self.PlaySeq = self.PlaySeq + 1
+		local list = (self._T.skills[traitId] and self._T.skills[traitId][tier]) or {}
+		log("[VRF] skill test play " .. traitId .. " tier=" .. tostring(tier) .. " skills=" .. tostring(#list))
+		if #list == 0 then
+			self.InfoTitle = "[" .. tostring(tier) .. "차] " .. jobName
+			self.InfoDesc = "이펙트가 있는 스킬이 없습니다 (능력치 스킬만 있음)"
+			return
+		end
+		for i, sk in ipairs(list) do
+			local idx = i
+			local skill = sk
+			self:Later(function() self:PlaySkill(skill, tier, jobName, idx, #list) end, (i - 1) * self.SkillGap)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PlaySkill(table sk, integer tier, string jobName, integer idx, integer total)
+		-- 스킬 하나: 공격 동작 → (HitDelay 뒤) 연타 수만큼 이펙트 + 피해 숫자 (회복 스킬은 캐릭터 위).
+		local player = self._T.player
+		local monster = self._T.monster
+		if not isvalid(player) or not isvalid(monster) then return end
+		self.InfoTitle = "[" .. tostring(tier) .. "차] " .. jobName .. " - " .. sk.name .. "  (" .. tostring(idx) .. "/" .. tostring(total) .. ")"
+		self.InfoDesc = sk.desc .. "\n" .. sk.type .. " · " .. tostring(sk.hits) .. "타 · 이펙트 크기 " .. tostring(sk.fxScale)
+		local tp = player:GetComponent("script.TowerPlayer")
+		if tp ~= nil then tp:PlayAttackMotion(0, player.PlayerComponent.UserId) end
+		for h = 1, sk.hits do
+			local hit = h
+			self:Later(function() self:PlayHit(sk, hit) end, self.HitDelay + (h - 1) * self.ProcHitInterval)
+		end
+		log("[VRF] skill test fx " .. sk.name .. " type=" .. sk.type .. " hits=" .. tostring(sk.hits) .. " scale=" .. tostring(sk.fxScale))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PlayHit(table sk, integer h)
+		-- 연타 한 대: TowerRunManager.ApplyProcHit과 같은 위치 규칙으로 이펙트를 그린다.
+		local player = self._T.player
+		local monster = self._T.monster
+		if not isvalid(player) or not isvalid(monster) then return end
+		local onPlayer = sk.type == "Heal"
+		local who = monster
+		if onPlayer then who = player end
+		local wp = who.TransformComponent.WorldPosition
+		-- 연타 이펙트는 조금씩 다른 자리에 (좌우·위아래로 번갈아)
+		local ox = ((h - 1) % 3 - 1) * 0.12
+		local oy = (math.floor((h - 1) / 3) % 2) * 0.12
+		if h == 1 then ox = 0 end
+		_EffectService:PlayEffect(sk.fx, who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(sk.fxScale, sk.fxScale, 1), false)
+		local tp = player:GetComponent("script.TowerPlayer")
+		if tp == nil then return end
+		-- 피해 숫자는 예시 값 (스킬 계수 %), 주사위는 무작위
+		if onPlayer then
+			tp:ShowHeal(math.max(1, math.floor(sk.pct)))
+		else
+			local amount = math.floor(sk.pct)
+			if sk.type == "Dice" then amount = _UtilLogic:RandomIntegerRange(50, 300) end
+			tp:ShowProcDamage(monster, math.max(1, amount), sk.type == "CritStrike")
+			local mc = monster:GetComponent("script.TowerMonster")
+			if mc ~= nil then mc:SetClip(mc.HitRUID, mc.HitAnimTime) end
+		end
+	end
+
+	@ExecSpace("Server")
+	method void RequestNextMonster()
+		-- 몬스터 변경 버튼: 다음 층 몬스터로 바꾼다 (몬스터 크기에 따라 이펙트가 어떻게 보이는지 확인).
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		local n = #self._T.floorMonsters
+		if n == 0 then return end
+		self._T.monsterIndex = self._T.monsterIndex % n + 1
+		self:SpawnMonster()
+	end
+
+	@ExecSpace("Server")
+	method void RequestLobby()
+		-- 로비로 버튼.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		self:ClearTimers()
+		self:DestroyMonster()
+		self._T.player = nil
+		_TeleportService:TeleportToMapPosition(player, self.LobbyPos, self.LobbyMapName)
+		log("[VRF] skill test -> lobby")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 플레이어가 들어오면 자리 잡기, 나가면 정리.
+		local player = self._T.player
+		if isvalid(player) and player.CurrentMap ~= self.Entity then
+			self:ClearTimers()
+			self:DestroyMonster()
+			self._T.player = nil
+			player = nil
+		end
+		if not isvalid(player) then
+			local found = self:FindPlayer()
+			if found ~= nil then self:SetupPlayer(found) end
+		end
+	end
+
+end

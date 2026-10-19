@@ -1,0 +1,684 @@
+@Component
+script PlayerEngrave extends Component
+
+	-- 각인: 아웃게임 영구 성장. 클리어한 최고 층 수 = 총 포인트 (절대 줄지 않음)
+	property string StorageKey = "OrbisEngrave"
+	-- 각인 이전 저장 데이터(최고 도달 층). 처음 한 번만 읽어 클리어 층으로 옮긴다.
+	property string LegacyKey = "OrbisTower"
+	property string TableName = "EngraveTable"
+	property string LobbyMapName = "Lobby"
+	property number LoadRetryDelay = 10
+
+	@Sync
+	property boolean Loaded = false
+	@Sync
+	property integer ClearedFloor = 0
+	@Sync
+	property integer Spent = 0
+	@Sync
+	property SyncTable<string, integer> Lv
+	@Sync
+	property string Msg = ""
+	@Sync
+	property integer MsgSeq = 0
+
+	-- 심볼: 층마다 1~3단계, 보스 처치 시 확률 획득 (SymbolTierTable / SymbolPermTable). 같은 플레이어 저장 컴포넌트에서 따로 저장
+	property string SymbolKey = "OrbisSymbol"
+	property string SymbolTierTableName = "SymbolTierTable"
+	property string SymbolPermTableName = "SymbolPermTable"
+	@Sync
+	property boolean SymbolLoaded = false
+	-- 층 번호(문자열) → 단계(1~3)
+	@Sync
+	property SyncTable<string, integer> SymbolLv
+	@Sync
+	property integer SymbolCount = 0
+
+	-- 미네르바의 은총: 여신의 깃털로 옵션 5줄 돌리기 (잠금 최대 4줄, 프리셋 3개). 키 OrbisGrace
+	property string GraceKey = "OrbisGrace"
+	property integer GraceSlots = 5
+	property integer GracePresetCount = 3
+	property integer GraceMaxLocks = 4
+	property integer GraceBaseCost = 10
+	property integer GraceLockCost = 10
+	@Sync
+	property boolean GraceLoaded = false
+	@Sync
+	property integer Feathers = 0
+	@Sync
+	property integer GracePreset = 1
+	-- "프리셋_줄" → "옵션Id|등급|단계|잠금(0/1)" (빈 줄은 "")
+	@Sync
+	property SyncTable<string, string> GraceLines
+	@Sync
+	property integer GraceSeq = 0
+
+	@HideFromInspector
+	property boolean GraceDirty = false
+	@HideFromInspector
+	property number GraceRetryTimer = 0
+	@HideFromInspector
+	property boolean SymbolDirty = false
+	@HideFromInspector
+	property number SymbolRetryTimer = 0
+	@HideFromInspector
+	property boolean Dirty = false
+	@HideFromInspector
+	property integer SaveGen = 0
+	@HideFromInspector
+	property number RetryTimer = 0
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 각인 테이블을 읽고 저장된 각인을 불러온다.
+		self:LoadTable()
+		self:LoadData()
+		self:LoadSymbolTables()
+		self:LoadSymbols()
+		self:LoadGraceTables()
+		self:LoadGrace()
+		log("[VRF] PlayerEngrave begin nodes=" .. tostring(#self._T.nodes) .. " cleared=" .. tostring(self.ClearedFloor) .. " spent=" .. tostring(self.Spent))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기에 실패했으면 잠시 뒤 다시 시도한다 (실패 상태에서는 저장하지 않음).
+		if not self.GraceLoaded then
+			self.GraceRetryTimer = self.GraceRetryTimer - delta
+			if self.GraceRetryTimer <= 0 then self:LoadGrace() end
+		end
+		if not self.SymbolLoaded then
+			self.SymbolRetryTimer = self.SymbolRetryTimer - delta
+			if self.SymbolRetryTimer <= 0 then self:LoadSymbols() end
+		end
+		if self.Loaded then return end
+		self.RetryTimer = self.RetryTimer - delta
+		if self.RetryTimer <= 0 then self:LoadData() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 플레이어가 나갈 때 저장되지 않은 변경을 마지막으로 저장한다.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		if self.GraceLoaded and self.GraceDirty then
+			local code = ds:SetAndWait(self.GraceKey, self:EncodeGrace())
+			if code ~= 0 then log_warning("[VRF] grace final save failed code=" .. tostring(code)) end
+		end
+		if self.SymbolLoaded and self.SymbolDirty then
+			local code = ds:SetAndWait(self.SymbolKey, self:EncodeSymbols())
+			if code ~= 0 then log_warning("[VRF] symbol final save failed code=" .. tostring(code)) end
+		end
+		if not self.Loaded or not self.Dirty then return end
+		local errorCode = ds:SetAndWait(self.StorageKey, self:Encode())
+		if errorCode ~= 0 then log_warning("[VRF] engrave final save failed code=" .. tostring(errorCode)) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadTable()
+		-- EngraveTable: 계열(Atk/Def/Util) × 단계(1~4) × 칸(1~2), 노드마다 효과 종류·레벨당 수치·최대 레벨.
+		self._T.nodes = {}
+		self._T.nodeById = {}
+		local ds = _DataService:GetTable(self.TableName)
+		if ds == nil then
+			log_error("[VRF] EngraveTable not found")
+			return
+		end
+		for i = 1, ds:GetRowCount() do
+			local n = {
+				id = ds:GetCell(i, "Id"), branch = ds:GetCell(i, "Branch"),
+				tier = tonumber(ds:GetCell(i, "Tier")) or 1, col = tonumber(ds:GetCell(i, "Col")) or 1, type = ds:GetCell(i, "Type"),
+				per = tonumber(ds:GetCell(i, "PerLv")) or 0, max = tonumber(ds:GetCell(i, "MaxLv")) or 3,
+			}
+			table.insert(self._T.nodes, n)
+			self._T.nodeById[n.id] = n
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadData()
+		-- 저장된 각인을 읽는다. 처음이면 예전 최고 도달 층에서 클리어 층(도달 층 - 1)을 옮겨 온다.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.StorageKey)
+		local cleared = 0
+		local lv = {}
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			local t = _HttpService:JSONDecode(raw)
+			if t ~= nil then
+				cleared = math.floor(t["c"] or 0)
+				if t["lv"] ~= nil then lv = t["lv"] end
+			end
+		elseif errorCode == 0 or errorCode == 1000002 then
+			-- 아직 각인 저장이 없음 (빈 값 또는 NotFound)
+			local code2, raw2 = ds:GetAndWait(self.LegacyKey)
+			if code2 == 0 and raw2 ~= nil and raw2 ~= "" then
+				local t = _HttpService:JSONDecode(raw2)
+				if t ~= nil and t["best"] ~= nil then cleared = math.max(0, math.floor(t["best"]) - 1) end
+			end
+			if cleared > 0 then self:MarkDirty() end
+		else
+			log_warning("[VRF] engrave load failed code=" .. tostring(errorCode))
+			self.RetryTimer = self.LoadRetryDelay
+			return
+		end
+		self.ClearedFloor = cleared
+		-- 테이블에 없는 노드는 버리고 최대 레벨을 넘지 않게 정리한다.
+		local spent = 0
+		for _, n in ipairs(self._T.nodes) do
+			local v = math.max(0, math.min(n.max, math.floor(lv[n.id] or 0)))
+			self.Lv[n.id] = v
+			spent = spent + v
+		end
+		-- 해금 조건(같은 줄 바로 위 노드 만렙)이 안 맞는 노드는 포인트를 돌려준다 (테이블은 단계 순서라 위에서부터 확인)
+		for _, n in ipairs(self._T.nodes) do
+			if (self.Lv[n.id] or 0) > 0 and not self:IsNodeOpen(n.id) then
+				spent = spent - self.Lv[n.id]
+				self.Lv[n.id] = 0
+				self:MarkDirty()
+				log("[VRF] engrave refund locked node " .. n.id)
+			end
+		end
+		self.Spent = spent
+		if spent > cleared then
+			for _, n in ipairs(self._T.nodes) do self.Lv[n.id] = 0 end
+			self.Spent = 0
+			self:MarkDirty()
+		end
+		self.Loaded = true
+		log("[VRF] engrave loaded cleared=" .. tostring(self.ClearedFloor) .. " spent=" .. tostring(self.Spent))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 문자열: {"c":클리어 층,"lv":{노드:레벨}} (0레벨 노드는 생략).
+		local lv = {}
+		local any = false
+		for _, n in ipairs(self._T.nodes) do
+			local v = self.Lv[n.id] or 0
+			if v > 0 then
+				lv[n.id] = v
+				any = true
+			end
+		end
+		-- 빈 테이블은 JSONEncode가 지원하지 않으므로 찍은 각인이 없으면 lv를 뺀다
+		if not any then return _HttpService:JSONEncode({ c = self.ClearedFloor }) end
+		return _HttpService:JSONEncode({ c = self.ClearedFloor, lv = lv })
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MarkDirty()
+		-- 변경 표시 (저장할 때 세대 번호로 그 사이 변경 여부를 확인).
+		self.Dirty = true
+		self.SaveGen = self.SaveGen + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Flush()
+		-- 바뀐 것이 있을 때만 저장한다. 저장 중 또 바뀌면 Dirty를 유지해 다음에 다시 저장.
+		if not self.Loaded or not self.Dirty then return end
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local gen = self.SaveGen
+		ds:SetAsync(self.StorageKey, self:Encode(), function(errorCode, key)
+			if errorCode == 0 then
+				if self.SaveGen == gen then self.Dirty = false end
+				log("[VRF] engrave saved cleared=" .. tostring(self.ClearedFloor) .. " spent=" .. tostring(self.Spent))
+			else
+				log_warning("[VRF] engrave save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean ReportCleared(integer floor)
+		-- 층 클리어 보고: 최고 클리어 층을 넘었을 때만 포인트가 늘고 바로 저장한다.
+		if not self.Loaded or floor <= self.ClearedFloor then return false end
+		self.ClearedFloor = floor
+		self:MarkDirty()
+		self:Flush()
+		log("[VRF] engrave cleared floor=" .. tostring(floor) .. " points=" .. tostring(self.ClearedFloor))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method table BuildValues()
+		-- 판 시작 시 적용할 각인 효과 합계 {효과 종류 = 수치}.
+		local values = {}
+		for _, n in ipairs(self._T.nodes) do
+			local v = self.Lv[n.id] or 0
+			if v > 0 then values[n.type] = (values[n.type] or 0) + n.per * v end
+		end
+		return values
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean IsNodeOpen(string nodeId)
+		-- 1단계는 항상 열림. 그 외에는 같은 계열·같은 줄(칸)의 바로 앞 단계 노드를 최대 레벨까지 찍어야 열린다.
+		local n = self._T.nodeById[nodeId]
+		if n == nil then return false end
+		if n.tier <= 1 then return true end
+		for _, p in ipairs(self._T.nodes) do
+			if p.branch == n.branch and p.col == n.col and p.tier == n.tier - 1 then return (self.Lv[p.id] or 0) >= p.max end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSymbolTables()
+		-- 심볼 단계표(확률·층 효과)와 3단계 영구 능력치 순환표.
+		self._T.symbolTiers = {}
+		local ts = _DataService:GetTable(self.SymbolTierTableName)
+		if ts ~= nil then
+			for i = 1, ts:GetRowCount() do
+				local t = tonumber(ts:GetCell(i, "Tier")) or i
+				self._T.symbolTiers[t] = {
+					chance = tonumber(ts:GetCell(i, "Chance")) or 0, dmg = tonumber(ts:GetCell(i, "DmgPct")) or 0,
+					cut = tonumber(ts:GetCell(i, "DmgCut")) or 0, gain = tonumber(ts:GetCell(i, "GainPct")) or 0,
+				}
+			end
+		end
+		self._T.symbolPerm = {}
+		local ps = _DataService:GetTable(self.SymbolPermTableName)
+		if ps ~= nil then
+			for i = 1, ps:GetRowCount() do
+				table.insert(self._T.symbolPerm, { type = ps:GetCell(i, "Type"), value = tonumber(ps:GetCell(i, "Value")) or 0 })
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSymbols()
+		-- 저장된 심볼을 읽는다. {"s":{"층":단계}}
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.SymbolKey)
+		local s = {}
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			local t = _HttpService:JSONDecode(raw)
+			if t ~= nil and t["s"] ~= nil then s = t["s"] end
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] symbol load failed code=" .. tostring(errorCode))
+			self.SymbolRetryTimer = self.LoadRetryDelay
+			return
+		end
+		-- 서버 계산용 일반 테이블(_T.sym)과 클라이언트 표시용 SyncTable(SymbolLv)을 함께 채운다
+		self._T.sym = {}
+		local count = 0
+		for floor, tier in pairs(s) do
+			local v = math.max(0, math.min(3, math.floor(tonumber(tier) or 0)))
+			if v > 0 then
+				self._T.sym[tostring(floor)] = v
+				self.SymbolLv[tostring(floor)] = v
+				count = count + 1
+			end
+		end
+		self.SymbolCount = count
+		self.SymbolLoaded = true
+		log("[VRF] symbols loaded count=" .. tostring(count))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeSymbols()
+		-- 저장 문자열 (가진 심볼이 없으면 빈 객체 대신 s를 생략).
+		local s = {}
+		local any = false
+		for floor, tier in pairs(self._T.sym or {}) do
+			if tier > 0 then
+				s[floor] = tier
+				any = true
+			end
+		end
+		if not any then return _HttpService:JSONEncode({ v = 1 }) end
+		return _HttpService:JSONEncode({ v = 1, s = s })
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveSymbols()
+		-- 심볼은 얻을 때마다 바로 저장한다.
+		if not self.SymbolLoaded then return end
+		self.SymbolDirty = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.SymbolKey, self:EncodeSymbols(), function(errorCode, key)
+			if errorCode == 0 then
+				self.SymbolDirty = false
+			else
+				log_warning("[VRF] symbol save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer SymbolTier(integer floor)
+		-- 그 층 심볼 단계 (없으면 0).
+		return (self._T.sym or {})[tostring(floor)] or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SymbolTierInfo(integer tier)
+		-- 단계별 층 효과 {dmg, cut, gain} (없으면 nil).
+		return self._T.symbolTiers[tier]
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer RollSymbol(integer floor)
+		-- 그 층 보스 처치: 3단계(1%) → 2단계(10%) → 1단계(50%) 순서로 판정, 지금보다 높은 단계만 (건너뛰기 가능). 얻은 단계 반환(없으면 0).
+		if not self.SymbolLoaded then return 0 end
+		local cur = self:SymbolTier(floor)
+		for tier = 3, 1, -1 do
+			local info = self._T.symbolTiers[tier]
+			if tier > cur and info ~= nil and _UtilLogic:RandomDouble() * 100 < info.chance then
+				if cur == 0 then self.SymbolCount = self.SymbolCount + 1 end
+				self._T.sym[tostring(floor)] = tier
+				self.SymbolLv[tostring(floor)] = tier
+				self:SaveSymbols()
+				log("[VRF] symbol get floor=" .. tostring(floor) .. " tier=" .. tostring(tier) .. " (was " .. tostring(cur) .. ")")
+				return tier
+			end
+		end
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SymbolPermValues()
+		-- 3단계 심볼의 모든 층 영구 능력치 합계 {효과 종류 = 수치}. 층 번호에 따라 능력치 종류가 순환.
+		local values = {}
+		local n = #self._T.symbolPerm
+		if n == 0 then return values end
+		for floor, tier in pairs(self._T.sym or {}) do
+			if tier >= 3 then
+				local p = self._T.symbolPerm[((math.floor(tonumber(floor) or 1) - 1) % n) + 1]
+				values[p.type] = (values[p.type] or 0) + p.value
+			end
+		end
+		return values
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadGraceTables()
+		-- 은총 옵션표(등급별 최소~최대), 등급 확률, 수치 단계 확률.
+		self._T.graceOpts = {}
+		self._T.graceOptById = {}
+		local optDs = _DataService:GetTable("GraceOptionTable")
+		if optDs ~= nil then
+			for i = 1, optDs:GetRowCount() do
+				local o = { id = optDs:GetCell(i, "Id"), type = optDs:GetCell(i, "Type"), ranges = {} }
+				for g = 1, 5 do
+					o.ranges[g] = { min = tonumber(optDs:GetCell(i, "G" .. tostring(g) .. "Min")) or 0, max = tonumber(optDs:GetCell(i, "G" .. tostring(g) .. "Max")) or 0 }
+				end
+				table.insert(self._T.graceOpts, o)
+				self._T.graceOptById[o.id] = o
+			end
+		end
+		self._T.graceGrades = {}
+		local gs = _DataService:GetTable("GraceGradeTable")
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do table.insert(self._T.graceGrades, { grade = tonumber(gs:GetCell(i, "Grade")) or i, chance = tonumber(gs:GetCell(i, "Chance")) or 0 }) end
+		end
+		self._T.graceSteps = {}
+		local ss = _DataService:GetTable("GraceStepTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do table.insert(self._T.graceSteps, { step = tonumber(ss:GetCell(i, "Step")) or i, chance = tonumber(ss:GetCell(i, "Chance")) or 0 }) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadGrace()
+		-- 저장된 은총을 읽는다. {"f":깃털,"p":프리셋,"l":{"프리셋_줄":"옵션|등급|단계|잠금"}}
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.GraceKey)
+		local t = {}
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			t = _HttpService:JSONDecode(raw) or {}
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] grace load failed code=" .. tostring(errorCode))
+			self.GraceRetryTimer = self.LoadRetryDelay
+			return
+		end
+		self.Feathers = math.max(0, math.floor(t["f"] or 0))
+		self.GracePreset = math.max(1, math.min(self.GracePresetCount, math.floor(t["p"] or 1)))
+		local lines = t["l"] or {}
+		for p = 1, self.GracePresetCount do
+			for i = 1, self.GraceSlots do
+				local key = tostring(p) .. "_" .. tostring(i)
+				local v = lines[key] or ""
+				-- 옵션표에 없는 옵션은 빈 줄로
+				if v ~= "" and self._T.graceOptById[self:GraceField(v, 1)] == nil then v = "" end
+				self.GraceLines[key] = v
+			end
+		end
+		self.GraceLoaded = true
+		log("[VRF] grace loaded feathers=" .. tostring(self.Feathers) .. " preset=" .. tostring(self.GracePreset))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string GraceField(string line, integer idx)
+		-- "옵션|등급|단계|잠금"에서 idx번째 값.
+		local n = 0
+		for part in string.gmatch(line, "[^|]+") do
+			n = n + 1
+			if n == idx then return part end
+		end
+		return ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeGrace()
+		-- 저장 문자열 (빈 줄은 생략, 하나도 없으면 l 생략).
+		local lines = {}
+		local any = false
+		for p = 1, self.GracePresetCount do
+			for i = 1, self.GraceSlots do
+				local key = tostring(p) .. "_" .. tostring(i)
+				local v = self.GraceLines[key] or ""
+				if v ~= "" then
+					lines[key] = v
+					any = true
+				end
+			end
+		end
+		if not any then return _HttpService:JSONEncode({ f = self.Feathers, p = self.GracePreset }) end
+		return _HttpService:JSONEncode({ f = self.Feathers, p = self.GracePreset, l = lines })
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveGrace()
+		-- 은총 저장 (비동기).
+		if not self.GraceLoaded then return end
+		self.GraceDirty = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.GraceKey, self:EncodeGrace(), function(errorCode, key)
+			if errorCode == 0 then
+				self.GraceDirty = false
+			else
+				log_warning("[VRF] grace save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddFeathers(integer n)
+		-- 전투 중 깃털 획득: 바로 저장하지 않고 표시만 (판이 끝날 때·나갈 때 저장).
+		if not self.GraceLoaded or n <= 0 then return end
+		self.Feathers = self.Feathers + n
+		self.GraceDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FlushGrace()
+		-- 바뀐 은총(깃털 포함)이 있으면 저장.
+		if self.GraceLoaded and self.GraceDirty then self:SaveGrace() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number GraceValue(string optId, integer grade, integer step)
+		-- 수치 = 그 등급 최소 + (최대 - 최소) × (단계 - 1) / 4, 소수 첫째 자리.
+		local o = self._T.graceOptById[optId]
+		if o == nil or o.ranges[grade] == nil then return 0 end
+		local r = o.ranges[grade]
+		local v = r.min + (r.max - r.min) * (step - 1) / 4
+		return math.floor(v * 10 + 0.5) / 10
+	end
+
+	@ExecSpace("ServerOnly")
+	method table GraceValues()
+		-- 판 시작 시 적용할 지금 프리셋의 은총 합계 {효과 종류 = 수치}.
+		local values = {}
+		if not self.GraceLoaded then return values end
+		for i = 1, self.GraceSlots do
+			local v = self.GraceLines[tostring(self.GracePreset) .. "_" .. tostring(i)] or ""
+			if v ~= "" then
+				local o = self._T.graceOptById[self:GraceField(v, 1)]
+				if o ~= nil then
+					local val = self:GraceValue(o.id, math.floor(tonumber(self:GraceField(v, 2)) or 1), math.floor(tonumber(self:GraceField(v, 3)) or 1))
+					values[o.type] = (values[o.type] or 0) + val
+				end
+			end
+		end
+		return values
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer PickWeighted(table list)
+		-- {chance} 목록에서 가중치 추첨 → 인덱스.
+		local sum = 0
+		for _, e in ipairs(list) do sum = sum + e.chance end
+		local r = _UtilLogic:RandomDouble() * sum
+		for i, e in ipairs(list) do
+			r = r - e.chance
+			if r < 0 then return i end
+		end
+		return #list
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanEditGrace(string fromUserId)
+		-- 본인 + 불러오기 완료 + 로비에서만.
+		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.GraceLoaded then return false end
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	@ExecSpace("Server")
+	method void RequestGraceRoll()
+		-- 은총 받기: 지금 프리셋에서 잠기지 않은 줄을 전부 새로 뽑는다 (같은 옵션은 한 프리셋에 한 번만). 비용 = 기본 + 잠금 수 × 추가.
+		if not self:CanEditGrace(senderUserId) then return end
+		local p = tostring(self.GracePreset)
+		local used = {}
+		local locks = 0
+		for i = 1, self.GraceSlots do
+			local v = self.GraceLines[p .. "_" .. tostring(i)] or ""
+			if v ~= "" and self:GraceField(v, 4) == "1" then
+				locks = locks + 1
+				used[self:GraceField(v, 1)] = true
+			end
+		end
+		local cost = self.GraceBaseCost + self.GraceLockCost * locks
+		if self.Feathers < cost then return end
+		self.Feathers = self.Feathers - cost
+		for i = 1, self.GraceSlots do
+			local key = p .. "_" .. tostring(i)
+			local v = self.GraceLines[key] or ""
+			if v == "" or self:GraceField(v, 4) ~= "1" then
+				local pool = {}
+				for _, o in ipairs(self._T.graceOpts) do
+					if not used[o.id] then table.insert(pool, o) end
+				end
+				if #pool > 0 then
+					local o = pool[_UtilLogic:RandomIntegerRange(1, #pool)]
+					used[o.id] = true
+					local g = self._T.graceGrades[self:PickWeighted(self._T.graceGrades)].grade
+					local st = self._T.graceSteps[self:PickWeighted(self._T.graceSteps)].step
+					self.GraceLines[key] = o.id .. "|" .. tostring(g) .. "|" .. tostring(st) .. "|0"
+				end
+			end
+		end
+		self.GraceSeq = self.GraceSeq + 1
+		self:SaveGrace()
+		log("[VRF] grace roll preset=" .. p .. " locks=" .. tostring(locks) .. " cost=" .. tostring(cost) .. " feathers=" .. tostring(self.Feathers))
+	end
+
+	@ExecSpace("Server")
+	method void RequestGraceLock(integer slot)
+		-- 줄 잠금/해제 (빈 줄은 잠글 수 없음, 최대 4줄).
+		if not self:CanEditGrace(senderUserId) then return end
+		local p = tostring(self.GracePreset)
+		local key = p .. "_" .. tostring(slot)
+		local v = self.GraceLines[key] or ""
+		if v == "" then return end
+		local locked = self:GraceField(v, 4) == "1"
+		if not locked then
+			local locks = 0
+			for i = 1, self.GraceSlots do
+				local w = self.GraceLines[p .. "_" .. tostring(i)] or ""
+				if w ~= "" and self:GraceField(w, 4) == "1" then locks = locks + 1 end
+			end
+			if locks >= self.GraceMaxLocks then return end
+		end
+		local newLock = "1"
+		if locked then newLock = "0" end
+		self.GraceLines[key] = self:GraceField(v, 1) .. "|" .. self:GraceField(v, 2) .. "|" .. self:GraceField(v, 3) .. "|" .. newLock
+		self:SaveGrace()
+	end
+
+	@ExecSpace("Server")
+	method void RequestGracePreset(integer preset)
+		-- 프리셋 전환 (무료).
+		if not self:CanEditGrace(senderUserId) then return end
+		self.GracePreset = math.max(1, math.min(self.GracePresetCount, preset))
+		self:SaveGrace()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetMsg(string msg)
+		-- 각인 창 안내 문구.
+		self.Msg = msg
+		self.MsgSeq = self.MsgSeq + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanEdit(string fromUserId)
+		-- 본인 요청 + 불러오기 완료 + 로비에 있을 때만 각인을 바꿀 수 있다.
+		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.Loaded then return false end
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	@ExecSpace("Server")
+	method void RequestInvest(string nodeId)
+		-- 노드에 포인트 1 투자.
+		if not self:CanEdit(senderUserId) then return end
+		local n = self._T.nodeById[nodeId]
+		if n == nil then return end
+		local lv = self.Lv[nodeId] or 0
+		if lv >= n.max then return end
+		if not self:IsNodeOpen(nodeId) then
+			self:SetMsg("바로 위 각인을 " .. tostring(n.max) .. "레벨까지 찍어야 합니다")
+			return
+		end
+		if self.ClearedFloor - self.Spent <= 0 then
+			self:SetMsg("남은 포인트가 없습니다")
+			return
+		end
+		self.Lv[nodeId] = lv + 1
+		self.Spent = self.Spent + 1
+		self:MarkDirty()
+		log("[VRF] engrave invest " .. nodeId .. " lv=" .. tostring(lv + 1) .. " spent=" .. tostring(self.Spent) .. "/" .. tostring(self.ClearedFloor))
+	end
+
+	@ExecSpace("Server")
+	method void RequestReset()
+		-- 포인트 리셋 (무료): 모든 노드 0레벨, 포인트 전부 돌려받음.
+		if not self:CanEdit(senderUserId) then return end
+		if self.Spent <= 0 then return end
+		for _, n in ipairs(self._T.nodes) do self.Lv[n.id] = 0 end
+		self.Spent = 0
+		self:MarkDirty()
+		self:SetMsg("포인트를 모두 돌려받았습니다")
+		log("[VRF] engrave reset")
+	end
+
+	@ExecSpace("Server")
+	method void RequestSave()
+		-- 각인 창을 닫을 때 바뀐 내용을 저장한다.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		self:Flush()
+	end
+
+end

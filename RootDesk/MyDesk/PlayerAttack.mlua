@@ -1,0 +1,63 @@
+@Component
+script PlayerAttack extends AttackComponent
+	
+	@HideFromInspector
+	property any Shape = nil -- 공격범위를 나타내기위한 변수
+	
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay() -- 이건 서버에서만 실행하도록 하는 어노테이션. 엔티티가 활성화 될때 1회 실행된다.
+		-- 공격범위를 나타내는 박스 쉐이프를 만든다, 근데 왜 any로 했지? BoxShape로 해야하는거 아닌가? --- IGNORE ---
+		self.Shape = BoxShape(Vector2.zero, Vector2.one, 0)
+	end
+	
+	-- 서버에서만 실행되는 공격함수
+	@ExecSpace("ServerOnly")
+	method void AttackNormal()
+		
+		-- 플레이어 컨트롤러라는 변수를 만들어 컴포넌트를 담는다,
+		local playerController = self.Entity.PlayerControllerComponent
+		-- 트랜스폼이라는 변수를 만들어 내 엔티티의 트랜스폼을 담는다.
+		local transform = self.Entity.TransformComponent
+		-- 여기서 isvaild를 왜안하지? 일단 둘다 있으면
+		if playerController and transform then
+			-- 월드 포지션 변수를 만들고, 내 월드 포지션을 담는다.
+			local worldPosition = transform.WorldPosition
+			-- 어택 오프셋이라는 변수를 만들고, vector2를 만들어 월드 포지션의 x좌표에 플레이어가 바라보는 방향 좌표 기준 0.5를, y로는 그냥 0.5를 더한값
+			local attackOffset = Vector2(worldPosition.x + 0.5 * playerController.LookDirectionX, worldPosition.y + 0.5)
+			-- 이걸 쉐이프 포지션에 넣음
+			self.Shape.Position = attackOffset
+			
+			-- 빠른 공격함수 실행, 여기에 인자로 공격범위, 공격정보는 왜 안넣지,그리고 몬스터 그룹
+			self:AttackFast(self.Shape, nil, CollisionGroups.Monster)
+		end
+	end
+	
+	-- 플레이어 공격 계산식을 오버라이드 해서 넣는다.
+	method integer CalcDamage(Entity attacker, Entity defender, string attackInfo)
+		-- Flat base damage.
+		return 50
+	end
+	
+	-- 크리티컬 데미지를 오버라이드해서 넣는다.
+	method boolean CalcCritical(Entity attacker, Entity defender, string attackInfo)
+		-- 30% crit chance.
+		return _UtilLogic:RandomDouble() < 0.3
+	end
+	
+	-- 크리티컬 데미지는 2배
+	method float GetCriticalDamageRate()
+		-- 2x on crit.
+		return 2
+	end
+	
+	-- 이벤트 함수. 내가 호출한거에만 반응하는 이벤트를 받는다.
+	@ExecSpace("ServerOnly")
+	@EventSender("Self")
+	handler HandlePlayerActionEvent(PlayerActionEvent event)
+		--이벤트 액션타입이 어택이면 공격함수를 호출
+		if event.ActionName == "Attack" then
+			self:AttackNormal()
+		end
+	end
+	
+end

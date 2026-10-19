@@ -1,0 +1,167 @@
+@Component
+script TowerPlayer extends AttackComponent
+
+	@HideFromInspector
+	property integer CurrentDamage = 1
+	@HideFromInspector
+	property number CurrentCritRate = 0
+	@HideFromInspector
+	property number CurrentCritDmg = 150
+	property string HitSkinRUID = "3271c3e79bf04ecba9a107d55495970d"
+	property string HealSkinRUID = "d58b67cf0f3a4eaf9fe1ad87c0ffac8a"
+	-- 타격 동기화: 서버는 타격을 '대기'로만 두고, 클라이언트에서 공격 동작(=엔진 무기 공격 소리)이 시작될 때 요청을 받아 적용한다
+	-- HitSyncDelay: 공격 동작 시작 후 몇 초 뒤에 요청할지(소리와 미세 조정용), HitTimeout: 요청이 안 오면 서버가 직접 적용하는 시간
+	property number HitSyncDelay = 0.3
+	property number HitTimeout = 0.8
+	@HideFromInspector
+	property integer HitSeq = 0
+
+	@ExecSpace("ServerOnly")
+	method void DoAttack(Entity target, integer damage, number critRate, number critDmg, table procs)
+		-- 우측 몬스터를 향해 자동 공격 1회. 데미지·크리티컬(확률 %, 데미지 %)·발동한 직업 스킬은 TowerRunManager가 정하고,
+		-- 실제 적용은 클라이언트 공격 동작 시점에 (직업 스킬도 기본 타격과 같은 순간).
+		if not isvalid(target) then return end
+		self:QueueHit(target, false, damage, critRate, critDmg)
+		self._T.pending[self.HitSeq].procs = procs
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DoMiss(Entity target)
+		-- 명중 실패: 공격 모션만 하고, 공격 동작 시점에 몬스터 위에 MISS 표시.
+		if not isvalid(target) then return end
+		self:QueueHit(target, true, 0, 0, 0)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void QueueHit(Entity target, boolean miss, integer damage, number critRate, number critDmg)
+		-- 타격을 대기열에 두고 클라이언트에 공격 모션을 지시한다 (연속 공격처럼 여러 타격이 동시에 대기할 수 있음).
+		if self._T.pending == nil then self._T.pending = {} end
+		self.HitSeq = self.HitSeq + 1
+		self._T.pending[self.HitSeq] = { seq = self.HitSeq, target = target, miss = miss, damage = damage, critRate = critRate, critDmg = critDmg, t = _UtilLogic.ElapsedSeconds, timer = self.HitTimeout }
+		local controller = self.Entity.PlayerControllerComponent
+		if isvalid(controller) then controller.LookDirectionX = 1 end
+		self:PlayAttackMotion(self.HitSeq, self.Entity.PlayerComponent.UserId)
+	end
+
+	@ExecSpace("Server")
+	method void RequestHit(integer seq)
+		-- 클라이언트 공격 동작 시작 신호: 대기 중인 같은 번호의 타격만 적용 (값은 서버가 정한 그대로).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		if self._T.pending == nil or self._T.pending[seq] == nil then return end
+		self:ApplyPendingHit(seq, "client")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyPendingHit(integer seq, string reason)
+		-- 대기 중인 타격 적용: 명중이면 공격 판정(피격음·데미지), 빗나감이면 MISS.
+		if self._T.pending == nil then return end
+		local p = self._T.pending[seq]
+		self._T.pending[seq] = nil
+		if p == nil or not isvalid(p.target) then return end
+		-- 그사이 이미 쓰러진 몬스터면 타격을 버린다 (같은 자리의 다음 몬스터나 시체에 맞지 않게)
+		local tm = p.target:GetComponent("script.TowerMonster")
+		if tm ~= nil and tm.IsDead then return end
+		self._T.lastHitLog = (self._T.lastHitLog or 0) + 1
+		if self._T.lastHitLog <= 6 then
+			log("[VRF] hit apply reason=" .. reason .. " seq=" .. tostring(p.seq) .. " wait=" .. string.format("%.3f", _UtilLogic.ElapsedSeconds - p.t))
+		end
+		if p.miss then
+			self:ShowMiss(p.target, self.Entity.PlayerComponent.UserId)
+			return
+		end
+		self.CurrentDamage = p.damage
+		self.CurrentCritRate = p.critRate
+		self.CurrentCritDmg = p.critDmg
+		local pos = p.target.TransformComponent.WorldPosition
+		self:AttackFast(BoxShape(Vector2(pos.x, pos.y + 0.4), Vector2(1.2, 1.2), 0), "tower.player", nil)
+		if p.procs ~= nil and #p.procs > 0 then
+			local map = self.Entity.CurrentMap
+			local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
+			if mgr ~= nil then mgr:ApplyJobProcs(p.procs, p.target) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 클라이언트 신호가 오지 않으면(렉·창 비활성 등) 시간이 지난 뒤 서버가 직접 적용해 전투가 멈추지 않게 한다.
+		if self._T.pending == nil then return end
+		local expired = {}
+		for seq, p in pairs(self._T.pending) do
+			p.timer = p.timer - delta
+			if p.timer <= 0 then table.insert(expired, seq) end
+		end
+		for _, seq in ipairs(expired) do self:ApplyPendingHit(seq, "timeout") end
+	end
+
+	@ExecSpace("Client")
+	method void ShowMiss(Entity target)
+		-- MISS 텍스트 데미지 스킨.
+		if not isvalid(target) then return end
+		_DamageSkinService:PlayTextDamage(target, self.HitSkinRUID, DamageSkinTextType.Miss, DamageSkinTweenType.Default)
+	end
+
+	@ExecSpace("Client")
+	method void ShowProcDamage(Entity target, integer amount, boolean crit)
+		-- 직업 스킬 추가 피해 숫자 (몬스터 위, 기본 타격 숫자보다 조금 위).
+		if not isvalid(target) then return end
+		_DamageSkinService:Play(target, self.HitSkinRUID, 0, { amount }, DamageSkinTweenType.Default, crit, Vector2(0, 0.8), Vector2(1, 1), 1.0, 1.0, LitMode.Default)
+	end
+
+	@ExecSpace("Client")
+	method void ShowHeal(integer amount)
+		-- 흡혈 회복량을 회복 데미지 스킨으로 표시.
+		_DamageSkinService:Play(self.Entity, self.HealSkinRUID, 0, { amount }, DamageSkinTweenType.Default, false, Vector2(0, 0.5), Vector2(1, 1), 1.0, 1.0, LitMode.Default)
+	end
+
+	@ExecSpace("Client")
+	method void PlayAttackMotion(integer seq)
+		-- 아바타 공격 모션은 플레이어 소유 클라이언트에서 상태를 바꿔 재생한다 (이때 엔진 무기 공격 소리도 재생).
+		-- 바로 그 순간(또는 HitSyncDelay 뒤)에 서버에 타격 적용을 요청한다.
+		local sc = self.Entity.StateComponent
+		if isvalid(sc) then sc:ChangeState("ATTACK") end
+		if self.HitSyncDelay > 0 then
+			_TimerService:SetTimerOnce(function() self:RequestHit(seq) end, self.HitSyncDelay)
+		else
+			self:RequestHit(seq)
+		end
+	end
+
+	method integer CalcDamage(Entity attacker, Entity defender, string attackInfo)
+		-- 판 진행 매니저가 넘겨준 공격력 그대로.
+		return self.CurrentDamage
+	end
+
+	method boolean CalcCritical(Entity attacker, Entity defender, string attackInfo)
+		-- 장갑 크리티컬 확률(%).
+		return _UtilLogic:RandomDouble() * 100 < self.CurrentCritRate
+	end
+
+	method float GetCriticalDamageRate()
+		-- 신발 크리티컬 데미지(%) → 배율.
+		return self.CurrentCritDmg / 100
+	end
+
+	method boolean IsAttackTarget(Entity defender, string attackInfo)
+		-- 탑 몬스터만 공격 대상.
+		if not isvalid(defender) then return false end
+		local tm = defender:GetComponent("script.TowerMonster")
+		-- 쓰러진 몬스터(사망 애니메이션 중인 시체)는 대상에서 제외
+		if tm == nil or tm.IsDead then return false end
+		return __base:IsAttackTarget(defender, attackInfo)
+	end
+
+	@ExecSpace("ServerOnly")
+	@EventSender("Self")
+	handler HandleHitEvent(HitEvent event)
+		-- 몬스터에게 맞은 데미지를 판 HP에 반영하고, 엔진 HP는 가득 유지(엔진 사망 방지).
+		local map = self.Entity.CurrentMap
+		if isvalid(map) then
+			local mgr = map:GetComponent("script.TowerRunManager")
+			if mgr ~= nil then mgr:ApplyPlayerDamage(event.TotalDamage) end
+		end
+		local pc = self.Entity.PlayerComponent
+		if isvalid(pc) then pc.Hp = pc.MaxHp end
+		log("[VRF] player hit dmg=" .. tostring(event.TotalDamage))
+	end
+
+end

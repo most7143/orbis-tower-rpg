@@ -1,0 +1,432 @@
+@Logic
+script TarotLogic extends Logic
+
+	-- 특성 발현 (타로 카드) UI: 판 시작 운명의 펼침(5장) / 레벨업 카드 3장 선택
+	property Entity uiRoot = "a16d14bb-337a-4ea2-ae76-e74f6890a0cf"
+	property Entity draftRoot = "90336c1b-0f08-4f25-9d35-293c3a5ead55"
+	property Entity choiceRoot = "edbad653-a684-4ee9-aac6-948df8541a73"
+	property Entity dimEntity = "9628a1f6-3176-4a2e-a321-84658b0b7545"
+	property ButtonComponent confirmBtn = "c60050c0-f7aa-477e-a94d-678fa5a08648"
+	property ButtonComponent card1 = "4b0221c1-2f92-484d-8f71-f012d5f7c890"
+	property ButtonComponent card2 = "1a35acc6-61ea-406d-82d1-3dfcf3a5b3b6"
+	property ButtonComponent card3 = "225cd561-92ea-4db7-a3ef-56683b9b7fe0"
+	property TextGUIRendererComponent choiceSub = "e6894ec9-85d1-4f42-9f1d-000c89f9926f"
+	property TextGUIRendererComponent choiceJob = "75cb595d-a176-4c5d-8029-5a35e51d37f8"
+	property TextGUIRendererComponent choiceRemain = "d75074fc-59dc-4c4d-888f-fbe40154dfb7"
+	-- 각인 '재추첨' 버튼 (남은 횟수가 있을 때만 표시)
+	property ButtonComponent rerollBtn = "d617b190-510d-4dc7-afb0-6a0e94a76366"
+	property string TraitTableName = "TraitTable"
+	property string GradeTableName = "TraitGradeTable"
+	property string DraftCardPath = "/ui/TarotUI/Draft/Card"
+	property string ChoiceCardPath = "/ui/TarotUI/Choice/Card"
+	property number ShineSpeed = 0.35
+	-- 시작 카드 펼침: 한 줄 카드의 세로 위치
+	property number DraftRowY = 70
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 테이블을 읽고 버튼을 연결한 뒤 화면을 숨긴다.
+		self:LoadTables()
+		self.clickHandlers = {}
+		self:Bind(self.confirmBtn, function() self:OnConfirm() end)
+		self:Bind(self.rerollBtn, function() self:OnReroll() end)
+		local cards = { self.card1, self.card2, self.card3 }
+		for i, c in ipairs(cards) do
+			local slot = i
+			self:Bind(c, function() self:OnPick(slot) end)
+		end
+		-- 처음엔 아무 화면도 기록되지 않은 상태(nil)로 두어야 Show("")가 실제로 전부 숨긴다
+		self._T.shown = nil
+		self._T.choiceSeq = -1
+		self._T.shineT = 0
+		self:Show("")
+		log("[VRF] TarotLogic begin traits=" .. tostring(#self._T.traits) .. " grades=" .. tostring(#self._T.grades))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(ButtonComponent button, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(button) then return end
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadTables()
+		-- 특성(21장)과 등급 테이블.
+		self._T.traits = {}
+		self._T.traitById = {}
+		self._T.grades = {}
+		local ds = _DataService:GetTable(self.TraitTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local t = {
+					id = ds:GetCell(i, "Id"), roman = ds:GetCell(i, "Roman"), arcana = ds:GetCell(i, "Arcana"),
+					familyName = ds:GetCell(i, "FamilyName"), trait = ds:GetCell(i, "Trait"),
+					jobs = { ds:GetCell(i, "Job1"), ds:GetCell(i, "Job2"), ds:GetCell(i, "Job3") },
+					baseStat = ds:GetCell(i, "BaseStat"), icon = ds:GetCell(i, "IconRUID"),
+					famColor = Color.FromHexCode(ds:GetCell(i, "FamilyColor")),
+					eff1 = ds:GetCell(i, "Eff1"), eff1Val = tonumber(ds:GetCell(i, "Eff1Val")) or 0,
+					eff2 = ds:GetCell(i, "Eff2"), eff2Val = tonumber(ds:GetCell(i, "Eff2Val")) or 0,
+				}
+				table.insert(self._T.traits, t)
+				self._T.traitById[t.id] = t
+			end
+		end
+		local gs = _DataService:GetTable(self.GradeTableName)
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do
+				local g = tonumber(gs:GetCell(i, "Grade")) or i
+				self._T.grades[g] = { name = gs:GetCell(i, "Name"), points = tonumber(gs:GetCell(i, "Points")) or 5, color = Color.FromHexCode(gs:GetCell(i, "ColorHex")) }
+			end
+		end
+		-- 직업 스킬: jobSkills[특성 Id][차수] = { { name, desc }, ... } (차수마다 1~3개)
+		self._T.jobSkills = {}
+		local js = _DataService:GetTable("JobSkillTable")
+		if js ~= nil then
+			for i = 1, js:GetRowCount() do
+				local id = js:GetCell(i, "TraitId")
+				local tier = tonumber(js:GetCell(i, "Tier")) or 1
+				if self._T.jobSkills[id] == nil then self._T.jobSkills[id] = {} end
+				if self._T.jobSkills[id][tier] == nil then self._T.jobSkills[id][tier] = {} end
+				table.insert(self._T.jobSkills[id][tier], { name = js:GetCell(i, "Name"), desc = js:GetCell(i, "Desc") })
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 탑 진행 매니저.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method string StatLabel(string stat, number pct)
+		-- 특성 기본 스탯 문구.
+		local name = "공격력"
+		if stat == "Def" then name = "방어력" elseif stat == "Hp" then name = "체력" end
+		if pct <= 0 then return name end
+		return name .. " +" .. string.format("%.1f", pct) .. "%"
+	end
+
+
+	@ExecSpace("ClientOnly")
+	method string GetJobLabel(Component mgr)
+		-- 캐릭터 탭용 직업 문구 ("매의 눈 (2차)" / "없음").
+		if mgr == nil or mgr.JobTier <= 0 then return "없음" end
+		local t = self._T.traitById[mgr.JobPath[tostring(mgr.JobTier)] or ""]
+		if t == nil then return "없음" end
+		return (t.jobs[mgr.JobTier] or t.jobs[1]) .. " (" .. tostring(mgr.JobTier) .. "차)"
+	end
+
+	@ExecSpace("ClientOnly")
+	method string NextJobLabel(Component mgr, table t, number pts)
+		-- 이 특성으로 100포인트를 채우면 될 다음 차수 직업 이름 (어떤 특성이든 전직 가능).
+		local nextTier = mgr.JobTier + 1
+		if nextTier > 3 then return "3차 전직 완료" end
+		return "다음 전직: " .. tostring(nextTier) .. "차 " .. (t.jobs[nextTier] or "")
+	end
+
+	@ExecSpace("ClientOnly")
+	method string EffectLabel(string effType, number value)
+		-- 직업 효과 문구.
+		local names = {
+			AtkPct = "공격력", HpPct = "체력", DefPct = "방어력", Speed = "공격 속도", Crit = "크리티컬 확률", CritDmg = "크리티컬 데미지",
+			Acc = "명중률", Mastery = "숙련도", MesoPct = "메소 획득", DoubleHit = "연속 공격 확률", Lifesteal = "흡혈 확률",
+			EquipCostDown = "장비 강화 비용 감소", StoneChance = "스킬석 획득 확률", EnhRate = "장비 강화 확률",
+			WeaponPct = "무기 효과", ArmorPct = "투구·옷 효과", ExpPct = "경험치 획득", SkillRate = "스킬 강화 확률",
+		}
+		local v = value
+		local vs = tostring(math.floor(v))
+		if math.abs(v - math.floor(v)) > 0.001 then vs = string.format("%.1f", v) end
+		return (names[effType] or effType) .. " +" .. vs .. "%"
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateTraitTab(Component mgr)
+		-- 특성 탭: 전직 경로·직업 스킬·전직 스탯, 이번 판 특성(5종)의 포인트와 다음 전직.
+		local base = "/ui/MainPanel/Panel/Content/Trait/"
+		local function setText(path, s)
+			local e = _EntityService:GetEntityByPath(base .. path)
+			if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+			return e
+		end
+		-- 전직 경로: 차수마다 전직한 직업 이름 (예: 검투사 → 매의 눈)
+		-- 전직 효과: [1차]~[3차] 한 줄씩 (직업 이름은 위 경로에 있으니 스킬 효과만, 아직이면 미전직)
+		local path = ""
+		local tierLines = {}
+		for tier = 1, 3 do
+			local jt = nil
+			if tier <= mgr.JobTier then jt = self._T.traitById[mgr.JobPath[tostring(tier)] or ""] end
+			if jt ~= nil then
+				if path ~= "" then path = path .. " → " end
+				path = path .. (jt.jobs[tier] or "")
+				local parts = {}
+				for _, sk in ipairs((self._T.jobSkills[jt.id] and self._T.jobSkills[jt.id][tier]) or {}) do
+					table.insert(parts, sk.name .. ": " .. sk.desc)
+				end
+				table.insert(tierLines, "[" .. tostring(tier) .. "차] " .. table.concat(parts, " / "))
+			else
+				table.insert(tierLines, "[" .. tostring(tier) .. "차] 미전직 (특성 하나를 100포인트로 올리면 전직)")
+			end
+		end
+		if path == "" then
+			setText("Job", "직업  없음")
+		else
+			setText("Job", "직업  " .. path)
+		end
+		setText("Effect", table.concat(tierLines, "\n"))
+		for i = 1, 7 do
+			local t = self._T.traitById[mgr.RunTraits[tostring(i)] or ""]
+			local row = "Row" .. tostring(i) .. "/"
+			local rowE = _EntityService:GetEntityByPath(base .. "Row" .. tostring(i))
+			if isvalid(rowE) and rowE.Enable ~= (t ~= nil) then rowE:SetEnable(t ~= nil) end
+			if t ~= nil then
+				local pts = mgr.TraitPoints[t.id] or 0
+				local jobTier = 0
+				for tier = 1, mgr.JobTier do
+					if mgr.JobPath[tostring(tier)] == t.id then jobTier = tier end
+				end
+				local tag = ""
+				if jobTier > 0 then tag = "  (" .. tostring(jobTier) .. "차 직업)" end
+				local nameE = setText(row .. "Name", t.trait .. tag)
+				if isvalid(nameE) then nameE.TextGUIRendererComponent.FontColor = Color(0.55 + t.famColor.r * 0.45, 0.55 + t.famColor.g * 0.45, 0.55 + t.famColor.b * 0.45, 1) end
+				setText(row .. "Sub", t.familyName .. " 계열")
+				if mgr.JobTier >= 3 then setText(row .. "Points", tostring(pts)) else setText(row .. "Points", tostring(pts) .. " / 100") end
+				setText(row .. "Next", self:NextJobLabel(mgr, t, pts))
+				local band = _EntityService:GetEntityByPath(base .. row .. "Band")
+				if isvalid(band) then band.SpriteGUIRendererComponent.Color = t.famColor end
+				local icon = _EntityService:GetEntityByPath(base .. row .. "Icon")
+				if isvalid(icon) and self._T["icon" .. tostring(i)] ~= t.icon then
+					self._T["icon" .. tostring(i)] = t.icon
+					icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon)
+				end
+				local fill = _EntityService:GetEntityByPath(base .. row .. "BarBg/Fill")
+				if isvalid(fill) then
+					fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, pts / 100))
+					fill.SpriteGUIRendererComponent.Color = t.famColor
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(string mode)
+		-- "DRAFT" / "CHOICE" / "" 에 맞춰 화면을 켜고 끈다.
+		if self._T.shown == mode then return end
+		self._T.shown = mode
+		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(mode ~= "") end
+		if isvalid(self.draftRoot) then self.draftRoot:SetEnable(mode == "DRAFT") end
+		if isvalid(self.choiceRoot) then self.choiceRoot:SetEnable(mode == "CHOICE") end
+		log("[VRF] tarot show '" .. mode .. "'")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillCard(string path, table t, integer grade, Component mgr, boolean big)
+		-- 카드 한 장 채우기: 아이콘 / 특성 이름 / 등급 색 테두리 등.
+		local function txt(sub, s)
+			local e = _EntityService:GetEntityByPath(path .. "/Gold/Face/" .. sub)
+			if isvalid(e) then e.TextGUIRendererComponent.Text = s end
+			return e
+		end
+		txt("Trait", t.trait)
+		local icon = _EntityService:GetEntityByPath(path .. "/Gold/Face/Icon")
+		if isvalid(icon) then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon) end
+		local root = _EntityService:GetEntityByPath(path)
+		local g = self._T.grades[grade] or self._T.grades[1]
+		if isvalid(root) and g ~= nil then root.SpriteGUIRendererComponent.Color = g.color end
+		local border = _EntityService:GetEntityByPath(path .. "/Gold")
+		local face = _EntityService:GetEntityByPath(path .. "/Gold/Face")
+		if big then
+			-- 선택 카드: 특성 계열 색 대신 등급 색으로 테두리·배경을 칠한다
+			local gc = Color(0.6, 0.6, 0.64, 1)
+			if g ~= nil then gc = g.color end
+			if isvalid(border) then border.SpriteGUIRendererComponent.Color = Color(gc.r * 0.75, gc.g * 0.75, gc.b * 0.75, 1) end
+			if isvalid(face) then face.SpriteGUIRendererComponent.Color = Color(0.05 + gc.r * 0.2, 0.05 + gc.g * 0.2, 0.07 + gc.b * 0.2, 1) end
+		else
+			-- 판 시작 펼침 카드: 계열 색 (안쪽 테두리 = 계열 색, 카드 면 = 계열 색을 어둡게 섞은 색)
+			local fc = t.famColor
+			if isvalid(border) then border.SpriteGUIRendererComponent.Color = fc end
+			if isvalid(face) then face.SpriteGUIRendererComponent.Color = Color(0.06 + fc.r * 0.22, 0.05 + fc.g * 0.22, 0.12 + fc.b * 0.22, 1) end
+			local job = _EntityService:GetEntityByPath(path .. "/Gold/Face/Job")
+			if isvalid(job) then job.TextGUIRendererComponent.FontColor = Color(0.55 + fc.r * 0.45, 0.55 + fc.g * 0.45, 0.55 + fc.b * 0.45, 1) end
+		end
+		local pts = mgr.TraitPoints[t.id] or 0
+		if big then
+			-- 선택 카드는 간단히: 등급 이름 / 현재 → 획득 후 포인트 / 다음 전직 이름
+			local gain = g ~= nil and g.points or 5
+			local ge = txt("Grade", g ~= nil and g.name or "")
+			if isvalid(ge) and g ~= nil then ge.TextGUIRendererComponent.FontColor = g.color end
+			-- 최고 등급(미스틱)만 반복 강조 연출 (무지개 테두리·배경 + 빛 줄기, 크기는 고정)
+			if isvalid(root) then root.UITransformComponent.UIScale = Vector3(1, 1, 1) end
+			local shine = _EntityService:GetEntityByPath(path .. "/Gold/Face/ShineMask")
+			if isvalid(shine) then shine:SetEnable(grade >= 5) end
+			txt("Progress", tostring(pts) .. " → " .. tostring(pts + gain))
+			txt("Next", self:NextJobLabel(mgr, t, pts))
+		else
+			txt("Job", t.jobs[1])
+			txt("Stat", t.familyName)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillDraft(Component mgr)
+		-- 이번 판에 뽑힌 특성 카드(5장)를 보여준다 (테두리는 금색). 가로 화면: 한 줄로 가운데 정렬, 빈 칸은 숨김.
+		local ids = {}
+		for i = 1, 7 do
+			local id = mgr.RunTraits[tostring(i)] or ""
+			if self._T.traitById[id] ~= nil then table.insert(ids, id) end
+		end
+		local n = #ids
+		for i = 1, 7 do
+			local path = self.DraftCardPath .. tostring(i)
+			local root = _EntityService:GetEntityByPath(path)
+			if isvalid(root) then
+				local t = self._T.traitById[ids[i] or ""]
+				root:SetEnable(t ~= nil)
+				if t ~= nil then
+					self:FillCard(path, t, 1, mgr, false)
+					root.SpriteGUIRendererComponent.Color = Color(0.79, 0.64, 0.3, 1)
+					root.UITransformComponent.anchoredPosition = Vector2((i - (n + 1) / 2) * 150, self.DraftRowY)
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillChoice(Component mgr)
+		-- 레벨업 카드 3장 (등급 색 테두리, 포인트·진행도).
+		self._T.mystic = {}
+		for i = 1, 3 do
+			local key = tostring(i)
+			local t = self._T.traitById[mgr.ChoiceTrait[key] or ""]
+			local grade = mgr.ChoiceGrade[key] or 1
+			local path = self.ChoiceCardPath .. key
+			if t ~= nil then
+				self:FillCard(path, t, grade, mgr, true)
+				if grade >= 5 then table.insert(self._T.mystic, path) end
+			end
+		end
+		if isvalid(self.choiceSub) then self.choiceSub.Text = "Lv." .. tostring(mgr.Level) .. " — 특성 발현" end
+		if isvalid(self.choiceJob) then
+			local job = self:GetJobLabel(mgr)
+			if job == "없음" then job = "직업 없음 · 아무 특성이든 100포인트면 전직 (전직마다 포인트 초기화)" else job = "현재 직업: " .. job end
+			self.choiceJob.Text = job
+		end
+		if isvalid(self.choiceRemain) then
+			if mgr.PendingPicks > 1 then self.choiceRemain.Text = "남은 선택 " .. tostring(mgr.PendingPicks) else self.choiceRemain.Text = "" end
+		end
+		log("[VRF] tarot choice filled seq=" .. tostring(mgr.ChoiceSeq))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnConfirm()
+		-- 운명의 펼침 확인 → 전투 시작.
+		local mgr = self:GetManager()
+		if mgr ~= nil and mgr.RunState == "DRAFT" then mgr:RequestConfirmDraft() end
+		log("[VRF] tarot confirm clicked")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnPick(integer slot)
+		-- 카드 선택 → 서버에 반영.
+		local mgr = self:GetManager()
+		if mgr ~= nil and mgr.RunState == "CHOICE" then mgr:RequestPick(slot) end
+		log("[VRF] tarot pick " .. tostring(slot))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnReroll()
+		-- 각인 재추첨: 지금 3장을 다시 뽑는다.
+		local mgr = self:GetManager()
+		if mgr ~= nil and mgr.RunState == "CHOICE" and mgr.Rerolls > 0 then mgr:RequestReroll() end
+		log("[VRF] tarot reroll clicked")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateReroll(Component mgr)
+		-- 재추첨 버튼: 남은 횟수가 있을 때만 보이고 횟수를 표시한다.
+		if not isvalid(self.rerollBtn) then return end
+		local e = self.rerollBtn.Entity
+		local show = mgr.Rerolls > 0
+		if e.Enable ~= show then e:SetEnable(show) end
+		if show then
+			local s = "다시 뽑기 (" .. tostring(mgr.Rerolls) .. ")"
+			if e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Color Rainbow(number h)
+		-- 미스틱(샤인) 테두리용 무지개 색 (0~1 색상환).
+		local r = math.abs(h * 6 - 3) - 1
+		local g = 2 - math.abs(h * 6 - 2)
+		local bl = 2 - math.abs(h * 6 - 4)
+		return Color(math.max(0, math.min(1, r)), math.max(0, math.min(1, g)), math.max(0, math.min(1, bl)), 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 판 상태에 맞춰 화면 전환, 미스틱 카드는 테두리가 무지개로 빛난다.
+		local mgr = self:GetManager()
+		if mgr == nil then
+			self:Show("")
+			return
+		end
+		local state = mgr.RunState
+		if state == "DRAFT" then
+			if self._T.shown ~= "DRAFT" then self:FillDraft(mgr) end
+			self:Show("DRAFT")
+		elseif state == "CHOICE" then
+			if self._T.shown ~= "CHOICE" or self._T.choiceSeq ~= mgr.ChoiceSeq then
+				self._T.choiceSeq = mgr.ChoiceSeq
+				self:FillChoice(mgr)
+			end
+			self:Show("CHOICE")
+			self:UpdateReroll(mgr)
+			self._T.shineT = (self._T.shineT + delta * self.ShineSpeed) % 1
+			self._T.mysticTime = (self._T.mysticTime or 0) + delta
+			local mt = self._T.mysticTime
+			for _, path in ipairs(self._T.mystic or {}) do
+				local h = self._T.shineT
+				local root = _EntityService:GetEntityByPath(path)
+				if isvalid(root) then root.SpriteGUIRendererComponent.Color = self:Rainbow(h) end
+				local border = _EntityService:GetEntityByPath(path .. "/Gold")
+				if isvalid(border) then
+					local c = self:Rainbow((h + 0.33) % 1)
+					border.SpriteGUIRendererComponent.Color = Color(c.r * 0.8, c.g * 0.8, c.b * 0.8, 1)
+				end
+				local face = _EntityService:GetEntityByPath(path .. "/Gold/Face")
+				if isvalid(face) then
+					local c = self:Rainbow((h + 0.6) % 1)
+					face.SpriteGUIRendererComponent.Color = Color(0.08 + c.r * 0.22, 0.06 + c.g * 0.22, 0.1 + c.b * 0.22, 1)
+				end
+				local ge = _EntityService:GetEntityByPath(path .. "/Gold/Face/Grade")
+				if isvalid(ge) then ge.TextGUIRendererComponent.FontColor = self:Rainbow((h + 0.5) % 1) end
+				-- 빛 줄기: 1.6초마다 카드 왼쪽에서 오른쪽으로 훑고 지나감
+				local shine = _EntityService:GetEntityByPath(path .. "/Gold/Face/ShineMask/Shine")
+				if isvalid(shine) then
+					local cycle = (mt % 1.6) / 1.6
+					shine.UITransformComponent.anchoredPosition = Vector2(-150 + 300 * math.min(1, cycle / 0.6), 0)
+				end
+			end
+		else
+			self:Show("")
+		end
+	end
+
+end

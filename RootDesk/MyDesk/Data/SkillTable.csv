@@ -1,0 +1,12 @@
+﻿Id,Name,UnlockLevel,IconRUID,Type,Base,PerLv,CostBase,Desc,#Note
+Might,단련,1,e4acdf27d68549db8858d6082169c70c,AtkPct,4,3,1,공격력 +{v}%,파워 스트라이크 아이콘
+Vitality,강인함,3,05a532dcac6f4e789bb8e6d74854e042,HpPct,5,4,1,최대 HP +{v}%,HP 증가 아이콘
+IronSkin,철벽,5,52162587bc534b9385af8c77513d93d4,DefPct,5,4,1,방어력 +{v}%,아이언 바디 아이콘
+Mastery,숙련,10,e304bb1f471545dabe68e1e1f791a10a,Mastery,5,5,1,숙련도 +{v}% (최소 공격력 상승),소드 마스터리 아이콘
+Precision,급소 노리기,15,001f3ba60bc14bfeb7217505f847ba10,Crit,3,1.5,1,크리티컬 확률 +{v}%,샤프 아이즈 아이콘
+Swift,신속,20,e0ecf6f4affe4c3792d4e4df241c7f67,Speed,5,2.5,1,공격 속도 +{v}%,헤이스트 아이콘
+MesoHunter,메소 사냥꾼,25,f18bb940bede467a93af2bb582e409b7,MesoProc,8,1.5,1,공격 시 {v}% 확률로 메소 획득 (처치 보상의 25%),메소 익스플로젼 아이콘
+Vampire,흡혈,30,f96bbd46ad404e9381036633aa55d936,Lifesteal,6,1.5,1,공격 시 {v}% 확률로 준 피해만큼 HP 회복,뱀파이어 아이콘
+DoubleStrike,연속 베기,35,8811072a9bfb4e45be2ada7f365a1b69,DoubleHit,8,2,1,공격 시 {v}% 확률로 한 번 더 공격,더블 리프 아이콘
+Execute,처형,40,0de196459cc24cb595b002d0926b0895,Execute,10,3,1,HP 20% 이하 몬스터 공격 시 {v}% 확률로 즉시 처치,암살 아이콘
+Undying,불사,45,a310d7b9e8324d0984de23515cc2789f,Undying,30,5,1,쓰러질 때 층마다 1회 HP {v}%로 부활,리저렉션 아이콘

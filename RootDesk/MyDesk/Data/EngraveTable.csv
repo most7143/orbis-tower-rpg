@@ -1,0 +1,25 @@
+﻿Id,Branch,Tier,Col,Name,Type,PerLv,MaxLv,IconRUID,Desc
+Sharp,Atk,1,1,날카로움,AtkPct,2,3,9f73253e798e459abceba700d648f7f4,공격력 +{v}%
+Keen,Atk,1,2,정밀,Crit,1,3,6d60d536b3fa460781078c3b5d8ef541,크리티컬 확률 +{v}%
+Train,Atk,2,1,숙련,Mastery,3,3,65bb278df3c74dbdaa30d0191df5fa37,숙련도 +{v}%
+Rapid,Atk,2,2,연타,Speed,3,3,55f415384df14dffbbc4e17f7cec30b0,공격 속도 +{v}%
+Deadly,Atk,3,1,치명 일격,CritDmg,10,3,2b87af61b99d4392801e3a7c607c9a19,크리티컬 데미지 +{v}%
+Executioner,Atk,3,2,처형자,LowHpDmg,5,3,442ec85d6a714ddd9b4cb062775cbc2c,체력 30% 이하 적에게 주는 피해 +{v}%
+Chain,Atk,4,1,연쇄,DoubleHit,10,3,2b0acc0c86f541398c14117b92d848d7,공격 시 {v}% 확률로 추가 공격
+BossHunter,Atk,4,2,보스 사냥꾼,EliteDmg,10,3,b17d47333423400f9b7e4ff1d5d74ad5,10스테이지 엘리트에게 주는 피해 +{v}%
+Tough,Def,1,1,강인함,HpPct,3,3,064dad3f9a45484a9f7f0a9ef0aa953d,최대 체력 +{v}%
+Hide,Def,1,2,단단한 피부,DefPct,5,3,1e51faafbdbf4a6f94b7e9af1313d639,방어력 +{v}%
+Regen,Def,2,1,재생,KillHeal,2,3,a0bf130e5af340f383eaa35bdad5a09f,몬스터 처치 시 최대 체력의 {v}% 회복
+Dodge,Def,2,2,회피,Evade,2,3,16e0a3259dbe419f85faa3934c824c6f,몬스터 공격을 {v}% 확률로 회피
+Drain,Def,3,1,흡혈,LifestealPct,1,3,b511edeedf2041e2be2ed6f39a50641e,준 피해의 {v}%만큼 체력 회복
+Thorns,Def,3,2,가시,Thorns,10,3,f73042275dc34ed38c0dda6af33f2bde,받은 피해의 {v}%를 반사
+Bulwark,Def,4,1,철벽,Bulwark,20,3,3b9ba76a1b22485a929c9409d201c7af,체력 50% 이하일 때 방어력 +{v}%
+LastStand,Def,4,2,최후의 저항,LastStand,10,3,2d8fb860f50549c091b80df3d0bbe22e,판마다 1회 쓰러질 때 체력 {v}%로 버팀
+Greed,Util,1,1,탐욕,MesoPct,5,3,5117d5e3fdec44429b47848fe01f471d,메소 획득 +{v}%
+Study,Util,1,2,학습,ExpPct,5,3,8a0a3c5113944728b2a2cd88fa30275b,경험치 획득 +{v}%
+Collector,Util,2,1,수집가,StoneChance,3,3,c7a95643f6274e00b574f8d7fabd0f46,스킬석 획득 확률 +{v}%p
+SmithHand,Util,2,2,대장장이의 손,EnhRate,1,3,01371e98db084a748c189d89a25c34d4,장비 강화 확률 +{v}%p
+Fund,Util,3,1,시작 자금,StartMeso,100,3,fc221dcfcd8b4a338de5639d10b3d710,판 시작 시 메소 +{v}
+Fate,Util,3,2,운명의 손,GradeLuck,10,3,1fd1da489dbd4e6d9f6fcf612de80bbc,희귀 이상 특성 카드 확률 +{v}%
+Reroll,Util,4,1,재추첨,Reroll,1,3,0764c9b610f940af9efa23a40949a576,판마다 특성 카드 다시 뽑기 {v}회
+HeadStart,Util,4,2,선행 학습,StartLevel,1,3,ccc5ef2e6715474ab1ffc69a8c8561a8,시작 레벨 +{v} (특성 선택도 +{v}회)

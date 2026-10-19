@@ -1,0 +1,117 @@
+@Logic
+script DealUILogic extends Logic
+
+	-- 보스 처치 후 거래 화면 (DealUI.ui 바인딩): 천사 / 악마 / 상인 NPC + 설명 + 획득 버튼, 맨 아래 "아무것도 고르지 않기"
+	property Entity rootEntity = "b72a8e16-4880-4e0f-b051-1d7e1637f10d"
+	property ButtonComponent angelBtn = "3dc34c16-9a1f-4d08-8076-cf802ca6e980"
+	property ButtonComponent devilBtn = "0e5f05a3-51db-4f7c-b30a-cc770a9b0ca8"
+	property ButtonComponent merchantBtn = "de8028de-fafb-4b3c-b50e-2d614d5d279f"
+	property ButtonComponent skipBtn = "03d78429-b949-481c-8ebd-8de2fce41e64"
+	property string ColPath = "/ui/DealUI/Deal/Col_"
+	property string DealTableName = "DealTable"
+	property Color BuyOnColor = Color(1, 1, 1, 1)
+	property Color BuyOffColor = Color(0.42, 0.42, 0.46, 1)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 거래 테이블을 읽고 버튼을 연결한 뒤 화면을 숨긴다.
+		self._T.deals = {}
+		local ds = _DataService:GetTable(self.DealTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local desc = (string.gsub(ds:GetCell(i, "Desc"), "\\n", "\n"))
+				self._T.deals[ds:GetCell(i, "Id")] = { name = ds:GetCell(i, "Name"), desc = desc }
+			end
+		end
+		self.clickHandlers = {}
+		self:Bind(self.angelBtn, function() self:OnPick("Angel") end)
+		self:Bind(self.devilBtn, function() self:OnPick("Devil") end)
+		self:Bind(self.merchantBtn, function() self:OnPick("Merchant") end)
+		self:Bind(self.skipBtn, function() self:OnPick("") end)
+		self._T.shown = nil
+		self:Show(false)
+		log("[VRF] DealUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(ButtonComponent button, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(button) then return end
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 탑 진행 매니저 (로비에서는 nil).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(boolean on)
+		-- 거래 화면 켜기/끄기.
+		if self._T.shown == on then return end
+		self._T.shown = on
+		if isvalid(self.rootEntity) then self.rootEntity:SetEnable(on) end
+		log("[VRF] deal ui show=" .. tostring(on))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnPick(string kind)
+		-- 획득 / 고르지 않기 → 서버에 전달 (상인은 메소가 부족하면 무시).
+		local mgr = self:GetManager()
+		if mgr == nil or mgr.RunState ~= "DEAL" then return end
+		if kind == "Merchant" and mgr.Meso < mgr.DealCost then return end
+		mgr:RequestDeal(kind)
+		log("[VRF] deal picked '" .. kind .. "'")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Fill(Component mgr)
+		-- 세 거래의 이름·설명·가격과 상인 버튼 상태를 채운다.
+		for _, kind in ipairs({ "Angel", "Devil", "Merchant" }) do
+			local d = self._T.deals[mgr.DealIds[kind] or ""]
+			local base = self.ColPath .. kind
+			local nameE = _EntityService:GetEntityByPath(base .. "/Name")
+			local descE = _EntityService:GetEntityByPath(base .. "/Desc")
+			local costE = _EntityService:GetEntityByPath(base .. "/Cost")
+			if isvalid(nameE) then nameE.TextGUIRendererComponent.Text = d ~= nil and d.name or "" end
+			if isvalid(descE) then descE.TextGUIRendererComponent.Text = d ~= nil and d.desc or "" end
+			if isvalid(costE) then
+				local label = "무료"
+				if kind == "Devil" then label = "대가가 따릅니다" end
+				if kind == "Merchant" then label = tostring(mgr.DealCost) .. " 메소 (보유 " .. tostring(mgr.Meso) .. ")" end
+				costE.TextGUIRendererComponent.Text = label
+			end
+		end
+		if isvalid(self.merchantBtn) then
+			local can = mgr.Meso >= mgr.DealCost
+			if can then self.merchantBtn.Entity.SpriteGUIRendererComponent.Color = self.BuyOnColor else self.merchantBtn.Entity.SpriteGUIRendererComponent.Color = self.BuyOffColor end
+			if can then self.merchantBtn.Entity.TextGUIRendererComponent.Text = "획득" else self.merchantBtn.Entity.TextGUIRendererComponent.Text = "메소 부족" end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 판 상태가 DEAL일 때만 보인다.
+		local mgr = self:GetManager()
+		local on = mgr ~= nil and mgr.RunState == "DEAL"
+		self:Show(on)
+		if on then self:Fill(mgr) end
+	end
+
+end

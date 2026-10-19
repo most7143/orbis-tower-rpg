@@ -1,0 +1,337 @@
+@Logic
+script EngraveUILogic extends Logic
+
+	-- 각인 트리 화면 (EngraveUI.ui). 데이터는 로컬 플레이어의 PlayerEngrave(서버 동기화)에서 읽는다.
+	property Entity dimEntity = "954a27e4-a328-4e13-95dd-aa5e0e9e3f10"
+	property Entity panelEntity = "2e8961bf-f27f-49f7-81d5-c0aaf797a55c"
+	property TextGUIRendererComponent pointsText = "c974bad3-6ba6-48af-9ec6-4e191e8dc700"
+	property TextGUIRendererComponent msgText = "49b2a87e-ced3-4264-bcc6-da4bbc8ae7e2"
+	property Entity catchEntity = "9b05336d-0dea-4bec-b096-11bba764c8f8"
+	property Entity tipEntity = "863b4262-55ba-418a-a77a-69efe4acae12"
+	property ButtonComponent btnReset = "b613289a-ec11-48ae-8e1d-22d6663570d8"
+	property ButtonComponent btnClose = "0485624f-fd41-4988-8c75-d9011ee912fd"
+	property string TableName = "EngraveTable"
+	property string TreePath = "/ui/EngraveUI/Panel/Tree/"
+	property string TipPath = "/ui/EngraveUI/Panel/Tip/"
+	property string LobbyMapName = "Lobby"
+	property number MsgDuration = 2.0
+	-- 툴팁은 숨긴 채로 위치를 옮기고 이 프레임 수가 지난 뒤 보여준다 (첫 프레임 위치 튐 방지)
+	property integer TipRevealFrames = 2
+	-- 레벨 글자 색: 찍을 수 있음(연두) / 조건만 됨(회색) / 만렙(흰색)
+	property Color CanColor = Color(0.55, 0.95, 0.35, 1)
+	property Color WaitColor = Color(0.6, 0.6, 0.64, 1)
+	property Color MaxColor = Color(1, 1, 1, 1)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 테이블을 읽고 노드·버튼을 연결한 뒤 닫힌 상태로 시작한다.
+		self:LoadTable()
+		self.clickHandlers = {}
+		self:Bind(self.btnReset.Entity, function() self:OnReset() end)
+		self:Bind(self.btnClose.Entity, function() self:Close() end)
+		-- 아이콘이 아닌 곳(패널 빈 곳·바깥 어두운 배경)을 누르면 선택 해제
+		self:Bind(self.catchEntity, function() self:Deselect() end)
+		self:Bind(self.dimEntity, function() self:Deselect() end)
+		for _, n in ipairs(self._T.nodes) do
+			local id = n.id
+			n.root = _EntityService:GetEntityByPath(self.TreePath .. id)
+			n.btn = _EntityService:GetEntityByPath(self.TreePath .. id .. "/Btn")
+			n.icon = _EntityService:GetEntityByPath(self.TreePath .. id .. "/Btn/Icon")
+			n.frame = _EntityService:GetEntityByPath(self.TreePath .. id .. "/Frame")
+			n.lv = _EntityService:GetEntityByPath(self.TreePath .. id .. "/Lv")
+			n.link = _EntityService:GetEntityByPath(self.TreePath .. "Link_" .. id)
+			if isvalid(n.btn) then self:Bind(n.btn, function() self:OnNodeClick(id) end) end
+		end
+		self._T.selected = ""
+		self._T.tipFor = ""
+		self._T.tipReveal = 0
+		self._T.msgSeq = -1
+		self._T.msgTimer = 0
+		self._T.open = true
+		self:SetOpen(false)
+		log("[VRF] EngraveUILogic begin nodes=" .. tostring(#self._T.nodes))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, fn)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadTable()
+		-- EngraveTable: 이름·설명({v} 자리에 수치)·레벨당 수치·최대 레벨·계열·단계.
+		self._T.nodes = {}
+		self._T.nodeById = {}
+		local ds = _DataService:GetTable(self.TableName)
+		if ds == nil then
+			log_error("[VRF] EngraveTable not found (client)")
+			return
+		end
+		for i = 1, ds:GetRowCount() do
+			local n = {
+				id = ds:GetCell(i, "Id"), branch = ds:GetCell(i, "Branch"), tier = tonumber(ds:GetCell(i, "Tier")) or 1, col = tonumber(ds:GetCell(i, "Col")) or 1,
+				name = ds:GetCell(i, "Name"), desc = ds:GetCell(i, "Desc"),
+				per = tonumber(ds:GetCell(i, "PerLv")) or 0, max = tonumber(ds:GetCell(i, "MaxLv")) or 3,
+			}
+			table.insert(self._T.nodes, n)
+			self._T.nodeById[n.id] = n
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 로컬 플레이어의 각인 컴포넌트.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [각인] 버튼: 트리 화면을 연다.
+		local eng = self:GetEngrave()
+		if eng == nil or not eng.Loaded then return end
+		self._T.selected = ""
+		self._T.msgSeq = eng.MsgSeq
+		self:SetOpen(true)
+		self:Refresh()
+		log("[VRF] engrave open points=" .. tostring(eng.ClearedFloor - eng.Spent) .. "/" .. tostring(eng.ClearedFloor))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기: 화면을 숨기고 바뀐 각인을 저장 요청한다.
+		if not self._T.open then return end
+		self:SetOpen(false)
+		local eng = self:GetEngrave()
+		if eng ~= nil then eng:RequestSave() end
+		log("[VRF] engrave close")
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsOpen()
+		-- 각인 화면이 열려 있는지.
+		return self._T.open == true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOpen(boolean open)
+		-- 배경·패널 표시 전환.
+		if self._T.open == open then return end
+		self._T.open = open
+		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(open) end
+		if isvalid(self.panelEntity) then self.panelEntity:SetEnable(open) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsNodeOpen(Component eng, table n)
+		-- 1단계는 항상 열림, 그 외에는 같은 계열·같은 줄의 바로 위 노드가 최대 레벨이어야 열림 (서버와 같은 규칙).
+		if n.tier <= 1 then return true end
+		for _, p in ipairs(self._T.nodes) do
+			if p.branch == n.branch and p.col == n.col and p.tier == n.tier - 1 then return (eng.Lv[p.id] or 0) >= p.max end
+		end
+		return false
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Deselect()
+		-- 선택 해제 (프레임·툴팁 숨김).
+		if self._T.selected == "" then return end
+		self._T.selected = ""
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method string EffectText(table n, integer lv)
+		-- 효과 문구 (설명의 {v}를 레벨 × 레벨당 수치로 바꾼다).
+		local v = n.per * lv
+		local vs = tostring(math.floor(v))
+		if math.abs(v - math.floor(v)) > 0.001 then vs = string.format("%.1f", v) end
+		return (string.gsub(n.desc, "{v}", vs))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnNodeClick(string id)
+		-- 첫 클릭은 선택(프레임 + 툴팁), 선택된 노드를 한 번 더 누르면 포인트 투자.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local n = self._T.nodeById[id]
+		if n == nil then return end
+		if self._T.selected ~= id then
+			self._T.selected = id
+			self:Refresh()
+			return
+		end
+		local lv = eng.Lv[id] or 0
+		if lv < n.max and self:IsNodeOpen(eng, n) and eng.ClearedFloor - eng.Spent > 0 then
+			eng:RequestInvest(id)
+			log("[VRF] engrave invest request " .. id)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnReset()
+		-- 포인트 리셋 요청 (무료).
+		local eng = self:GetEngrave()
+		if eng ~= nil then eng:RequestReset() end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(Entity e, string s, Color c)
+		-- 바뀐 경우에만 글자·색을 바꾼다.
+		if not isvalid(e) then return end
+		local t = e.TextGUIRendererComponent
+		if t.Text ~= s then t.Text = s end
+		if c ~= nil then t.FontColor = c end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 포인트·노드 상태(잠김/찍을 수 있음/만렙)·연결선·툴팁을 갱신한다.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local avail = eng.ClearedFloor - eng.Spent
+		if isvalid(self.pointsText) then
+			local s = "남은 포인트 " .. tostring(avail) .. " / 총 " .. tostring(eng.ClearedFloor)
+			if self.pointsText.Text ~= s then self.pointsText.Text = s end
+		end
+		for _, n in ipairs(self._T.nodes) do
+			local lv = eng.Lv[n.id] or 0
+			local open = self:IsNodeOpen(eng, n)
+			if isvalid(n.lv) then
+				-- 찍을 수 없는(잠긴) 단계는 레벨 숨김
+				if n.lv.Enable ~= open then n.lv:SetEnable(open) end
+				local c = self.WaitColor
+				if lv >= n.max then c = self.MaxColor elseif avail > 0 then c = self.CanColor end
+				self:SetText(n.lv, tostring(lv) .. "/" .. tostring(n.max), c)
+			end
+			if isvalid(n.icon) then
+				local g = 1
+				if not open then g = 0.3 end
+				n.icon.SpriteGUIRendererComponent.Color = Color(g, g, g, 1)
+			end
+			if isvalid(n.frame) then
+				local sel = self._T.selected == n.id
+				if n.frame.Enable ~= sel then n.frame:SetEnable(sel) end
+			end
+		end
+		-- 줄마다 위 노드 → 아래 노드 연결선: 열리면 금색
+		for _, n in ipairs(self._T.nodes) do
+			if isvalid(n.link) then
+				if self:IsNodeOpen(eng, n) then
+					n.link.SpriteGUIRendererComponent.Color = Color(0.91, 0.78, 0.45, 1)
+				else
+					n.link.SpriteGUIRendererComponent.Color = Color(0.23, 0.23, 0.27, 1)
+				end
+			end
+		end
+		self:RefreshTip(eng, avail)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshTip(Component eng, integer avail)
+		-- 선택한 아이콘 옆에 효과 툴팁 (아이콘이 왼쪽 절반이면 오른쪽, 오른쪽 절반이면 왼쪽).
+		local n = self._T.nodeById[self._T.selected or ""]
+		if not isvalid(self.tipEntity) then return end
+		if n == nil or not isvalid(n.root) then
+			if self.tipEntity.Enable then self.tipEntity:SetEnable(false) end
+			self._T.tipFor = ""
+			return
+		end
+		-- 다른 아이콘을 새로 선택했으면 툴팁을 숨기고(Visible) 위치·내용을 먼저 맞춘 뒤 OnUpdate에서 보여준다
+		if self._T.tipFor ~= n.id then
+			self._T.tipFor = n.id
+			self:SetTipVisible(false)
+			self._T.tipReveal = self.TipRevealFrames
+		end
+		if not self.tipEntity.Enable then self.tipEntity:SetEnable(true) end
+		local p = n.root.UITransformComponent.anchoredPosition
+		local x = p.x + 175
+		if p.x > 0 then x = p.x - 175 end
+		local y = math.max(-160, math.min(230, p.y - 20))
+		self.tipEntity.UITransformComponent.anchoredPosition = Vector2(x, y)
+
+		local lv = eng.Lv[n.id] or 0
+		local open = self:IsNodeOpen(eng, n)
+		local function tip(name) return _EntityService:GetEntityByPath(self.TipPath .. name) end
+		self:SetText(tip("Name"), n.name, nil)
+		self:SetText(tip("Level"), "Lv " .. tostring(lv) .. " / " .. tostring(n.max), nil)
+		if lv > 0 then
+			self:SetText(tip("Cur"), "현재: " .. self:EffectText(n, lv), nil)
+		else
+			self:SetText(tip("Cur"), "현재: 효과 없음", nil)
+		end
+		if lv < n.max then
+			self:SetText(tip("Next"), "다음: " .. self:EffectText(n, lv + 1), nil)
+		else
+			self:SetText(tip("Next"), "최대 레벨", nil)
+		end
+		local hint = "한 번 더 누르면 찍기"
+		local hc = Color(0.91, 0.78, 0.45, 1)
+		if lv >= n.max then
+			hint = "최대 레벨입니다"
+			hc = self.MaxColor
+		elseif not open then
+			hint = "바로 위 각인을 " .. tostring(n.max) .. "레벨까지"
+			hc = Color(1, 0.45, 0.4, 1)
+		elseif avail <= 0 then
+			hint = "남은 포인트가 없습니다"
+			hc = self.WaitColor
+		end
+		self:SetText(tip("Hint"), hint, hc)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetTipVisible(boolean visible)
+		-- 툴팁 배경과 글자 전부의 Visible 전환 (Visible은 자식에 전파되지 않아 하나씩 바꾼다).
+		if not isvalid(self.tipEntity) then return end
+		self.tipEntity:SetVisible(visible)
+		for _, child in ipairs(self.tipEntity.Children:ToTable()) do
+			if isvalid(child) then child:SetVisible(visible) end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있는 동안 동기화된 각인 상태를 반영하고, 서버 안내 문구를 잠깐 띄운다. 로비를 벗어나면 닫는다.
+		if not self._T.open then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then
+			self:Close()
+			return
+		end
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		if eng.MsgSeq ~= self._T.msgSeq then
+			self._T.msgSeq = eng.MsgSeq
+			self._T.msgTimer = self.MsgDuration
+			if isvalid(self.msgText) then self.msgText.Text = eng.Msg end
+		end
+		if self._T.msgTimer > 0 then
+			self._T.msgTimer = self._T.msgTimer - delta
+			if self._T.msgTimer <= 0 and isvalid(self.msgText) then self.msgText.Text = "" end
+		end
+		self:Refresh()
+		-- 위치가 반영된 다음 프레임에 툴팁을 보여준다
+		if (self._T.tipReveal or 0) > 0 then
+			self._T.tipReveal = self._T.tipReveal - 1
+			if self._T.tipReveal <= 0 then self:SetTipVisible(true) end
+		end
+	end
+
+end

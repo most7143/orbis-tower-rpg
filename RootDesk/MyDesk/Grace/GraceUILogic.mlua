@@ -1,0 +1,316 @@
+@Logic
+script GraceUILogic extends Logic
+
+	-- 미네르바의 은총 화면 (GraceUI.ui): 여신의 깃털로 은총 5줄 돌리기, 줄 잠금, 프리셋 3개.
+	-- 데이터는 로컬 플레이어의 PlayerEngrave(GraceLines·Feathers 동기화)에서 읽고, 변경은 서버 요청.
+	property Entity dimEntity = "fe18e743-51e8-45dd-bc5e-c2a6039a1e60"
+	property Entity panelEntity = "469158c3-349f-4d40-aab1-a8418b6eeab3"
+	property ButtonComponent btnClose = "7caf70ca-77d5-4e3a-8097-68cd976b00ee"
+	property ButtonComponent btnRoll = "e4cce156-c48c-4b06-aa41-4a5314febfd0"
+	property ButtonComponent btnPreset1 = "a0ab76cb-e00f-479e-b2a7-03499e2a17f6"
+	property ButtonComponent btnPreset2 = "8f146c81-b156-4ac9-8cc0-d297363b9677"
+	property ButtonComponent btnPreset3 = "8c381427-78d7-4058-bd3b-6b3cc749622f"
+	property TextGUIRendererComponent featherText = "d5b1842a-ae55-4f0c-8d90-2e6f4c4a5ac9"
+	property TextGUIRendererComponent lockInfoText = "06aaf47f-e92d-4fad-ba69-241947a13704"
+	property string RowPath = "/ui/GraceUI/Panel/Rows/Row_"
+	property integer Slots = 5
+	property integer MaxLocks = 4
+	property integer BaseCost = 10
+	property integer LockCost = 10
+	property Color EmptyBgColor = Color(0.14, 0.14, 0.17, 1)
+	property Color PresetOnColor = Color(1, 0.82, 0.35, 1)
+	property Color PresetOffColor = Color(1, 1, 1, 1)
+	property Color RollOnColor = Color(1, 1, 1, 1)
+	property Color RollOffColor = Color(0.42, 0.42, 0.46, 1)
+	property Color LockOnColor = Color(1, 0.82, 0.35, 1)
+	property Color LockOffColor = Color(1, 1, 1, 1)
+	property Color TopStepColor = Color(1, 0.4, 0.4, 1)
+	-- 새로 뽑힌 줄 반짝임 시간(초)
+	property number FlashTime = 0.45
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 옵션·등급·단계표를 읽고 버튼을 연결한 뒤 닫힌 상태로 시작한다.
+		self._T.opts = {}
+		local optDs = _DataService:GetTable("GraceOptionTable")
+		if optDs ~= nil then
+			for i = 1, optDs:GetRowCount() do
+				local o = { id = optDs:GetCell(i, "Id"), name = optDs:GetCell(i, "Name"), unit = optDs:GetCell(i, "Unit"), ranges = {} }
+				for g = 1, 5 do
+					o.ranges[g] = { min = tonumber(optDs:GetCell(i, "G" .. tostring(g) .. "Min")) or 0, max = tonumber(optDs:GetCell(i, "G" .. tostring(g) .. "Max")) or 0 }
+				end
+				self._T.opts[o.id] = o
+			end
+		end
+		self._T.grades = {}
+		local gs = _DataService:GetTable("GraceGradeTable")
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do
+				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = { name = gs:GetCell(i, "Name"), text = Color.FromHexCode(gs:GetCell(i, "TextHex")), bg = Color.FromHexCode(gs:GetCell(i, "BgHex")) }
+			end
+		end
+		self._T.steps = {}
+		local ss = _DataService:GetTable("GraceStepTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do self._T.steps[tonumber(ss:GetCell(i, "Step")) or i] = ss:GetCell(i, "Name") end
+		end
+		self.clickHandlers = {}
+		self:Bind(self.btnClose, function() self:Close() end)
+		self:Bind(self.btnRoll, function() self:OnRoll() end)
+		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
+		for i, b in ipairs(presets) do
+			local p = i
+			self:Bind(b, function() self:OnPreset(p) end)
+		end
+		for i = 1, self.Slots do
+			local slot = i
+			local lock = _EntityService:GetEntityByPath(self.RowPath .. tostring(i) .. "/Lock")
+			if isvalid(lock) and isvalid(lock.ButtonComponent) then self:Bind(lock.ButtonComponent, function() self:OnLock(slot) end) end
+		end
+		self._T.flash = {}
+		self._T.open = true
+		self:SetOpen(false)
+		log("[VRF] GraceUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(ButtonComponent button, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(button) then return end
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 로컬 플레이어의 저장 컴포넌트 (은총 포함).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [은총] 버튼.
+		local eng = self:GetEngrave()
+		if eng == nil or not eng.GraceLoaded then return end
+		self._T.graceSeq = eng.GraceSeq
+		self:SetOpen(true)
+		self:Refresh()
+		log("[VRF] grace open feathers=" .. tostring(eng.Feathers) .. " preset=" .. tostring(eng.GracePreset))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기.
+		self:SetOpen(false)
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsOpen()
+		-- 은총 화면이 열려 있는지.
+		return self._T.open == true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOpen(boolean open)
+		-- 배경·패널 표시 전환.
+		if self._T.open == open then return end
+		self._T.open = open
+		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(open) end
+		if isvalid(self.panelEntity) then self.panelEntity:SetEnable(open) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table ParseLine(string v)
+		-- "옵션|등급|단계|잠금" → {id, grade, step, lock} (빈 줄이면 nil).
+		if v == nil or v == "" then return nil end
+		local parts = {}
+		for part in string.gmatch(v, "[^|]+") do table.insert(parts, part) end
+		return { id = parts[1] or "", grade = math.floor(tonumber(parts[2]) or 1), step = math.floor(tonumber(parts[3]) or 1), lock = parts[4] == "1" }
+	end
+
+	@ExecSpace("ClientOnly")
+	method table CurrentLines(Component eng)
+		-- 지금 프리셋의 5줄.
+		local lines = {}
+		for i = 1, self.Slots do
+			lines[i] = self:ParseLine(eng.GraceLines[tostring(eng.GracePreset) .. "_" .. tostring(i)] or "")
+		end
+		return lines
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer LockCount(table lines)
+		-- 잠긴 줄 수.
+		local n = 0
+		for i = 1, self.Slots do
+			if lines[i] ~= nil and lines[i].lock then n = n + 1 end
+		end
+		return n
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FormatNum(number v)
+		-- 정수면 정수, 아니면 소수 한 자리.
+		if math.abs(v - math.floor(v)) < 0.001 then return tostring(math.floor(v)) end
+		return string.format("%.1f", v)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnRoll()
+		-- 은총 받기: 깃털이 모자라면 무시.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local lines = self:CurrentLines(eng)
+		local cost = self.BaseCost + self.LockCost * self:LockCount(lines)
+		if eng.Feathers < cost then return end
+		-- 이번에 새로 뽑힐 줄(잠기지 않은 줄)을 기억해 두었다가 결과가 오면 반짝인다
+		self._T.rollRows = {}
+		for i = 1, self.Slots do self._T.rollRows[i] = lines[i] == nil or not lines[i].lock end
+		eng:RequestGraceRoll()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnLock(integer slot)
+		-- 줄 잠금/해제.
+		local eng = self:GetEngrave()
+		if eng ~= nil then eng:RequestGraceLock(slot) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnPreset(integer preset)
+		-- 프리셋 전환.
+		local eng = self:GetEngrave()
+		if eng ~= nil and eng.GracePreset ~= preset then eng:RequestGracePreset(preset) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 깃털 수, 프리셋 탭, 5줄(등급 배경·이름·수치·단계·잠금), 잠금 정보와 은총 받기 비용.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local lines = self:CurrentLines(eng)
+		local locks = self:LockCount(lines)
+		local cost = self.BaseCost + self.LockCost * locks
+		if isvalid(self.featherText) then self.featherText.Text = tostring(eng.Feathers) end
+		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
+		for i, b in ipairs(presets) do
+			if isvalid(b) then
+				if i == eng.GracePreset then b.Entity.SpriteGUIRendererComponent.Color = self.PresetOnColor else b.Entity.SpriteGUIRendererComponent.Color = self.PresetOffColor end
+			end
+		end
+		for i = 1, self.Slots do
+			local base = self.RowPath .. tostring(i)
+			local row = _EntityService:GetEntityByPath(base)
+			local line = lines[i]
+			local o = line ~= nil and self._T.opts[line.id] or nil
+			local g = line ~= nil and self._T.grades[line.grade] or nil
+			local function setText(name, text, color)
+				local e = _EntityService:GetEntityByPath(base .. "/" .. name)
+				if not isvalid(e) then return end
+				e.TextGUIRendererComponent.Text = text
+				if color ~= nil then e.TextGUIRendererComponent.FontColor = color end
+			end
+			if isvalid(row) then
+				if g ~= nil then row.SpriteGUIRendererComponent.Color = g.bg else row.SpriteGUIRendererComponent.Color = self.EmptyBgColor end
+			end
+			local tag = _EntityService:GetEntityByPath(base .. "/Grade")
+			if o ~= nil and g ~= nil then
+				local r = o.ranges[line.grade]
+				local v = r.min + (r.max - r.min) * (line.step - 1) / 4
+				v = math.floor(v * 10 + 0.5) / 10
+				local unit = o.unit
+				if unit == "%p" then unit = "%p" end
+				setText("Grade", g.name, g.text)
+				if isvalid(tag) then tag.SpriteGUIRendererComponent.Color = Color(g.text.r * 0.35, g.text.g * 0.35, g.text.b * 0.35, 1) end
+				setText("Name", o.name, Color(1, 1, 1, 1))
+				setText("Value", "+" .. self:FormatNum(v) .. unit, g.text)
+				local stepName = self._T.steps[line.step] or ""
+				local stepColor = Color(0.85, 0.85, 0.85, 1)
+				if line.step >= 5 then stepColor = self.TopStepColor end
+				setText("Step", stepName, stepColor)
+			else
+				setText("Grade", "-", Color(0.5, 0.5, 0.55, 1))
+				if isvalid(tag) then tag.SpriteGUIRendererComponent.Color = Color(0.2, 0.2, 0.23, 1) end
+				setText("Name", "비어 있음", Color(0.5, 0.5, 0.55, 1))
+				setText("Value", "", nil)
+				setText("Step", "", nil)
+			end
+			local lock = _EntityService:GetEntityByPath(base .. "/Lock")
+			if isvalid(lock) then
+				local locked = line ~= nil and line.lock
+				lock:SetEnable(line ~= nil)
+				if locked then
+					lock.SpriteGUIRendererComponent.Color = self.LockOnColor
+					lock.TextGUIRendererComponent.Text = "잠김"
+				else
+					lock.SpriteGUIRendererComponent.Color = self.LockOffColor
+					lock.TextGUIRendererComponent.Text = "잠금"
+				end
+			end
+		end
+		if isvalid(self.lockInfoText) then self.lockInfoText.Text = "잠금 " .. tostring(locks) .. " / " .. tostring(self.MaxLocks) .. "  ·  잠금 1줄당 깃털 +" .. tostring(self.LockCost) end
+		if isvalid(self.btnRoll) then
+			self.btnRoll.Entity.TextGUIRendererComponent.Text = "은총 받기   깃털 " .. tostring(cost)
+			if eng.Feathers >= cost then self.btnRoll.Entity.SpriteGUIRendererComponent.Color = self.RollOnColor else self.btnRoll.Entity.SpriteGUIRendererComponent.Color = self.RollOffColor end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateFlash(Component eng, number delta)
+		-- 돌리기 결과가 오면 새로 뽑힌 줄을 잠깐 반짝인다.
+		if eng.GraceSeq ~= self._T.graceSeq then
+			self._T.graceSeq = eng.GraceSeq
+			for i = 1, self.Slots do
+				if self._T.rollRows == nil or self._T.rollRows[i] then self._T.flash[i] = self.FlashTime end
+			end
+			self:Refresh()
+		end
+		for i = 1, self.Slots do
+			local f = _EntityService:GetEntityByPath(self.RowPath .. tostring(i) .. "/Flash")
+			if isvalid(f) then
+				local t = self._T.flash[i] or 0
+				if t > 0 then
+					t = t - delta
+					self._T.flash[i] = t
+				end
+				local a = math.max(0, t / self.FlashTime) * 0.7
+				if f.Enable ~= (a > 0) then f:SetEnable(a > 0) end
+				if a > 0 then f.SpriteGUIRendererComponent.Color = Color(1, 1, 0.9, a) end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있는 동안 서버 동기화 값으로 갱신 (로비를 벗어나면 닫음).
+		if not self._T.open then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= "Lobby" then
+			self:Close()
+			return
+		end
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		self:UpdateFlash(eng, delta)
+		self._T.refreshT = (self._T.refreshT or 0) + delta
+		if self._T.refreshT >= 0.2 then
+			self._T.refreshT = 0
+			self:Refresh()
+		end
+	end
+
+end

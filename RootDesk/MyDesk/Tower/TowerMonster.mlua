@@ -1,0 +1,159 @@
+@Component
+script TowerMonster extends AttackComponent
+	
+	-- 애니메이션 클립 (스폰 시 TowerRunManager가 MonsterTable 값으로 ApplyLook)
+	property string StandRUID = ""
+	property string AttackRUID = ""
+	property string HitRUID = ""
+	property string DieRUID = ""
+	-- 피격 / 사망 사운드 (MonsterTable의 리소스 팩 _audio/Damage, _audio/Die)
+	property string HitSoundRUID = ""
+	property string DieSoundRUID = ""
+	property number SoundVolume = 0.7
+	property number AttackAnimTime = 0.8
+	property number HitAnimTime = 0.4
+	
+	@HideFromInspector
+	property integer CurrentDamage = 1
+	@HideFromInspector
+	property number CurrentCritRate = 0
+	@HideFromInspector
+	property number CurrentCritDmg = 150
+	@HideFromInspector
+	property boolean IsDead = false
+	@HideFromInspector
+	property number AnimTimer = 0
+	
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 스폰 직후 대기 모션 (ApplyLook이 먼저 불린 경우에만).
+		if self.StandRUID ~= "" then self:SetClip(self.StandRUID, 0) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ClipDuration(string ruid)
+		-- 애니메이션 클립 1회 재생 시간(초) = 프레임 Delay 합 ÷ PlayRate. Delay가 ms 단위면 초로 환산.
+		local clip = _ResourceService:LoadAnimationClipAndWait(ruid)
+		if clip == nil then return 0 end
+		local total = 0
+		for _, f in ipairs(clip.Frames:ToTable()) do total = total + f.Delay end
+		if total > 20 then total = total / 1000 end
+		local rate = clip.PlayRate
+		if rate == nil or rate <= 0 then rate = 1 end
+		return total / rate
+	end
+	
+	@ExecSpace("ServerOnly")
+	method void ApplyLook(string stand, string attack, string hit, string die, string hitSound, string dieSound)
+		-- 몬스터 테이블의 애니메이션·사운드로 외형을 바꾼다. 없는 모션은 대기 모션으로 대체, 없는 사운드는 재생 안 함.
+		self.HitSoundRUID = hitSound or ""
+		self.DieSoundRUID = dieSound or ""
+		self.StandRUID = stand
+		if attack ~= nil and attack ~= "" then self.AttackRUID = attack else self.AttackRUID = stand end
+		if hit ~= nil and hit ~= "" then self.HitRUID = hit else self.HitRUID = stand end
+		if die ~= nil and die ~= "" then self.DieRUID = die else self.DieRUID = stand end
+		self:SetClip(self.StandRUID, 0)
+	end
+	
+	@ExecSpace("ServerOnly")
+	method void SetClip(string ruid, number duration)
+		-- 스프라이트 클립을 바꾸고, duration이 지나면 대기 모션으로 돌아간다.
+		local sprite = self.Entity.SpriteRendererComponent
+		if isvalid(sprite) then sprite.SpriteRUID = ruid end
+		self.AnimTimer = duration
+	end
+	
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 공격/피격 모션이 끝나면 stand로 복귀.
+		if self.IsDead or self.AnimTimer <= 0 then return end
+		self.AnimTimer = self.AnimTimer - delta
+		if self.AnimTimer <= 0 then self:SetClip(self.StandRUID, 0) end
+	end
+	
+	@ExecSpace("ServerOnly")
+	method void DoAttack(Entity target, integer damage, number critRate, number critDmg)
+		-- 좌측 플레이어를 향해 공격 1회. 치명타 확률(%)·피해(%)는 접두사(치명적인)에서 온다.
+		if self.IsDead or not isvalid(target) then return end
+		self.CurrentDamage = damage
+		self.CurrentCritRate = critRate
+		self.CurrentCritDmg = critDmg
+		self:SetClip(self.AttackRUID, self.AttackAnimTime)
+		local p = target.TransformComponent.WorldPosition
+		self:AttackFast(BoxShape(Vector2(p.x, p.y + 0.4), Vector2(1.2, 1.2), 0), "tower.monster", nil)
+	end
+	
+	@ExecSpace("ServerOnly")
+	method number PlayDie()
+		-- 처치 연출. 사망 애니메이션 1회 재생 시간(초)을 돌려준다.
+		self.Entity.CurrentMap:SendEvent(MonsterDeadEvent()) -- 이 몬스터가 있는 맵 엔티티(중계자)를 통해 "몬스터가 죽었다"는 이벤트를 보낸다
+		self.IsDead = true
+		self:SetClip(self.DieRUID, 0)
+		-- 시체는 다음에 나오는 몬스터보다 뒤에 그린다
+		local sprite = self.Entity.SpriteRendererComponent
+		if isvalid(sprite) then sprite.OrderInLayer = sprite.OrderInLayer - 1 end
+		self:PlaySfx(self.DieSoundRUID)
+		-- 사망 애니메이션은 1회만: 한 번 재생이 끝나는 시점에 스프라이트를 비워 반복되지 않게 한다
+		local dur = self:ClipDuration(self.DieRUID)
+		if dur > 0 then
+			_TimerService:SetTimerOnce(function()
+				if isvalid(self.Entity) and isvalid(self.Entity.SpriteRendererComponent) then self.Entity.SpriteRendererComponent.SpriteRUID = "" end
+			end, math.max(0.05, dur - 0.03))
+		end
+		log("[VRF] monster die anim once dur=" .. string.format("%.2f", dur))
+		return dur
+	end
+	
+	@ExecSpace("ServerOnly")
+	method void PlaySfx(string ruid)
+		-- 이 맵에 있는 플레이어들에게 사운드를 재생한다.
+		if ruid == nil or ruid == "" then return end
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or not isvalid(map.MapComponent) then return end
+		local users = _UserService:GetUsersByMapComponent(map.MapComponent)
+		if users == nil then return end
+		for _, user in ipairs(users) do
+			if isvalid(user) then _SoundService:PlaySound(ruid, self.SoundVolume, user.PlayerComponent.UserId) end
+		end
+	end
+	
+	method integer CalcDamage(Entity attacker, Entity defender, string attackInfo)
+		-- 판 진행 매니저가 넘겨준 공격력 그대로.
+		return self.CurrentDamage
+	end
+	
+	method boolean CalcCritical(Entity attacker, Entity defender, string attackInfo)
+		-- 치명적인 접두사 몬스터만 치명타 확률이 있다.
+		return _UtilLogic:RandomDouble() * 100 < self.CurrentCritRate
+	end
+	
+	method float GetCriticalDamageRate()
+		-- 치명타 피해(%) → 배율.
+		return self.CurrentCritDmg / 100
+	end
+	
+	method boolean IsAttackTarget(Entity defender, string attackInfo)
+		-- 플레이어만 공격 대상.
+		if not isvalid(defender) or not isvalid(defender.PlayerComponent) then return false end
+		return __base:IsAttackTarget(defender, attackInfo)
+	end
+	
+	@ExecSpace("ServerOnly")
+	@EventSender("Self")
+	handler HandleHitEvent(HitEvent event)
+		-- 플레이어 공격을 매니저에 전달하고 피격 모션을 재생한다.
+		if self.IsDead then return end
+		local map = self.Entity.CurrentMap
+		if isvalid(map) then
+			local mgr = map:GetComponent("script.TowerRunManager")
+			if mgr ~= nil then mgr:ApplyMonsterDamage(event.TotalDamage) end
+		end
+		-- 처치된 타격이면 PlayDie에서 사망 사운드, 아니면 피격 사운드
+		if not self.IsDead then self:PlaySfx(self.HitSoundRUID) end
+		if not self.IsDead and self.AnimTimer <= 0 then
+			self:SetClip(self.HitRUID, self.HitAnimTime)
+		end
+		log("[VRF] monster hit dmg=" .. tostring(event.TotalDamage))
+	end
+	
+end

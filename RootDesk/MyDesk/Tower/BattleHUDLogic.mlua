@@ -1,0 +1,386 @@
+@Logic
+script BattleHUDLogic extends Logic
+
+	-- BattleHUD.ui 바인딩 (UIBuilder injectBindings로 주입)
+	property UITransformComponent playerHpRoot = "fd12a1b9-016e-4ff0-9ba3-dfe82d0851eb"
+	property UITransformComponent playerHpFill = "27e4458d-785b-46c2-9bbb-be2fdb7b5ea2"
+	property UITransformComponent monsterHpRoot = "62bebb04-9576-4c10-9446-f8b02cbfd443"
+	property UITransformComponent monsterHpFill = "cca7f8e8-b9c2-4b79-a621-f46abb013cb5"
+	property TextGUIRendererComponent floorText = "fb49aba7-6fc7-45e2-8865-e10959855b81"
+
+	property TextGUIRendererComponent monsterNameText = "cbf70e54-1861-49ce-9b5c-05e5b41fd380"
+	property UITransformComponent monsterTagRoot = "75bbd1c5-758b-478f-8b36-5a117425e0d2"
+	property number NameTagHeight = -0.42
+	property Color EliteNameColor = Color(1, 0.3, 0.3, 1)
+	-- 메소 드롭 연출: MesoDrop 아래 동전 스프라이트 풀을 월드 좌표로 시뮬레이션해 UI에 그린다
+	-- 패시브 발동 문구 (처형! / 불사!) — 캐릭터 머리 위로 떠오르며 사라짐
+	property TextGUIRendererComponent procText = "469320fb-1d36-4519-ae26-735aa299e477"
+	property number ProcTextTime = 1.0
+	property Entity mesoRoot = "b1217d7d-2eca-4e3f-bee0-9c3edecba4a0"
+	property number MesoGravity = -14
+	property number MesoBounce = 0.35
+	property number MesoRestTime = 0.45
+	property number MesoFlyTime = 0.35
+
+	property string BattleCameraName = "BattleCamera"
+	-- 심볼 획득 배너 (SymbolGetSeq 변화 시 SymbolBannerTime초 표시)
+	property Entity symbolBanner = "dc905fd0-a537-4061-bd04-0a3405f95e0b"
+	property SpriteGUIRendererComponent symbolIcon = "02b1d05d-1cfa-458c-a9b4-4aa22250a84e"
+	property TextGUIRendererComponent symbolTitle = "c2d56c73-1116-48f0-b103-132d67dcb556"
+	property TextGUIRendererComponent symbolSub = "924204c8-86cd-44de-a85d-301d634a9d30"
+	property number SymbolBannerTime = 3.0
+	property number BarWidth = 64
+	property number PlayerBarHeight = -0.22
+	property number MonsterBarHeight = -0.22
+	-- 가로 화면 전투 카메라: 확대 비율과 카메라 중심(지면이 화면 가운데보다 조금 아래에 오도록)
+	property number PcZoomRatio = 150
+	property number MobileZoomRatio = 130
+	property Vector3 BattleCamPos = Vector3(0, 1.0, 0)
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 판이 시작되기 전까지 HP 바를 숨긴다.
+		self._T.viewMap = ""
+		self._T.keysRemoved = false
+		if isvalid(self.playerHpRoot) then self.playerHpRoot.Entity:SetEnable(false) end
+		if isvalid(self.monsterHpRoot) then self.monsterHpRoot.Entity:SetEnable(false) end
+		self._T.coins = {}
+		self._T.lastKillSeq = nil
+		if isvalid(self.mesoRoot) then
+			for _, child in ipairs(self.mesoRoot.Children:ToTable()) do
+				child:SetEnable(false)
+				table.insert(self._T.coins, { entity = child, active = false })
+			end
+		end
+		log("[VRF] BattleHUDLogic begin (client) coins=" .. tostring(#self._T.coins))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SpawnMesoDrop(Vector2 origin, number groundY, integer count)
+		-- 몬스터 위치에서 동전을 위로 튀겨 낸다 (좌우로 퍼지며 떨어진 뒤 한 번 튕김).
+		local spawned = 0
+		for _, coin in ipairs(self._T.coins) do
+			if spawned >= count then break end
+			if not coin.active then
+				spawned = spawned + 1
+				coin.active = true
+				coin.phase = "fall"
+				coin.delay = (spawned - 1) * 0.04
+				coin.x = origin.x
+				coin.y = origin.y
+				coin.vx = (_UtilLogic:RandomDouble() - 0.5) * 2.4
+				coin.vy = 3.2 + _UtilLogic:RandomDouble() * 1.4
+				coin.groundY = groundY + _UtilLogic:RandomDouble() * 0.06
+				coin.bounced = false
+				coin.t = 0
+			end
+		end
+		log("[VRF] meso drop coins=" .. tostring(spawned))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateMesoDrop(number delta, Entity player)
+		-- 동전 물리(낙하→튕김→잠시 멈춤→플레이어에게 날아가며 사라짐)를 월드 좌표로 계산해 UI에 그린다.
+		local target = Vector2(-1.2, 0.6)
+		if isvalid(player) then
+			local wp = player.TransformComponent.WorldPosition
+			target = Vector2(wp.x, wp.y + 0.4)
+		end
+		for _, coin in ipairs(self._T.coins) do
+			if coin.active then
+				local alpha = 1
+				if coin.delay > 0 then
+					coin.delay = coin.delay - delta
+				elseif coin.phase == "fall" then
+					coin.vy = coin.vy + self.MesoGravity * delta
+					coin.x = coin.x + coin.vx * delta
+					coin.y = coin.y + coin.vy * delta
+					-- 땅에 닿는 즉시 플레이어에게 흡수
+					if coin.y <= coin.groundY and coin.vy < 0 then
+						coin.y = coin.groundY
+						coin.phase = "fly"
+						coin.t = 0
+						coin.sx = coin.x
+						coin.sy = coin.y
+					end
+				elseif coin.phase == "rest" then
+					coin.t = coin.t + delta
+					if coin.t >= self.MesoRestTime then
+						coin.phase = "fly"
+						coin.t = 0
+						coin.sx = coin.x
+						coin.sy = coin.y
+					end
+				elseif coin.phase == "fly" then
+					coin.t = coin.t + delta
+					local k = math.min(1, coin.t / self.MesoFlyTime)
+					local e = k * k
+					coin.x = coin.sx + (target.x - coin.sx) * e
+					coin.y = coin.sy + (target.y - coin.sy) * e
+					alpha = 1 - k * 0.8
+					if k >= 1 then
+						coin.active = false
+					end
+				end
+				local e = coin.entity
+				if coin.active and coin.delay <= 0 then
+					if not e.Enable then e:SetEnable(true) end
+					local screenPos = _UILogic:WorldToScreenPosition(Vector2(coin.x, coin.y))
+					e.UITransformComponent.anchoredPosition = self:ToUI(screenPos)
+					e.SpriteGUIRendererComponent.Color = Color(1, 1, 1, alpha)
+				elseif e.Enable and not coin.active then
+					e:SetEnable(false)
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateProcText(Component mgr, Entity player, number delta)
+		-- 패시브 발동 문구: ProcSeq가 바뀌면 캐릭터 머리 위에서 떠오르며 사라진다.
+		if not isvalid(self.procText) then return end
+		if self._T.lastProcSeq == nil then
+			self._T.lastProcSeq = mgr.ProcSeq
+		elseif mgr.ProcSeq ~= self._T.lastProcSeq then
+			self._T.lastProcSeq = mgr.ProcSeq
+			self.procText.Text = mgr.ProcText
+			self._T.procTimer = self.ProcTextTime
+			log("[VRF] proc text " .. mgr.ProcText)
+		end
+		local t = self._T.procTimer or 0
+		local show = t > 0
+		if self.procText.Entity.Enable ~= show then self.procText.Entity:SetEnable(show) end
+		if not show then return end
+		self._T.procTimer = t - delta
+		local k = 1 - t / self.ProcTextTime
+		local wp = player.TransformComponent.WorldPosition
+		local screenPos = _UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y + 1.0 + 0.4 * k))
+		self.procText.Entity.UITransformComponent.anchoredPosition = self:ToUI(screenPos)
+		local c = self.procText.FontColor
+		self.procText.FontColor = Color(c.r, c.g, c.b, math.min(1, t / 0.3))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ClearMesoDrop()
+		-- 탑 밖으로 나가면 남은 동전을 숨긴다.
+		for _, coin in ipairs(self._T.coins) do
+			coin.active = false
+			if coin.entity.Enable then coin.entity:SetEnable(false) end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetupView(Entity player, Entity map)
+		-- 고정 전투 카메라로 전환하고, 플레이어 입력(이동/점프/공격 키)을 막는다.
+		-- 카메라 전환은 블렌드 없이 즉시(Cut), 플레이어 카메라는 따라가기 지연 없음
+		_CameraService.TransitionBlendType = CameraBlendType.Cut
+		_CameraService.TransitionBlendTime = 0
+		if isvalid(player.CameraComponent) then player.CameraComponent.Damping = Vector2(0, 0) end
+		local camEntity = map:GetChildByName(self.BattleCameraName)
+		local avatar = player.AvatarRendererComponent
+		if not isvalid(camEntity) or not isvalid(camEntity.CameraComponent) then
+			-- 전투 카메라가 없는 맵(로비)은 플레이어 카메라로 복귀, 캐릭터는 숨김
+			if isvalid(player.CameraComponent) then _CameraService:SwitchCameraTo(player.CameraComponent) end
+			if isvalid(avatar) then avatar:SetAlpha(0) end
+			self._T.viewMap = map.Name
+			log("[VRF] player camera restored map=" .. map.Name)
+			return
+		end
+		local cam = camEntity.CameraComponent
+		camEntity.TransformComponent.Position = self.BattleCamPos
+		if _ApplicationService:IsMobilePlatform() then
+			cam.ZoomRatio = self.MobileZoomRatio
+		else
+			cam.ZoomRatio = self.PcZoomRatio
+		end
+		_CameraService:SwitchCameraTo(cam)
+		if isvalid(avatar) then avatar:SetAlpha(1) end
+
+		local controller = player.PlayerControllerComponent
+		if isvalid(controller) and not self._T.keysRemoved then
+			self._T.keysRemoved = true
+			local keys = { KeyboardKey.LeftArrow, KeyboardKey.RightArrow, KeyboardKey.UpArrow, KeyboardKey.DownArrow,
+				KeyboardKey.LeftAlt, KeyboardKey.LeftControl, KeyboardKey.Space }
+			for _, key in ipairs(keys) do
+				controller:RemoveActionKey(key)
+			end
+		end
+		self._T.viewMap = map.Name
+		log("[VRF] battle camera switched mobile=" .. tostring(_ApplicationService:IsMobilePlatform()))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateSymbolBanner(Component mgr, number delta)
+		-- 층 보스에게서 심볼을 얻으면 단계 아이콘·문구 배너를 잠깐 보여준다 (처음 들어왔을 때의 값은 무시).
+		if not isvalid(self.symbolBanner) then return end
+		if self._T.symTiers == nil then
+			self._T.symTiers = {}
+			local ts = _DataService:GetTable("SymbolTierTable")
+			if ts ~= nil then
+				for i = 1, ts:GetRowCount() do
+					self._T.symTiers[tonumber(ts:GetCell(i, "Tier")) or i] = { icon = ts:GetCell(i, "IconRUID"), dmg = ts:GetCell(i, "DmgPct"), cut = ts:GetCell(i, "DmgCut"), gain = ts:GetCell(i, "GainPct"), prefix = ts:GetCell(i, "NamePrefix") or "" }
+				end
+			end
+			-- 층별 몬스터 이름 (심볼 이름용)
+			local monName = {}
+			local ms = _DataService:GetTable("MonsterTable")
+			if ms ~= nil then
+				for i = 1, ms:GetRowCount() do monName[ms:GetCell(i, "id")] = ms:GetCell(i, "Name") end
+			end
+			self._T.floorMonster = {}
+			local fs = _DataService:GetTable("FloorTable")
+			if fs ~= nil then
+				for i = 1, fs:GetRowCount() do self._T.floorMonster[tonumber(fs:GetCell(i, "Floor")) or i] = monName[fs:GetCell(i, "MonsterId")] or "" end
+			end
+		end
+		if self._T.lastSymbolSeq == nil then
+			self._T.lastSymbolSeq = mgr.SymbolGetSeq
+		elseif mgr.SymbolGetSeq ~= self._T.lastSymbolSeq then
+			self._T.lastSymbolSeq = mgr.SymbolGetSeq
+			local tier = mgr.SymbolGetTier
+			local t = self._T.symTiers[tier]
+			if t ~= nil and isvalid(self.symbolIcon) then self.symbolIcon.ImageRUID = DataRef(t.icon) end
+			if isvalid(self.symbolTitle) then
+				local mon = self._T.floorMonster[mgr.SymbolGetFloor] or ""
+				local prefix = t ~= nil and t.prefix or ""
+				self.symbolTitle.Text = prefix .. " " .. mon .. "의 심볼 획득!"
+			end
+			if isvalid(self.symbolSub) and t ~= nil then
+				local sub = tostring(mgr.SymbolGetFloor) .. "층 · " .. tostring(tier) .. "단계 · 이 층: 주는 피해 +" .. t.dmg .. "% · 받는 피해 -" .. t.cut .. "% · 메소·경험치 +" .. t.gain .. "%"
+				if tier >= 3 then sub = "모든 층 영구 능력치 획득! · " .. sub end
+				self.symbolSub.Text = sub
+			end
+			-- 보스 처치 직후엔 거래·카드 화면이 먼저 뜨므로, 전투로 돌아왔을 때 보여준다
+			self._T.symbolPending = true
+		end
+		if self._T.symbolPending and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR") then
+			self._T.symbolPending = false
+			self._T.symbolTimer = self.SymbolBannerTime
+			self.symbolBanner:SetEnable(true)
+			log("[VRF] symbol banner floor=" .. tostring(mgr.SymbolGetFloor) .. " tier=" .. tostring(mgr.SymbolGetTier))
+		end
+		if (self._T.symbolTimer or 0) > 0 then
+			self._T.symbolTimer = self._T.symbolTimer - delta
+			if self._T.symbolTimer <= 0 then self.symbolBanner:SetEnable(false) end
+		elseif self.symbolBanner.Enable then
+			self.symbolBanner:SetEnable(false)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Vector2 ToUI(Vector2 screenPos)
+		-- 화면 좌표 → UI 좌표. 화면 비율이 16:9가 아니면 ScreenToUIPosition 결과가 실제 UI 배율과 달라 보정한다
+		-- (UI는 화면 높이 1080 기준으로 맞춰짐: 보정 배율 = 540 / ScreenToUIPosition이 알려주는 화면 위쪽 y)
+		local h = _UILogic.ScreenHeight
+		local top = _UILogic:ScreenToUIPosition(Vector2(_UILogic.ScreenWidth / 2, h)).y
+		local k = 1
+		if top > 1 then k = 540 / top end
+		local p = _UILogic:ScreenToUIPosition(screenPos)
+		return Vector2(p.x * k, p.y * k)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PlaceBar(UITransformComponent root, UITransformComponent fill, Entity target, number height, number hp, number maxHp)
+		-- 대상 머리 위에 HP 바를 놓고 비율만큼 채운다.
+		if not isvalid(root) or not isvalid(fill) then return end
+		if not isvalid(target) or maxHp <= 0 then
+			root.Entity:SetEnable(false)
+			return
+		end
+		root.Entity:SetEnable(true)
+		local wp = target.TransformComponent.WorldPosition
+		local screenPos = _UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y + height))
+		root.anchoredPosition = self:ToUI(screenPos)
+		local ratio = math.max(0, math.min(1, hp / maxHp))
+		fill.RectSize = Vector2(self.BarWidth * ratio, fill.RectSize.y)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PlaceNameTag(Entity target, string label, boolean elite)
+		-- 몬스터 발밑(HP 바 아래)에 "Lv.N 이름" 네임태그를 표시한다. 접두사 강화 몬스터는 붉은 글씨.
+		if not isvalid(self.monsterNameText) or not isvalid(self.monsterTagRoot) then return end
+		local show = isvalid(target) and label ~= ""
+		if self.monsterTagRoot.Entity.Enable ~= show then self.monsterTagRoot.Entity:SetEnable(show) end
+		if not show then return end
+		local wp = target.TransformComponent.WorldPosition
+		local screenPos = _UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y + self.NameTagHeight))
+		self.monsterTagRoot.anchoredPosition = self:ToUI(screenPos)
+		if self.monsterNameText.Text ~= label then
+			self.monsterNameText.Text = label
+			if elite then
+				self.monsterNameText.FontColor = self.EliteNameColor
+			else
+				self.monsterNameText.FontColor = Color(1, 1, 1, 1)
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 매 프레임 판 상태(@Sync)를 읽어 HUD를 갱신한다.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return end
+		local map = player.CurrentMap
+		if not isvalid(map) then return end
+		if self._T.viewMap ~= map.Name then self:SetupView(player, map) end
+
+		local mgr = map:GetComponent("script.TowerRunManager")
+		if isvalid(self.floorText) then self.floorText.Entity:SetEnable(mgr ~= nil) end
+		if mgr == nil then
+			if isvalid(self.playerHpRoot) then self.playerHpRoot.Entity:SetEnable(false) end
+			if isvalid(self.monsterHpRoot) then self.monsterHpRoot.Entity:SetEnable(false) end
+			if isvalid(self.monsterTagRoot) then self.monsterTagRoot.Entity:SetEnable(false) end
+			self:ClearMesoDrop()
+			self._T.lastKillSeq = nil
+			self._T.lastMesoProcSeq = nil
+			self._T.lastProcSeq = nil
+			self._T.procTimer = 0
+			if isvalid(self.procText) and self.procText.Entity.Enable then self.procText.Entity:SetEnable(false) end
+			return
+		end
+
+		if isvalid(self.floorText) and self.floorText.Text ~= mgr.FloorTitle then self.floorText.Text = mgr.FloorTitle end
+		self:UpdateSymbolBanner(mgr, delta)
+		-- 카드·거래 화면이 떠 있을 때는 층 이름을 숨겨 팝업 제목과 겹치지 않게
+		if isvalid(self.floorText) then
+			local showFloor = mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR"
+			if self.floorText.Entity.Enable ~= showFloor then self.floorText.Entity:SetEnable(showFloor) end
+		end
+		self:PlaceBar(self.playerHpRoot, self.playerHpFill, player, self.PlayerBarHeight, mgr.PlayerHp, mgr.PlayerMaxHp)
+
+		local monster = nil
+		if mgr.MonsterName ~= "" then monster = map:GetChildByName(mgr.MonsterName) end
+		self:PlaceBar(self.monsterHpRoot, self.monsterHpFill, monster, self.MonsterBarHeight, mgr.MonsterHp, mgr.MonsterMaxHp)
+		self:PlaceNameTag(monster, mgr.MonsterLabel, mgr.MonsterElite)
+
+		-- 몬스터 처치(KillSeq 증가) 시 메소 드롭 연출. 강화 몬스터는 동전을 더 많이.
+		if self._T.lastKillSeq == nil then
+			self._T.lastKillSeq = mgr.KillSeq
+		elseif mgr.KillSeq ~= self._T.lastKillSeq then
+			self._T.lastKillSeq = mgr.KillSeq
+			local origin = Vector2(1.0, 0.36)
+			local groundY = -0.04
+			if isvalid(monster) then
+				local wp = monster.TransformComponent.WorldPosition
+				origin = Vector2(wp.x, wp.y + 0.4)
+				groundY = wp.y
+			end
+			local count = 3 + _UtilLogic:RandomIntegerRange(0, 2)
+			if mgr.MonsterElite then count = 8 end
+			self:SpawnMesoDrop(origin, groundY, count)
+		end
+		-- 메소 사냥꾼 발동: 동전 2개
+		if self._T.lastMesoProcSeq == nil then
+			self._T.lastMesoProcSeq = mgr.MesoProcSeq
+		elseif mgr.MesoProcSeq ~= self._T.lastMesoProcSeq then
+			self._T.lastMesoProcSeq = mgr.MesoProcSeq
+			if isvalid(monster) then
+				local wp = monster.TransformComponent.WorldPosition
+				self:SpawnMesoDrop(Vector2(wp.x, wp.y + 0.4), wp.y, 2)
+			end
+		end
+		self:UpdateMesoDrop(delta, player)
+		self:UpdateProcText(mgr, player, delta)
+	end
+
+end
