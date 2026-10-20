@@ -30,15 +30,18 @@ script LobbyUILogic extends Logic
 		self:Bind(self.btnGrace, function() _GraceUILogic:Open() end)
 		self:Bind(self.btnAchieve, function() self:ShowNotice("업적은 준비 중입니다") end)
 		self:Bind(self.btnSkillTest, function() self:OnSkillTest() end)
+		-- 스킬 테스트는 개발 도구라 메이커 플레이에서만 보인다 (출시 월드에서는 숨김).
+		local devTools = Environment:IsMakerPlay()
+		if isvalid(self.btnSkillTest) then self.btnSkillTest.Entity:SetEnable(devTools) end
 		if isvalid(self.noticeText) then self.noticeText.Entity:SetEnable(false) end
-		log("[VRF] LobbyUILogic begin buttons=" .. tostring(#self.clickHandlers))
+		log("[VRF] LobbyUILogic begin buttons=" .. tostring(#self.clickHandlers) .. " devTools=" .. tostring(devTools))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void Bind(ButtonComponent button, any fn)
 		-- 버튼 클릭 이벤트 연결 + 해제용 기록.
 		if not isvalid(button) then return end
-		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
 	end
 

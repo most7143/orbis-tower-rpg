@@ -91,7 +91,7 @@ script SymbolUILogic extends Logic
 	method void Bind(ButtonComponent button, any fn)
 		-- 버튼 클릭 연결 + 해제 기록.
 		if not isvalid(button) then return end
-		local h = button.Entity:ConnectEvent(ButtonClickEvent, fn)
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
 	end
 

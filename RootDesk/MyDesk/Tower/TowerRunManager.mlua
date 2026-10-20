@@ -9,7 +9,8 @@ script TowerRunManager extends Component
 	property Vector3 LobbyPos = Vector3(0, 0.2, 0)
 	property string StorageKey = "OrbisTower"
 
-	-- 밸런스 (Phase 3에서 UserDataSet으로 이전 예정)
+	-- 밸런스: 아래 수치 대부분은 RunConfig 데이터셋 값으로 덮어씀 (LoadRunConfig). 여기 값은 표가 없을 때의 기본값
+	property string RunConfigTableName = "RunConfig"
 	-- 몬스터 능력치 = (기본 + 레벨당 증가 × 몬스터 레벨) × 타입 배율 (MonsterTable / MonsterTypeTable)
 	property string MonsterTableName = "MonsterTable"
 	property string MonsterTypeTableName = "MonsterTypeTable"
@@ -60,6 +61,9 @@ script TowerRunManager extends Component
 	property number BaseExpToNext = 26.6667
 	property number ExpToNextGrowth = 1.25
 	property string LevelUpEffectRUID = "d92f2ec742d94285af771d33086773d3"
+	-- 레벨업 축하 효과음 (sound/mob.img 2700023/Attack1, 밝은 축하음)
+	property string LevelUpSoundRUID = "c6813615a6fc4850b907302a698ffae5"
+	property number LevelUpSoundVolume = 0.8
 	-- 발동 연출 이펙트 (텍스트 대신): 전직(effect/basiceff JobChangedCygnusKnights 뒤·앞), 처형, 불사, 최후의 저항
 	property string JobChangeBackFxRUID = "a1132babccd64942a3afc920976ea4f0"
 	property string JobChangeFrontFxRUID = "0806b2e8a1124ac7b15d8aacd11a77d5"
@@ -80,9 +84,9 @@ script TowerRunManager extends Component
 	property string TraitGradeTableName = "TraitGradeTable"
 	property integer PointsPerJobTier = 100
 	-- 테스트용: 판의 첫 특성 선택에서 카드 1장을 최고 등급(미스틱)으로 확정 (테스트 끝나면 false)
-	property boolean TestFirstPickTopGrade = true
+	property boolean TestFirstPickTopGrade = false
 	-- 테스트용: 매 특성 선택마다 카드 1장을 미스틱으로 확정 (테스트 끝나면 false)
-	property boolean TestAlwaysTopGrade = true
+	property boolean TestAlwaysTopGrade = false
 	property integer MaxJobTier = 3
 	-- 한 판에 나오는 특성 수 (7계열 중 무작위 계열에서 1장씩)
 	property integer RunTraitCount = 5
@@ -265,6 +269,7 @@ script TowerRunManager extends Component
 		self._T.player = nil
 		self._T.monster = nil
 		self.RunState = "WAIT"
+		self:LoadRunConfig()
 		self:LoadMonsterTables()
 		self:LoadEquipTable()
 		self:LoadDealTable()
@@ -277,6 +282,74 @@ script TowerRunManager extends Component
 	method void OnEndPlay()
 		-- 남아 있는 몬스터를 정리한다.
 		self:DestroyMonster()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadRunConfig()
+		-- 밸런스 수치를 RunConfig(Key, Value) 데이터셋에서 읽는다. 표에 없거나 숫자가 아니면 아래 속성 기본값을 유지.
+		local ds = _DataService:GetTable(self.RunConfigTableName)
+		if ds == nil then
+			log_warning("[VRF] RunConfig table missing, using defaults")
+			return
+		end
+		local cfg = {}
+		for i = 1, ds:GetRowCount() do
+			local k = ds:GetCell(i, "Key")
+			local v = tonumber(ds:GetCell(i, "Value"))
+			if k ~= nil and k ~= "" and v ~= nil then cfg[k] = v end
+		end
+		local function n(key, cur)
+			local v = cfg[key]
+			if v == nil then return cur end
+			return v
+		end
+		local function i(key, cur)
+			local v = cfg[key]
+			if v == nil then return cur end
+			return math.floor(v)
+		end
+		self.MonsterHpBase = n("MonsterHpBase", self.MonsterHpBase)
+		self.MonsterHpPerLevel = n("MonsterHpPerLevel", self.MonsterHpPerLevel)
+		self.MonsterAtkBase = n("MonsterAtkBase", self.MonsterAtkBase)
+		self.MonsterAtkPerLevel = n("MonsterAtkPerLevel", self.MonsterAtkPerLevel)
+		self.MonsterAttackInterval = n("MonsterAttackInterval", self.MonsterAttackInterval)
+		self.StagesPerFloor = i("StagesPerFloor", self.StagesPerFloor)
+		self.LastStageStatMul = n("LastStageStatMul", self.LastStageStatMul)
+		self.EliteRewardMul = n("EliteRewardMul", self.EliteRewardMul)
+		self.MonsterCritDmg = n("MonsterCritDmg", self.MonsterCritDmg)
+		self.BasePlayerAtk = n("BasePlayerAtk", self.BasePlayerAtk)
+		self.BasePlayerMaxHp = n("BasePlayerMaxHp", self.BasePlayerMaxHp)
+		self.LevelAtkBonus = n("LevelAtkBonus", self.LevelAtkBonus)
+		self.LevelDefBonus = n("LevelDefBonus", self.LevelDefBonus)
+		self.LevelHpBonus = n("LevelHpBonus", self.LevelHpBonus)
+		self.BaseCritDmg = n("BaseCritDmg", self.BaseCritDmg)
+		self.BaseMastery = n("BaseMastery", self.BaseMastery)
+		self.MesoMinRate = n("MesoMinRate", self.MesoMinRate)
+		self.MesoMaxRate = n("MesoMaxRate", self.MesoMaxRate)
+		self.DefConstant = n("DefConstant", self.DefConstant)
+		self.EnhanceBaseRate = n("EnhanceBaseRate", self.EnhanceBaseRate)
+		self.EnhanceRateStep = n("EnhanceRateStep", self.EnhanceRateStep)
+		self.MaxEnhance = i("MaxEnhance", self.MaxEnhance)
+		self.EnhanceStatStep = n("EnhanceStatStep", self.EnhanceStatStep)
+		self.EnhanceCostStep = n("EnhanceCostStep", self.EnhanceCostStep)
+		self.UpgradeCostMul = n("UpgradeCostMul", self.UpgradeCostMul)
+		self.BaseMesoReward = n("BaseMesoReward", self.BaseMesoReward)
+		self.MesoGrowth = n("MesoGrowth", self.MesoGrowth)
+		self.BaseExpReward = n("BaseExpReward", self.BaseExpReward)
+		self.ExpGrowth = n("ExpGrowth", self.ExpGrowth)
+		self.BaseExpToNext = n("BaseExpToNext", self.BaseExpToNext)
+		self.ExpToNextGrowth = n("ExpToNextGrowth", self.ExpToNextGrowth)
+		self.SkillMaxLevel = i("SkillMaxLevel", self.SkillMaxLevel)
+		self.SkillBaseRate = n("SkillBaseRate", self.SkillBaseRate)
+		self.SkillRateStep = n("SkillRateStep", self.SkillRateStep)
+		self.StoneDropChance = n("StoneDropChance", self.StoneDropChance)
+		self.MesoProcRatio = n("MesoProcRatio", self.MesoProcRatio)
+		self.FeatherChance = n("FeatherChance", self.FeatherChance)
+		self.BossFeatherMin = i("BossFeatherMin", self.BossFeatherMin)
+		self.BossFeatherMax = i("BossFeatherMax", self.BossFeatherMax)
+		local count = 0
+		for _ in pairs(cfg) do count = count + 1 end
+		log("[VRF] RunConfig loaded keys=" .. tostring(count) .. " baseMeso=" .. tostring(self.BaseMesoReward) .. " expToNext=" .. tostring(self.BaseExpToNext) .. " enhanceRate=" .. tostring(self.EnhanceBaseRate) .. " stages=" .. tostring(self.StagesPerFloor))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1211,6 +1284,10 @@ script TowerRunManager extends Component
 			local player = self._T.player
 			if isvalid(player) then
 				_EffectService:PlayEffectAttached(self.LevelUpEffectRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+				if self.LevelUpSoundRUID ~= "" and isvalid(player.PlayerComponent) then
+					_SoundService:PlaySound(self.LevelUpSoundRUID, self.LevelUpSoundVolume, player.PlayerComponent.UserId)
+					log("[VRF] level up sound played")
+				end
 			end
 			log("[VRF] level up -> Lv" .. tostring(self.Level) .. " atk=" .. tostring(self.PlayerAtk) .. " maxHp=" .. tostring(self.PlayerMaxHp))
 		end

@@ -1,0 +1,17 @@
+@Logic
+script UISoundLogic extends Logic
+	-- UI 버튼 공통 효과음. 각 UI 로직의 Bind 도우미가 클릭 때마다 PlayClick을 부른다.
+	property string ClickSoundRUID = "972843e759204d3e9ad84e7d3fa94f83"
+	property number ClickVolume = 0.8
+	@HideFromInspector
+	property integer ClickCount = 0
+
+	@ExecSpace("ClientOnly")
+	method void PlayClick()
+		-- 버튼 클릭 효과음 재생 (검증용 횟수 기록).
+		if self.ClickSoundRUID == "" then return end
+		_SoundService:PlaySound(self.ClickSoundRUID, self.ClickVolume)
+		self.ClickCount = self.ClickCount + 1
+		log("[VRF] ui click sound n=" .. tostring(self.ClickCount))
+	end
+end
