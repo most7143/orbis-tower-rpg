@@ -1,12 +1,12 @@
 @Logic
 script MainPanelLogic extends Logic
 
-	-- MainPanel.ui 바인딩 (UIBuilder injectBindings로 주입). 탭: 캐릭터 / 특성 / 장비 / 스킬
+	-- MainPanel.ui 바인딩 (UIBuilder injectBindings로 주입). 탭: 캐릭터 / 직업 / 장비 / 스킬
 	property Entity panelRoot = "9f053eab-de7e-4938-8a4b-4b8b5c6d5f05"
 	property ButtonComponent tabInfo = "0dd3dcfd-ac7f-4cd2-915f-65e2b7132e36"
 	property ButtonComponent tabStat = "ac433eb4-9bef-4b9a-a50c-79b4ec5a95f4"
 	property ButtonComponent tabSkill = "f85b81b5-c148-4f6a-872d-273f8923367a"
-	-- 특성 탭 (캐릭터와 장비 사이)
+	-- 직업 탭 (캐릭터와 장비 사이)
 	property ButtonComponent tabTrait = "c4267683-1a80-432c-8eb7-3217734bae3a"
 	property Entity contentTrait = "a7038d4d-8c16-466a-898a-2310fd8f9f8e"
 	property Entity contentInfo = "2d769f0f-db05-42b5-aa1b-0a7f687a8f98"
@@ -87,6 +87,8 @@ script MainPanelLogic extends Logic
 			local index = i
 			self:Bind(tab, function() self:SelectTab(index) end)
 		end
+		-- 특성 탭 → 직업 탭 (ui 고정 문구 대신)
+		if isvalid(self.tabTrait) and isvalid(self.tabTrait.Entity.TextGUIRendererComponent) then self.tabTrait.Entity.TextGUIRendererComponent.Text = "직업" end
 		self:SetupEquipRows()
 		self:SetupSkillRows()
 		self._T.fxTimers = {}
@@ -452,7 +454,7 @@ script MainPanelLogic extends Logic
 		for i = 1, 4 do
 			if isvalid(contents[i]) then contents[i]:SetEnable(i == index) end
 		end
-		local titles = { "캐릭터 정보", "특성", "장비", "스킬" }
+		local titles = { "캐릭터 정보", "직업", "장비", "스킬" }
 		if isvalid(self.headerText) then self.headerText.Text = titles[index] or "" end
 		self:UpdateTabColors()
 	end

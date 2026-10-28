@@ -21,7 +21,7 @@ script SkillTestUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
-		-- 특성 21줄에 직업 이름을 채우고 버튼을 연결한다. 이펙트 스킬이 없는 직업 버튼은 어둡게.
+		-- 직업 15종의 1~4차 버튼을 줄에 채우고 연결한다. 이펙트 스킬이 없는 직업 버튼은 어둡게.
 		self.clickHandlers = {}
 		self._T.rows = {}
 		self._T.selected = nil
@@ -35,39 +35,67 @@ script SkillTestUILogic extends Logic
 				end
 			end
 		end
+		-- 줄 구성: 1~15줄 = 직업마다 1~3차 버튼, 16줄부터 = 4차 버튼 (한 줄에 3직업). 남는 줄·버튼은 숨김
+		local jobs = {}
 		local ds = _DataService:GetTable(self.TraitTableName)
-		local count = 0
-		if ds ~= nil and isvalid(self.listEntity) then
+		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
-				local row = self.listEntity:GetChildByName("Row_" .. tostring(i))
-				if isvalid(row) then
+				local names = {}
+				for tier = 1, 4 do names[tier] = ds:GetCell(i, "Job" .. tostring(tier)) or "" end
+				table.insert(jobs, { id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), color = Color.FromHexCode(ds:GetCell(i, "FamilyColor")), names = names })
+			end
+		end
+		local lines = {}
+		for _, j in ipairs(jobs) do
+			table.insert(lines, { label = j.name, color = j.color, list = { { job = j, tier = 1 }, { job = j, tier = 2 }, { job = j, tier = 3 } } })
+		end
+		for k = 1, #jobs, 3 do
+			local list = {}
+			for m = k, math.min(k + 2, #jobs) do table.insert(list, { job = jobs[m], tier = 4 }) end
+			table.insert(lines, { label = "4차", color = Color(1, 1, 1, 1), list = list })
+		end
+		local count = 0
+		if isvalid(self.listEntity) then
+			local i = 1
+			local row = self.listEntity:GetChildByName("Row_1")
+			while isvalid(row) do
+				local line = lines[i]
+				row:SetEnable(line ~= nil)
+				if line ~= nil then
 					count = count + 1
-					local id = ds:GetCell(i, "Id")
 					local name = row:GetChildByName("Name")
 					if isvalid(name) then
-						name.TextGUIRendererComponent.Text = ds:GetCell(i, "Trait")
-						name.TextGUIRendererComponent.FontColor = Color.FromHexCode(ds:GetCell(i, "FamilyColor"))
+						name.TextGUIRendererComponent.Text = line.label
+						name.TextGUIRendererComponent.FontColor = line.color
 					end
-					for tier = 1, 3 do
-						local btn = row:GetChildByName("Btn" .. tostring(tier))
+					for b = 1, 3 do
+						local btn = row:GetChildByName("Btn" .. tostring(b))
+						local entry = line.list[b]
 						if isvalid(btn) then
-							local job = ds:GetCell(i, "Job" .. tostring(tier)) or ""
-							local n = fx[id .. "_" .. tostring(tier)] or 0
-							local label = job
-							if n > 1 then label = job .. " (" .. tostring(n) .. ")" end
-							btn.TextGUIRendererComponent.Text = label
-							local base = Color(0.18, 0.34, 0.5, 1)
-							if n == 0 then
-								base = self.NoFxColor
-								btn.TextGUIRendererComponent.FontColor = Color(0.55, 0.55, 0.55, 1)
+							btn:SetEnable(entry ~= nil)
+							if entry ~= nil then
+								local id = entry.job.id
+								local tier = entry.tier
+								local job = entry.job.names[tier]
+								local n = fx[id .. "_" .. tostring(tier)] or 0
+								local label = job
+								if n > 1 then label = job .. " (" .. tostring(n) .. ")" end
+								btn.TextGUIRendererComponent.Text = label
+								local base = Color(0.18, 0.34, 0.5, 1)
+								if n == 0 then
+									base = self.NoFxColor
+									btn.TextGUIRendererComponent.FontColor = Color(0.55, 0.55, 0.55, 1)
+								end
+								btn.SpriteGUIRendererComponent.Color = base
+								local rec = { id = id, tier = tier, job = job, btn = btn, base = base }
+								table.insert(self._T.rows, rec)
+								self:Bind(btn.ButtonComponent, function() self:OnJob(rec) end)
 							end
-							btn.SpriteGUIRendererComponent.Color = base
-							local rec = { id = id, tier = tier, job = job, btn = btn, base = base }
-							table.insert(self._T.rows, rec)
-							self:Bind(btn.ButtonComponent, function() self:OnJob(rec) end)
 						end
 					end
 				end
+				i = i + 1
+				row = self.listEntity:GetChildByName("Row_" .. tostring(i))
 			end
 		end
 		self:Bind(self.btnReplay, function() if self._T.last ~= nil then self:OnJob(self._T.last) end end)

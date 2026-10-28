@@ -1,7 +1,7 @@
 @Logic
 script TarotLogic extends Logic
 
-	-- 특성 발현 (타로 카드) UI: 판 시작 운명의 펼침(5장) / 레벨업 카드 3장 선택
+	-- 직업 카드 UI: 판 시작 직업 펼침(15직업 중 5장) / 레벨업 카드 3장 선택. 아이콘 없이 이름만 표시
 	property Entity uiRoot = "a16d14bb-337a-4ea2-ae76-e74f6890a0cf"
 	property Entity draftRoot = "90336c1b-0f08-4f25-9d35-293c3a5ead55"
 	property Entity choiceRoot = "edbad653-a684-4ee9-aac6-948df8541a73"
@@ -43,7 +43,23 @@ script TarotLogic extends Logic
 		self._T.choiceSeq = -1
 		self._T.shineT = 0
 		self:Show("")
+		self:ApplyJobTexts()
 		log("[VRF] TarotLogic begin traits=" .. tostring(#self._T.traits) .. " grades=" .. tostring(#self._T.grades))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyJobTexts()
+		-- TarotUI의 고정 문구를 직업 카드 문구로 바꾼다.
+		local texts = {
+			["/ui/TarotUI/Draft/Title"] = "직업 펼침",
+			["/ui/TarotUI/Draft/Sub"] = "이번 탑에서 전직할 수 있는 다섯 가지 직업",
+			["/ui/TarotUI/Draft/Confirm"] = "모험을 시작한다",
+			["/ui/TarotUI/Choice/Title"] = "포인트를 올릴 직업을 고르세요",
+		}
+		for path, text in pairs(texts) do
+			local e = _EntityService:GetEntityByPath(path)
+			if isvalid(e) and isvalid(e.TextGUIRendererComponent) then e.TextGUIRendererComponent.Text = text end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -65,7 +81,7 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void LoadTables()
-		-- 특성(21장)과 등급 테이블.
+		-- 직업(15종)과 등급 테이블.
 		self._T.traits = {}
 		self._T.traitById = {}
 		self._T.grades = {}
@@ -73,13 +89,9 @@ script TarotLogic extends Logic
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
 				local t = {
-					id = ds:GetCell(i, "Id"), roman = ds:GetCell(i, "Roman"), arcana = ds:GetCell(i, "Arcana"),
-					familyName = ds:GetCell(i, "FamilyName"), trait = ds:GetCell(i, "Trait"),
-					jobs = { ds:GetCell(i, "Job1"), ds:GetCell(i, "Job2"), ds:GetCell(i, "Job3") },
-					baseStat = ds:GetCell(i, "BaseStat"), icon = ds:GetCell(i, "IconRUID"),
+					id = ds:GetCell(i, "Id"), familyName = ds:GetCell(i, "FamilyName"), trait = ds:GetCell(i, "Name"),
+					jobs = { ds:GetCell(i, "Job1"), ds:GetCell(i, "Job2"), ds:GetCell(i, "Job3"), ds:GetCell(i, "Job4") },
 					famColor = Color.FromHexCode(ds:GetCell(i, "FamilyColor")),
-					eff1 = ds:GetCell(i, "Eff1"), eff1Val = tonumber(ds:GetCell(i, "Eff1Val")) or 0,
-					eff2 = ds:GetCell(i, "Eff2"), eff2Val = tonumber(ds:GetCell(i, "Eff2Val")) or 0,
 				}
 				table.insert(self._T.traits, t)
 				self._T.traitById[t.id] = t
@@ -92,7 +104,7 @@ script TarotLogic extends Logic
 				self._T.grades[g] = { name = gs:GetCell(i, "Name"), points = tonumber(gs:GetCell(i, "Points")) or 5, color = Color.FromHexCode(gs:GetCell(i, "ColorHex")) }
 			end
 		end
-		-- 직업 스킬: jobSkills[특성 Id][차수] = { { name, desc }, ... } (차수마다 1~3개)
+		-- 직업 스킬: jobSkills[직업 Id][차수] = { { name, desc }, ... } (차수마다 1~3개)
 		self._T.jobSkills = {}
 		local js = _DataService:GetTable("JobSkillTable")
 		if js ~= nil then
@@ -115,18 +127,8 @@ script TarotLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method string StatLabel(string stat, number pct)
-		-- 특성 기본 스탯 문구.
-		local name = "공격력"
-		if stat == "Def" then name = "방어력" elseif stat == "Hp" then name = "체력" end
-		if pct <= 0 then return name end
-		return name .. " +" .. string.format("%.1f", pct) .. "%"
-	end
-
-
-	@ExecSpace("ClientOnly")
 	method string GetJobLabel(Component mgr)
-		-- 캐릭터 탭용 직업 문구 ("매의 눈 (2차)" / "없음").
+		-- 캐릭터 탭용 직업 문구 ("파이터 (2차)" / "없음").
 		if mgr == nil or mgr.JobTier <= 0 then return "없음" end
 		local t = self._T.traitById[mgr.JobPath[tostring(mgr.JobTier)] or ""]
 		if t == nil then return "없음" end
@@ -135,9 +137,9 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method string NextJobLabel(Component mgr, table t, number pts)
-		-- 이 특성으로 100포인트를 채우면 될 다음 차수 직업 이름 (어떤 특성이든 전직 가능).
+		-- 이 직업으로 100포인트를 채우면 될 다음 차수 직업 이름 (어떤 직업이든 전직 가능).
 		local nextTier = mgr.JobTier + 1
-		if nextTier > 3 then return "3차 전직 완료" end
+		if nextTier > mgr.MaxJobTier then return tostring(mgr.MaxJobTier) .. "차 전직 완료" end
 		return "다음 전직: " .. tostring(nextTier) .. "차 " .. (t.jobs[nextTier] or "")
 	end
 
@@ -158,18 +160,23 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void UpdateTraitTab(Component mgr)
-		-- 특성 탭: 전직 경로·직업 스킬·전직 스탯, 이번 판 특성(5종)의 포인트와 다음 전직.
+		-- 직업 탭: 전직 경로·직업 스킬, 이번 판 직업(5종)의 포인트와 다음 전직.
 		local base = "/ui/MainPanel/Panel/Content/Trait/"
 		local function setText(path, s)
 			local e = _EntityService:GetEntityByPath(base .. path)
 			if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
 			return e
 		end
-		-- 전직 경로: 차수마다 전직한 직업 이름 (예: 검투사 → 매의 눈)
-		-- 전직 효과: [1차]~[3차] 한 줄씩 (직업 이름은 위 경로에 있으니 스킬 효과만, 아직이면 미전직)
+		-- 처음 한 번: 탭 이름을 '직업'으로, 줄마다 아이콘을 숨기고 이름을 왼쪽으로 당긴다
+		if not self._T.traitTabLaidOut then
+			self._T.traitTabLaidOut = true
+			self:InitTraitTab(base)
+		end
+		-- 전직 경로: 차수마다 전직한 직업 이름 (예: 검사 → 위자드(불·독) → 체이서)
+		-- 전직 효과: [1차]~[4차] 한 줄씩 (직업 이름은 위 경로에 있으니 스킬 효과만, 아직이면 미전직)
 		local path = ""
 		local tierLines = {}
-		for tier = 1, 3 do
+		for tier = 1, mgr.MaxJobTier do
 			local jt = nil
 			if tier <= mgr.JobTier then jt = self._T.traitById[mgr.JobPath[tostring(tier)] or ""] end
 			if jt ~= nil then
@@ -181,7 +188,7 @@ script TarotLogic extends Logic
 				end
 				table.insert(tierLines, "[" .. tostring(tier) .. "차] " .. table.concat(parts, " / "))
 			else
-				table.insert(tierLines, "[" .. tostring(tier) .. "차] 미전직 (특성 하나를 100포인트로 올리면 전직)")
+				table.insert(tierLines, "[" .. tostring(tier) .. "차] 미전직 (직업 하나를 100포인트로 올리면 자동 전직)")
 			end
 		end
 		if path == "" then
@@ -206,19 +213,62 @@ script TarotLogic extends Logic
 				local nameE = setText(row .. "Name", t.trait .. tag)
 				if isvalid(nameE) then nameE.TextGUIRendererComponent.FontColor = Color(0.55 + t.famColor.r * 0.45, 0.55 + t.famColor.g * 0.45, 0.55 + t.famColor.b * 0.45, 1) end
 				setText(row .. "Sub", t.familyName .. " 계열")
-				if mgr.JobTier >= 3 then setText(row .. "Points", tostring(pts)) else setText(row .. "Points", tostring(pts) .. " / 100") end
+				if mgr.JobTier >= mgr.MaxJobTier then setText(row .. "Points", tostring(pts)) else setText(row .. "Points", tostring(pts) .. " / 100") end
 				setText(row .. "Next", self:NextJobLabel(mgr, t, pts))
 				local band = _EntityService:GetEntityByPath(base .. row .. "Band")
 				if isvalid(band) then band.SpriteGUIRendererComponent.Color = t.famColor end
-				local icon = _EntityService:GetEntityByPath(base .. row .. "Icon")
-				if isvalid(icon) and self._T["icon" .. tostring(i)] ~= t.icon then
-					self._T["icon" .. tostring(i)] = t.icon
-					icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon)
-				end
 				local fill = _EntityService:GetEntityByPath(base .. row .. "BarBg/Fill")
 				if isvalid(fill) then
 					fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, pts / 100))
 					fill.SpriteGUIRendererComponent.Color = t.famColor
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void InitTraitTab(string base)
+		-- 직업 탭 첫 표시: 줄마다 아이콘을 숨겨 이름·계열을 왼쪽으로 당긴다.
+		-- 전직 효과는 4차까지 길어질 수 있어 칸에 맞춰 글자 크기를 줄인다
+		local eff = _EntityService:GetEntityByPath(base .. "Effect")
+		if isvalid(eff) then
+			local tc = eff.TextGUIRendererComponent
+			tc.MaxSize = tc.FontSize
+			tc.MinSize = 11
+			tc.BestFit = true
+		end
+		for i = 1, 7 do
+			local row = base .. "Row" .. tostring(i) .. "/"
+			local icon = _EntityService:GetEntityByPath(row .. "Icon")
+			if isvalid(icon) then icon:SetEnable(false) end
+			for _, name in ipairs({ "Name", "Sub" }) do
+				local e = _EntityService:GetEntityByPath(row .. name)
+				if isvalid(e) then
+					local ap = e.UITransformComponent.anchoredPosition
+					e.UITransformComponent.anchoredPosition = Vector2(ap.x - 54, ap.y)
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RelayoutCard(string path, table ys)
+		-- 카드 첫 표시: 아이콘을 숨기고 글자를 위로 당긴다. 긴 직업 이름은 칸에 맞춰 글자 크기를 줄인다.
+		if self._T.laidOut == nil then self._T.laidOut = {} end
+		if self._T.laidOut[path] then return end
+		self._T.laidOut[path] = true
+		local icon = _EntityService:GetEntityByPath(path .. "/Gold/Face/Icon")
+		if isvalid(icon) then icon:SetEnable(false) end
+		for name, y in pairs(ys) do
+			local e = _EntityService:GetEntityByPath(path .. "/Gold/Face/" .. name)
+			if isvalid(e) then
+				local ap = e.UITransformComponent.anchoredPosition
+				e.UITransformComponent.anchoredPosition = Vector2(ap.x, y)
+				local tc = e.TextGUIRendererComponent
+				if isvalid(tc) then
+					tc.MaxSize = tc.FontSize
+					tc.MinSize = 10
+					tc.BestFit = true
 				end
 			end
 		end
@@ -237,22 +287,26 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void FillCard(string path, table t, integer grade, Component mgr, boolean big)
-		-- 카드 한 장 채우기: 아이콘 / 특성 이름 / 등급 색 테두리 등.
+		-- 카드 한 장 채우기: 직업 이름 / 등급 색 테두리 등 (아이콘 없음).
+		-- 아이콘을 뺀 카드의 글자 세로 위치 (선택 카드 / 판 시작 카드)
+		if big then
+			self:RelayoutCard(path, { Trait = 66, Grade = 26, Progress = -18, Next = -62 })
+		else
+			self:RelayoutCard(path, { Trait = 26, Job = -14, Stat = -42 })
+		end
 		local function txt(sub, s)
 			local e = _EntityService:GetEntityByPath(path .. "/Gold/Face/" .. sub)
 			if isvalid(e) then e.TextGUIRendererComponent.Text = s end
 			return e
 		end
 		txt("Trait", t.trait)
-		local icon = _EntityService:GetEntityByPath(path .. "/Gold/Face/Icon")
-		if isvalid(icon) then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon) end
 		local root = _EntityService:GetEntityByPath(path)
 		local g = self._T.grades[grade] or self._T.grades[1]
 		if isvalid(root) and g ~= nil then root.SpriteGUIRendererComponent.Color = g.color end
 		local border = _EntityService:GetEntityByPath(path .. "/Gold")
 		local face = _EntityService:GetEntityByPath(path .. "/Gold/Face")
 		if big then
-			-- 선택 카드: 특성 계열 색 대신 등급 색으로 테두리·배경을 칠한다
+			-- 선택 카드: 직업 계열 색 대신 등급 색으로 테두리·배경을 칠한다
 			local gc = Color(0.6, 0.6, 0.64, 1)
 			if g ~= nil then gc = g.color end
 			if isvalid(border) then border.SpriteGUIRendererComponent.Color = Color(gc.r * 0.75, gc.g * 0.75, gc.b * 0.75, 1) end
@@ -278,14 +332,14 @@ script TarotLogic extends Logic
 			txt("Progress", tostring(pts) .. " → " .. tostring(pts + gain))
 			txt("Next", self:NextJobLabel(mgr, t, pts))
 		else
-			txt("Job", t.jobs[1])
-			txt("Stat", t.familyName)
+			txt("Job", t.familyName)
+			txt("Stat", "1차 " .. (t.jobs[1] or ""))
 		end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void FillDraft(Component mgr)
-		-- 이번 판에 뽑힌 특성 카드(5장)를 보여준다 (테두리는 금색). 가로 화면: 한 줄로 가운데 정렬, 빈 칸은 숨김.
+		-- 이번 판에 뽑힌 직업 카드(5장)를 보여준다 (테두리는 금색). 가로 화면: 한 줄로 가운데 정렬, 빈 칸은 숨김.
 		local ids = {}
 		for i = 1, 7 do
 			local id = mgr.RunTraits[tostring(i)] or ""
@@ -321,10 +375,10 @@ script TarotLogic extends Logic
 				if grade >= 5 then table.insert(self._T.mystic, path) end
 			end
 		end
-		if isvalid(self.choiceSub) then self.choiceSub.Text = "Lv." .. tostring(mgr.Level) .. " — 특성 발현" end
+		if isvalid(self.choiceSub) then self.choiceSub.Text = "Lv." .. tostring(mgr.Level) .. " — 직업 선택" end
 		if isvalid(self.choiceJob) then
 			local job = self:GetJobLabel(mgr)
-			if job == "없음" then job = "직업 없음 · 아무 특성이든 100포인트면 전직 (전직마다 포인트 초기화)" else job = "현재 직업: " .. job end
+			if job == "없음" then job = "직업 없음 · 아무 직업이든 100포인트면 자동 전직 (전직마다 포인트 초기화)" else job = "현재 직업: " .. job end
 			self.choiceJob.Text = job
 		end
 		if isvalid(self.choiceRemain) then
@@ -335,7 +389,7 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnConfirm()
-		-- 운명의 펼침 확인 → 전투 시작.
+		-- 직업 펼침 확인 → 전투 시작.
 		local mgr = self:GetManager()
 		if mgr ~= nil and mgr.RunState == "DRAFT" then mgr:RequestConfirmDraft() end
 		log("[VRF] tarot confirm clicked")
