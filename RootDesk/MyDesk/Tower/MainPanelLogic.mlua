@@ -19,11 +19,10 @@ script MainPanelLogic extends Logic
 	property SpriteGUIRendererComponent expFill = "ef0fbf00-5db1-46cf-bba5-b897f8f34146"
 	property TextGUIRendererComponent expText = "23323398-5c89-4684-9767-3f62a3fcf40f"
 	property number ExpFillSpeed = 4
-	-- 스킬 탭 (스킬석 수치 / 메시지 / 스크롤 목록 줄은 경로로 찾는다)
+	-- 스킬 탭 (안내 문구 / 메시지 / 스크롤 목록 줄은 경로로 찾는다). 줄 11개를 직업 스킬 순서대로 채워 쓴다
 	property TextGUIRendererComponent stoneText = "4837108d-cbf5-4524-ad27-1e0fb967356b"
 	property TextGUIRendererComponent skillMsgText = "47f3c450-6aca-4725-b08b-5597dc4f672c"
 	property string SkillRowPath = "/ui/MainPanel/Panel/Content/Skill/List/Row_"
-	property string SkillTableName = "SkillTable"
 	-- 강화 결과 이펙트: 패널 맨 앞 레이어의 이펙트 하나를 강화한 줄 위치로 옮겨 재생 (다른 줄에 가려지지 않게)
 	property Entity fxEntity = "5b2c879d-ef15-41d8-99f8-3c6887235908"
 	-- 강화 이펙트 칸 2개를 번갈아 사용 (연속 강화 시 이전 이펙트는 즉시 숨기고 새 칸에서 처음부터 재생)
@@ -150,6 +149,7 @@ script MainPanelLogic extends Logic
 		self._T.statLabel = { Weapon = { "공격력 +", "" }, Cap = { "체력 +", "" }, Coat = { "방어력 +", "" }, Glove = { "크리티컬 확률 +", "%" }, Shoes = { "크리티컬 데미지 +", "%" }, Cape = { "명중률 +", "%" } }
 		self._T.slotName = { Weapon = "무기", Cap = "투구", Coat = "옷", Glove = "장갑", Shoes = "신발", Cape = "망토" }
 		self._T.equip = {}
+		self._T.jobEquip = {}
 		self._T.rows = {}
 		self._T.shownTier = {}
 		for _, slot in ipairs(self._T.slots) do self._T.equip[slot] = {} end
@@ -157,8 +157,15 @@ script MainPanelLogic extends Logic
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
 				local slot = ds:GetCell(i, "Slot")
-				if self._T.equip[slot] ~= nil then
-					self._T.equip[slot][tonumber(ds:GetCell(i, "Tier")) or 1] = {
+				local tier = tonumber(ds:GetCell(i, "Tier")) or 1
+				-- Job 열이 있는 줄 = 그 직업 전용 이름·아이콘 (수치는 공용 줄)
+				local job = ds:GetCell(i, "Job") or ""
+				if job ~= "" then
+					if self._T.jobEquip[job] == nil then self._T.jobEquip[job] = {} end
+					if self._T.jobEquip[job][slot] == nil then self._T.jobEquip[job][slot] = {} end
+					self._T.jobEquip[job][slot][tier] = { name = ds:GetCell(i, "Name"), ruid = ds:GetCell(i, "ItemRUID") or "" }
+				elseif self._T.equip[slot] ~= nil then
+					self._T.equip[slot][tier] = {
 						name = ds:GetCell(i, "Name"), ruid = ds:GetCell(i, "ItemRUID"),
 						value = tonumber(ds:GetCell(i, "StatValue")) or 0, req = tonumber(ds:GetCell(i, "ReqLevel")) or 0,
 					}
@@ -194,40 +201,33 @@ script MainPanelLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SetupSkillRows()
-		-- 스킬 테이블을 읽고, 스크롤 목록의 스킬 줄(이름/설명/버튼/잠금/이펙트)을 찾아 강화 버튼을 연결한다.
-		self._T.skills = {}
+		-- 스킬 탭 줄(아이콘/이름/설명/버튼/잠금)을 찾는다. 줄은 ui에 이름이 정해져 있어 순서대로 직업 스킬에 배정한다.
+		-- 직업 스킬은 레벨업 카드로만 강화하므로 강화 버튼과 스킬석 표시는 숨긴다.
+		local names = { "Might", "Vitality", "IronSkin", "Mastery", "Precision", "Swift", "MesoHunter", "Vampire", "DoubleStrike", "Execute", "Undying" }
 		self._T.skillRows = {}
-		local ds = _DataService:GetTable(self.SkillTableName)
-		if ds == nil then return end
-		for i = 1, ds:GetRowCount() do
-			local s = {
-				id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), unlock = tonumber(ds:GetCell(i, "UnlockLevel")) or 1,
-				base = tonumber(ds:GetCell(i, "Base")) or 0, per = tonumber(ds:GetCell(i, "PerLv")) or 0, desc = ds:GetCell(i, "Desc"),
-			}
-			table.insert(self._T.skills, s)
-			local base = self.SkillRowPath .. s.id
+		for _, n in ipairs(names) do
+			local base = self.SkillRowPath .. n
 			local row = {
+				root = _EntityService:GetEntityByPath(base),
+				icon = _EntityService:GetEntityByPath(base .. "/Icon"),
 				name = _EntityService:GetEntityByPath(base .. "/Name"),
 				desc = _EntityService:GetEntityByPath(base .. "/Desc"),
 				btn = _EntityService:GetEntityByPath(base .. "/Btn"),
 				lock = _EntityService:GetEntityByPath(base .. "/Lock"),
+				lockText = _EntityService:GetEntityByPath(base .. "/Lock/Text"),
 			}
-			self._T.skillRows[s.id] = row
-			if isvalid(row.btn) then
-				local id = s.id
-				local h = row.btn:ConnectEvent(ButtonClickEvent, function() self:RequestSkillEnhance(id) end)
-				table.insert(self.clickHandlers, { entity = row.btn, eventHandler = h })
+			if isvalid(row.btn) then row.btn:SetEnable(false) end
+			if isvalid(row.desc) then
+				-- 버튼 자리까지 설명을 넓힌다
+				local rt = row.desc.UITransformComponent
+				rt.RectSize = Vector2(rt.RectSize.x + 150, rt.RectSize.y)
 			end
+			table.insert(self._T.skillRows, row)
 		end
-		log("[VRF] skill rows=" .. tostring(#self._T.skills))
-	end
-
-	@ExecSpace("ClientOnly")
-	method void RequestSkillEnhance(string skillId)
-		-- 서버에 스킬 강화 요청 (스킬석·확률 검증은 서버).
-		local mgr = self:GetManager()
-		if mgr ~= nil then mgr:RequestSkillEnhance(skillId) end
-		log("[VRF] skill enhance clicked " .. skillId)
+		local stoneIcon = _EntityService:GetEntityByPath("/ui/MainPanel/Panel/Content/Skill/StoneIcon")
+		if isvalid(stoneIcon) then stoneIcon:SetEnable(false) end
+		self._T.skillTabJob = nil
+		log("[VRF] skill rows=" .. tostring(#self._T.skillRows))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -239,39 +239,43 @@ script MainPanelLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void UpdateSkillTab(Component mgr)
-		-- 스킬석 수치와 스킬별 레벨/효과/강화 버튼/잠금 상태를 갱신한다.
-		if isvalid(self.stoneText) then self.stoneText.Text = ": " .. tostring(mgr.Stones) end
-		for _, s in ipairs(self._T.skills) do
-			local row = self._T.skillRows[s.id]
-			local lv = mgr.SkillLv[s.id] or 0
-			local locked = lv <= 0
-			if isvalid(row.lock) and row.lock.Enable ~= locked then row.lock:SetEnable(locked) end
-			if isvalid(row.name) then
-				local label = s.name
-				if lv > 0 then label = s.name .. "  Lv." .. tostring(lv) end
-				row.name.TextGUIRendererComponent.Text = label
+		-- 직업 스킬 목록: 줄마다 이름·레벨/최고 레벨·지금 효과(+다음 레벨), 안 배운 스킬은 잠금 덮개. 남는 줄은 숨김.
+		local skills = _TarotLogic:GetJobSkills(mgr.JobId)
+		if isvalid(self.stoneText) then
+			local learned = 0
+			for _, sk in ipairs(skills) do
+				if (mgr.SkillLv[sk.id] or 0) > 0 then learned = learned + 1 end
 			end
-			if isvalid(row.desc) then
-				local shown = math.max(1, lv)
-				local v = s.base + s.per * (shown - 1)
-				local text = (string.gsub(s.desc, "{v}", self:FormatSkillValue(v)))
-				if lv > 0 and lv < 10 then
-					text = text .. "  (다음 " .. self:FormatSkillValue(v + s.per) .. ")"
+			local s = "배운 스킬 " .. tostring(learned) .. " / " .. tostring(#skills) .. "  (레벨업마다 스킬 카드 1장)"
+			if #skills == 0 then s = "직업을 고르면 스킬이 표시됩니다" end
+			if self.stoneText.Text ~= s then self.stoneText.Text = s end
+		end
+		-- 직업이 바뀌면 줄 켜기/끄기·아이콘을 다시 정한다
+		local relayout = self._T.skillTabJob ~= mgr.JobId
+		self._T.skillTabJob = mgr.JobId
+		for i, row in ipairs(self._T.skillRows) do
+			local sk = skills[i]
+			if relayout then
+				if isvalid(row.root) then row.root:SetEnable(sk ~= nil) end
+				if sk ~= nil and isvalid(row.icon) then
+					row.icon:SetEnable(sk.icon ~= "")
+					if sk.icon ~= "" then row.icon.SpriteGUIRendererComponent.ImageRUID = DataRef(sk.icon) end
 				end
-				row.desc.TextGUIRendererComponent.Text = text
 			end
-			if isvalid(row.btn) then
-				local cost = mgr.SkillCost[s.id] or 1
-				local label = ""
-				local canBuy = mgr.Stones >= cost and lv > 0
-				if lv >= 10 then
-					label = "최고 레벨"
-					canBuy = false
-				else
-					label = "강화 " .. self:FormatSkillValue(math.max(5, 50 - 5 * (math.max(1, lv) - 1)) + mgr.SkillRateBonus) .. "%\n스킬석 " .. tostring(cost)
+			if sk ~= nil then
+				local lv = mgr.SkillLv[sk.id] or 0
+				local locked = lv <= 0
+				if isvalid(row.lock) and row.lock.Enable ~= locked then row.lock:SetEnable(locked) end
+				if locked and isvalid(row.lockText) then row.lockText.TextGUIRendererComponent.Text = sk.name .. " - 레벨업 스킬 카드로 배울 수 있음" end
+				if isvalid(row.name) then
+					local label = sk.name .. "  Lv." .. tostring(lv) .. " / " .. tostring(sk.max)
+					if row.name.TextGUIRendererComponent.Text ~= label then row.name.TextGUIRendererComponent.Text = label end
 				end
-				row.btn.TextGUIRendererComponent.Text = label
-				if canBuy then row.btn.SpriteGUIRendererComponent.Color = self.BuyOnColor else row.btn.SpriteGUIRendererComponent.Color = self.BuyOffColor end
+				if isvalid(row.desc) then
+					local text = _TarotLogic:SkillDesc(sk, lv)
+					if lv > 0 and lv < sk.max then text = text .. "\n(다음 레벨: " .. _TarotLogic:SkillDesc(sk, lv + 1) .. ")" end
+					if row.desc.TextGUIRendererComponent.Text ~= text then row.desc.TextGUIRendererComponent.Text = text end
+				end
 			end
 		end
 	end
@@ -379,6 +383,20 @@ script MainPanelLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method table EquipInfo(string slot, integer tier, string jobId)
+		-- 장비 단계 표시 정보. 직업 전용 줄이 있으면 이름(과 아이콘이 있으면 아이콘)만 그 직업 것으로.
+		local row = self._T.equip[slot][tier]
+		if row == nil then return nil end
+		local jobRows = self._T.jobEquip[jobId]
+		local jr = nil
+		if jobRows ~= nil and jobRows[slot] ~= nil then jr = jobRows[slot][tier] end
+		if jr == nil then return row end
+		local ruid = row.ruid
+		if jr.ruid ~= "" then ruid = jr.ruid end
+		return { name = jr.name, ruid = ruid, value = row.value, req = row.req }
+	end
+
+	@ExecSpace("ClientOnly")
 	method void UpdateEquipTab(Component mgr)
 		-- 부위별 장비 이름/능력치/버튼 상태를 갱신한다.
 		if isvalid(self.equipMesoText) then self.equipMesoText.Text = ": " .. tostring(mgr.Meso) end
@@ -387,7 +405,7 @@ script MainPanelLogic extends Logic
 			local tier = mgr.EquipTier[slot] or 1
 			local enh = mgr.EquipEnh[slot] or 0
 			local cost = mgr.EquipCost[slot] or 0
-			local info = self._T.equip[slot][tier]
+			local info = self:EquipInfo(slot, tier, mgr.JobId)
 			-- 잠긴 부위: 검은 반투명 덮개 + 붉은 해금 조건
 			local locked = mgr.EquipUnlocked[slot] ~= 1
 			if row ~= nil and isvalid(row.lock) then
@@ -397,8 +415,9 @@ script MainPanelLogic extends Logic
 				end
 			end
 			if info ~= nil and row ~= nil then
-				if isvalid(row.icon) and self._T.shownTier[slot] ~= tier then
-					self._T.shownTier[slot] = tier
+				local iconKey = tostring(tier) .. ":" .. info.ruid
+				if isvalid(row.icon) and self._T.shownTier[slot] ~= iconKey then
+					self._T.shownTier[slot] = iconKey
 					row.icon.SpriteGUIRendererComponent.ImageRUID = "thumbnail://" .. info.ruid
 				end
 				if isvalid(row.name) then

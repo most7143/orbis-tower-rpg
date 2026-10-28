@@ -17,9 +17,9 @@ Bulwark,Def,4,1,철벽,Bulwark,20,3,3b9ba76a1b22485a929c9409d201c7af,체력 50% 
 LastStand,Def,4,2,최후의 저항,LastStand,10,3,2d8fb860f50549c091b80df3d0bbe22e,판마다 1회 쓰러질 때 체력 {v}%로 버팀
 Greed,Util,1,1,탐욕,MesoPct,5,3,5117d5e3fdec44429b47848fe01f471d,메소 획득 +{v}%
 Study,Util,1,2,학습,ExpPct,5,3,8a0a3c5113944728b2a2cd88fa30275b,경험치 획득 +{v}%
-Collector,Util,2,1,수집가,StoneChance,3,3,c7a95643f6274e00b574f8d7fabd0f46,스킬석 획득 확률 +{v}%p
+Collector,Util,2,1,비전서 수집가,ExtraPick,5,3,c7a95643f6274e00b574f8d7fabd0f46,레벨업 시 {v}% 확률로 스킬 카드 선택 1회 추가
 SmithHand,Util,2,2,대장장이의 손,EnhRate,1,3,01371e98db084a748c189d89a25c34d4,장비 강화 확률 +{v}%p
 Fund,Util,3,1,시작 자금,StartMeso,100,3,fc221dcfcd8b4a338de5639d10b3d710,판 시작 시 메소 +{v}
-Fate,Util,3,2,운명의 손,GradeLuck,10,3,1fd1da489dbd4e6d9f6fcf612de80bbc,희귀 이상 직업 카드 확률 +{v}%
-Reroll,Util,4,1,재추첨,Reroll,1,3,0764c9b610f940af9efa23a40949a576,판마다 직업 카드 다시 뽑기 {v}회
-HeadStart,Util,4,2,선행 학습,StartLevel,1,3,ccc5ef2e6715474ab1ffc69a8c8561a8,시작 레벨 +{v} (직업 카드 선택도 +{v}회)
+Fate,Util,3,2,운명의 손,ProcChance,2,3,1fd1da489dbd4e6d9f6fcf612de80bbc,공격 시 발동 스킬 확률 +{v}%p
+Reroll,Util,4,1,재추첨,Reroll,1,3,0764c9b610f940af9efa23a40949a576,판마다 스킬 카드 다시 뽑기 {v}회
+HeadStart,Util,4,2,선행 학습,StartLevel,1,3,ccc5ef2e6715474ab1ffc69a8c8561a8,시작 레벨 +{v} (스킬 카드 선택도 +{v}회)

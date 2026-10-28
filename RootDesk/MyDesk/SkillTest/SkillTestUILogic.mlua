@@ -13,7 +13,6 @@ script SkillTestUILogic extends Logic
 
 	property string TestMapName = "SkillTest"
 	property string TraitTableName = "TraitTable"
-	property Color NoFxColor = Color(0.2, 0.2, 0.22, 1)
 	property Color SelectedColor = Color(1, 0.85, 0.3, 1)
 
 	@HideFromInspector
@@ -21,38 +20,32 @@ script SkillTestUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
-		-- 직업 15종의 1~4차 버튼을 줄에 채우고 연결한다. 이펙트 스킬이 없는 직업 버튼은 어둡게.
+		-- 스킬이 있는 직업마다 한 줄씩 재생 버튼을 채우고 연결한다.
 		self.clickHandlers = {}
 		self._T.rows = {}
 		self._T.selected = nil
 		self._T.last = nil
+		-- 직업마다 이펙트 있는 발동 스킬 수
 		local fx = {}
 		local js = _DataService:GetTable("JobSkillTable")
 		if js ~= nil then
 			for i = 1, js:GetRowCount() do
 				if (js:GetCell(i, "EffectRUID") or "") ~= "" and (js:GetCell(i, "ProcType") or "") ~= "" then
-					fx[js:GetCell(i, "TraitId") .. "_" .. js:GetCell(i, "Tier")] = (fx[js:GetCell(i, "TraitId") .. "_" .. js:GetCell(i, "Tier")] or 0) + 1
+					local id = js:GetCell(i, "JobId")
+					fx[id] = (fx[id] or 0) + 1
 				end
 			end
 		end
-		-- 줄 구성: 1~15줄 = 직업마다 1~3차 버튼, 16줄부터 = 4차 버튼 (한 줄에 3직업). 남는 줄·버튼은 숨김
-		local jobs = {}
+		-- 줄 구성: 스킬이 있는 직업마다 한 줄 (첫 버튼 = 그 직업 이펙트 스킬 전체 재생). 남는 줄·버튼은 숨김
+		local lines = {}
 		local ds = _DataService:GetTable(self.TraitTableName)
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
-				local names = {}
-				for tier = 1, 4 do names[tier] = ds:GetCell(i, "Job" .. tostring(tier)) or "" end
-				table.insert(jobs, { id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), color = Color.FromHexCode(ds:GetCell(i, "FamilyColor")), names = names })
+				local id = ds:GetCell(i, "Id")
+				if fx[id] ~= nil then
+					table.insert(lines, { id = id, name = ds:GetCell(i, "Name"), color = Color.FromHexCode(ds:GetCell(i, "FamilyColor")), n = fx[id] })
+				end
 			end
-		end
-		local lines = {}
-		for _, j in ipairs(jobs) do
-			table.insert(lines, { label = j.name, color = j.color, list = { { job = j, tier = 1 }, { job = j, tier = 2 }, { job = j, tier = 3 } } })
-		end
-		for k = 1, #jobs, 3 do
-			local list = {}
-			for m = k, math.min(k + 2, #jobs) do table.insert(list, { job = jobs[m], tier = 4 }) end
-			table.insert(lines, { label = "4차", color = Color(1, 1, 1, 1), list = list })
 		end
 		local count = 0
 		if isvalid(self.listEntity) then
@@ -65,29 +58,18 @@ script SkillTestUILogic extends Logic
 					count = count + 1
 					local name = row:GetChildByName("Name")
 					if isvalid(name) then
-						name.TextGUIRendererComponent.Text = line.label
+						name.TextGUIRendererComponent.Text = line.name
 						name.TextGUIRendererComponent.FontColor = line.color
 					end
 					for b = 1, 3 do
 						local btn = row:GetChildByName("Btn" .. tostring(b))
-						local entry = line.list[b]
 						if isvalid(btn) then
-							btn:SetEnable(entry ~= nil)
-							if entry ~= nil then
-								local id = entry.job.id
-								local tier = entry.tier
-								local job = entry.job.names[tier]
-								local n = fx[id .. "_" .. tostring(tier)] or 0
-								local label = job
-								if n > 1 then label = job .. " (" .. tostring(n) .. ")" end
-								btn.TextGUIRendererComponent.Text = label
+							btn:SetEnable(b == 1)
+							if b == 1 then
+								btn.TextGUIRendererComponent.Text = "스킬 재생 (" .. tostring(line.n) .. ")"
 								local base = Color(0.18, 0.34, 0.5, 1)
-								if n == 0 then
-									base = self.NoFxColor
-									btn.TextGUIRendererComponent.FontColor = Color(0.55, 0.55, 0.55, 1)
-								end
 								btn.SpriteGUIRendererComponent.Color = base
-								local rec = { id = id, tier = tier, job = job, btn = btn, base = base }
+								local rec = { id = line.id, job = line.name, btn = btn, base = base }
 								table.insert(self._T.rows, rec)
 								self:Bind(btn.ButtonComponent, function() self:OnJob(rec) end)
 							end
@@ -145,7 +127,7 @@ script SkillTestUILogic extends Logic
 		self._T.selected = rec
 		self._T.last = rec
 		rec.btn.SpriteGUIRendererComponent.Color = self.SelectedColor
-		mgr:RequestPlayJob(rec.id, rec.tier, rec.job)
+		mgr:RequestPlayJob(rec.id, rec.job)
 	end
 
 	@ExecSpace("ClientOnly")
