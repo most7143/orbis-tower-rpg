@@ -70,31 +70,14 @@ script TowerRunManager extends Component
 	property string ExecuteFxRUID = "63b7f4807e4748eda2d57f1ca055e8e8"
 	property string UndyingFxRUID = "c6f54657879448b496daecc8a15c2918"
 	property string LastStandFxRUID = "5044542ed02947009eff46ea1e86a5a1"
-	-- 패시브 스킬 (SkillTable): 레벨 도달 시 1레벨로 해금, 스킬석으로 확률 강화 (최대 10레벨)
-	property string SkillTableName = "SkillTable"
-	property integer SkillMaxLevel = 10
-	property number SkillBaseRate = 50
-	property number SkillRateStep = 5
-	property number StoneDropChance = 50
 	property number MesoProcRatio = 0.25
 	property number ExecuteHpRatio = 0.2
 	property number DoubleHitDelay = 0.2
-	-- 직업 (TraitTable · TraitGradeTable) — 메이플스토리 모험가 15직업 (1~4차)
+	-- 직업 (TraitTable): 판 시작 시 고를 수 있는 직업(Playable = 1), 직업마다 무기 종류가 다름
 	property string TraitTableName = "TraitTable"
-	property string TraitGradeTableName = "TraitGradeTable"
-	property integer PointsPerJobTier = 100
-	-- 테스트용: 판의 첫 직업 카드 선택에서 카드 1장을 최고 등급(미스틱)으로 확정 (테스트 끝나면 false)
-	property boolean TestFirstPickTopGrade = false
-	-- 테스트용: 매 직업 카드 선택마다 카드 1장을 미스틱으로 확정 (테스트 끝나면 false)
-	property boolean TestAlwaysTopGrade = false
-	property integer MaxJobTier = 4
-	-- 한 판에 나오는 직업 수 (15직업 중 무작위)
-	property integer RunTraitCount = 5
-	-- 판 시작 카드 칸 수 (TarotUI Draft Card1~7)
-	property integer RunTraitSlots = 7
-	-- 직업 스킬 (JobSkillTable): 직업·차수별 패시브
+	-- 직업 스킬 (JobSkillTable): 직업마다 스킬 목록, 레벨업마다 3장 중 1개를 배우거나 +1레벨
 	property string JobSkillTableName = "JobSkillTable"
-	-- 직업 스킬 빙결 시간(초), '메소 익스플로전' 메소 = 처치 메소 × 비율
+	-- 직업 스킬 빙결 시간(초), 메소 발동 스킬 메소 = 처치 메소 × 비율
 	property number JobFreezeSec = 2
 	property number JobMesoStrikeRatio = 0.2
 	-- 연타 직업 스킬의 타격 간격(초)
@@ -159,45 +142,30 @@ script TowerRunManager extends Component
 	property integer Exp = 0
 	@Sync
 	property integer ExpToNext = 27
-	@Sync
-	property integer Stones = 0
+	-- 직업 스킬 레벨: 스킬 Id → 레벨 (0 = 아직 안 배움)
 	@Sync
 	property SyncTable<string, integer> SkillLv
-	@Sync
-	property SyncTable<string, integer> SkillCost
-	-- 강화 결과 연출 신호: FxTarget = 장비 부위 이름 또는 "skill:<Id>"
+	-- 강화 결과 연출 신호: FxTarget = 장비 부위 이름
 	@Sync
 	property integer FxSeq = 0
 	@Sync
 	property string FxTarget = ""
 	@Sync
 	property boolean FxOk = false
-	-- 직업 카드: 판 시작 시 15직업 중 5개, 레벨업마다 그중 3장 중 1장 선택
+	-- 카드 선택: JOBSELECT = 직업 Id 3장, CHOICE = 직업 스킬 Id 최대 3장 ("1"~"3", 빈 칸은 "")
 	@Sync
-	property SyncTable<string, string> RunTraits
-	@Sync
-	property SyncTable<string, integer> TraitPoints
-	@Sync
-	property SyncTable<string, string> ChoiceTrait
-	@Sync
-	property SyncTable<string, integer> ChoiceGrade
+	property SyncTable<string, string> ChoiceIds
 	@Sync
 	property integer ChoiceSeq = 0
 	@Sync
 	property integer PendingPicks = 0
 	@Sync
 	property integer Rerolls = 0
-	-- 전직 경로: "1"~"4" 차수 → 그 차수로 전직한 직업 Id (차수마다 다른 직업일 수 있음)
+	-- 이번 판 직업 Id (직업 선택 전에는 "")
 	@Sync
-	property SyncTable<string, string> JobPath
-	@Sync
-	property string JobTrait = ""
-	@Sync
-	property integer JobTier = 0
+	property string JobId = ""
 	@Sync
 	property number EnhanceBonus = 0
-	@Sync
-	property number SkillRateBonus = 0
 	@Sync
 	property integer MesoProcSeq = 0
 	@Sync
@@ -275,8 +243,7 @@ script TowerRunManager extends Component
 		self:LoadMonsterTables()
 		self:LoadEquipTable()
 		self:LoadDealTable()
-		self:LoadSkillTable()
-		self:LoadTraitTables()
+		self:LoadJobTables()
 		log("[VRF] TowerRunManager begin map=" .. self.Entity.Name .. " monsters=" .. tostring(#self._T.monsters) .. " floors=" .. tostring(#self._T.floors) .. " prefixes=" .. tostring(#self._T.prefixes))
 	end
 
@@ -341,10 +308,6 @@ script TowerRunManager extends Component
 		self.ExpGrowth = n("ExpGrowth", self.ExpGrowth)
 		self.BaseExpToNext = n("BaseExpToNext", self.BaseExpToNext)
 		self.ExpToNextGrowth = n("ExpToNextGrowth", self.ExpToNextGrowth)
-		self.SkillMaxLevel = i("SkillMaxLevel", self.SkillMaxLevel)
-		self.SkillBaseRate = n("SkillBaseRate", self.SkillBaseRate)
-		self.SkillRateStep = n("SkillRateStep", self.SkillRateStep)
-		self.StoneDropChance = n("StoneDropChance", self.StoneDropChance)
 		self.MesoProcRatio = n("MesoProcRatio", self.MesoProcRatio)
 		self.FeatherChance = n("FeatherChance", self.FeatherChance)
 		self.BossFeatherMin = i("BossFeatherMin", self.BossFeatherMin)
@@ -411,6 +374,7 @@ script TowerRunManager extends Component
 		-- 장비 테이블을 부위·단계별로 읽는다.
 		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Shoes", "Cape" }
 		self._T.equip = {}
+		self._T.jobEquip = {}
 		for _, slot in ipairs(self._T.slots) do self._T.equip[slot] = {} end
 		-- 부위 해금 조건 (최고 기록 층)
 		self._T.unlockFloor = {}
@@ -431,7 +395,13 @@ script TowerRunManager extends Component
 		for i = 1, ds:GetRowCount() do
 			local slot = ds:GetCell(i, "Slot")
 			local tier = tonumber(ds:GetCell(i, "Tier")) or 1
-			if self._T.equip[slot] ~= nil then
+			-- Job 열이 있는 줄 = 그 직업 전용 이름·외형 (수치는 공용 줄과 같게 둠)
+			local job = ds:GetCell(i, "Job") or ""
+			if job ~= "" then
+				if self._T.jobEquip[job] == nil then self._T.jobEquip[job] = {} end
+				if self._T.jobEquip[job][slot] == nil then self._T.jobEquip[job][slot] = {} end
+				self._T.jobEquip[job][slot][tier] = { name = ds:GetCell(i, "Name"), ruid = ds:GetCell(i, "ItemRUID") or "" }
+			elseif self._T.equip[slot] ~= nil then
 				self._T.equip[slot][tier] = {
 					name = ds:GetCell(i, "Name"),
 					ruid = ds:GetCell(i, "ItemRUID"),
@@ -443,76 +413,50 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
-	method void LoadSkillTable()
-		-- 패시브 스킬 테이블: 해금 레벨, 효과 타입, 1레벨 수치 + 레벨당 증가, 스킬석 기본 비용.
-		self._T.skills = {}
-		local ds = _DataService:GetTable(self.SkillTableName)
-		if ds == nil then
-			log_error("[VRF] SkillTable not found")
-			return
-		end
-		for i = 1, ds:GetRowCount() do
-			table.insert(self._T.skills, {
-				id = ds:GetCell(i, "Id"),
-				name = ds:GetCell(i, "Name"),
-				unlock = tonumber(ds:GetCell(i, "UnlockLevel")) or 1,
-				type = ds:GetCell(i, "Type"),
-				base = tonumber(ds:GetCell(i, "Base")) or 0,
-				per = tonumber(ds:GetCell(i, "PerLv")) or 0,
-				cost = tonumber(ds:GetCell(i, "CostBase")) or 1,
-			})
-		end
-	end
-
-	@ExecSpace("ServerOnly")
 	method number SkillValue(string skillType)
-		-- 해당 효과 타입 스킬의 현재 수치 (미해금이면 0). 수치 = 기본 + 레벨당 증가 × (레벨 - 1)
+		-- 배운 직업 스킬의 능력치 효과 합계 (안 배웠으면 0). 수치 = 1레벨 값 + 레벨당 증가 × (레벨 - 1)
 		local total = 0
-		for _, s in ipairs(self._T.skills) do
-			if s.type == skillType then
-				local lv = self.SkillLv[s.id] or 0
-				if lv > 0 then total = total + s.base + s.per * (lv - 1) end
+		for _, sk in ipairs(self:JobSkills()) do
+			local lv = self.SkillLv[sk.id] or 0
+			if lv > 0 then
+				for _, e in ipairs(sk.effects) do
+					if e.type == skillType then total = total + e.base + e.per * (lv - 1) end
+				end
 			end
 		end
 		return total
 	end
 
 	@ExecSpace("ServerOnly")
-	method void LoadTraitTables()
-		-- 직업(모험가 15직업)과 등급(일반~미스틱) 테이블을 읽는다.
-		self._T.traits = {}
-		self._T.traitById = {}
-		self._T.grades = {}
+	method void LoadJobTables()
+		-- 직업(고를 수 있는 직업만 선택지)과 직업 스킬 테이블을 읽는다.
+		self._T.jobById = {}
+		self._T.playableJobs = {}
 		local ds = _DataService:GetTable(self.TraitTableName)
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
-				local t = {
-					id = ds:GetCell(i, "Id"), family = ds:GetCell(i, "Family"), trait = ds:GetCell(i, "Name"),
-					jobs = { ds:GetCell(i, "Job1"), ds:GetCell(i, "Job2"), ds:GetCell(i, "Job3"), ds:GetCell(i, "Job4") },
-				}
-				table.insert(self._T.traits, t)
-				self._T.traitById[t.id] = t
+				local j = { id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), weapon = ds:GetCell(i, "Weapon") or "",
+					weaponCat = ds:GetCell(i, "WeaponCat") or "OneHanded", playable = (tonumber(ds:GetCell(i, "Playable")) or 0) == 1 }
+				self._T.jobById[j.id] = j
+				if j.playable then table.insert(self._T.playableJobs, j.id) end
 			end
 		end
-		local gs = _DataService:GetTable(self.TraitGradeTableName)
-		if gs ~= nil then
-			for i = 1, gs:GetRowCount() do
-				table.insert(self._T.grades, { grade = tonumber(gs:GetCell(i, "Grade")) or i, points = tonumber(gs:GetCell(i, "Points")) or 5, weight = tonumber(gs:GetCell(i, "Weight")) or 1 })
-			end
-		end
-		-- 직업 스킬: jobSkills[직업 Id][차수] = { 스킬, ... } (차수마다 1~3개), 스킬 = { name, effects = { {type, value}, ... }, proc }
+		-- 직업 스킬: jobSkills[직업 Id] = 표 순서대로 스킬 목록
+		-- 스킬 = { id, name, max, effects = { {type, base, per}, ... }, proc = { type, chance, chancePer, pct, pctPer, hits, fx, fxScale } }
 		self._T.jobSkills = {}
+		self._T.skillById = {}
 		local js = _DataService:GetTable(self.JobSkillTableName)
 		if js ~= nil then
 			for i = 1, js:GetRowCount() do
-				local id = js:GetCell(i, "TraitId")
-				local tier = tonumber(js:GetCell(i, "Tier")) or 1
+				local job = js:GetCell(i, "JobId")
 				local effects = {}
 				for k = 1, 2 do
 					local ty = js:GetCell(i, "Type" .. tostring(k))
-					if ty ~= nil and ty ~= "" then table.insert(effects, { type = ty, value = tonumber(js:GetCell(i, "Value" .. tostring(k))) or 0 }) end
+					if ty ~= nil and ty ~= "" then
+						table.insert(effects, { type = ty, base = tonumber(js:GetCell(i, "V" .. tostring(k))) or 0, per = tonumber(js:GetCell(i, "V" .. tostring(k) .. "Per")) or 0 })
+					end
 				end
-				-- 공격 시 발동형: ProcType(Strike/CritStrike/Pierce/Double/Freeze/Heal/MesoStrike/Dice), 확률 %, 수치 %
+				-- 공격 시 발동형: ProcType(Strike/CritStrike/Pierce/Double/Freeze/Heal/MesoStrike/Dice), 확률 %, 수치 % (레벨마다 증가)
 				local proc = nil
 				local pt = js:GetCell(i, "ProcType")
 				if pt ~= nil and pt ~= "" then
@@ -522,28 +466,29 @@ script TowerRunManager extends Component
 						hits = 1
 						if pt == "Double" then hits = 2 end
 					end
-					proc = { type = pt, chance = tonumber(js:GetCell(i, "ProcChance")) or 0, pct = tonumber(js:GetCell(i, "ProcPct")) or 0, hits = hits,
+					proc = { type = pt, chance = tonumber(js:GetCell(i, "Chance")) or 0, chancePer = tonumber(js:GetCell(i, "ChancePer")) or 0,
+						pct = tonumber(js:GetCell(i, "Pct")) or 0, pctPer = tonumber(js:GetCell(i, "PctPer")) or 0, hits = hits,
 						fx = js:GetCell(i, "EffectRUID") or "", fxScale = tonumber(js:GetCell(i, "EffectScale")) or 1 }
 				end
-				if self._T.jobSkills[id] == nil then self._T.jobSkills[id] = {} end
-				if self._T.jobSkills[id][tier] == nil then self._T.jobSkills[id][tier] = {} end
-				table.insert(self._T.jobSkills[id][tier], { name = js:GetCell(i, "Name"), effects = effects, proc = proc })
+				local sk = { id = js:GetCell(i, "SkillId"), job = job, name = js:GetCell(i, "Name"), max = tonumber(js:GetCell(i, "MaxLv")) or 5, effects = effects, proc = proc }
+				if self._T.jobSkills[job] == nil then self._T.jobSkills[job] = {} end
+				table.insert(self._T.jobSkills[job], sk)
+				self._T.skillById[sk.id] = sk
 			end
 		end
+		log("[VRF] jobs playable=" .. tostring(#self._T.playableJobs))
 	end
 
 	@ExecSpace("ServerOnly")
-	method table JobSkill(integer tier)
-		-- 그 차수로 전직한 직업의 스킬 목록 (없으면 빈 목록).
-		local id = self.JobPath[tostring(tier)] or ""
-		if id == "" or self._T.jobSkills == nil or self._T.jobSkills[id] == nil then return {} end
-		return self._T.jobSkills[id][tier] or {}
+	method table JobSkills()
+		-- 이번 판 직업의 스킬 목록 (직업 선택 전이면 빈 목록).
+		if self.JobId == "" or self._T.jobSkills == nil then return {} end
+		return self._T.jobSkills[self.JobId] or {}
 	end
-
 
 	@ExecSpace("ServerOnly")
 	method number Bonus(string effType)
-		-- 효과 합계 = 패시브 스킬 수치 + 직업 전직 효과(효과값 × 전직 차수) + 각인 효과.
+		-- 효과 합계 = 직업 스킬 수치 + 각인 + 은총 + 심볼 + 거래 효과.
 		local total = self:SkillValue(effType)
 		local engrave = self._T.engrave
 		if engrave ~= nil and engrave[effType] ~= nil then total = total + engrave[effType] end
@@ -559,137 +504,66 @@ script TowerRunManager extends Component
 		for _, c in ipairs(self._T.curses or {}) do
 			if c.type == effType then total = total + c.value end
 		end
-		-- 직업 스킬 (차수마다 전직한 직업의 그 차수 스킬)
-		for tier = 1, self.JobTier do
-			for _, sk in ipairs(self:JobSkill(tier)) do
-				for _, e in ipairs(sk.effects) do
-					if e.type == effType then total = total + e.value end
-				end
-			end
-		end
 		return total
 	end
 
 
 	@ExecSpace("ServerOnly")
-	method void DrawRunTraits()
-		-- 판 시작: 직업 포인트·전직 초기화 후, 15직업 중 무작위 RunTraitCount(5)개를 뽑는다.
-		for _, t in ipairs(self._T.traits) do self.TraitPoints[t.id] = 0 end
-		self.JobTrait = ""
-		self.JobTier = 0
-		for tier = 1, self.MaxJobTier do self.JobPath[tostring(tier)] = "" end
-		self.PendingPicks = 0
-		local pool = {}
-		for _, t in ipairs(self._T.traits) do table.insert(pool, t) end
-		local names = ""
-		for i = 1, self.RunTraitSlots do
-			self.RunTraits[tostring(i)] = ""
-			if i <= self.RunTraitCount and #pool > 0 then
-				local pick = table.remove(pool, _UtilLogic:RandomIntegerRange(1, #pool))
-				self.RunTraits[tostring(i)] = pick.id
-				names = names .. pick.id .. " "
-			end
+	method void RollJobChoices()
+		-- 판 시작 직업 선택: 고를 수 있는 직업(최대 3개)을 카드로 보여준다.
+		for slot = 1, 3 do
+			self.ChoiceIds[tostring(slot)] = self._T.playableJobs[slot] or ""
 		end
-		log("[VRF] run jobs drawn: " .. names)
-	end
-
-	@ExecSpace("ServerOnly")
-	method integer RollGrade()
-		-- 등급 가중치 추첨 (일반 50 / 희귀 30 / 에픽 14 / 레전더리 5 / 미스틱 1). 각인 '운명의 손'은 희귀 이상 가중치를 올린다.
-		local luck = 1 + self:Bonus("GradeLuck") / 100
-		local function weight(g)
-			if g.grade >= 2 then return g.weight * luck end
-			return g.weight
-		end
-		local sum = 0
-		for _, g in ipairs(self._T.grades) do sum = sum + weight(g) end
-		local r = _UtilLogic:RandomDouble() * sum
-		for _, g in ipairs(self._T.grades) do
-			r = r - weight(g)
-			if r < 0 then return g.grade end
-		end
-		return 1
+		self.ChoiceSeq = self.ChoiceSeq + 1
+		self.RunState = "JOBSELECT"
+		log("[VRF] job select " .. tostring(self.ChoiceIds["1"]) .. " " .. tostring(self.ChoiceIds["2"]) .. " " .. tostring(self.ChoiceIds["3"]))
 	end
 
 	@ExecSpace("ServerOnly")
 	method void RollChoices()
-		-- 이번 판의 직업(5개) 중 서로 다른 3장을 뽑고, 장마다 등급을 정한다.
+		-- 레벨업 스킬 카드: 아직 최고 레벨이 아닌 직업 스킬 중 서로 다른 최대 3개. 다 배웠으면 바로 다음 몬스터.
 		local pool = {}
-		for i = 1, self.RunTraitSlots do
-			local id = self.RunTraits[tostring(i)]
-			if id ~= nil and id ~= "" then table.insert(pool, id) end
+		for _, sk in ipairs(self:JobSkills()) do
+			if (self.SkillLv[sk.id] or 0) < sk.max then table.insert(pool, sk.id) end
+		end
+		if #pool == 0 then
+			self.PendingPicks = 0
+			self:SpawnMonster()
+			return
 		end
 		for slot = 1, 3 do
-			if #pool == 0 then break end
-			local k = _UtilLogic:RandomIntegerRange(1, #pool)
-			self.ChoiceTrait[tostring(slot)] = pool[k]
-			self.ChoiceGrade[tostring(slot)] = self:RollGrade()
-			table.remove(pool, k)
-		end
-		if self.TestAlwaysTopGrade or (self.TestFirstPickTopGrade and not self._T.topGradeShown) then
-			self._T.topGradeShown = true
-			local top = #self._T.grades
-			self.ChoiceGrade[tostring(_UtilLogic:RandomIntegerRange(1, 3))] = top
-			log("[VRF] test: first choice forced top grade=" .. tostring(top))
+			local id = ""
+			if #pool > 0 then id = table.remove(pool, _UtilLogic:RandomIntegerRange(1, #pool)) end
+			self.ChoiceIds[tostring(slot)] = id
 		end
 		self.ChoiceSeq = self.ChoiceSeq + 1
 		self.RunState = "CHOICE"
-		log("[VRF] choices " .. tostring(self.ChoiceTrait["1"]) .. "(" .. tostring(self.ChoiceGrade["1"]) .. ") " .. tostring(self.ChoiceTrait["2"]) .. "(" .. tostring(self.ChoiceGrade["2"]) .. ") " .. tostring(self.ChoiceTrait["3"]) .. "(" .. tostring(self.ChoiceGrade["3"]) .. ") pending=" .. tostring(self.PendingPicks))
+		log("[VRF] skill choices " .. tostring(self.ChoiceIds["1"]) .. " " .. tostring(self.ChoiceIds["2"]) .. " " .. tostring(self.ChoiceIds["3"]) .. " pending=" .. tostring(self.PendingPicks))
 	end
 
 	@ExecSpace("ServerOnly")
-	method integer GradePoints(integer grade)
-		-- 등급별 직업 포인트 (일반 5 / 희귀 10 / 에픽 20 / 레전더리 45 / 미스틱 100).
-		for _, g in ipairs(self._T.grades) do
-			if g.grade == grade then return g.points end
+	method boolean HasSkillToLearn()
+		-- 최고 레벨이 아닌 직업 스킬이 남아 있는지 (없으면 레벨업 카드를 쌓지 않음).
+		for _, sk in ipairs(self:JobSkills()) do
+			if (self.SkillLv[sk.id] or 0) < sk.max then return true end
 		end
-		return 5
-	end
-
-	@ExecSpace("ServerOnly")
-	method void ApplyTraitPick(string traitId, integer grade)
-		-- 선택한 직업 카드의 포인트를 더한다. 어떤 직업이든 100포인트가 되면 그 직업의 다음 차수로 자동 전직하고,
-		-- 전직할 때마다 모든 직업 포인트를 0으로 초기화한다 (그래서 차수마다 다른 직업일 수 있음, 최대 4차).
-		local t = self._T.traitById[traitId]
-		if t == nil then return end
-		local pts = (self.TraitPoints[traitId] or 0) + self:GradePoints(grade)
-		self.TraitPoints[traitId] = pts
-		local advanced = false
-		if pts >= self.PointsPerJobTier and self.JobTier < self.MaxJobTier then
-			local tier = self.JobTier + 1
-			self.JobPath[tostring(tier)] = traitId
-			self.JobTrait = traitId
-			self.JobTier = tier
-			for _, other in ipairs(self._T.traits) do self.TraitPoints[other.id] = 0 end
-			advanced = true
-			local jobName = t.jobs[tier] or t.jobs[1]
-			local names = {}
-			for _, sk in ipairs(self:JobSkill(tier)) do table.insert(names, sk.name) end
-			local msg = tostring(tier) .. "차 전직! [" .. jobName .. "]"
-			if #names > 0 then msg = msg .. " 스킬: " .. table.concat(names, ", ") end
-			self:SetEnhanceMsg(msg)
-			-- 전직 전용 이펙트 (빛기둥 + 문양, 캐릭터를 따라감)
-			local player = self._T.player
-			if isvalid(player) then
-				_EffectService:PlayEffectAttached(self.JobChangeBackFxRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
-				_EffectService:PlayEffectAttached(self.JobChangeFrontFxRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
-			end
-			log("[VRF] job advance " .. traitId .. " tier=" .. tostring(tier) .. " " .. jobName .. " skills=" .. table.concat(names, ",") .. " points reset")
-		end
-		self:RecalcStats()
-		-- 전직하면 체력 가득
-		if advanced then self.PlayerHp = self.PlayerMaxHp end
-		log("[VRF] job pick " .. traitId .. " grade=" .. tostring(grade) .. " points=" .. tostring(pts))
+		return false
 	end
 
 	@ExecSpace("Server")
-	method void RequestConfirmDraft()
-		-- 판 시작 카드 펼침 확인: 전투 시작.
+	method void RequestPickJob(integer slot)
+		-- 판 시작 직업 선택 (1~3): 직업 무기로 갈아입고, 첫 스킬 카드(각인 '선행 학습'이면 더 많이)부터 시작.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
-		if self.RunState ~= "DRAFT" then return end
-		log("[VRF] draft confirmed pending=" .. tostring(self.PendingPicks))
-		-- 각인 '선행 학습'으로 시작 레벨이 높으면 그만큼 직업 카드 선택부터
+		if self.RunState ~= "JOBSELECT" then return end
+		local job = self._T.jobById[self.ChoiceIds[tostring(slot)] or ""]
+		if job == nil or not job.playable then return end
+		self.JobId = job.id
+		for _, sk in ipairs(self:JobSkills()) do self.SkillLv[sk.id] = 0 end
+		self:RecalcStats()
+		self:ApplyCostume()
+		self.PlayerHp = self.PlayerMaxHp
+		log("[VRF] job picked " .. job.id .. " pending=" .. tostring(self.PendingPicks))
 		if self.PendingPicks > 0 then
 			self:RollChoices()
 		else
@@ -699,17 +573,23 @@ script TowerRunManager extends Component
 
 	@ExecSpace("Server")
 	method void RequestPick(integer slot)
-		-- 레벨업 직업 카드 선택 (1~3). 남은 선택이 있으면 다시 3장, 없으면 다음 몬스터.
+		-- 레벨업 스킬 카드 선택 (1~3): 안 배운 스킬은 1레벨로 배우고, 배운 스킬은 +1레벨. 남은 선택이 있으면 다시 3장.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		if self.RunState ~= "CHOICE" then return end
-		local key = tostring(slot)
-		local traitId = self.ChoiceTrait[key]
-		if traitId == nil or traitId == "" then return end
-		self:ApplyTraitPick(traitId, self.ChoiceGrade[key] or 1)
+		local sk = self._T.skillById[self.ChoiceIds[tostring(slot)] or ""]
+		if sk == nil or sk.job ~= self.JobId then return end
+		local lv = self.SkillLv[sk.id] or 0
+		if lv >= sk.max then return end
+		self.SkillLv[sk.id] = lv + 1
+		if lv == 0 then
+			self:SetEnhanceMsg("스킬 [" .. sk.name .. "] 습득!")
+		else
+			self:SetEnhanceMsg(sk.name .. " Lv." .. tostring(lv + 1) .. " 강화!")
+		end
+		self:RecalcStats()
+		log("[VRF] skill pick " .. sk.id .. " lv=" .. tostring(lv + 1))
 		self.PendingPicks = math.max(0, self.PendingPicks - 1)
-		-- 이 선택으로 4차 전직을 마쳤으면 남은 선택은 버린다
-		if self.JobTier >= self.MaxJobTier then self.PendingPicks = 0 end
 		if self.PendingPicks > 0 then
 			self:RollChoices()
 		else
@@ -768,32 +648,37 @@ script TowerRunManager extends Component
 		-- 이번 공격에서 발동할 직업 스킬(공격 시 확률)을 정하고 결과(피해·회복·빙결·메소)를 미리 계산한다.
 		-- 실제 적용은 기본 타격과 같은 순간(TowerPlayer가 대기 타격을 적용할 때 ApplyJobProcs).
 		local list = {}
-		for tier = 1, self.JobTier do
-			for _, sk in ipairs(self:JobSkill(tier)) do
-				local p = sk.proc
-				-- 은총 '공격 시 발동 확률': 스킬 발동 확률에 합연산
-				if p ~= nil and _UtilLogic:RandomDouble() * 100 < p.chance + self:Bonus("ProcChance") then
-					local r = { name = sk.name, dmg = 0, hits = p.hits or 1, freeze = 0, heal = 0, meso = 0, crit = false, fx = p.fx, fxScale = p.fxScale }
-					local atk = self:RollPlayerAtk()
-					if p.type == "Strike" or p.type == "MesoStrike" or p.type == "Freeze" then
-						r.dmg = math.floor(self:PlayerHitDamage() * p.pct / 100 + 0.5)
-					elseif p.type == "CritStrike" then
-						r.dmg = math.floor(self:PlayerHitDamage() * p.pct / 100 * self.CritDmg / 100 + 0.5)
-						r.crit = true
-					elseif p.type == "Pierce" then
-						r.dmg = math.floor(atk * p.pct / 100 + 0.5)
-					elseif p.type == "Double" then
-						r.dmg = math.floor(self:PlayerHitDamage() * p.pct / 100 + 0.5)
-					elseif p.type == "Dice" then
-						r.dmg = math.floor(atk * (0.5 + _UtilLogic:RandomDouble() * 2.5) + 0.5)
-					elseif p.type == "Heal" then
-						r.heal = math.max(1, math.floor(self.PlayerMaxHp * p.pct / 100 + 0.5))
-					end
-					if p.type == "Freeze" then r.freeze = self.JobFreezeSec end
-					if p.type == "MesoStrike" then r.meso = math.max(1, math.floor(self:KillMeso() * self.JobMesoStrikeRatio + 0.5)) end
-					if r.dmg > 0 then r.dmg = math.max(1, r.dmg) end
-					table.insert(list, r)
+		for _, sk in ipairs(self:JobSkills()) do
+			local p = sk.proc
+			local lv = self.SkillLv[sk.id] or 0
+			-- 확률·계수 = 1레벨 값 + 레벨당 증가 × (레벨 - 1). 은총 '공격 시 발동 확률'은 확률에 합연산
+			local chance = 0
+			local pct = 0
+			if p ~= nil and lv > 0 then
+				chance = p.chance + p.chancePer * (lv - 1)
+				pct = p.pct + p.pctPer * (lv - 1)
+			end
+			if p ~= nil and lv > 0 and _UtilLogic:RandomDouble() * 100 < chance + self:Bonus("ProcChance") then
+				local r = { name = sk.name, dmg = 0, hits = p.hits or 1, freeze = 0, heal = 0, meso = 0, crit = false, fx = p.fx, fxScale = p.fxScale }
+				local atk = self:RollPlayerAtk()
+				if p.type == "Strike" or p.type == "MesoStrike" or p.type == "Freeze" then
+					r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 + 0.5)
+				elseif p.type == "CritStrike" then
+					r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 * self.CritDmg / 100 + 0.5)
+					r.crit = true
+				elseif p.type == "Pierce" then
+					r.dmg = math.floor(atk * pct / 100 + 0.5)
+				elseif p.type == "Double" then
+					r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 + 0.5)
+				elseif p.type == "Dice" then
+					r.dmg = math.floor(atk * (0.5 + _UtilLogic:RandomDouble() * 2.5) + 0.5)
+				elseif p.type == "Heal" then
+					r.heal = math.max(1, math.floor(self.PlayerMaxHp * pct / 100 + 0.5))
 				end
+				if p.type == "Freeze" then r.freeze = self.JobFreezeSec end
+				if p.type == "MesoStrike" then r.meso = math.max(1, math.floor(self:KillMeso() * self.JobMesoStrikeRatio + 0.5)) end
+				if r.dmg > 0 then r.dmg = math.max(1, r.dmg) end
+				table.insert(list, r)
 			end
 		end
 		return list
@@ -858,33 +743,6 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
-	method void UpdateSkillCosts()
-		-- 스킬 강화 비용 = 테이블 CostBase (현재 전부 1개 고정)
-		for _, s in ipairs(self._T.skills) do
-			self.SkillCost[s.id] = s.cost
-		end
-	end
-
-	@ExecSpace("ServerOnly")
-	method void UpdateSkillUnlocks(boolean announce)
-		-- 레벨에 도달한 스킬을 1레벨로 해금한다.
-		local changed = false
-		for _, s in ipairs(self._T.skills) do
-			local lv = self.SkillLv[s.id] or 0
-			if lv == 0 and self.Level >= s.unlock then
-				self.SkillLv[s.id] = 1
-				changed = true
-				if announce then self:SetEnhanceMsg("스킬 [" .. s.name .. "] 해금!") end
-				log("[VRF] skill unlocked " .. s.id .. " at Lv" .. tostring(self.Level))
-			elseif self.SkillLv[s.id] == nil then
-				self.SkillLv[s.id] = 0
-			end
-		end
-		self:UpdateSkillCosts()
-		if changed then self:RecalcStats() end
-	end
-
-	@ExecSpace("ServerOnly")
 	method void SignalFx(string target, boolean ok)
 		-- 클라이언트 강화 성공/실패 이펙트 신호.
 		self.FxTarget = target
@@ -941,15 +799,45 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method table EquipRow(string slot, integer tier)
+		-- 장비 단계 정보. 직업 전용 줄이 있으면 이름·외형만 그 직업 것으로 (수치·비용은 공용 줄).
+		-- 직업 전용 외형(ItemRUID)이 비어 있으면 공용 외형을 쓴다 (own = false).
+		local row = self._T.equip[slot][tier]
+		if row == nil then return nil end
+		local jobRows = self._T.jobEquip[self.JobId]
+		local jr = nil
+		if jobRows ~= nil and jobRows[slot] ~= nil then jr = jobRows[slot][tier] end
+		if jr == nil then return { name = row.name, ruid = row.ruid, value = row.value, cost = row.cost, own = false } end
+		local own = jr.ruid ~= ""
+		local ruid = row.ruid
+		if own then ruid = jr.ruid end
+		return { name = jr.name, ruid = ruid, value = row.value, cost = row.cost, own = own }
+	end
+
+	@ExecSpace("ServerOnly")
 	method void ApplyCostume()
-		-- 현재 장비 단계의 아바타 아이템을 캐릭터에 입힌다.
+		-- 현재 장비 단계의 아바타 아이템을 캐릭터에 입힌다. 무기는 직업 무기 종류(한손/두손)에 맞는 칸에 입히고 다른 칸은 비운다.
 		local player = self._T.player
 		if not isvalid(player) or not isvalid(player.CostumeManagerComponent) then return end
 		local cm = player.CostumeManagerComponent
 		local cats = { Weapon = MapleAvatarItemCategory.OneHandedWeapon, Cap = MapleAvatarItemCategory.Cap, Coat = MapleAvatarItemCategory.Coat, Glove = MapleAvatarItemCategory.Glove, Shoes = MapleAvatarItemCategory.Shoes, Cape = MapleAvatarItemCategory.Cape }
 		for _, slot in ipairs(self._T.slots) do
-			local row = self._T.equip[slot][self.EquipTier[slot] or 1]
-			if self.EquipUnlocked[slot] == 1 and row ~= nil and row.ruid ~= "" then cm:SetEquip(cats[slot], row.ruid) end
+			local row = self:EquipRow(slot, self.EquipTier[slot] or 1)
+			if self.EquipUnlocked[slot] == 1 and row ~= nil and row.ruid ~= "" then
+				if slot == "Weapon" then
+					local job = self._T.jobById[self.JobId]
+					local twoHanded = row.own and job ~= nil and job.weaponCat == "TwoHanded"
+					if twoHanded then
+						cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, "")
+						cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, row.ruid)
+					else
+						cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, "")
+						cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, row.ruid)
+					end
+				else
+					cm:SetEquip(cats[slot], row.ruid)
+				end
+			end
 		end
 	end
 
@@ -1054,7 +942,7 @@ script TowerRunManager extends Component
 	method void RecalcStats()
 		-- 레벨·장비로 능력치를 다시 계산한다. 최대 HP 증가분만큼 현재 HP도 올린다.
 		local oldMax = self.PlayerMaxHp
-		-- 패시브 스킬 + 직업 스킬 + 각인 (Bonus). 전직 자체로 오르는 기본 스탯은 없음
+		-- 직업 스킬 + 각인 등 (Bonus)
 		local weapon = self:EquipStat("Weapon") * (1 + self:Bonus("WeaponPct") / 100)
 		local armorMul = 1 + self:Bonus("ArmorPct") / 100
 		local atk = self.BasePlayerAtk + self.LevelAtkBonus * (self.Level - 1) + weapon
@@ -1072,7 +960,6 @@ script TowerRunManager extends Component
 		self.CritDmg = self.BaseCritDmg + self:EquipStat("Shoes") + self:Bonus("CritDmg")
 		self.Accuracy = self:EquipStat("Cape") + self:Bonus("Acc")
 		self.EnhanceBonus = self:Bonus("EnhRate")
-		self.SkillRateBonus = self:Bonus("SkillRate")
 		if oldMax > 0 and self.PlayerMaxHp > oldMax then
 			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + (self.PlayerMaxHp - oldMax))
 		end
@@ -1108,22 +995,19 @@ script TowerRunManager extends Component
 			self.EquipEnh[slot] = 0
 		end
 		self:UpdateUnlocks(false)
-		-- 스킬도 판 안 성장: 전부 0레벨로 되돌린 뒤 현재 레벨(1)로 해금
-		self.Stones = 0
 		self._T.undyingUsed = false
 		self._T.lastStandUsed = false
-		self._T.topGradeShown = false
 		self._T.deal = {}
 		self._T.curses = {}
 		self.CurseText = ""
 		self._T.extraHitTimer = 0
-		for _, s in ipairs(self._T.skills) do self.SkillLv[s.id] = 0 end
-		-- 직업 포인트·전직 초기화 + 이번 판의 직업 5개 뽑기
-		self:DrawRunTraits()
-		self.PendingPicks = startLevel - 1
+		-- 직업·직업 스킬 초기화 (직업은 판 시작 화면에서 고름)
+		self.JobId = ""
+		for id, _ in pairs(self._T.skillById) do self.SkillLv[id] = 0 end
+		-- 직업을 고르면 첫 스킬 카드 1장 + 각인 '선행 학습' 시작 레벨만큼 더
+		self.PendingPicks = startLevel
 		self.Rerolls = math.floor(self:Bonus("Reroll"))
 		self.PlayerMaxHp = 0
-		self:UpdateSkillUnlocks(false)
 		self:RecalcStats()
 		self:ApplyCostume()
 		self.PlayerHp = self.PlayerMaxHp
@@ -1135,8 +1019,8 @@ script TowerRunManager extends Component
 			player.PlayerComponent:SetWorldPosition(self.PlayerPos)
 		end
 		log("[VRF] run start floor=1 lv=" .. tostring(self.Level) .. " meso=" .. tostring(self.Meso) .. " rerolls=" .. tostring(self.Rerolls) .. " atk=" .. tostring(self.PlayerAtk) .. " hp=" .. tostring(self.PlayerHp))
-		-- 운명 카드 펼침을 보여주고, 확인을 누르면(RequestConfirmDraft) 전투 시작
-		self.RunState = "DRAFT"
+		-- 직업 선택 카드를 보여주고, 고르면(RequestPickJob) 스킬 카드 → 전투 시작
+		self:RollJobChoices()
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1237,12 +1121,6 @@ script TowerRunManager extends Component
 		-- 이 층 심볼: 메소·경험치 증가
 		local symGain = 1 + (self._T.symGain or 0) / 100
 		local meso = math.max(1, math.floor(self:KillMeso() * rewardMul * mesoRate * (1 + self:Bonus("MesoPct") / 100) * symGain + 0.5))
-		-- 스킬석: 몬스터 처치 시 50% 확률로 1개
-		local stones = 0
-		if _UtilLogic:RandomDouble() * 100 < self.StoneDropChance + self:Bonus("StoneChance") then
-			stones = 1
-		end
-		self.Stones = self.Stones + stones
 		local exp = math.floor(self.BaseExpReward * (self.ExpGrowth ^ (self.Floor - 1)) * rewardMul * (1 + self:Bonus("ExpPct") / 100) * symGain + 0.5)
 		self.Meso = self.Meso + meso
 		self.RunMeso = self.RunMeso + meso
@@ -1263,13 +1141,15 @@ script TowerRunManager extends Component
 			self.Level = self.Level + 1
 			self.ExpToNext = math.floor(self.BaseExpToNext * (self.ExpToNextGrowth ^ (self.Level - 1)) + 0.5)
 			leveled = true
-			-- 레벨업마다 직업 카드 선택 1회 (다음 몬스터가 나오기 전에). 4차 전직을 마치면 더는 나오지 않음
-			if self.JobTier < self.MaxJobTier then self.PendingPicks = self.PendingPicks + 1 end
+			-- 레벨업마다 스킬 카드 선택 1회 (다음 몬스터가 나오기 전에), 각인·은총 확률로 1회 더. 모든 스킬이 최고 레벨이면 없음
+			if self:HasSkillToLearn() then
+				self.PendingPicks = self.PendingPicks + 1
+				if _UtilLogic:RandomDouble() * 100 < self:Bonus("ExtraPick") then self.PendingPicks = self.PendingPicks + 1 end
+			end
 		end
 		if leveled then
 			self:RecalcStats()
-			-- 레벨업 시 체력 최대 회복 + 스킬 해금
-			self:UpdateSkillUnlocks(true)
+			-- 레벨업 시 체력 최대 회복
 			self.PlayerHp = self.PlayerMaxHp
 			-- 메이플 레벨업 이펙트 (effect/basiceff.img/LevelUp_Fast)를 캐릭터에 붙여 재생
 			local player = self._T.player
@@ -1282,7 +1162,7 @@ script TowerRunManager extends Component
 			end
 			log("[VRF] level up -> Lv" .. tostring(self.Level) .. " atk=" .. tostring(self.PlayerAtk) .. " maxHp=" .. tostring(self.PlayerMaxHp))
 		end
-		log("[VRF] reward meso+" .. tostring(meso) .. " exp+" .. tostring(exp) .. " stones+" .. tostring(stones) .. " total meso=" .. tostring(self.Meso) .. " stones=" .. tostring(self.Stones))
+		log("[VRF] reward meso+" .. tostring(meso) .. " exp+" .. tostring(exp) .. " total meso=" .. tostring(self.Meso) .. " picks=" .. tostring(self.PendingPicks))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1521,7 +1401,7 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void ApplyDeal(table d)
-		-- 거래 효과 적용: 즉시 효과(회복·체력 소모·스킬석·메소)와 이번 판 능력치, 기간제 대가.
+		-- 거래 효과 적용: 즉시 효과(회복·체력 소모·스킬 카드 선택·메소)와 이번 판 능력치, 기간제 대가.
 		local healed = 0
 		for _, e in ipairs(d.effects) do
 			if e.type == "Heal" then
@@ -1530,8 +1410,9 @@ script TowerRunManager extends Component
 				healed = healed + (self.PlayerHp - before)
 			elseif e.type == "HpCost" then
 				self.PlayerHp = math.max(1, self.PlayerHp - math.floor(self.PlayerHp * e.value / 100 + 0.5))
-			elseif e.type == "Stones" then
-				self.Stones = self.Stones + math.floor(e.value)
+			elseif e.type == "SkillPick" then
+				-- 스킬 카드 선택 횟수 (거래 뒤 ContinueAfterReward에서 카드가 나옴)
+				if self:HasSkillToLearn() then self.PendingPicks = self.PendingPicks + math.floor(e.value) end
 			elseif e.type == "MesoGain" then
 				local gain = math.floor(self:KillMeso() * e.value + 0.5)
 				self.Meso = self.Meso + gain
@@ -1581,7 +1462,7 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void ContinueAfterReward()
-		-- 보상(거래) 처리 후: 쌓인 직업 카드 선택이 있으면 카드, 없으면 다음 몬스터.
+		-- 보상(거래) 처리 후: 쌓인 스킬 카드 선택이 있으면 카드, 없으면 다음 몬스터.
 		if self.PendingPicks > 0 then
 			self:RollChoices()
 		else
@@ -1611,7 +1492,7 @@ script TowerRunManager extends Component
 		end
 		local tier = self.EquipTier[slot] or 1
 		local enh = self.EquipEnh[slot] or 0
-		local row = list[tier]
+		local row = self:EquipRow(slot, tier)
 		local cost = self.EquipCost[slot] or 0
 		if enh >= self.MaxEnhance and list[tier + 1] == nil then
 			self:SetEnhanceMsg(row.name .. " : 최고 등급입니다")
@@ -1626,7 +1507,7 @@ script TowerRunManager extends Component
 			self.EquipTier[slot] = tier + 1
 			self.EquipEnh[slot] = 0
 			self:ApplyCostume()
-			self:SetEnhanceMsg(list[tier + 1].name .. " (으)로 업그레이드!")
+			self:SetEnhanceMsg(self:EquipRow(slot, tier + 1).name .. " (으)로 업그레이드!")
 			self:SignalFx(slot, true)
 		else
 			local rate = math.max(0, self.EnhanceBaseRate - self.EnhanceRateStep * enh) + self.EnhanceBonus
@@ -1639,45 +1520,6 @@ script TowerRunManager extends Component
 				self:SignalFx(slot, false)
 			end
 		end
-		self:RecalcStats()
-	end
-
-	@ExecSpace("Server")
-	method void RequestSkillEnhance(string skillId)
-		-- 스킬 강화 요청: 스킬석 소모, 성공 확률 50%에서 레벨마다 5%씩 감소 (장비보다 2배 이상 어렵게), 실패 시 레벨 유지.
-		local player = self._T.player
-		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
-		if self.RunState ~= "FIGHT" and self.RunState ~= "CLEAR" then return end
-		local skill = nil
-		for _, s in ipairs(self._T.skills) do
-			if s.id == skillId then skill = s end
-		end
-		if skill == nil then return end
-		local lv = self.SkillLv[skillId] or 0
-		if lv <= 0 then
-			self:SetEnhanceMsg("Lv." .. tostring(skill.unlock) .. " 달성 시 해금되는 스킬입니다")
-			return
-		end
-		if lv >= self.SkillMaxLevel then
-			self:SetEnhanceMsg(skill.name .. " : 최고 레벨입니다")
-			return
-		end
-		local cost = self.SkillCost[skillId] or 1
-		if self.Stones < cost then
-			self:SetEnhanceMsg("스킬석이 부족합니다 (" .. tostring(cost) .. " 필요)")
-			return
-		end
-		self.Stones = self.Stones - cost
-		local rate = math.max(5, self.SkillBaseRate - self.SkillRateStep * (lv - 1)) + self.SkillRateBonus
-		local ok = _UtilLogic:RandomDouble() * 100 < rate
-		if ok then
-			self.SkillLv[skillId] = lv + 1
-			self:SetEnhanceMsg(skill.name .. " Lv." .. tostring(lv + 1) .. " 강화 성공!")
-		else
-			self:SetEnhanceMsg(skill.name .. " 강화 실패 (Lv." .. tostring(lv) .. " 유지)")
-		end
-		self:SignalFx("skill:" .. skillId, ok)
-		self:UpdateSkillCosts()
 		self:RecalcStats()
 	end
 
@@ -1827,7 +1669,7 @@ script TowerRunManager extends Component
 						self:SetEnhanceMsg("각인 포인트 +1! (총 " .. tostring(self.Floor - 1) .. ")")
 					end
 				end
-				-- 보스를 잡았으면 거래부터, 그다음 레벨업으로 쌓인 직업 카드 선택, 없으면 바로 다음 몬스터
+				-- 보스를 잡았으면 거래부터, 그다음 레벨업으로 쌓인 스킬 카드 선택, 없으면 바로 다음 몬스터
 				if bossCleared then
 					self:RollDeals()
 				else

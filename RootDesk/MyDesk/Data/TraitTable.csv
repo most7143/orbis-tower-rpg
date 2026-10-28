@@ -1,16 +1,16 @@
-﻿Id,Family,FamilyName,Name,Job1,Job2,Job3,Job4,FamilyColor
-Hero,Warrior,전사,히어로,검사,파이터,크루세이더,히어로,#E74C3C
-Paladin,Warrior,전사,팔라딘,검사,페이지,나이트,팔라딘,#E74C3C
-DarkKnight,Warrior,전사,다크나이트,검사,스피어맨,버서커,다크나이트,#E74C3C
-FirePoison,Mage,마법사,불·독,매지션,위자드(불·독),메이지(불·독),아크메이지(불·독),#2E86DE
-IceLightning,Mage,마법사,썬·콜,매지션,위자드(썬·콜),메이지(썬·콜),아크메이지(썬·콜),#2E86DE
-Bishop,Mage,마법사,비숍,매지션,클레릭,프리스트,비숍,#2E86DE
-Bowmaster,Archer,궁수,보우마스터,아처,헌터,레인저,보우마스터,#27AE60
-Marksman,Archer,궁수,신궁,아처,사수,저격수,신궁,#27AE60
-Pathfinder,Archer,궁수,패스파인더,아처,에인션트 아처,체이서,패스파인더,#27AE60
-NightLord,Thief,도적,나이트로드,로그,어쌔신,허밋,나이트로드,#8E44AD
-Shadower,Thief,도적,섀도어,로그,시프,시프마스터,섀도어,#8E44AD
-DualBlade,Thief,도적,듀얼블레이드,듀얼블레이드,듀어러,슬래셔,듀얼블레이더,#8E44AD
-Viper,Pirate,해적,바이퍼,해적,인파이터,버커니어,바이퍼,#17A2B8
-Captain,Pirate,해적,캡틴,해적,건슬링거,발키리,캡틴,#17A2B8
-CannonMaster,Pirate,해적,캐논마스터,해적,캐논슈터,캐논블래스터,캐논마스터,#17A2B8
+﻿Id,Family,FamilyName,Name,Weapon,WeaponCat,Playable,Keyword,FamilyColor
+Hero,Warrior,전사,히어로,양손검,TwoHanded,1,검술 · 콤보,#E74C3C
+Paladin,Warrior,전사,팔라딘,한손둔기,OneHanded,1,성검 · 수호,#E74C3C
+DarkKnight,Warrior,전사,다크나이트,창,TwoHanded,1,창술 · 드래곤,#E74C3C
+FirePoison,Mage,마법사,불·독,완드,OneHanded,0,화독,#2E86DE
+IceLightning,Mage,마법사,썬·콜,완드,OneHanded,0,빙뢰,#2E86DE
+Bishop,Mage,마법사,비숍,완드,OneHanded,0,신성,#2E86DE
+Bowmaster,Archer,궁수,보우마스터,활,TwoHanded,0,속사,#27AE60
+Marksman,Archer,궁수,신궁,석궁,TwoHanded,0,저격,#27AE60
+Pathfinder,Archer,궁수,패스파인더,에인션트 보우,TwoHanded,0,렐릭,#27AE60
+NightLord,Thief,도적,나이트로드,아대,TwoHanded,0,표창술,#8E44AD
+Shadower,Thief,도적,섀도어,단검,OneHanded,0,암살 · 메소,#8E44AD
+DualBlade,Thief,도적,듀얼블레이드,단검,OneHanded,0,쌍검,#8E44AD
+Viper,Pirate,해적,바이퍼,너클,TwoHanded,0,권법,#17A2B8
+Captain,Pirate,해적,캡틴,건,TwoHanded,0,총술,#17A2B8
+CannonMaster,Pirate,해적,캐논마스터,핸드캐논,TwoHanded,0,포격,#17A2B8
