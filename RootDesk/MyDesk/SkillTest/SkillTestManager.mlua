@@ -47,7 +47,7 @@ script SkillTestManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void LoadTables()
-		-- skills[특성 Id][차수] = { {name, desc, type, pct, hits, fx, fxScale}, ... } (이펙트 RUID가 있는 스킬만)
+		-- skills[직업 Id][차수] = { {name, desc, type, pct, hits, fx, fxScale}, ... } (이펙트 RUID가 있는 스킬만)
 		self._T.skills = {}
 		self._T.fxCount = 0
 		local js = _DataService:GetTable(self.JobSkillTableName)
@@ -162,7 +162,7 @@ script SkillTestManager extends Component
 
 	@ExecSpace("Server")
 	method void RequestPlayJob(string traitId, integer tier, string jobName)
-		-- 직업 버튼: 그 직업(특성·차수)의 이펙트 스킬을 하나씩 재생한다. 재생 중이면 끊고 새로 시작.
+		-- 직업 버튼: 그 직업(직업 Id·차수)의 이펙트 스킬을 하나씩 재생한다. 재생 중이면 끊고 새로 시작.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		self:ClearTimers()

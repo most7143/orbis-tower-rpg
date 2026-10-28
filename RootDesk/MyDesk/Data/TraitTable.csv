@@ -1,22 +1,16 @@
-﻿Id,No,Roman,Arcana,Family,FamilyName,Trait,Job1,Job2,Job3,BaseStat,Eff1,Eff1Val,Eff2,Eff2Val,IconRUID,FamilyColor
-Strength,8,VIII,힘,Warrior,전사,투지,투사,워리어,워로드,Atk,AtkPct,8,HpPct,5,e4acdf27d68549db8858d6082169c70c,#E74C3C
-HangedMan,12,XII,매달린 사람,Warrior,전사,불굴,수호기사,나이트,팔라딘,Def,DefPct,15,HpPct,8,52162587bc534b9385af8c77513d93d4,#E74C3C
-Tower,16,XVI,탑,Warrior,전사,광기,광전사,버서커,디스트로이어,Hp,Speed,6,AtkPct,5,38a6aefef6784c42967a997795dba30f,#E74C3C
-Hermit,9,IX,은둔자,Archer,궁수,집중,저격수,스나이퍼,호크아이,Atk,Crit,4,Acc,4,001f3ba60bc14bfeb7217505f847ba10,#27AE60
-Moon,18,XVIII,달,Archer,궁수,야성,사냥꾼,헌터,비스트마스터,Atk,CritDmg,15,AtkPct,4,360acfc5aab24a019e1b32a514bb305f,#27AE60
-Chariot,7,VII,전차,Archer,궁수,속사,연사수,레인저,윈드러너,Hp,Speed,7,Acc,3,b23232e4346a47ba895f998227058aa8,#27AE60
-Death,13,XIII,죽음,Thief,도적,암영,암살자,어쌔신,리퍼,Atk,CritDmg,12,Crit,3,0de196459cc24cb595b002d0926b0895,#8E44AD
-Lovers,6,VI,연인,Thief,도적,연격,쌍검사,듀얼리스트,블레이드마스터,Atk,DoubleHit,6,Speed,4,8811072a9bfb4e45be2ada7f365a1b69,#8E44AD
-Devil,15,XV,악마,Thief,도적,탐욕,그림자도둑,섀도어,나이트로드,Def,MesoPct,15,Crit,2,f18bb940bede467a93af2bb582e409b7,#8E44AD
-Magician,1,I,마술사,Mage,마법사,열화,화염술사,파이어 메이지,소서러,Atk,AtkPct,6,CritDmg,10,6ac2d9fe57f94952acb01b7a053f538e,#2E86DE
-Priestess,2,II,여사제,Mage,마법사,냉기,빙결술사,아이스 메이지,아크메이지,Def,DefPct,10,Mastery,5,84ba18ffe9644d7b807449b6b586154d,#2E86DE
-Hierophant,5,V,교황,Mage,마법사,신성,성직자,프리스트,비숍,Hp,HpPct,10,Lifesteal,4,a310d7b9e8324d0984de23515cc2789f,#2E86DE
-Sun,19,XIX,태양,Pirate,해적,근성,권투가,브롤러,타이탄,Hp,HpPct,8,Speed,4,05a532dcac6f4e789bb8e6d74854e042,#17A2B8
-Judgement,20,XX,심판,Pirate,해적,정조준,총잡이,건슬링거,건마스터,Atk,Acc,6,Mastery,5,77e281e328a04f9e9e817a7ba913fd68,#17A2B8
-Emperor,4,IV,황제,Pirate,해적,호령,선장,캡틴,아드미럴,Atk,MesoPct,10,AtkPct,4,0adc3d82099740a2870e7db192a31696,#17A2B8
-Empress,3,III,여황제,Merchant,상인,상술,상인,머천트,그랜드 머천트,Def,MesoPct,20,EquipCostDown,5,0bc56bdb2ba54b3dbdf43ff07cddb57f,#F5B041
-World,21,XXI,세계,Merchant,상인,흥정,행상인,트레이더,길드마스터,Hp,EquipCostDown,8,StoneChance,5,32c36f370b4c46368e72c2e75770e1ab,#F5B041
-Wheel,10,X,운명의 수레바퀴,Merchant,상인,행운,도박사,갬블러,하이롤러,Def,EnhRate,3,Crit,2,1a56f79f451741e0a02efbfc574fa9af,#F5B041
-Temperance,14,XIV,절제,Smith,대장장이,단조,무기장인,웨폰스미스,마스터 스미스,Atk,WeaponPct,15,Mastery,4,12c952b779ae4af8a31a1830b38b3444,#A0522D
-Justice,11,XI,정의,Smith,대장장이,담금질,방어구장인,아머스미스,아머마스터,Def,ArmorPct,15,DefPct,5,50d0cbdb59cc4ca08ff6a9974b552444,#A0522D
-Star,17,XVII,별,Smith,대장장이,각인,룬세공사,룬 위버,룬 마스터,Hp,ExpPct,10,SkillRate,3,8b1d3abf55b2449ba580eaf8a575b33a,#A0522D
+﻿Id,Family,FamilyName,Name,Job1,Job2,Job3,Job4,FamilyColor
+Hero,Warrior,전사,히어로,검사,파이터,크루세이더,히어로,#E74C3C
+Paladin,Warrior,전사,팔라딘,검사,페이지,나이트,팔라딘,#E74C3C
+DarkKnight,Warrior,전사,다크나이트,검사,스피어맨,버서커,다크나이트,#E74C3C
+FirePoison,Mage,마법사,불·독,매지션,위자드(불·독),메이지(불·독),아크메이지(불·독),#2E86DE
+IceLightning,Mage,마법사,썬·콜,매지션,위자드(썬·콜),메이지(썬·콜),아크메이지(썬·콜),#2E86DE
+Bishop,Mage,마법사,비숍,매지션,클레릭,프리스트,비숍,#2E86DE
+Bowmaster,Archer,궁수,보우마스터,아처,헌터,레인저,보우마스터,#27AE60
+Marksman,Archer,궁수,신궁,아처,사수,저격수,신궁,#27AE60
+Pathfinder,Archer,궁수,패스파인더,아처,에인션트 아처,체이서,패스파인더,#27AE60
+NightLord,Thief,도적,나이트로드,로그,어쌔신,허밋,나이트로드,#8E44AD
+Shadower,Thief,도적,섀도어,로그,시프,시프마스터,섀도어,#8E44AD
+DualBlade,Thief,도적,듀얼블레이드,듀얼블레이드,듀어러,슬래셔,듀얼블레이더,#8E44AD
+Viper,Pirate,해적,바이퍼,해적,인파이터,버커니어,바이퍼,#17A2B8
+Captain,Pirate,해적,캡틴,해적,건슬링거,발키리,캡틴,#17A2B8
+CannonMaster,Pirate,해적,캐논마스터,해적,캐논슈터,캐논블래스터,캐논마스터,#17A2B8
