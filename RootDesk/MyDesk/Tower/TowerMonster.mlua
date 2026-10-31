@@ -146,7 +146,10 @@ script TowerMonster extends AttackComponent
 		local map = self.Entity.CurrentMap
 		if isvalid(map) then
 			local mgr = map:GetComponent("script.TowerRunManager")
-			if mgr ~= nil then mgr:ApplyMonsterDamage(event.TotalDamage) end
+			if mgr ~= nil then
+				mgr:ApplyMonsterDamage(event.TotalDamage)
+				if event.IsCritical then mgr:OnPlayerCrit() end
+			end
 		end
 		-- 처치된 타격이면 PlayDie에서 사망 사운드, 아니면 피격 사운드
 		if not self.IsDead then self:PlaySfx(self.HitSoundRUID) end

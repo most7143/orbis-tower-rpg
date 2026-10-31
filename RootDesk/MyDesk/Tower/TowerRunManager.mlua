@@ -155,6 +155,17 @@ script TowerRunManager extends Component
 	-- 카드 선택: JOBSELECT = 직업 Id 3장, CHOICE = 직업 스킬 Id 최대 3장 ("1"~"3", 빈 칸은 "")
 	@Sync
 	property SyncTable<string, string> ChoiceIds
+	-- 카드별 내용: learn(신규 습득) / break(돌파) / 별 옵션 Id
+	@Sync
+	property SyncTable<string, string> ChoiceOpts
+	-- 스킬별 고른 돌파 옵션 Id 목록 ("a,b") / 스킬 목록에 표시할 옵션 요약
+	@Sync
+	property SyncTable<string, string> SkillBreaks
+	@Sync
+	property SyncTable<string, string> SkillInfo
+	-- 돌파 옵션 화면을 보고 있는 스킬
+	@Sync
+	property string BreakSkill = ""
 	@Sync
 	property integer ChoiceSeq = 0
 	@Sync
@@ -414,15 +425,17 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method number SkillValue(string skillType)
-		-- 배운 직업 스킬의 능력치 효과 합계 (안 배웠으면 0). 수치 = 1레벨 값 + 레벨당 증가 × (레벨 - 1)
-		local total = 0
+		-- 배운 패시브의 기본 효과 + 이번 판에 얻은 별·돌파 옵션 + 지금 지속 중인 버프 합계.
+		local total = (self._T.runBonus or {})[skillType] or 0
 		for _, sk in ipairs(self:JobSkills()) do
-			local lv = self.SkillLv[sk.id] or 0
-			if lv > 0 then
+			if sk.trigger == "Passive" and (self.SkillLv[sk.id] or 0) > 0 then
 				for _, e in ipairs(sk.effects) do
-					if e.type == skillType then total = total + e.base + e.per * (lv - 1) end
+					if e.type == skillType then total = total + e.base end
 				end
 			end
+		end
+		for _, b in ipairs(self._T.buffs or {}) do
+			if b.key == skillType then total = total + b.value end
 		end
 		return total
 	end
@@ -436,54 +449,98 @@ script TowerRunManager extends Component
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
 				local j = { id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), weapon = ds:GetCell(i, "Weapon") or "",
-					weaponCat = ds:GetCell(i, "WeaponCat") or "OneHanded", playable = (tonumber(ds:GetCell(i, "Playable")) or 0) == 1 }
+					weaponCat = ds:GetCell(i, "WeaponCat") or "OneHanded", weaponFamily = ds:GetCell(i, "WeaponFamily") or "O", family = ds:GetCell(i, "Family") or "", playable = (tonumber(ds:GetCell(i, "Playable")) or 0) == 1 }
 				self._T.jobById[j.id] = j
 				if j.playable then table.insert(self._T.playableJobs, j.id) end
 			end
 		end
-		-- 직업 스킬: jobSkills[직업 Id] = 표 순서대로 스킬 목록
-		-- 스킬 = { id, name, max, effects = { {type, base, per}, ... }, proc = { type, chance, chancePer, pct, pctPer, hits, fx, fxScale } }
+		-- 스킬 표: 기본(JobSkillTable) + 연출(SkillActionTable) + 돌파(SkillBreakTable) + 별 옵션(SkillStarOptionTable)
 		self._T.jobSkills = {}
 		self._T.skillById = {}
+		local actions = {}
+		local at = _DataService:GetTable("SkillActionTable")
+		if at ~= nil then
+			for i = 1, at:GetRowCount() do
+				actions[at:GetCell(i, "SkillId")] = { frames = at:GetCell(i, "ActionFrames") or "", time = tonumber(at:GetCell(i, "ActionTime")) or 0.8, caster = at:GetCell(i, "CasterFx") or "", hit = at:GetCell(i, "HitFx") or "", scale = tonumber(at:GetCell(i, "FxScale")) or 1 }
+			end
+		end
 		local js = _DataService:GetTable(self.JobSkillTableName)
 		if js ~= nil then
 			for i = 1, js:GetRowCount() do
 				local job = js:GetCell(i, "JobId")
+				local id = js:GetCell(i, "SkillId")
 				local effects = {}
 				for k = 1, 2 do
 					local ty = js:GetCell(i, "Type" .. tostring(k))
-					if ty ~= nil and ty ~= "" then
-						table.insert(effects, { type = ty, base = tonumber(js:GetCell(i, "V" .. tostring(k))) or 0, per = tonumber(js:GetCell(i, "V" .. tostring(k) .. "Per")) or 0 })
-					end
+					if ty ~= nil and ty ~= "" then table.insert(effects, { type = ty, base = tonumber(js:GetCell(i, "V" .. tostring(k))) or 0 }) end
 				end
-				-- 공격 시 발동형: ProcType(Strike/CritStrike/Pierce/Double/Freeze/Heal/MesoStrike/Dice), 확률 %, 수치 % (레벨마다 증가)
+				-- 액티브: ProcType(Strike/CritStrike/Pierce/Double/Freeze/Heal/MesoStrike/Dice/Buff), 확률 %, 계수 %, 타수
 				local proc = nil
 				local pt = js:GetCell(i, "ProcType")
 				if pt ~= nil and pt ~= "" then
-					-- ProcHits: 연타 수 (0이면 Double은 2, 나머지는 1)
 					local hits = tonumber(js:GetCell(i, "ProcHits")) or 0
 					if hits <= 0 then
 						hits = 1
 						if pt == "Double" then hits = 2 end
 					end
-					proc = { type = pt, chance = tonumber(js:GetCell(i, "Chance")) or 0, chancePer = tonumber(js:GetCell(i, "ChancePer")) or 0,
-						pct = tonumber(js:GetCell(i, "Pct")) or 0, pctPer = tonumber(js:GetCell(i, "PctPer")) or 0, hits = hits,
-						fx = js:GetCell(i, "EffectRUID") or "", fxScale = tonumber(js:GetCell(i, "EffectScale")) or 1 }
+					local a = actions[id] or { frames = "", time = 0.8, caster = "", hit = "", scale = 1 }
+					proc = { type = pt, chance = tonumber(js:GetCell(i, "Chance")) or 0, pct = tonumber(js:GetCell(i, "Pct")) or 0, hits = hits,
+						fx = a.hit, fxScale = a.scale, actionFrames = a.frames, actionTime = a.time, casterFx = a.caster }
 				end
-				local sk = { id = js:GetCell(i, "SkillId"), job = job, name = js:GetCell(i, "Name"), max = tonumber(js:GetCell(i, "MaxLv")) or 5, effects = effects, proc = proc }
+				local sk = { id = id, job = job, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Proc", cooldown = tonumber(js:GetCell(i, "Cooldown")) or 0,
+					buffTime = tonumber(js:GetCell(i, "BuffTime")) or 0, effects = effects, proc = proc, breaks = {}, max = 30 }
 				if self._T.jobSkills[job] == nil then self._T.jobSkills[job] = {} end
 				table.insert(self._T.jobSkills[job], sk)
-				self._T.skillById[sk.id] = sk
+				self._T.skillById[id] = sk
 			end
+		end
+		self._T.breakById = {}
+		local bt = _DataService:GetTable("SkillBreakTable")
+		if bt ~= nil then
+			for i = 1, bt:GetRowCount() do
+				local b = { id = bt:GetCell(i, "OptionId"), skill = bt:GetCell(i, "SkillId"), name = bt:GetCell(i, "Name"), effect = bt:GetCell(i, "Effect"), value = tonumber(bt:GetCell(i, "Value")) or 0 }
+				self._T.breakById[b.id] = b
+				local sk = self._T.skillById[b.skill]
+				if sk ~= nil then
+					table.insert(sk.breaks, b)
+					sk.max = #sk.breaks * 3
+				end
+			end
+		end
+		self._T.starOpts = {}
+		self._T.starById = {}
+		local st = _DataService:GetTable("SkillStarOptionTable")
+		if st ~= nil then
+			for i = 1, st:GetRowCount() do
+				local o = { id = st:GetCell(i, "OptionId"), trigger = st:GetCell(i, "Trigger"), name = st:GetCell(i, "Name"), effect = st:GetCell(i, "Effect"), value = tonumber(st:GetCell(i, "Value")) or 0, weight = tonumber(st:GetCell(i, "Weight")) or 1 }
+				if self._T.starOpts[o.trigger] == nil then self._T.starOpts[o.trigger] = {} end
+				table.insert(self._T.starOpts[o.trigger], o)
+				self._T.starById[o.id] = o
+			end
+		end
+		-- 스킬 자신에게만 적용되는 옵션 (나머지는 Bonus로 합산되는 전역 효과)
+		self._T.localFx = {}
+		for _, k in ipairs({ "Pct", "Chance", "CooldownPct", "CooldownSec", "Hits", "CritChance", "SkillCritDmg", "HealCast", "SkillDefIgnore", "Repeat", "SkillLowHp", "SkillElite", "PostSpeed", "PostSpeedShort", "PostAtk", "SkillDrain", "ResetOnKill", "Vuln", "MonDelay", "AlwaysCrit", "StunSec", "StunVuln", "StunCrit", "EndBurst", "EliteStun", "CdOnCast", "Follow", "KillHealSkill", "BuffTime", "BuffAtk", "BuffCritDmg", "BuffSpeed", "BuffReduce", "BuffDrain", "BuffCrit", "BuffBurst" }) do
+			self._T.localFx[k] = true
 		end
 		log("[VRF] jobs playable=" .. tostring(#self._T.playableJobs))
 	end
 
 	@ExecSpace("ServerOnly")
 	method table JobSkills()
-		-- 이번 판 직업의 스킬 목록 (직업 선택 전이면 빈 목록).
+		-- 이번 판에 쓸 스킬: 직업 액티브 + 계열 공용 패시브 (직업 선택 전이면 빈 목록).
 		if self.JobId == "" or self._T.jobSkills == nil then return {} end
-		return self._T.jobSkills[self.JobId] or {}
+		if self._T.runSkillsJob ~= self.JobId then
+			local list = {}
+			for _, sk in ipairs(self._T.jobSkills[self.JobId] or {}) do table.insert(list, sk) end
+			local job = self._T.jobById[self.JobId]
+			if job ~= nil then
+				for _, sk in ipairs(self._T.jobSkills[job.family] or {}) do table.insert(list, sk) end
+			end
+			self._T.runSkills = list
+			self._T.runSkillsJob = self.JobId
+		end
+		return self._T.runSkills
 	end
 
 	@ExecSpace("ServerOnly")
@@ -521,7 +578,7 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void RollChoices()
-		-- 레벨업 스킬 카드: 아직 최고 레벨이 아닌 직업 스킬 중 서로 다른 최대 3개. 다 배웠으면 바로 다음 몬스터.
+		-- 레벨업 카드: 최고 레벨이 아닌 스킬 중 서로 다른 최대 3개. 카드 내용(신규/별 옵션/돌파)은 이때 정해 보여 준다.
 		local pool = {}
 		for _, sk in ipairs(self:JobSkills()) do
 			if (self.SkillLv[sk.id] or 0) < sk.max then table.insert(pool, sk.id) end
@@ -532,13 +589,111 @@ script TowerRunManager extends Component
 			return
 		end
 		for slot = 1, 3 do
+			local key = tostring(slot)
 			local id = ""
 			if #pool > 0 then id = table.remove(pool, _UtilLogic:RandomIntegerRange(1, #pool)) end
-			self.ChoiceIds[tostring(slot)] = id
+			self.ChoiceIds[key] = id
+			self.ChoiceOpts[key] = ""
+			if id ~= "" then self.ChoiceOpts[key] = self:RollCardOption(self._T.skillById[id]) end
 		end
+		self.BreakSkill = ""
 		self.ChoiceSeq = self.ChoiceSeq + 1
 		self.RunState = "CHOICE"
-		log("[VRF] skill choices " .. tostring(self.ChoiceIds["1"]) .. " " .. tostring(self.ChoiceIds["2"]) .. " " .. tostring(self.ChoiceIds["3"]) .. " pending=" .. tostring(self.PendingPicks))
+		log("[VRF] skill choices " .. tostring(self.ChoiceIds["1"]) .. "(" .. tostring(self.ChoiceOpts["1"]) .. ") " .. tostring(self.ChoiceIds["2"]) .. "(" .. tostring(self.ChoiceOpts["2"]) .. ") " .. tostring(self.ChoiceIds["3"]) .. "(" .. tostring(self.ChoiceOpts["3"]) .. ") pending=" .. tostring(self.PendingPicks))
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RemainingBreaks(table sk)
+		-- 아직 고르지 않은 돌파 옵션 목록.
+		local list = {}
+		local taken = self._T.breakTaken[sk.id] or {}
+		for _, b in ipairs(sk.breaks) do
+			if not taken[b.id] then table.insert(list, b) end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method string RollCardOption(table sk)
+		-- Lv.0 → 습득, 다음 레벨이 3의 배수면 돌파, 그 외에는 별 옵션 풀에서 가중치 랜덤 1개.
+		local lv = self.SkillLv[sk.id] or 0
+		if lv == 0 then return "learn" end
+		if (lv + 1) % 3 == 0 and #self:RemainingBreaks(sk) > 0 then return "break" end
+		local opts = self._T.starOpts[sk.trigger] or {}
+		local sum = 0
+		for _, o in ipairs(opts) do sum = sum + o.weight end
+		local r = _UtilLogic:RandomDouble() * sum
+		for _, o in ipairs(opts) do
+			r = r - o.weight
+			if r <= 0 then return o.id end
+		end
+		if #opts > 0 then return opts[#opts].id end
+		return "learn"
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RollBreakChoices(table sk)
+		-- 돌파 옵션 화면: 남은 옵션 중 무작위 최대 3개.
+		local pool = self:RemainingBreaks(sk)
+		for slot = 1, 3 do
+			local key = tostring(slot)
+			local id = ""
+			if #pool > 0 then id = table.remove(pool, _UtilLogic:RandomIntegerRange(1, #pool)).id end
+			self.ChoiceIds[key] = id
+			self.ChoiceOpts[key] = "option"
+		end
+		self.BreakSkill = sk.id
+		self.ChoiceSeq = self.ChoiceSeq + 1
+		self.RunState = "BREAK"
+		log("[VRF] break choices " .. sk.id .. " " .. tostring(self.ChoiceIds["1"]) .. " " .. tostring(self.ChoiceIds["2"]) .. " " .. tostring(self.ChoiceIds["3"]))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplySkillOption(table sk, string effect, number value)
+		-- 옵션 적용: 스킬 전용 효과는 그 스킬에, 나머지는 판 전체 능력치에 더한다.
+		if self._T.localFx[effect] then
+			if self._T.skillMods[sk.id] == nil then self._T.skillMods[sk.id] = {} end
+			local m = self._T.skillMods[sk.id]
+			m[effect] = (m[effect] or 0) + value
+		else
+			self._T.runBonus[effect] = (self._T.runBonus[effect] or 0) + value
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateSkillInfo(table sk)
+		-- 스킬 목록에 보여 줄 옵션 요약: 별 옵션 이름 ×횟수 + 고른 돌파 이름.
+		local parts = {}
+		for optId, n in pairs(self._T.starCount[sk.id] or {}) do
+			local o = self._T.starById[optId]
+			if o ~= nil then table.insert(parts, o.name .. " ×" .. tostring(n)) end
+		end
+		local names = {}
+		for _, b in ipairs(sk.breaks) do
+			if (self._T.breakTaken[sk.id] or {})[b.id] then table.insert(names, b.name) end
+		end
+		local text = table.concat(parts, ", ")
+		if #names > 0 then
+			if text ~= "" then text = text .. "\n" end
+			text = text .. "돌파: " .. table.concat(names, ", ")
+		end
+		self.SkillInfo[sk.id] = text
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FinishSkillPick(table sk, string msg)
+		-- 선택 1회 마무리: 레벨 +1, 능력치 갱신, 남은 선택이 있으면 다시 카드.
+		self.SkillLv[sk.id] = (self.SkillLv[sk.id] or 0) + 1
+		self:UpdateSkillInfo(sk)
+		self:SetEnhanceMsg(msg)
+		self:RecalcStats()
+		log("[VRF] skill pick " .. sk.id .. " lv=" .. tostring(self.SkillLv[sk.id]) .. " " .. msg)
+		self.PendingPicks = math.max(0, self.PendingPicks - 1)
+		if self.PendingPicks > 0 then
+			self:RollChoices()
+		else
+			self:SpawnMonster()
+		end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -573,27 +728,42 @@ script TowerRunManager extends Component
 
 	@ExecSpace("Server")
 	method void RequestPick(integer slot)
-		-- 레벨업 스킬 카드 선택 (1~3): 안 배운 스킬은 1레벨로 배우고, 배운 스킬은 +1레벨. 남은 선택이 있으면 다시 3장.
+		-- 카드 선택: 신규 습득 / 별 옵션 적용 / 돌파 카드면 옵션 화면으로, 돌파 옵션이면 적용.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
-		if self.RunState ~= "CHOICE" then return end
-		local sk = self._T.skillById[self.ChoiceIds[tostring(slot)] or ""]
-		if sk == nil or sk.job ~= self.JobId then return end
-		local lv = self.SkillLv[sk.id] or 0
-		if lv >= sk.max then return end
-		self.SkillLv[sk.id] = lv + 1
-		if lv == 0 then
-			self:SetEnhanceMsg("스킬 [" .. sk.name .. "] 습득!")
-		else
-			self:SetEnhanceMsg(sk.name .. " Lv." .. tostring(lv + 1) .. " 강화!")
+		local key = tostring(slot)
+		local id = self.ChoiceIds[key] or ""
+		if id == "" then return end
+		if self.RunState == "BREAK" then
+			local b = self._T.breakById[id]
+			local sk = self._T.skillById[self.BreakSkill]
+			if b == nil or sk == nil or b.skill ~= sk.id then return end
+			if self._T.breakTaken[sk.id] == nil then self._T.breakTaken[sk.id] = {} end
+			if self._T.breakTaken[sk.id][b.id] then return end
+			self._T.breakTaken[sk.id][b.id] = true
+			self:ApplySkillOption(sk, b.effect, b.value)
+			local prev = self.SkillBreaks[sk.id] or ""
+			if prev ~= "" then prev = prev .. "," end
+			self.SkillBreaks[sk.id] = prev .. b.id
+			self:FinishSkillPick(sk, sk.name .. " 돌파! [" .. b.name .. "]")
+			return
 		end
-		self:RecalcStats()
-		log("[VRF] skill pick " .. sk.id .. " lv=" .. tostring(lv + 1))
-		self.PendingPicks = math.max(0, self.PendingPicks - 1)
-		if self.PendingPicks > 0 then
-			self:RollChoices()
+		if self.RunState ~= "CHOICE" then return end
+		local sk = self._T.skillById[id]
+		if sk == nil or (sk.job ~= self.JobId and sk.job ~= (self._T.jobById[self.JobId] or {}).family) then return end
+		if (self.SkillLv[sk.id] or 0) >= sk.max then return end
+		local mode = self.ChoiceOpts[key] or ""
+		if mode == "break" then
+			self:RollBreakChoices(sk)
+		elseif mode == "learn" then
+			self:FinishSkillPick(sk, "스킬 [" .. sk.name .. "] 습득!")
 		else
-			self:SpawnMonster()
+			local o = self._T.starById[mode]
+			if o == nil then return end
+			self:ApplySkillOption(sk, o.effect, o.value)
+			if self._T.starCount[sk.id] == nil then self._T.starCount[sk.id] = {} end
+			self._T.starCount[sk.id][o.id] = (self._T.starCount[sk.id][o.id] or 0) + 1
+			self:FinishSkillPick(sk, sk.name .. " 강화! " .. o.name)
 		end
 	end
 
@@ -602,10 +772,14 @@ script TowerRunManager extends Component
 		-- 각인 '재추첨': 판마다 정해진 횟수만큼 지금 3장을 다시 뽑는다.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
-		if self.RunState ~= "CHOICE" or self.Rerolls <= 0 then return end
+		if (self.RunState ~= "CHOICE" and self.RunState ~= "BREAK") or self.Rerolls <= 0 then return end
 		self.Rerolls = self.Rerolls - 1
 		log("[VRF] reroll left=" .. tostring(self.Rerolls))
-		self:RollChoices()
+		if self.RunState == "BREAK" then
+			self:RollBreakChoices(self._T.skillById[self.BreakSkill])
+		else
+			self:RollChoices()
+		end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -620,13 +794,15 @@ script TowerRunManager extends Component
 	method integer PlayerHitDamage()
 		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
 		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
-		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - self:Bonus("DefIgnore") / 100)
+		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - (self:Bonus("DefIgnore") + (self._T.castDefIgnore or 0)) / 100)
 		local dmg = self:RollPlayerAtk() * (1 - monDef / (monDef + self.DefConstant))
 		local mul = 1
 		-- 직업 스킬 '투혼': 내 체력 50% 이하일 때 주는 피해 증가
 		if self.PlayerHp < self.PlayerMaxHp * 0.5 then mul = mul + self:Bonus("LowHpAtk") / 100 end
 		if self.MonsterHp <= self.MonsterMaxHp * self.LowHpDmgRatio then mul = mul + self:Bonus("LowHpDmg") / 100 end
 		if self.MonsterElite then mul = mul + self:Bonus("EliteDmg") / 100 end
+		-- 공용 패시브 돌파 '충만한 힘': 체력이 가득할 때 공격력 증가
+		if self.PlayerHp >= self.PlayerMaxHp then mul = mul + self:Bonus("FullHpAtk") / 100 end
 		-- 이 층 심볼: 주는 피해 증가
 		mul = mul + (self._T.symDmg or 0) / 100
 		return math.max(1, math.floor(dmg * mul + 0.5))
@@ -645,43 +821,157 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method table RollJobProcs()
-		-- 이번 공격에서 발동할 직업 스킬(공격 시 확률)을 정하고 결과(피해·회복·빙결·메소)를 미리 계산한다.
+		-- 이번 공격에 시전할 스킬을 정한다: 쿨타임이 끝난 쿨타임형 1개 + 확률에 걸린 발동형.
 		-- 실제 적용은 기본 타격과 같은 순간(TowerPlayer가 대기 타격을 적용할 때 ApplyJobProcs).
 		local list = {}
 		for _, sk in ipairs(self:JobSkills()) do
-			local p = sk.proc
-			local lv = self.SkillLv[sk.id] or 0
-			-- 확률·계수 = 1레벨 값 + 레벨당 증가 × (레벨 - 1). 은총 '공격 시 발동 확률'은 확률에 합연산
-			local chance = 0
-			local pct = 0
-			if p ~= nil and lv > 0 then
-				chance = p.chance + p.chancePer * (lv - 1)
-				pct = p.pct + p.pctPer * (lv - 1)
-			end
-			if p ~= nil and lv > 0 and _UtilLogic:RandomDouble() * 100 < chance + self:Bonus("ProcChance") then
-				local r = { name = sk.name, dmg = 0, hits = p.hits or 1, freeze = 0, heal = 0, meso = 0, crit = false, fx = p.fx, fxScale = p.fxScale }
-				local atk = self:RollPlayerAtk()
-				if p.type == "Strike" or p.type == "MesoStrike" or p.type == "Freeze" then
-					r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 + 0.5)
-				elseif p.type == "CritStrike" then
-					r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 * self.CritDmg / 100 + 0.5)
-					r.crit = true
-				elseif p.type == "Pierce" then
-					r.dmg = math.floor(atk * pct / 100 + 0.5)
-				elseif p.type == "Double" then
-					r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 + 0.5)
-				elseif p.type == "Dice" then
-					r.dmg = math.floor(atk * (0.5 + _UtilLogic:RandomDouble() * 2.5) + 0.5)
-				elseif p.type == "Heal" then
-					r.heal = math.max(1, math.floor(self.PlayerMaxHp * pct / 100 + 0.5))
-				end
-				if p.type == "Freeze" then r.freeze = self.JobFreezeSec end
-				if p.type == "MesoStrike" then r.meso = math.max(1, math.floor(self:KillMeso() * self.JobMesoStrikeRatio + 0.5)) end
-				if r.dmg > 0 then r.dmg = math.max(1, r.dmg) end
-				table.insert(list, r)
+			if sk.trigger == "Cooldown" and sk.proc ~= nil and (self.SkillLv[sk.id] or 0) > 0 and (self._T.cd[sk.id] or 0) <= 0 then
+				local m = self._T.skillMods[sk.id] or {}
+				self._T.cd[sk.id] = math.max(1, (sk.cooldown - (m.CooldownSec or 0)) * (1 - (m.CooldownPct or 0) / 100))
+				table.insert(list, self:MakeCast(sk))
+				break
 			end
 		end
+		local follow = {}
+		for _, sk in ipairs(self:JobSkills()) do
+			if sk.trigger == "Proc" and sk.proc ~= nil and (self.SkillLv[sk.id] or 0) > 0 then
+				local m = self._T.skillMods[sk.id] or {}
+				-- 은총 '공격 시 발동 확률'은 확률에 합연산
+				if _UtilLogic:RandomDouble() * 100 < sk.proc.chance + (m.Chance or 0) + self:Bonus("ProcChance") then
+					table.insert(list, self:MakeCast(sk))
+				elseif (m.Follow or 0) > 0 then
+					table.insert(follow, sk)
+				end
+			end
+		end
+		-- 돌파 '따라 베기': 다른 스킬이 발동하면 반드시 함께 발동
+		if #list > 0 then
+			for _, sk in ipairs(follow) do table.insert(list, self:MakeCast(sk)) end
+		end
 		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method table MakeCast(table sk)
+		-- 스킬 1회 결과를 미리 계산한다 (계수·타수·크리티컬에 별·돌파 옵션 반영).
+		local p = sk.proc
+		local m = self._T.skillMods[sk.id] or {}
+		local r = { id = sk.id, name = sk.name, m = m, dmg = 0, hits = p.hits + (m.Hits or 0), freeze = 0, heal = 0, meso = 0, crit = false, fx = p.fx, fxScale = p.fxScale, actionFrames = p.actionFrames or "", actionTime = p.actionTime or 0.8, casterFx = p.casterFx or "" }
+		if p.type == "Buff" then
+			r.buffSkill = sk
+			return r
+		end
+		local pct = p.pct + (m.Pct or 0)
+		local atk = self:RollPlayerAtk()
+		self._T.castDefIgnore = m.SkillDefIgnore or 0
+		if p.type == "Strike" or p.type == "MesoStrike" or p.type == "Freeze" or p.type == "Double" then
+			r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 + 0.5)
+		elseif p.type == "CritStrike" then
+			r.dmg = math.floor(self:PlayerHitDamage() * pct / 100 * self.CritDmg / 100 + 0.5)
+			r.crit = true
+		elseif p.type == "Pierce" then
+			r.dmg = math.floor(atk * pct / 100 + 0.5)
+		elseif p.type == "Dice" then
+			r.dmg = math.floor(atk * (0.5 + _UtilLogic:RandomDouble() * 2.5) + 0.5)
+		elseif p.type == "Heal" then
+			r.heal = math.max(1, math.floor(self.PlayerMaxHp * pct / 100 + 0.5))
+		end
+		self._T.castDefIgnore = 0
+		local mul = 1
+		if self.MonsterHp <= self.MonsterMaxHp * self.LowHpDmgRatio then mul = mul + (m.SkillLowHp or 0) / 100 end
+		if self.MonsterElite then mul = mul + (m.SkillElite or 0) / 100 end
+		if not r.crit and r.dmg > 0 and ((m.AlwaysCrit or 0) > 0 or ((m.StunCrit or 0) > 0 and self:IsStunned()) or _UtilLogic:RandomDouble() * 100 < (m.CritChance or 0)) then
+			mul = mul * self.CritDmg / 100 * (1 + (m.SkillCritDmg or 0) / 100)
+			r.crit = true
+		end
+		r.dmg = math.floor(r.dmg * mul + 0.5)
+		if p.type == "Freeze" then r.freeze = self.JobFreezeSec + (m.StunSec or 0) end
+		if p.type == "MesoStrike" then r.meso = math.max(1, math.floor(self:KillMeso() * self.JobMesoStrikeRatio + 0.5)) end
+		if r.dmg > 0 then r.dmg = math.max(1, r.dmg) end
+		return r
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean IsStunned()
+		-- 지금 몬스터가 기절 중인지.
+		return _UtilLogic.ElapsedSeconds < (self._T.stunUntil or 0)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddBuff(string tag, string key, number value, number duration, number burst)
+		-- 일정 시간 능력치 버프 (같은 tag는 새로 고침). burst > 0이면 끝날 때 공격력 burst% 추가 피해.
+		for i = #self._T.buffs, 1, -1 do
+			if self._T.buffs[i].tag == tag then table.remove(self._T.buffs, i) end
+		end
+		table.insert(self._T.buffs, { tag = tag, key = key, value = value, t = duration, burst = burst })
+		self:RecalcStats()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HealPlayer(number amount)
+		-- 회복 (돌파 '생명력'·'회복 강화' 반영) + 회복 숫자 표시.
+		local heal = math.floor(amount * (1 + self:Bonus("HealRecv") / 100) + 0.5)
+		if heal <= 0 or self.PlayerHp >= self.PlayerMaxHp then return end
+		self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + heal)
+		local pc = self:GetPlayerAttack()
+		if pc ~= nil then pc:ShowHeal(heal) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ReduceCooldowns(number sec)
+		-- 모든 쿨타임 스킬의 남은 쿨타임 감소.
+		for id, t in pairs(self._T.cd) do self._T.cd[id] = math.max(0, t - sec) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnPlayerCrit()
+		-- 크리티컬 적중 시 공용 패시브 '찬스 어택' 돌파 효과.
+		local speed = self:Bonus("CritSpeed")
+		if speed > 0 then self:AddBuff("critSpeed", "Speed", speed, 3, 0) end
+		local heal = self:Bonus("CritHeal")
+		if heal > 0 then self:HealPlayer(self.PlayerMaxHp * heal / 100) end
+		local cd = self:Bonus("CritCd")
+		if cd > 0 then self:ReduceCooldowns(cd) end
+		if _UtilLogic:RandomDouble() * 100 < self:Bonus("CritExtra") then self._T.extraHitTimer = self.DoubleHitDelay end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickSkills(number delta)
+		-- 전투 중 매 프레임: 쿨타임·버프 시간, 기절 종료 피해, 셀프 리커버리 회복.
+		for id, t in pairs(self._T.cd) do self._T.cd[id] = math.max(0, t - delta) end
+		local changed = false
+		for i = #self._T.buffs, 1, -1 do
+			local b = self._T.buffs[i]
+			b.t = b.t - delta
+			if b.t <= 0 then
+				table.remove(self._T.buffs, i)
+				changed = true
+				if b.burst > 0 then self:ApplyMonsterDamage(math.floor(self.PlayerAtk * b.burst / 100 + 0.5)) end
+			end
+		end
+		if changed then self:RecalcStats() end
+		if (self._T.stunBurst or 0) > 0 and not self:IsStunned() then
+			local burst = self._T.stunBurst
+			self._T.stunBurst = 0
+			self:ApplyMonsterDamage(math.floor(self.PlayerAtk * burst / 100 + 0.5))
+			log("[VRF] stun end burst " .. tostring(burst))
+		end
+		local regen = self:Bonus("SelfRegen")
+		if regen > 0 then
+			self._T.regenTimer = (self._T.regenTimer or 5) - delta
+			if self._T.regenTimer <= 0 then
+				self._T.regenTimer = math.max(1, 5 - self:Bonus("RegenSec"))
+				if self.PlayerHp < self.PlayerMaxHp then
+					local pct = regen
+					if self:Bonus("RegenLow") > 0 and self.PlayerHp <= self.PlayerMaxHp * 0.3 then pct = pct * 2 end
+					self:HealPlayer(self.PlayerMaxHp * pct / 100)
+					local atk = self:Bonus("RegenAtk")
+					if atk > 0 then self:AddBuff("regenAtk", "AtkPct", atk, 3, 0) end
+					local cd = self:Bonus("RegenCd")
+					if cd > 0 then self:ReduceCooldowns(cd) end
+				end
+			end
+		end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -690,18 +980,30 @@ script TowerRunManager extends Component
 		if procs == nil or #procs == 0 or self.RunState ~= "FIGHT" then return end
 		local pc = self:GetPlayerAttack()
 		for _, r in ipairs(procs) do
+			self:ApplyCastEffects(r, target)
 			-- 연타 스킬은 0.12초 간격으로 한 대씩 (첫 타는 기본 타격과 같은 순간)
 			self:ApplyProcHit(r, target, 1)
 			for h = 2, r.hits do
 				local hit = h
 				_TimerService:SetTimerOnce(function() self:ApplyProcHit(r, target, hit) end, (h - 1) * self.ProcHitInterval)
 			end
-			if r.heal > 0 then
-				self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + r.heal)
-				if pc ~= nil then pc:ShowHeal(r.heal) end
+			if r.heal > 0 then self:HealPlayer(r.heal) end
+			-- 기절: 몬스터 다음 공격까지 최소 freeze초 (중첩되지 않음)
+			if r.freeze > 0 and self.RunState == "FIGHT" then
+				local sec = r.freeze
+				if self.MonsterElite then sec = sec + (r.m.EliteStun or 0) end
+				self.MonsterAttackTimer = math.max(self.MonsterAttackTimer, sec)
+				self._T.stunUntil = _UtilLogic.ElapsedSeconds + sec
+				self._T.stunVuln = r.m.StunVuln or 0
+				self._T.stunBurst = r.m.EndBurst or 0
 			end
-			-- 빙결: 몬스터 다음 공격까지 최소 freeze초 (중첩되지 않음)
-			if r.freeze > 0 and self.RunState == "FIGHT" then self.MonsterAttackTimer = math.max(self.MonsterAttackTimer, r.freeze) end
+			-- 돌파 '잔상'류: 확률로 한 번 더 발동
+			if not r.repeated and (r.m.Repeat or 0) > 0 and _UtilLogic:RandomDouble() * 100 < r.m.Repeat then
+				local again = {}
+				for k, v in pairs(r) do again[k] = v end
+				again.repeated = true
+				_TimerService:SetTimerOnce(function() self:ApplyJobProcs({ again }, target) end, r.hits * self.ProcHitInterval + 0.15)
+			end
 			if r.meso > 0 then
 				self.Meso = self.Meso + r.meso
 				self.RunMeso = self.RunMeso + r.meso
@@ -709,6 +1011,42 @@ script TowerRunManager extends Component
 			end
 			log("[VRF] job proc " .. r.name .. " dmg=" .. tostring(r.dmg) .. "x" .. tostring(r.hits) .. " heal=" .. tostring(r.heal) .. " freeze=" .. tostring(r.freeze) .. " meso=" .. tostring(r.meso))
 		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyCastEffects(table r, Entity target)
+		-- 시전 순간 효과: 버프 스킬, 발동 회복, 시전 후 버프, 몬스터 약화, 쿨타임 감소.
+		local m = r.m
+		if r.buffSkill ~= nil then
+			local sk = r.buffSkill
+			local dur = sk.buffTime + (m.BuffTime or 0)
+			local power = 1 + (m.Pct or 0) / 100
+			for _, e in ipairs(sk.effects) do self:AddBuff(sk.id .. e.type, e.type, e.base * power, dur, 0) end
+			local extra = { { "BuffAtk", "AtkPct" }, { "BuffCritDmg", "CritDmg" }, { "BuffSpeed", "Speed" }, { "BuffReduce", "DmgReduce" }, { "BuffDrain", "LifestealPct" }, { "BuffCrit", "Crit" } }
+			for _, x in ipairs(extra) do
+				if (m[x[1]] or 0) > 0 then self:AddBuff(sk.id .. x[1], x[2], m[x[1]], dur, 0) end
+			end
+			if (m.BuffBurst or 0) > 0 then self:AddBuff(sk.id .. "Burst", "", 0, dur, m.BuffBurst) end
+		end
+		if (m.HealCast or 0) > 0 then self:HealPlayer(self.PlayerMaxHp * m.HealCast / 100) end
+		if (m.PostSpeed or 0) > 0 then self:AddBuff(r.id .. "PostSpeed", "Speed", m.PostSpeed, 4, 0) end
+		if (m.PostSpeedShort or 0) > 0 then self:AddBuff(r.id .. "PostSpeedShort", "Speed", m.PostSpeedShort, 2, 0) end
+		if (m.PostAtk or 0) > 0 then self:AddBuff(r.id .. "PostAtk", "AtkPct", m.PostAtk, 5, 0) end
+		if (m.Vuln or 0) > 0 then
+			self._T.vulnUntil = _UtilLogic.ElapsedSeconds + 5
+			self._T.vulnPct = m.Vuln
+		end
+		if (m.MonDelay or 0) > 0 then self.MonsterAttackTimer = self.MonsterAttackTimer * (1 + m.MonDelay / 100) end
+		if (m.CdOnCast or 0) > 0 then self:ReduceCooldowns(m.CdOnCast) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method string PickHitFx(string list, integer h)
+		-- "ruid|ruid" 목록에서 h번째 타격에 쓸 피격 이펙트를 고른다.
+		local fx = {}
+		for ruid in string.gmatch(list, "[^|]+") do table.insert(fx, ruid) end
+		if #fx == 0 then return list end
+		return fx[(h - 1) % #fx + 1]
 	end
 
 	@ExecSpace("ServerOnly")
@@ -726,12 +1064,21 @@ script TowerRunManager extends Component
 			local ox = ((h - 1) % 3 - 1) * 0.12
 			local oy = (math.floor((h - 1) / 3) % 2) * 0.12
 			if h == 1 then ox = 0 end
-			_EffectService:PlayEffect(r.fx, who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(r.fxScale, r.fxScale, 1), false)
+			-- 피격 이펙트는 여러 장이면 타수마다 번갈아, 메이플 그림은 왼쪽 기준이라 오른쪽 공격에 맞게 뒤집는다
+			_EffectService:PlayEffect(self:PickHitFx(r.fx, h), who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(r.fxScale, r.fxScale, 1), false, { FlipX = true })
 		end
 		if r.dmg > 0 then
 			local pc = self:GetPlayerAttack()
 			if pc ~= nil then pc:ShowProcDamage(target, r.dmg, r.crit) end
 			self:ApplyMonsterDamage(r.dmg)
+			if r.crit then self:OnPlayerCrit() end
+			local m = r.m
+			if (m.SkillDrain or 0) > 0 then self:HealPlayer(r.dmg * m.SkillDrain / 100) end
+			-- 이 스킬로 처치했을 때
+			if self.MonsterHp <= 0 then
+				if (m.ResetOnKill or 0) > 0 then self._T.cd[r.id] = 0 end
+				if (m.KillHealSkill or 0) > 0 then self:HealPlayer(self.PlayerMaxHp * m.KillHealSkill / 100) end
+			end
 		end
 	end
 
@@ -827,6 +1174,12 @@ script TowerRunManager extends Component
 				if slot == "Weapon" then
 					local job = self._T.jobById[self.JobId]
 					local twoHanded = row.own and job ~= nil and job.weaponCat == "TwoHanded"
+					-- 스킬 동작이 든 무기에 맞는 프레임을 쓰도록 무기 계열 전달 (직업 무기가 아니면 공용 한손검)
+					local attacker = player:GetComponent("script.TowerPlayer")
+					if attacker ~= nil then
+						attacker.WeaponFamily = "O"
+						if row.own and job ~= nil then attacker.WeaponFamily = job.weaponFamily end
+					end
 					if twoHanded then
 						cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, "")
 						cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, row.ruid)
@@ -947,10 +1300,12 @@ script TowerRunManager extends Component
 		local armorMul = 1 + self:Bonus("ArmorPct") / 100
 		local atk = self.BasePlayerAtk + self.LevelAtkBonus * (self.Level - 1) + weapon
 		local hp = self.BasePlayerMaxHp + self.LevelHpBonus * (self.Level - 1) + self:EquipStat("Cap") * armorMul
-		self.PlayerAtk = math.floor(atk * (1 + (self:Bonus("AtkPct")) / 100) + 0.5)
+		self.PlayerMaxHp = math.floor(hp * (1 + (self:Bonus("HpPct")) / 100) + 0.5)
+		-- 돌파 '무기 공명'(무기 강화 단계당 공격력)·'활력'(최대 체력 비례 공격력)
+		local atkPct = self:Bonus("AtkPct") + self:Bonus("WeaponEnhAtk") * (self.EquipEnh["Weapon"] or 0)
+		self.PlayerAtk = math.floor(atk * (1 + atkPct / 100) + self.PlayerMaxHp * self:Bonus("HpToAtk") / 100 + 0.5)
 		self.Mastery = math.min(100, self.BaseMastery + self:Bonus("Mastery"))
 		self.PlayerAtkMin = math.max(1, math.floor(self.PlayerAtk * (0.2 + 0.8 * self.Mastery / 100) + 0.5))
-		self.PlayerMaxHp = math.floor(hp * (1 + (self:Bonus("HpPct")) / 100) + 0.5)
 		local def = self.LevelDefBonus * (self.Level - 1) + self:EquipStat("Coat") * armorMul
 		self.PlayerDef = math.floor(def * (1 + (self:Bonus("DefPct")) / 100) + 0.5)
 		self.CritRate = self:EquipStat("Glove") + self:Bonus("Crit")
@@ -1003,7 +1358,25 @@ script TowerRunManager extends Component
 		self._T.extraHitTimer = 0
 		-- 직업·직업 스킬 초기화 (직업은 판 시작 화면에서 고름)
 		self.JobId = ""
-		for id, _ in pairs(self._T.skillById) do self.SkillLv[id] = 0 end
+		for id, _ in pairs(self._T.skillById) do
+			self.SkillLv[id] = 0
+			self.SkillBreaks[id] = ""
+			self.SkillInfo[id] = ""
+		end
+		self.BreakSkill = ""
+		self._T.runSkillsJob = nil
+		self._T.skillMods = {}
+		self._T.runBonus = {}
+		self._T.breakTaken = {}
+		self._T.starCount = {}
+		self._T.buffs = {}
+		self._T.cd = {}
+		self._T.shield = 0
+		self._T.regenTimer = 5
+		self._T.stunUntil = 0
+		self._T.stunBurst = 0
+		self._T.stunVuln = 0
+		self._T.vulnUntil = 0
 		-- 직업을 고르면 첫 스킬 카드 1장 + 각인 '선행 학습' 시작 레벨만큼 더
 		self.PendingPicks = startLevel
 		self.Rerolls = math.floor(self:Bonus("Reroll"))
@@ -1059,6 +1432,10 @@ script TowerRunManager extends Component
 		self.MonsterElite = self.Stage >= self.StagesPerFloor
 		self:UpdateFloorSymbol()
 		self._T.firstHitDone = false
+		-- 새 몬스터: 기절·약화 상태 초기화
+		self._T.stunUntil = 0
+		self._T.stunBurst = 0
+		self._T.vulnUntil = 0
 		if self.MonsterElite and #self._T.prefixes > 0 then
 			-- 접두사 무작위 1개: 강력한(공격력) / 단단한(방어력) / 치명적인(치명타) / 재빠른(공격 속도) / 날렵한(회피율)
 			local p = self._T.prefixes[_UtilLogic:RandomIntegerRange(1, #self._T.prefixes)]
@@ -1169,6 +1546,11 @@ script TowerRunManager extends Component
 	method void ApplyMonsterDamage(integer damage)
 		-- 플레이어 공격이 몬스터에 맞았을 때 HP를 깎고 처치를 판정한다.
 		if self.RunState ~= "FIGHT" then return end
+		-- 몬스터 약화·기절 중 받는 피해 증가
+		local takenMul = 1
+		if _UtilLogic.ElapsedSeconds < (self._T.vulnUntil or 0) then takenMul = takenMul + (self._T.vulnPct or 0) / 100 end
+		if self:IsStunned() then takenMul = takenMul + (self:Bonus("StunDmg") + (self._T.stunVuln or 0)) / 100 end
+		damage = math.floor(damage * takenMul + 0.5)
 		-- 처형: HP 20% 이하 몬스터는 확률로 즉시 처치
 		if self.MonsterHp - damage > 0 and self.MonsterHp <= self.MonsterMaxHp * self.ExecuteHpRatio and self:RollSkill("Execute") then
 			damage = math.ceil(self.MonsterHp)
@@ -1183,7 +1565,7 @@ script TowerRunManager extends Component
 		self.MonsterHp = math.max(0, self.MonsterHp - damage)
 		-- 각인 '흡혈': 준 피해의 일정 %를 항상 회복
 		local drain = dealt * self:Bonus("LifestealPct") / 100
-		if drain > 0 then self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + drain) end
+		if drain > 0 then self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + drain * (1 + self:Bonus("HealRecv") / 100)) end
 		-- 흡혈: 확률로 준 피해만큼 회복
 		if dealt > 0 and self.PlayerHp < self.PlayerMaxHp and self:RollSkill("Lifesteal") then
 			local heal = math.floor(dealt + 0.5)
@@ -1211,7 +1593,11 @@ script TowerRunManager extends Component
 		local bossKilled = self.MonsterElite
 		self:GiveKillReward()
 		self:DropFeathers(bossKilled)
-		if bossKilled then self:RollFloorSymbol() end
+		if bossKilled then
+			self:RollFloorSymbol()
+			local bossHeal = self:Bonus("BossHeal")
+			if bossHeal > 0 then self:HealPlayer(self.PlayerMaxHp * bossHeal / 100) end
+		end
 		log("[VRF] " .. self.FloorTitle .. " cleared")
 	end
 
@@ -1219,8 +1605,18 @@ script TowerRunManager extends Component
 	method void ApplyPlayerDamage(integer damage)
 		-- 몬스터 공격이 플레이어에 맞았을 때 HP를 깎고 패배를 판정한다.
 		if self.RunState ~= "FIGHT" then return end
+		-- 돌파 '보호막': 남은 보호막이 먼저 피해를 받는다
+		local shield = self._T.shield or 0
+		if shield > 0 then
+			local absorbed = math.min(shield, damage)
+			self._T.shield = shield - absorbed
+			damage = damage - absorbed
+		end
 		self.PlayerHp = math.max(0, self.PlayerHp - damage)
 		if self.PlayerHp > 0 then
+			-- 돌파 '피격 회복'
+			local hitHeal = self:Bonus("HitHeal")
+			if hitHeal > 0 and _UtilLogic:RandomDouble() < 0.1 then self:HealPlayer(self.PlayerMaxHp * hitHeal / 100) end
 			-- 각인 '가시': 받은 피해의 일부를 몬스터에게 반사
 			local reflect = math.floor(damage * self:Bonus("Thorns") / 100 + 0.5)
 			if reflect > 0 then self:ApplyMonsterDamage(reflect) end
@@ -1282,7 +1678,7 @@ script TowerRunManager extends Component
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		local s = self.RunState
-		if s ~= "FIGHT" and s ~= "CLEAR" and s ~= "CHOICE" and s ~= "DEAL" then return end
+		if s ~= "FIGHT" and s ~= "CLEAR" and s ~= "CHOICE" and s ~= "BREAK" and s ~= "DEAL" then return end
 		log("[VRF] give up at floor " .. tostring(self.Floor) .. " stage=" .. tostring(self.Stage))
 		self:Defeat()
 	end
@@ -1582,6 +1978,9 @@ script TowerRunManager extends Component
 			local monster = self._T.monster
 			if not isvalid(monster) then return end
 
+			self:TickSkills(delta)
+			if self.RunState ~= "FIGHT" or not isvalid(self._T.monster) then return end
+
 			self.PlayerAttackTimer = self.PlayerAttackTimer - delta
 			if self.PlayerAttackTimer <= 0 then
 				self.PlayerAttackTimer = self.PlayerAttackInterval
@@ -1593,7 +1992,12 @@ script TowerRunManager extends Component
 						pc:DoMiss(monster)
 					else
 						-- 몬스터 방어력(단단한)도 플레이어와 같은 공식으로 피해 감소
-						pc:DoAttack(monster, self:BasicHitDamage(), self.CritRate, self.CritDmg, self:RollJobProcs())
+						-- 돌파 '선제 급소'(첫 타격 크리티컬)·'거인 급소'(강화 몬스터 크리티컬 데미지)
+						local critRate = self.CritRate
+						if not self._T.firstHitDone and self:Bonus("FirstCrit") > 0 then critRate = 100 end
+						local critDmg = self.CritDmg
+						if self.MonsterElite then critDmg = critDmg + self:Bonus("EliteCritDmg") end
+						pc:DoAttack(monster, self:BasicHitDamage(), critRate, critDmg, self:RollJobProcs())
 						-- 연속 베기: 확률로 잠시 뒤 한 번 더 공격
 						if self:RollSkill("DoubleHit") then
 							self._T.extraHitTimer = self.DoubleHitDelay
@@ -1633,6 +2037,13 @@ script TowerRunManager extends Component
 						-- 회피: 캐릭터 위에 MISS 데미지 스킨
 						local pc = self:GetPlayerAttack()
 						if pc ~= nil then pc:ShowMiss(player, player.PlayerComponent.UserId) end
+						-- 돌파 '반격 자세'
+						local counter = self:Bonus("EvadeCounter")
+						if counter > 0 then self:ApplyMonsterDamage(math.floor(self.PlayerAtk * counter / 100 + 0.5)) end
+					elseif _UtilLogic:RandomDouble() * 100 < self:Bonus("HitNullify") then
+						-- 돌파 '피격 무효'
+						local pc = self:GetPlayerAttack()
+						if pc ~= nil then pc:ShowMiss(player, player.PlayerComponent.UserId) end
 					else
 						-- 방어력: 받는 피해 = 공격력 × (1 - 방어 / (방어 + 상수)), 치명타(치명적인)는 TowerMonster가 판정
 						-- 각인 '철벽': 체력 50% 이하일 때 방어력 증가
@@ -1640,7 +2051,11 @@ script TowerRunManager extends Component
 						if self.PlayerHp < self.PlayerMaxHp * self.BulwarkHpRatio then def = def * (1 + self:Bonus("Bulwark") / 100) end
 						local reduce = def / (def + self.DefConstant)
 						-- 직업 스킬 '철벽 자세': 받는 피해 감소
-						local cut = math.max(0, 1 - self:Bonus("DmgReduce") / 100)
+						local reduceSum = self:Bonus("DmgReduce")
+						if self.PlayerHp >= self.PlayerMaxHp * 0.5 then reduceSum = reduceSum + self:Bonus("HighHpReduce") end
+						if self.PlayerHp <= self.PlayerMaxHp * 0.3 then reduceSum = reduceSum + self:Bonus("LowHpReduce") end
+						if self.MonsterElite then reduceSum = reduceSum + self:Bonus("EliteReduce") end
+						local cut = math.max(0, 1 - reduceSum / 100)
 						-- 악마의 거래 대가: 받는 피해 증가
 						cut = cut * (1 + self:Bonus("DmgTaken") / 100)
 						-- 이 층 심볼: 받는 피해 감소
@@ -1662,6 +2077,10 @@ script TowerRunManager extends Component
 					self.Stage = 1
 					self.Floor = self.Floor + 1
 					self._T.undyingUsed = false
+					-- 돌파 '재정비'·'보호막': 층 시작 시 회복·보호막
+					local floorHeal = self:Bonus("FloorHeal")
+					if floorHeal > 0 then self:HealPlayer(self.PlayerMaxHp * floorHeal / 100) end
+					self._T.shield = self.PlayerMaxHp * self:Bonus("FloorShield") / 100
 					self:UpdateUnlocks(true)
 					-- 층 클리어: 최고 클리어 층을 넘으면 각인 포인트 +1 (영구)
 					local engrave = self:GetEngrave()

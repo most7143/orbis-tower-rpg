@@ -1,0 +1,11 @@
+﻿Trigger,OptionId,Name,Effect,Value,Weight,Desc
+Cooldown,CdPct,스킬 계수,Pct,12,1,스킬 계수 +12%p
+Cooldown,CdCool,쿨타임 감소,CooldownPct,4,1,쿨타임 -4%
+Cooldown,CdSpeed,공격 속도,Speed,2,1,공격 속도 +2%
+Proc,PrPct,스킬 계수,Pct,8,1,스킬 계수 +8%p
+Proc,PrChance,발동 확률,Chance,2,1,발동 확률 +2%p
+Proc,PrSpeed,공격 속도,Speed,2,1,공격 속도 +2%
+Passive,PaAtk,공격력,AtkPct,1,1,공격력 +1%
+Passive,PaHp,최대 체력,HpPct,2,1,최대 체력 +2%
+Passive,PaDef,방어력,DefPct,2,1,방어력 +2%
+Passive,PaSpeed,공격 속도,Speed,1,1,공격 속도 +1%

@@ -1,25 +1,25 @@
-﻿JobId,SkillId,Name,MaxLv,IconRUID,Type1,V1,V1Per,Type2,V2,V2Per,ProcType,Chance,ChancePer,Pct,PctPer,ProcHits,EffectRUID,EffectScale,Desc
-Hero,PowerStrike,파워 스트라이크,5,e4acdf27d68549db8858d6082169c70c,,0,0,,0,0,Strike,20,2,150,30,1,ae2ca726059442efbafad2eaa7456248,0.8,공격 시 {c}% 확률로 공격력 {p}% 추가 피해
-Hero,SwordMastery,소드 마스터리,5,e304bb1f471545dabe68e1e1f791a10a,Mastery,10,5,Acc,4,2,,0,0,0,0,0,,1,숙련도 +{v1}% / 명중률 +{v2}%
-Hero,Rage,분노,5,,AtkPct,6,3,,0,0,,0,0,0,0,0,,1,공격력 +{v1}%
-Hero,ComboAttack,콤보 어택,5,,DoubleHit,8,3,CritDmg,10,5,,0,0,0,0,0,,1,공격 시 {v1}% 확률로 한 번 더 공격 / 크리티컬 데미지 +{v2}%
-Hero,Brandish,브랜디쉬,5,,,0,0,,0,0,Strike,20,2,100,15,2,ed38cd53290046eb86ad9244632e950a,0.56,공격 시 {c}% 확률로 2연타 (각 공격력 {p}%)
-Hero,Panic,패닉,5,,,0,0,,0,0,Strike,15,2,250,40,1,fa71427649df4eeb8a3fd1ddf4cf9023,1.0,공격 시 {c}% 확률로 공격력 {p}% 추가 피해
-Hero,Enrage,인레이지,5,,AtkPct,5,3,CritDmg,10,5,,0,0,0,0,0,,1,공격력 +{v1}% / 크리티컬 데미지 +{v2}%
-Hero,AdvancedCombo,어드밴스드 콤보,5,,DoubleHit,5,2,Crit,3,1,,0,0,0,0,0,,1,공격 시 {v1}% 확률로 한 번 더 공격 / 크리티컬 확률 +{v2}%
-Paladin,IronBody,아이언 바디,5,52162587bc534b9385af8c77513d93d4,DefPct,10,5,HpPct,4,2,,0,0,0,0,0,,1,방어력 +{v1}% / 최대 체력 +{v2}%
-Paladin,BluntMastery,메이스 마스터리,5,,Mastery,10,5,Acc,4,2,,0,0,0,0,0,,1,숙련도 +{v1}% / 명중률 +{v2}%
-Paladin,PowerGuard,파워 가드,5,,Thorns,10,5,DmgReduce,3,1,,0,0,0,0,0,,1,받은 피해의 {v1}% 반사 / 받는 피해 -{v2}%
-Paladin,ThunderCharge,썬더 차지,5,,,0,0,,0,0,Strike,20,2,160,30,1,28ccd3a45bc14bc994f3debdb968f25d,0.9,공격 시 {c}% 확률로 공격력 {p}% 추가 피해
-Paladin,BlizzardCharge,블리자드 차지,5,,,0,0,,0,0,Freeze,15,2,150,25,1,a8312bac0c2f4152ae7134c5a5793bb2,1.14,공격 시 {c}% 확률로 공격력 {p}% + 몬스터 2초 빙결
-Paladin,Achilles,아킬레스,5,,DmgReduce,4,2,HpPct,5,3,,0,0,0,0,0,,1,받는 피해 -{v1}% / 최대 체력 +{v2}%
-Paladin,Blast,블래스트,5,,,0,0,,0,0,Strike,15,2,300,50,1,9d249b2b40c143269a88ecf31358c6eb,3.0,공격 시 {c}% 확률로 공격력 {p}% 추가 피해
-Paladin,Guardian,가디언,5,,Evade,5,2,Thorns,5,5,,0,0,0,0,0,,1,{v1}% 확률로 몬스터 공격 회피 / 받은 피해의 {v2}% 반사
-DarkKnight,SlashBlast,슬래시 블러스트,5,,,0,0,,0,0,Strike,20,2,80,15,2,e7aa1b92119c41469f0c81a7ab3febbc,0.54,공격 시 {c}% 확률로 2연타 (각 공격력 {p}%)
-DarkKnight,SpearMastery,스피어 마스터리,5,,Mastery,10,5,Acc,4,2,,0,0,0,0,0,,1,숙련도 +{v1}% / 명중률 +{v2}%
-DarkKnight,HyperBody,하이퍼 바디,5,05a532dcac6f4e789bb8e6d74854e042,HpPct,8,4,,0,0,,0,0,0,0,0,,1,최대 체력 +{v1}%
-DarkKnight,DragonBuster,드래곤 버스터,5,,,0,0,,0,0,Strike,20,2,70,12,3,b79cbdf6d06b487382f03d625a1fc464,1.17,공격 시 {c}% 확률로 3연타 (각 공격력 {p}%)
-DarkKnight,DragonRoar,드래곤 로어,5,,,0,0,,0,0,Pierce,15,2,220,40,1,9f38c4e12c8c4d17ab9b923e20f5acbe,1.1,공격 시 {c}% 확률로 공격력 {p}% 추가 피해 (방어 무시)
-DarkKnight,DragonBlood,드래곤 블러드,5,,LowHpAtk,10,6,AtkPct,3,2,,0,0,0,0,0,,1,체력 50% 미만일 때 피해 +{v1}% / 공격력 +{v2}%
-DarkKnight,Beholder,비홀더,5,,,0,0,,0,0,Strike,15,2,200,35,1,9d249b2b40c143269a88ecf31358c6eb,3.0,공격 시 {c}% 확률로 공격력 {p}% 추가 피해
-DarkKnight,Berserk,버서크,5,f96bbd46ad404e9381036633aa55d936,LowHpAtk,10,5,LifestealPct,1,0.5,,0,0,0,0,0,,1,체력 50% 미만일 때 피해 +{v1}% / 준 피해의 {v2}% 회복
+﻿JobId,SkillId,Name,IconRUID,Trigger,SkillType,Cooldown,BuffTime,ProcType,Chance,Pct,ProcHits,Type1,V1,Type2,V2,Desc
+Hero,HeroBrandish,브랜디쉬,22916c14ce3b4ef69611347947fcb54d,Cooldown,검술,6,,Strike,0,220,2,,,,,{cd}초마다 공격력 {p}% {h}연타
+Hero,HeroPanic,패닉,8d71243d59684151b349cb3583a6c46a,Cooldown,콤보,12,,Strike,0,420,1,,,,,{cd}초마다 공격력 {p}% 강타
+Hero,HeroComa,코마,38a6aefef6784c42967a997795dba30f,Cooldown,콤보,15,,Freeze,0,220,1,,,,,{cd}초마다 공격력 {p}% + 기절 2초
+Hero,HeroEnrage,인레이지,14c64ff02eb64da0be624eed933e9d9c,Cooldown,콤보,20,8,Buff,0,0,1,AtkPct,20,CritDmg,30,"{cd}초마다 {bt}초간 공격력 +{v1}%, 크리티컬 데미지 +{v2}%"
+Hero,HeroSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,검술,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 공격력 {p}% {h}연타
+Hero,HeroComboAttack,콤보 어택,7328c199a3494a2ab0c12335f637c762,Proc,콤보,0,,Strike,15,100,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 공격
+Hero,HeroFinalAttack,파이널 어택,1446e8e558f64df2b805e94e74e32d7d,Proc,검술,0,,Strike,25,70,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 타격
+Warrior,WarriorIronBody,아이언 바디,52162587bc534b9385af8c77513d93d4,Passive,강인함,0,,,0,0,0,DefPct,6,HpPct,8,"방어력 +{v1}%, 최대 체력 +{v2}%"
+Warrior,WarriorWeaponMastery,웨폰 마스터리,d5cc33ccae844ba3b41d9c553f52200a,Passive,검술,0,,,0,0,0,Mastery,10,Acc,4,"숙련도 +{v1}%, 명중률 +{v2}%"
+Warrior,WarriorAchilles,아킬레스,6fa15fd3a0004b409ea516c11a67e533,Passive,강인함,0,,,0,0,0,DmgReduce,4,DefPct,5,"받는 피해 -{v1}%, 방어력 +{v2}%"
+Warrior,WarriorSelfRecovery,셀프 리커버리,dc628babea834dde8a7130cdf50b97b9,Passive,강인함,0,,,0,0,0,SelfRegen,1,,,5초마다 최대 체력 {v1}% 회복
+Warrior,WarriorChanceAttack,찬스 어택,50a17d6899e04e2eab21fe0f2d315519,Passive,콤보,0,,,0,0,0,Crit,3,StunDmg,10,"크리티컬 확률 +{v1}%, 기절한 몬스터에게 피해 +{v2}%"
+Paladin,PaladinSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,검술,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 전방 2연타 (각 공격력 {p}%)
+Paladin,PaladinFireCharge,파이어 차지,a1c1a122cfef44b08d21b77bc8337bcb,Proc,검술,0,,Strike,18,160,1,,,,,공격 시 {c}% 확률로 화염 속성 공격력 {p}% 추가 피해
+Paladin,PaladinIceCharge,아이스 차지,663b41e92d9444f283fff626fd2dc9b8,Proc,검술,0,,Freeze,15,150,1,,,,,공격 시 {c}% 확률로 빙결 속성 공격력 {p}% + 몬스터 2초 빙결
+Paladin,PaladinChargeBlow,차지 블로우,9aac955d159f49c1bc913ef96128e781,Proc,검술,0,,Strike,15,220,1,,,,,공격 시 {c}% 확률로 속성 차지 범위 공격 (공격력 {p}%)
+Paladin,PaladinBlast,블래스트,b67f324531034fe58dbcc040e2b850ed,Proc,검술,0,,Strike,15,300,1,,,,,공격 시 {c}% 확률로 단일 대상에게 공격력 {p}% 강력한 피해
+Paladin,PaladinSanctuary,생츄어리,01d9771554b74783bb4f837705dba08c,Proc,검술,0,,Strike,12,80,3,,,,,공격 시 {c}% 확률로 넓은 범위에 신성 3연타 (각 공격력 {p}%)
+DarkKnight,DarkKnightSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,검술,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 전방 2연타 (각 공격력 {p}%)
+DarkKnight,DarkKnightDragonBuster,드래곤 버스터,4464d8f09b00428c90f6867613c5041d,Proc,검술,0,,Strike,20,70,3,,,,,공격 시 {c}% 확률로 3연타 (각 공격력 {p}%)
+DarkKnight,DarkKnightDragonThrasher,드래곤 쓰레셔,,Proc,검술,0,,Strike,18,130,1,,,,,공격 시 {c}% 확률로 넓은 범위를 휘둘러 공격력 {p}% 피해
+DarkKnight,DarkKnightSacrifice,새크리파이스,8a0b0d445b0448eb8265cb123245b38f,Proc,검술,0,,Pierce,15,200,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 피해 (방어 무시)
+DarkKnight,DarkKnightDragonRoar,드래곤 로어,5b95027b2e3e409a9a0e5d7565bb82a8,Proc,검술,0,,Strike,14,280,1,,,,,공격 시 {c}% 확률로 주변 광역 공격 (공격력 {p}%)
+DarkKnight,DarkKnightBeholder,비홀더,ff2d6cadf81a4633bf56b5fa462f40bc,Proc,검술,0,,Strike,25,60,1,,,,,비홀더가 {c}% 확률로 공격력 {p}% 추가 피해

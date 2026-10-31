@@ -24,7 +24,7 @@
           "enable": true,
           "visible": true,
           "localize": true,
-          "displayOrder": 9,
+          "displayOrder": 6,
           "pathConstraints": "//",
           "revision": 0,
           "origin": {
@@ -372,9 +372,9 @@
               "PreserveSprite": 0,
               "StartFrameIndex": 0,
               "Color": {
-                "r": 0.6588235294117647,
-                "g": 0.6588235294117647,
-                "b": 0.6745098039215687,
+                "r": 0.65882355,
+                "g": 0.65882355,
+                "b": 0.6745098,
                 "a": 1
               },
               "DropShadow": false,
@@ -415,7 +415,7 @@
       {
         "id": "3606e39d-32de-427e-8d23-b38af810a3b4",
         "path": "/ui/PopupGroup/PopupBack/PopupPanel/PopupMessage",
-        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.TextComponent",
+        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.TextGUIRendererComponent",
         "jsonString": {
           "name": "PopupMessage",
           "path": "/ui/PopupGroup/PopupBack/PopupPanel/PopupMessage",
@@ -428,12 +428,12 @@
           "revision": 0,
           "origin": {
             "type": "Model",
-            "entry_id": "UIText",
+            "entry_id": "UITextGUIRenderer",
             "sub_entity_id": null,
             "root_entity_id": null,
             "replaced_model_id": null
           },
-          "modelId": "uitext",
+          "modelId": "uitextguirenderer",
           "@components": [
             {
               "@type": "MOD.Core.UITransformComponent",
@@ -556,39 +556,32 @@
               "Enable": true
             },
             {
-              "@type": "MOD.Core.TextComponent",
-              "Alignment": 4,
-              "Bold": false,
-              "DropShadow": false,
-              "DropShadowAngle": 30,
-              "DropShadowColor": {
-                "r": 0,
-                "g": 0,
-                "b": 0,
-                "a": 0.72
-              },
-              "DropShadowDistance": 32,
-              "Font": 0,
+              "@type": "MOD.Core.TextGUIRendererComponent",
+              "BestFit": false,
+              "ConstraintX": 100,
+              "ConstraintY": 100,
+              "FaceDilate": 0,
+              "Font": "Dotum",
               "FontColor": {
-                "r": 0.9019607843137255,
-                "g": 0.9019607843137255,
-                "b": 0.9019607843137255,
+                "r": 0.9019608,
+                "g": 0.9019608,
+                "b": 0.9019608,
                 "a": 1
               },
               "FontSize": 36,
-              "MaxSize": 40,
+              "FontStyle": 0,
+              "HorizontalAlignment": 2,
+              "IgnoreMapLayerCheck": false,
+              "MaxSize": 48,
               "MinSize": 10,
+              "OrderInLayer": 0,
               "OutlineColor": {
-                "r": 0.698039234,
-                "g": 0.698039234,
-                "b": 0.698039234,
+                "r": 0,
+                "g": 0,
+                "b": 0,
                 "a": 1
               },
-              "OutlineDistance": {
-                "x": 1,
-                "y": -1
-              },
-              "OutlineWidth": 1,
+              "OutlineWidth": 0,
               "Overflow": 0,
               "OverrideSorting": false,
               "Padding": {
@@ -598,8 +591,12 @@
                 "bottom": 0
               },
               "SizeFit": false,
+              "SortingLayer": "UI",
               "Text": "팝업 메시지",
-              "UseOutLine": false,
+              "Underlay": false,
+              "UseConstraintX": false,
+              "UseConstraintY": false,
+              "VerticalAlignment": 512,
               "Enable": true
             }
           ],
@@ -609,7 +606,7 @@
       {
         "id": "94a274e4-4111-40f1-924d-c95a3a1f14d5",
         "path": "/ui/PopupGroup/PopupBack/PopupPanel/PopupBtnOK",
-        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextComponent",
+        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextGUIRendererComponent",
         "jsonString": {
           "name": "PopupBtnOK",
           "path": "/ui/PopupGroup/PopupBack/PopupPanel/PopupBtnOK",
@@ -797,39 +794,32 @@
               "Enable": true
             },
             {
-              "@type": "MOD.Core.TextComponent",
-              "Alignment": 4,
-              "Bold": true,
-              "DropShadow": false,
-              "DropShadowAngle": 30,
-              "DropShadowColor": {
-                "r": 0,
-                "g": 0,
-                "b": 0,
-                "a": 0.72
-              },
-              "DropShadowDistance": 32,
-              "Font": 0,
+              "@type": "MOD.Core.TextGUIRendererComponent",
+              "BestFit": false,
+              "ConstraintX": 100,
+              "ConstraintY": 100,
+              "FaceDilate": 0,
+              "Font": "Dotum",
               "FontColor": {
                 "r": 1,
-                "g": 0.8274509803921568,
-                "b": 0.4196078431372549,
+                "g": 0.827451,
+                "b": 0.419607848,
                 "a": 1
               },
               "FontSize": 38,
-              "MaxSize": 40,
+              "FontStyle": 0,
+              "HorizontalAlignment": 2,
+              "IgnoreMapLayerCheck": false,
+              "MaxSize": 50,
               "MinSize": 10,
+              "OrderInLayer": 0,
               "OutlineColor": {
-                "r": 0.7,
-                "g": 0.7,
-                "b": 0.7,
+                "r": 0,
+                "g": 0,
+                "b": 0,
                 "a": 1
               },
-              "OutlineDistance": {
-                "x": 1,
-                "y": -1
-              },
-              "OutlineWidth": 1,
+              "OutlineWidth": 0,
               "Overflow": 0,
               "OverrideSorting": false,
               "Padding": {
@@ -839,8 +829,12 @@
                 "bottom": 0
               },
               "SizeFit": false,
+              "SortingLayer": "UI",
               "Text": "확인",
-              "UseOutLine": false,
+              "Underlay": false,
+              "UseConstraintX": false,
+              "UseConstraintY": false,
+              "VerticalAlignment": 512,
               "Enable": true
             }
           ],
@@ -850,7 +844,7 @@
       {
         "id": "0f5de49b-2adc-409a-816d-15aa43df8e0d",
         "path": "/ui/PopupGroup/PopupBack/PopupPanel/PopupBtnCancel",
-        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextComponent",
+        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextGUIRendererComponent",
         "jsonString": {
           "name": "PopupBtnCancel",
           "path": "/ui/PopupGroup/PopupBack/PopupPanel/PopupBtnCancel",
@@ -954,9 +948,9 @@
               "PreserveSprite": 0,
               "StartFrameIndex": 0,
               "Color": {
-                "r": 0.5568627450980392,
-                "g": 0.5568627450980392,
-                "b": 0.5882352941176471,
+                "r": 0.5568628,
+                "g": 0.5568628,
+                "b": 0.5882353,
                 "a": 1
               },
               "DropShadow": false,
@@ -1038,19 +1032,12 @@
               "Enable": true
             },
             {
-              "@type": "MOD.Core.TextComponent",
-              "Alignment": 4,
-              "Bold": true,
-              "DropShadow": false,
-              "DropShadowAngle": 30,
-              "DropShadowColor": {
-                "r": 0,
-                "g": 0,
-                "b": 0,
-                "a": 0.72
-              },
-              "DropShadowDistance": 32,
-              "Font": 0,
+              "@type": "MOD.Core.TextGUIRendererComponent",
+              "BestFit": false,
+              "ConstraintX": 100,
+              "ConstraintY": 100,
+              "FaceDilate": 0,
+              "Font": "Dotum",
               "FontColor": {
                 "r": 1,
                 "g": 1,
@@ -1058,19 +1045,19 @@
                 "a": 1
               },
               "FontSize": 38,
-              "MaxSize": 40,
+              "FontStyle": 0,
+              "HorizontalAlignment": 2,
+              "IgnoreMapLayerCheck": false,
+              "MaxSize": 50,
               "MinSize": 10,
+              "OrderInLayer": 0,
               "OutlineColor": {
-                "r": 0.7,
-                "g": 0.7,
-                "b": 0.7,
+                "r": 0,
+                "g": 0,
+                "b": 0,
                 "a": 1
               },
-              "OutlineDistance": {
-                "x": 1,
-                "y": -1
-              },
-              "OutlineWidth": 1,
+              "OutlineWidth": 0,
               "Overflow": 0,
               "OverrideSorting": false,
               "Padding": {
@@ -1080,8 +1067,12 @@
                 "bottom": 0
               },
               "SizeFit": false,
+              "SortingLayer": "UI",
               "Text": "취소",
-              "UseOutLine": false,
+              "Underlay": false,
+              "UseConstraintX": false,
+              "UseConstraintY": false,
+              "VerticalAlignment": 512,
               "Enable": true
             }
           ],
@@ -1195,9 +1186,9 @@
               "PreserveSprite": 0,
               "StartFrameIndex": 0,
               "Color": {
-                "r": 0.2901960784313726,
-                "g": 0.2901960784313726,
-                "b": 0.3137254901960784,
+                "r": 0.2901961,
+                "g": 0.2901961,
+                "b": 0.3137255,
                 "a": 1
               },
               "DropShadow": false,
