@@ -25,12 +25,12 @@ script SkillTestUILogic extends Logic
 		self._T.rows = {}
 		self._T.selected = nil
 		self._T.last = nil
-		-- 직업마다 이펙트 있는 발동 스킬 수
+		-- 직업마다 액티브 스킬 수
 		local fx = {}
 		local js = _DataService:GetTable("JobSkillTable")
 		if js ~= nil then
 			for i = 1, js:GetRowCount() do
-				if (js:GetCell(i, "EffectRUID") or "") ~= "" and (js:GetCell(i, "ProcType") or "") ~= "" then
+				if (js:GetCell(i, "ProcType") or "") ~= "" then
 					local id = js:GetCell(i, "JobId")
 					fx[id] = (fx[id] or 0) + 1
 				end

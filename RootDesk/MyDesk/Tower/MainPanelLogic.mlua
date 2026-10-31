@@ -203,7 +203,7 @@ script MainPanelLogic extends Logic
 	method void SetupSkillRows()
 		-- 스킬 탭 줄(아이콘/이름/설명/버튼/잠금)을 찾는다. 줄은 ui에 이름이 정해져 있어 순서대로 직업 스킬에 배정한다.
 		-- 직업 스킬은 레벨업 카드로만 강화하므로 강화 버튼과 스킬석 표시는 숨긴다.
-		local names = { "Might", "Vitality", "IronSkin", "Mastery", "Precision", "Swift", "MesoHunter", "Vampire", "DoubleStrike", "Execute", "Undying" }
+		local names = { "Might", "Vitality", "IronSkin", "Mastery", "Precision", "Swift", "MesoHunter", "Vampire", "DoubleStrike", "Execute", "Undying", "Skill12" }
 		self._T.skillRows = {}
 		for _, n in ipairs(names) do
 			local base = self.SkillRowPath .. n
@@ -268,12 +268,14 @@ script MainPanelLogic extends Logic
 				if isvalid(row.lock) and row.lock.Enable ~= locked then row.lock:SetEnable(locked) end
 				if locked and isvalid(row.lockText) then row.lockText.TextGUIRendererComponent.Text = sk.name .. " - 레벨업 스킬 카드로 배울 수 있음" end
 				if isvalid(row.name) then
-					local label = sk.name .. "  Lv." .. tostring(lv) .. " / " .. tostring(sk.max)
+					local label = sk.name .. "  Lv." .. tostring(lv)
+					if sk.breaks > 0 then label = label .. "  돌파 " .. tostring(math.floor(lv / 3)) .. "/" .. tostring(sk.breaks) end
 					if row.name.TextGUIRendererComponent.Text ~= label then row.name.TextGUIRendererComponent.Text = label end
 				end
 				if isvalid(row.desc) then
 					local text = _TarotLogic:SkillDesc(sk, lv)
-					if lv > 0 and lv < sk.max then text = text .. "\n(다음 레벨: " .. _TarotLogic:SkillDesc(sk, lv + 1) .. ")" end
+					local info = mgr.SkillInfo[sk.id] or ""
+					if info ~= "" then text = text .. "\n" .. info end
 					if row.desc.TextGUIRendererComponent.Text ~= text then row.desc.TextGUIRendererComponent.Text = text end
 				end
 			end

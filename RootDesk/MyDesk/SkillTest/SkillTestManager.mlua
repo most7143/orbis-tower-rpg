@@ -47,29 +47,35 @@ script SkillTestManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void LoadTables()
-		-- skills[직업 Id] = { {name, desc, type, pct, hits, fx, fxScale}, ... } (이펙트 RUID가 있는 발동 스킬만, 1레벨 수치)
+		-- skills[직업 Id] = { {name, desc, type, pct, hits, fx, fxScale, actionFrames, ...}, ... } (연출이 있는 액티브만, 기본 수치)
 		self._T.skills = {}
 		self._T.fxCount = 0
+		local actions = {}
+		local at = _DataService:GetTable("SkillActionTable")
+		if at ~= nil then
+			for i = 1, at:GetRowCount() do
+				actions[at:GetCell(i, "SkillId")] = { name = at:GetCell(i, "Action") or "", frames = at:GetCell(i, "ActionFrames") or "", time = tonumber(at:GetCell(i, "ActionTime")) or 0.8, caster = at:GetCell(i, "CasterFx") or "", hit = at:GetCell(i, "HitFx") or "", scale = tonumber(at:GetCell(i, "FxScale")) or 1 }
+			end
+		end
 		local js = _DataService:GetTable(self.JobSkillTableName)
 		if js ~= nil then
 			for i = 1, js:GetRowCount() do
-				local fx = js:GetCell(i, "EffectRUID") or ""
+				local a = actions[js:GetCell(i, "SkillId")]
 				local pt = js:GetCell(i, "ProcType") or ""
-				if fx ~= "" and pt ~= "" then
+				if a ~= nil and pt ~= "" then
 					local id = js:GetCell(i, "JobId")
-					-- ProcHits: 연타 수 (0이면 Double은 2, 나머지는 1) — TowerRunManager와 같은 규칙
 					local hits = tonumber(js:GetCell(i, "ProcHits")) or 0
 					if hits <= 0 then
 						hits = 1
 						if pt == "Double" then hits = 2 end
 					end
-					-- 설명은 1레벨 수치로 채운다
 					local desc = js:GetCell(i, "Desc") or ""
-					local keys = { v1 = "V1", v2 = "V2", c = "Chance", p = "Pct" }
-					for key, col in pairs(keys) do desc = (string.gsub(desc, "{" .. key .. "}", tostring(tonumber(js:GetCell(i, col)) or 0))) end
+					local keys = { v1 = "V1", v2 = "V2", c = "Chance", p = "Pct", h = "ProcHits", cd = "Cooldown", bt = "BuffTime" }
+					for key, col in pairs(keys) do desc = (string.gsub(desc, "{" .. key .. "}", tostring(math.floor(tonumber(js:GetCell(i, col)) or 0)))) end
 					if self._T.skills[id] == nil then self._T.skills[id] = {} end
 					table.insert(self._T.skills[id], { name = js:GetCell(i, "Name"), desc = desc, type = pt,
-						pct = tonumber(js:GetCell(i, "Pct")) or 0, hits = hits, fx = fx, fxScale = tonumber(js:GetCell(i, "EffectScale")) or 1 })
+						pct = tonumber(js:GetCell(i, "Pct")) or 0, hits = hits, fx = a.hit, fxScale = a.scale,
+						actionName = a.name, actionFrames = a.frames, actionTime = a.time, casterFx = a.caster })
 					self._T.fxCount = self._T.fxCount + 1
 				end
 			end
@@ -190,9 +196,9 @@ script SkillTestManager extends Component
 		local monster = self._T.monster
 		if not isvalid(player) or not isvalid(monster) then return end
 		self.InfoTitle = jobName .. " - " .. sk.name .. "  (" .. tostring(idx) .. "/" .. tostring(total) .. ")"
-		self.InfoDesc = sk.desc .. "\n" .. sk.type .. " · " .. tostring(sk.hits) .. "타 · 이펙트 크기 " .. tostring(sk.fxScale)
+		self.InfoDesc = sk.desc .. "\n" .. sk.type .. " · " .. tostring(sk.hits) .. "타 · 이펙트 크기 " .. tostring(sk.fxScale) .. " · 액션 " .. sk.actionName
 		local tp = player:GetComponent("script.TowerPlayer")
-		if tp ~= nil then tp:PlayAttackMotion(0, player.PlayerComponent.UserId) end
+		if tp ~= nil then tp:PlayAttackMotion(0, sk.actionFrames, sk.actionTime, sk.casterFx, player.PlayerComponent.UserId) end
 		for h = 1, sk.hits do
 			local hit = h
 			self:Later(function() self:PlayHit(sk, hit) end, self.HitDelay + (h - 1) * self.ProcHitInterval)
@@ -214,7 +220,9 @@ script SkillTestManager extends Component
 		local ox = ((h - 1) % 3 - 1) * 0.12
 		local oy = (math.floor((h - 1) / 3) % 2) * 0.12
 		if h == 1 then ox = 0 end
-		_EffectService:PlayEffect(sk.fx, who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(sk.fxScale, sk.fxScale, 1), false)
+		local fxList = {}
+		for ruid in string.gmatch(sk.fx, "[^|]+") do table.insert(fxList, ruid) end
+		if #fxList > 0 then _EffectService:PlayEffect(fxList[(h - 1) % #fxList + 1], who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(sk.fxScale, sk.fxScale, 1), false, { FlipX = true }) end
 		local tp = player:GetComponent("script.TowerPlayer")
 		if tp == nil then return end
 		-- 피해 숫자는 예시 값 (스킬 계수 %), 주사위는 무작위
@@ -223,7 +231,7 @@ script SkillTestManager extends Component
 		else
 			local amount = math.floor(sk.pct)
 			if sk.type == "Dice" then amount = _UtilLogic:RandomIntegerRange(50, 300) end
-			tp:ShowProcDamage(monster, math.max(1, amount), sk.type == "CritStrike")
+			if amount > 0 then tp:ShowProcDamage(monster, amount, sk.type == "CritStrike") end
 			local mc = monster:GetComponent("script.TowerMonster")
 			if mc ~= nil then mc:SetClip(mc.HitRUID, mc.HitAnimTime) end
 		end
