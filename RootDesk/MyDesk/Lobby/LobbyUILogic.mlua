@@ -4,15 +4,24 @@ script LobbyUILogic extends Logic
 	-- LobbyUI.ui 바인딩 (UIBuilder injectBindings로 주입)
 	property Entity lobbyRoot = "ca754c14-c243-4e89-86e1-a8347b0f7fa8"
 	property ButtonComponent btnPlay = "3b66162e-0c74-4b1f-acff-4e28c727a7ee"
-	property ButtonComponent btnEngrave = "ff27894c-fbae-495e-8c32-71484ee63a3d"
+	property ButtonComponent btnGrowth = "ff27894c-fbae-495e-8c32-71484ee63a3d"
 	property ButtonComponent btnAchieve = "84cac690-1c03-4705-9def-ab603706aab0"
-	property ButtonComponent btnSymbol = "f608bfef-817e-4aec-aa4b-2bf00ecc159c"
-	property ButtonComponent btnGrace = "282df23c-78cf-427c-b867-b8a18ab5baac"
 	-- 테스트용: 스킬 이펙트 테스트 맵 입장
 	property ButtonComponent btnSkillTest = "7b5ace19-dcae-41ea-9748-ae12ee4e3205"
+	-- 스킬 뽑기 화면
+	property ButtonComponent btnGacha = "e5b66d96-8849-405a-9d82-a3656a2f7e30"
 	property TextGUIRendererComponent noticeText = "d93951f9-f2bd-464b-a3a1-97ca120a9d6c"
 
 	property string LobbyMapName = "Lobby"
+	-- 메인화면 버튼 (메인화면 리소스): 배경은 SpriteSwap, 아이콘·Label은 자식. 글자색은 상태별로 여기서 바꾼다.
+	property Color LabelNormal = Color(1, 0.953, 0.843, 1)
+	property Color LabelHover = Color(1, 1, 1, 1)
+	property Color LabelPressed = Color(1, 0.886, 0.627, 1)
+	property Color LabelDisabled = Color(0.714, 0.714, 0.745, 1)
+	property Color OutlineNormal = Color(0.145, 0.11, 0.212, 1)
+	property Color OutlineDisabled = Color(0.196, 0.196, 0.227, 1)
+	-- 아이콘 비활성 이미지 (normal:disabled;...)
+	property string IconDisabledMap = "4290c21040c64e2c98188f663a0f4b72:426839e62a6544a99c8fb54dc107466e;9aa251a3748c4655af2a7c909efe692a:c1eadf0f500f419ba5d5b81e860b46c8;983bdc209e734848987d4e9f0b3c803c:14a1d8def6df486cacb0a19f95326dc9;2db220ec552a4416b44aba16503247d9:17dca29821b645b79d4900695ce404d0"
 	property number NoticeDuration = 1.5
 
 	@HideFromInspector
@@ -24,17 +33,90 @@ script LobbyUILogic extends Logic
 	method void OnBeginPlay()
 		-- 로비 버튼 연결. 업적은 아직 준비 중 안내만 띄운다.
 		self.clickHandlers = {}
+		self._T.menuHandlers = {}
 		self:Bind(self.btnPlay, function() self:OnPlay() end)
-		self:Bind(self.btnEngrave, function() _EngraveUILogic:Open() end)
-		self:Bind(self.btnSymbol, function() _SymbolUILogic:Open() end)
-		self:Bind(self.btnGrace, function() _GraceUILogic:Open() end)
+		self:Bind(self.btnGrowth, function() _GrowthUILogic:Open() end)
+		self:Bind(self.btnGacha, function() _GachaUILogic:Open() end)
 		self:Bind(self.btnAchieve, function() self:ShowNotice("업적은 준비 중입니다") end)
 		self:Bind(self.btnSkillTest, function() self:OnSkillTest() end)
+		-- 버튼 상태 연출 (호버·눌림·비활성: 글자색, 눌림 시 아이콘·글자 2px 아래로)
+		self._T.menu = {}
+		for _, b in ipairs({ self.btnPlay, self.btnGrowth, self.btnAchieve, self.btnGacha, self.btnSkillTest }) do self:SetupMenuButton(b) end
 		-- 스킬 테스트는 개발 도구라 메이커 플레이에서만 보인다 (출시 월드에서는 숨김).
 		local devTools = Environment:IsMakerPlay()
 		if isvalid(self.btnSkillTest) then self.btnSkillTest.Entity:SetEnable(devTools) end
 		if isvalid(self.noticeText) then self.noticeText.Entity:SetEnable(false) end
 		log("[VRF] LobbyUILogic begin buttons=" .. tostring(#self.clickHandlers) .. " devTools=" .. tostring(devTools))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetupMenuButton(ButtonComponent button)
+		-- 메뉴 버튼 하나: 아이콘·Label 원래 위치를 기억하고 터치 이벤트로 상태를 바꾼다.
+		if not isvalid(button) then return end
+		local e = button.Entity
+		local icon = e:GetChildByName("Icon")
+		local label = e:GetChildByName("Label")
+		local rec = { button = button, icon = icon, label = label, hover = false, pressed = false, disabled = false }
+		if isvalid(icon) then
+			rec.iconPos = icon.UITransformComponent.anchoredPosition
+			rec.iconRuid = icon.SpriteGUIRendererComponent.ImageRUID.DataId
+		end
+		if isvalid(label) then rec.labelPos = label.UITransformComponent.anchoredPosition end
+		button.Selectable = false
+		local function on(evt, fn)
+			local h = e:ConnectEvent(evt, fn)
+			table.insert(self._T.menuHandlers, { entity = e, evt = evt, h = h })
+		end
+		on(UITouchEnterEvent, function() rec.hover = true self:ApplyMenuState(rec) end)
+		on(UITouchExitEvent, function() rec.hover = false rec.pressed = false self:ApplyMenuState(rec) end)
+		on(UITouchDownEvent, function() rec.pressed = true self:ApplyMenuState(rec) end)
+		on(UITouchUpEvent, function() rec.pressed = false self:ApplyMenuState(rec) end)
+		table.insert(self._T.menu, rec)
+		self:ApplyMenuState(rec)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyMenuState(table rec)
+		-- 상태별 글자색·외곽선, 눌림이면 아이콘·Label만 (0,-2), 비활성이면 비활성 아이콘.
+		local d = Vector2(0, 0)
+		local color = self.LabelNormal
+		if rec.disabled then
+			color = self.LabelDisabled
+		elseif rec.pressed then
+			color = self.LabelPressed
+			d = Vector2(0, -2)
+		elseif rec.hover then
+			color = self.LabelHover
+		end
+		if isvalid(rec.label) then
+			local t = rec.label.TextGUIRendererComponent
+			t.FontColor = color
+			if rec.disabled then t.OutlineColor = self.OutlineDisabled else t.OutlineColor = self.OutlineNormal end
+			rec.label.UITransformComponent.anchoredPosition = rec.labelPos + d
+		end
+		if isvalid(rec.icon) then
+			rec.icon.UITransformComponent.anchoredPosition = rec.iconPos + d
+			local ruid = rec.iconRuid
+			if rec.disabled then
+				for pair in string.gmatch(self.IconDisabledMap, "[^;]+") do
+					local n, dis = string.match(pair, "([^:]+):([^:]+)")
+					if n == rec.iconRuid then ruid = dis end
+				end
+			end
+			rec.icon.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetMenuDisabled(ButtonComponent button, boolean disabled)
+		-- 이용 불가 버튼: 회색 배경(DisabledSprite)·회색 아이콘·글자, 클릭 막기.
+		for _, rec in ipairs(self._T.menu or {}) do
+			if rec.button == button then
+				rec.disabled = disabled
+				button.Enable = not disabled
+				self:ApplyMenuState(rec)
+			end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -52,6 +134,10 @@ script LobbyUILogic extends Logic
 			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
 		end
 		self.clickHandlers = {}
+		for _, rec in ipairs(self._T.menuHandlers or {}) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(rec.evt, rec.h) end
+		end
+		self._T.menuHandlers = {}
 	end
 
 	@ExecSpace("ClientOnly")

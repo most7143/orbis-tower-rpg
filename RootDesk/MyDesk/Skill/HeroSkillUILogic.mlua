@@ -1,0 +1,455 @@
+@Logic
+script HeroSkillUILogic extends Logic
+
+	-- 성장 > 스킬 탭 (SkillUI.ui): 히어로 스킬 15종 보유·레벨업·합성, 5칸 장착(칸 순서는 의미 없음) + 고정 고유 패시브.
+	-- 장착: 5칸은 항상 차 있고 해제할 수 없다. 위쪽 칸을 누른 뒤 아래에서 장착하지 않은 스킬을 누르면 그 칸의 스킬과 바뀐다. 데이터는 로컬 플레이어의 PlayerEngrave(Skill* 동기화)에서 읽는다.
+	property Entity dimEntity = "a76c6a34-c7ef-46ff-83eb-0516e8443778"
+	property Entity panelEntity = "15a1400f-a655-464b-928d-595fb318604a"
+	property string PanelPath = "/ui/SkillUI/Panel/"
+	property integer SkillCount = 15
+	property integer EquipSlots = 5
+	property string SkillTableName = "HeroSkillTable"
+	property string GradeTableName = "SkillGradeTable"
+	property string LockedIconRUID = "5ee1af3484dd4876859334a278bfa7db"
+	property Color MainTextColor = Color(0.91, 0.91, 0.89, 1)
+	property Color SubTextColor = Color(0.59, 0.59, 0.57, 1)
+	property Color LockedTextColor = Color(0.45, 0.45, 0.45, 1)
+	property Color GoldTextColor = Color(0.847, 0.733, 0.475, 1)
+	-- 고유 패시브: 장착 칸을 쓰지 않고 해제·교체할 수 없다
+	property string PassiveName = "콤보 어택"
+	property string PassiveIconRUID = "7328c199a3494a2ab0c12335f637c762"
+	property string PassiveDesc = "콤보를 소비하지 않는 직접 공격 적중 시 30% 확률로 콤보 1 획득 (최대 12, 자연 감소 없음). 콤보당 기본 공격력 증가"
+	-- 인게임 수치 (HeroCombatLogic과 같게): 콤보당 공격력 % = 기본 + (레벨-1) × 증가
+	property number ComboAtkBase = 1
+	property number ComboAtkPerLv = 0.2
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 스킬표·등급표·설정값을 읽고 카드·장착 칸·버튼을 연결한 뒤 닫힌 상태로 시작한다.
+		self._T.skills = {}
+		self._T.skillById = {}
+		local ds = _DataService:GetTable(self.SkillTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local sk = { id = ds:GetCell(i, "SkillId"), name = ds:GetCell(i, "Name"), grade = tonumber(ds:GetCell(i, "Grade")) or 1, icon = ds:GetCell(i, "IconRUID") or "",
+					category = ds:GetCell(i, "Category") or "", role = ds:GetCell(i, "Role") or "", desc = ds:GetCell(i, "Desc") or "" }
+				table.insert(self._T.skills, sk)
+				self._T.skillById[sk.id] = sk
+			end
+		end
+		self._T.grades = {}
+		local gs = _DataService:GetTable(self.GradeTableName)
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do
+				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = { name = gs:GetCell(i, "Name"), synth = tonumber(gs:GetCell(i, "SynthRate")) or 0, color = Color.FromHexCode(gs:GetCell(i, "ColorHex")) }
+			end
+		end
+		self._T.cfg = { SkillUpBase = 5, SkillMaxLv = 11, SkillLvPower = 20, SkillSynthCount = 3 }
+		local rc = _DataService:GetTable("RunConfig")
+		if rc ~= nil then
+			for i = 1, rc:GetRowCount() do
+				local k = rc:GetCell(i, "Key")
+				if self._T.cfg[k] ~= nil then self._T.cfg[k] = tonumber(rc:GetCell(i, "Value")) or self._T.cfg[k] end
+			end
+		end
+		self.clickHandlers = {}
+		local cardSkin = {
+			normal = "b98a964cddde44bc91cc608e648320d4", hover = "39cde8030aef40c68b7e8afc4e62aa15", pressed = "39cde8030aef40c68b7e8afc4e62aa15", disabled = "9f3b7d70600c434dbf531456a34f4865",
+			selected = "71e3f450afe64feb8e864b21924d3be5", selectedHover = "26f6423680b54a17a08f2e0b9a5fadb5", selectedPressed = "26f6423680b54a17a08f2e0b9a5fadb5",
+		}
+		for i = 1, self.SkillCount do
+			local idx = i
+			local card = self:Get("Grid/Card_" .. tostring(i))
+			if isvalid(card) then
+				self:Bind(card, function() self:SelectSkill(idx) end)
+				_UIButtonLogic:SetSkin(card, cardSkin)
+			end
+		end
+		for i = 1, self.EquipSlots do
+			local slot = i
+			self:Bind(self:Get("Equip/Slot_" .. tostring(i)), function() self:OnEquipSlot(slot) end)
+		end
+		local actionSkin = { normal = "359ea90151c042ad89f3eccf3ed758b6", hover = "69b856b1b9c24e89845934f43ff84cf2", pressed = "42eb348e71354d949ea41664074dc230", disabled = "4058bc4ce0dc4ca09f560a08631ee64d",
+			textNormal = Color(0.812, 0.812, 0.8, 1), textHover = Color(0.9, 0.9, 0.88, 1), textDisabled = Color(0.463, 0.463, 0.451, 1) }
+		for _, name in ipairs({ "BtnUpgrade", "BtnSynth" }) do _UIButtonLogic:SetSkin(self:Get(name), actionSkin) end
+		self:Bind(self:Get("BtnUpgrade"), function() self:OnUpgrade() end)
+		self:Bind(self:Get("BtnSynth"), function() self:OnSynth() end)
+		self:Bind(self:Get("Equip/Passive"), function() self:SelectPassive() end)
+		self._T.selected = 1
+		self._T.pickSlot = 0
+		self._T.msg = ""
+		self._T.open = true
+		self:SetOpen(false)
+		log("[VRF] HeroSkillUILogic begin skills=" .. tostring(#self._T.skills))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Get(string name)
+		-- 패널 안 엔티티.
+		return _EntityService:GetEntityByPath(self.PanelPath .. name)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string name, string s, Color c)
+		-- 패널 안 글자(와 색) 바꾸기.
+		local e = self:Get(name)
+		if not isvalid(e) then return end
+		if e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+		if c ~= nil then e.TextGUIRendererComponent.FontColor = c end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetIcon(string name, string ruid, Color c)
+		-- 패널 안 아이콘 이미지·색.
+		local e = self:Get(name)
+		if not isvalid(e) then return end
+		e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		e.SpriteGUIRendererComponent.Color = c
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 로컬 플레이어의 저장 컴포넌트 (스킬 포함).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 성장 화면 스킬 탭.
+		local eng = self:GetEngrave()
+		if eng == nil or not eng.SkillLoaded then return end
+		self._T.seq = eng.SkillSeq
+		self._T.msg = ""
+		self._T.pickSlot = 0
+		self:SetOpen(true)
+		self:Refresh()
+		log("[VRF] skill tab open books=" .. tostring(eng.SkillBooks))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기.
+		self:SetOpen(false)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOpen(boolean open)
+		-- 배경·패널 표시 전환.
+		if self._T.open == open then return end
+		self._T.open = open
+		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(open) end
+		if isvalid(self.panelEntity) then self.panelEntity:SetEnable(open) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method number Power(integer lv)
+		-- 레벨에 따른 기본 능력치 배율 (Lv.1 = 1배, 레벨당 +20%).
+		return 1 + math.max(0, lv - 1) * self._T.cfg.SkillLvPower / 100
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FormatNum(number v)
+		-- 정수면 정수, 아니면 소수 한 자리.
+		if math.abs(v - math.floor(v)) < 0.001 then return tostring(math.floor(v)) end
+		return string.format("%.1f", v)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectSkill(integer idx)
+		-- 카드 선택: 오른쪽에 그 스킬 정보. 장착할 칸을 고른 상태면 장착하지 않은 보유 스킬을 그 칸에 넣는다.
+		local sk = self._T.skills[idx]
+		if sk == nil then return end
+		self._T.selected = idx
+		self._T.msg = ""
+		local eng = self:GetEngrave()
+		local slot = self._T.pickSlot or 0
+		if eng ~= nil and slot > 0 then
+			if (eng.SkillOwnLv[sk.id] or 0) <= 0 then
+				self._T.msg = "보유하지 않은 스킬은 장착할 수 없습니다"
+			elseif self:EquippedSlot(eng, sk.id) > 0 then
+				self._T.msg = "이미 장착된 스킬입니다. 장착하지 않은 스킬을 골라 주세요"
+			else
+				self._T.pickSlot = 0
+				eng:RequestSkillEquip(slot, sk.id)
+			end
+		end
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectPassive()
+		-- 고유 패시브 칸: 오른쪽에 패시브 정보 (해제·교체 불가).
+		self._T.selected = 0
+		self._T.pickSlot = 0
+		self._T.msg = ""
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method table SelectedSkill()
+		-- 지금 고른 스킬 (고유 패시브를 보고 있으면 nil).
+		return self._T.skills[self._T.selected or 1]
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer EquippedSlot(Component eng, string id)
+		-- 그 스킬이 장착된 칸 (없으면 0).
+		for i = 1, self.EquipSlots do
+			if eng.SkillEquip[tostring(i)] == id then return i end
+		end
+		return 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEquipSlot(integer slot)
+		-- 장착 칸 클릭: 그 칸을 장착 대상으로 고른다 (다시 누르면 취소). 칸에 스킬이 있으면 오른쪽에 그 스킬 정보.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		if self._T.pickSlot == slot then
+			self._T.pickSlot = 0
+			self._T.msg = ""
+			self:Refresh()
+			return
+		end
+		self._T.pickSlot = slot
+		local id = eng.SkillEquip[tostring(slot)] or ""
+		for i, sk in ipairs(self._T.skills) do
+			if sk.id == id then self._T.selected = i end
+		end
+		self._T.msg = "아래에서 바꿔 낄 스킬을 고르세요"
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpgrade()
+		-- [레벨업] 요청.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		-- 고유 패시브 칸을 보고 있으면 콤보 어택 레벨업 (스킬북 소모)
+		if (self._T.selected or 1) == 0 then
+			eng:RequestComboAttackUpgrade()
+			return
+		end
+		local sk = self:SelectedSkill()
+		if sk ~= nil then eng:RequestSkillUpgrade(sk.id) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSynth()
+		-- [합성] 요청.
+		local eng = self:GetEngrave()
+		local sk = self:SelectedSkill()
+		if eng ~= nil and sk ~= nil then eng:RequestSkillSynth(sk.id) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CheckResult(Component eng)
+		-- 서버 결과(레벨업·합성)가 오면 안내 문구.
+		if eng.SkillSeq == self._T.seq then return end
+		self._T.seq = eng.SkillSeq
+		local id = string.match(eng.SkillResult or "", "^([^:,]+)") or ""
+		local isNew = string.match(eng.SkillResult or "", "^[^:,]+:1") ~= nil
+		local sk = self._T.skillById[id]
+		local name = ""
+		if sk ~= nil then name = sk.name end
+		local kind = eng.SkillMsg
+		if kind == "upgrade" then
+			self._T.msg = name .. " Lv." .. tostring(eng.SkillOwnLv[id] or 0) .. " 달성!"
+		elseif kind == "synth_ok" or kind == "synth_fail" then
+			local head = "합성 실패... "
+			if kind == "synth_ok" then head = "합성 성공! " end
+			local tail = " +1"
+			if isNew then tail = " 신규 획득!" end
+			self._T.msg = head .. "[" .. name .. "]" .. tail
+		elseif kind == "passive" then
+			if eng.ComboAttackLv == 1 then self._T.msg = "콤보 어택 해금!" else self._T.msg = "콤보 어택 Lv." .. tostring(eng.ComboAttackLv) .. " 달성!" end
+		elseif kind == "equip" then
+			self._T.msg = ""
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 장착 칸, 스킬 카드 15장, 오른쪽 상세와 버튼 상태.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		self:CheckResult(eng)
+		local owned = 0
+		for i, sk in ipairs(self._T.skills) do
+			local lv = eng.SkillOwnLv[sk.id] or 0
+			if lv > 0 then owned = owned + 1 end
+			self:RefreshCard(eng, i, sk, lv)
+		end
+		self:SetText("OwnHead", "보유 스킬  " .. tostring(owned) .. " / " .. tostring(#self._T.skills), nil)
+		local equipped = 0
+		for i = 1, self.EquipSlots do
+			local id = eng.SkillEquip[tostring(i)] or ""
+			local sk = self._T.skillById[id]
+			local base = "Equip/Slot_" .. tostring(i)
+			if sk ~= nil then
+				equipped = equipped + 1
+				self:SetIcon(base .. "/Icon", sk.icon, Color(1, 1, 1, 1))
+				self:SetText(base .. "/Label", sk.name, self.MainTextColor)
+			else
+				self:SetIcon(base .. "/Icon", self.LockedIconRUID, Color(1, 1, 1, 0.6))
+				self:SetText(base .. "/Label", "빈 칸", self.LockedTextColor)
+			end
+			local mark = self:Get(base .. "/Mark")
+			if isvalid(mark) then mark:SetEnable(self._T.pickSlot == i) end
+		end
+		self:SetText("EquipHead", "장착 스킬  " .. tostring(equipped) .. " / " .. tostring(self.EquipSlots), nil)
+		-- 고유 패시브 칸: 잠겨 있으면 아이콘을 어둡게
+		local pTint = Color(1, 1, 1, 1)
+		if eng.ComboAttackLv <= 0 then pTint = Color(0.3, 0.3, 0.3, 1) end
+		self:SetIcon("Equip/Passive/Icon", self.PassiveIconRUID, pTint)
+		local passiveMark = self:Get("Equip/Passive/Mark")
+		if isvalid(passiveMark) then passiveMark:SetEnable(self._T.selected == 0) end
+		self:RefreshDetail(eng)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshCard(Component eng, integer i, table sk, integer lv)
+		-- 카드 한 장: 아이콘·이름·등급·레벨·재료 수 (미보유는 어둡게).
+		local base = "Grid/Card_" .. tostring(i)
+		local card = self:Get(base)
+		if not isvalid(card) then return end
+		local g = self._T.grades[sk.grade] or { name = "", color = self.SubTextColor }
+		local cfg = self._T.cfg
+		_UIButtonLogic:SetDisabled(card, lv <= 0)
+		_UIButtonLogic:SetSelected(card, i == self._T.selected)
+		-- 장착 중인 스킬은 카드 바탕에 색과 표시
+		local equipped = lv > 0 and self:EquippedSlot(eng, sk.id) > 0
+		local bg = self:Get(base .. "/EquipBg")
+		if isvalid(bg) and bg.Enable ~= equipped then bg:SetEnable(equipped) end
+		local tag = self:Get(base .. "/EquipTag")
+		if isvalid(tag) and tag.Enable ~= equipped then tag:SetEnable(equipped) end
+		if lv > 0 then
+			self:SetIcon(base .. "/Icon", sk.icon, Color(1, 1, 1, 1))
+			self:SetText(base .. "/Name", sk.name, self.MainTextColor)
+			self:SetText(base .. "/Grade", g.name .. "  ·  Lv." .. tostring(lv), g.color)
+			local cnt = eng.SkillCnt[sk.id] or 0
+			local text = tostring(cnt)
+			if lv < cfg.SkillMaxLv then text = tostring(cnt) .. " / " .. tostring(lv * cfg.SkillUpBase) end
+			local c = self.SubTextColor
+			if lv < cfg.SkillMaxLv and cnt >= lv * cfg.SkillUpBase then c = self.GoldTextColor end
+			self:SetText(base .. "/Count", text, c)
+		else
+			self:SetIcon(base .. "/Icon", sk.icon, Color(0.25, 0.25, 0.25, 1))
+			self:SetText(base .. "/Name", sk.name, self.LockedTextColor)
+			self:SetText(base .. "/Grade", g.name .. "  ·  미보유", self.LockedTextColor)
+			self:SetText(base .. "/Count", "", nil)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshDetail(Component eng)
+		-- 오른쪽 상세: 아이콘·이름·등급·레벨·능력치 배율·설명·재료·버튼 상태와 안내.
+		local sk = self:SelectedSkill()
+		if sk == nil then
+			self:RefreshPassiveDetail(eng)
+			return
+		end
+		local cfg = self._T.cfg
+		local lv = eng.SkillOwnLv[sk.id] or 0
+		local cnt = eng.SkillCnt[sk.id] or 0
+		local g = self._T.grades[sk.grade] or { name = "", synth = 0, color = self.SubTextColor }
+		local tint = Color(1, 1, 1, 1)
+		if lv <= 0 then tint = Color(0.3, 0.3, 0.3, 1) end
+		self:SetIcon("Info/Icon", sk.icon, tint)
+		self:SetText("Info/Name", sk.name, self.MainTextColor)
+		local lvText = "미보유"
+		if lv > 0 then lvText = "Lv." .. tostring(lv) .. " / " .. tostring(cfg.SkillMaxLv) end
+		self:SetText("Info/Grade", g.name .. "  ·  " .. lvText, g.color)
+		self:SetText("Info/Category", sk.category .. "  ·  " .. sk.role, self.SubTextColor)
+		self:SetText("Info/Desc", sk.desc, self.MainTextColor)
+		local power = "기본 능력치  ×" .. self:FormatNum(self:Power(math.max(1, lv)))
+		if lv > 0 and lv < cfg.SkillMaxLv then power = power .. "   (다음 레벨 ×" .. self:FormatNum(self:Power(lv + 1)) .. ")" end
+		self:SetText("Info/Power", power, self.GoldTextColor)
+		local need = lv * cfg.SkillUpBase
+		local mat = "보유 재료  " .. tostring(cnt) .. "개"
+		if lv > 0 and lv < cfg.SkillMaxLv then mat = mat .. "   ·   레벨업에 " .. tostring(need) .. "개 필요" end
+		if lv >= cfg.SkillMaxLv then mat = mat .. "   ·   최고 레벨" end
+		self:SetText("Info/Material", mat, self.MainTextColor)
+		local synthText = "같은 스킬 " .. tostring(cfg.SkillSynthCount) .. "개를 합성하면 " .. self:FormatNum(g.synth) .. "% 확률로 상위 등급 스킬 (실패하면 같은 등급 스킬)"
+		local nextGrade = self._T.grades[sk.grade + 1]
+		if g.synth <= 0 or nextGrade == nil then synthText = "가장 높은 등급이라 합성할 수 없습니다" end
+		self:SetText("Info/SynthInfo", synthText, self.SubTextColor)
+		_UIButtonLogic:SetDisabled(self:Get("BtnUpgrade"), lv <= 0 or lv >= cfg.SkillMaxLv or cnt < need)
+		_UIButtonLogic:SetDisabled(self:Get("BtnSynth"), g.synth <= 0 or nextGrade == nil or cnt < cfg.SkillSynthCount)
+		local msg = self._T.msg or ""
+		if msg == "" then msg = "위쪽 장착 칸을 누른 뒤 아래에서 바꿔 낄 스킬을 고르세요" end
+		self:SetText("Msg", msg, nil)
+		self:SetText("Books", "보유 스킬북  " .. tostring(eng.SkillBooks), nil)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshPassiveDetail(Component eng)
+		-- 고유 패시브 콤보 어택 상세: Lv.0이면 잠김 (스킬북으로 해금), 레벨당 콤보 공격력 증가. 합성 버튼은 비활성.
+		local lv = eng.ComboAttackLv
+		local maxLv = eng.ComboAttackMaxLv
+		local tint = Color(1, 1, 1, 1)
+		if lv <= 0 then tint = Color(0.3, 0.3, 0.3, 1) end
+		self:SetIcon("Info/Icon", self.PassiveIconRUID, tint)
+		self:SetText("Info/Name", self.PassiveName, self.MainTextColor)
+		local lvText = "잠김  ·  레벨업으로 해금"
+		if lv > 0 then lvText = "Lv." .. tostring(lv) .. " / " .. tostring(maxLv) end
+		self:SetText("Info/Grade", "고유 패시브  ·  " .. lvText, self.GoldTextColor)
+		self:SetText("Info/Category", "패시브  ·  콤보 자원 (장착 칸 사용 안 함)", self.SubTextColor)
+		self:SetText("Info/Desc", self.PassiveDesc, self.MainTextColor)
+		local function per(l) return self.ComboAtkBase + (l - 1) * self.ComboAtkPerLv end
+		local power = "콤보당 기본 공격력 +" .. self:FormatNum(per(math.max(1, lv))) .. "%  (12콤보 +" .. self:FormatNum(per(math.max(1, lv)) * 12) .. "%)"
+		if lv <= 0 then power = "해금하면 " .. power end
+		if lv > 0 and lv < maxLv then power = power .. "   (다음 레벨 +" .. self:FormatNum(per(lv + 1)) .. "%)" end
+		self:SetText("Info/Power", power, self.GoldTextColor)
+		local cost = eng.ComboAttackBaseCost + lv * eng.ComboAttackStepCost
+		local mat = "최고 레벨"
+		if lv < maxLv then
+			if lv <= 0 then mat = "해금에 스킬북 " .. tostring(cost) .. "권 필요" else mat = "레벨업에 스킬북 " .. tostring(cost) .. "권 필요" end
+		end
+		self:SetText("Info/Material", mat, self.MainTextColor)
+		self:SetText("Info/SynthInfo", "고유 패시브는 합성할 수 없습니다", self.SubTextColor)
+		_UIButtonLogic:SetDisabled(self:Get("BtnUpgrade"), lv >= maxLv or eng.SkillBooks < cost)
+		_UIButtonLogic:SetDisabled(self:Get("BtnSynth"), true)
+		self:SetText("Msg", self._T.msg or "", nil)
+		self:SetText("Books", "보유 스킬북  " .. tostring(eng.SkillBooks), nil)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있는 동안 서버 동기화 값으로 갱신 (로비를 벗어나면 닫음).
+		if not self._T.open then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= "Lobby" then
+			self:Close()
+			return
+		end
+		self._T.refreshT = (self._T.refreshT or 0) + delta
+		if self._T.refreshT >= 0.3 then
+			self._T.refreshT = 0
+			self:Refresh()
+		end
+	end
+
+end

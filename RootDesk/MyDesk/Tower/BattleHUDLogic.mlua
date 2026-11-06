@@ -29,7 +29,10 @@ script BattleHUDLogic extends Logic
 	property TextGUIRendererComponent symbolTitle = "c2d56c73-1116-48f0-b103-132d67dcb556"
 	property TextGUIRendererComponent symbolSub = "924204c8-86cd-44de-a85d-301d634a9d30"
 	property number SymbolBannerTime = 3.0
-	property number BarWidth = 64
+	property number BarWidth = 62
+	-- 몬스터 체력바 크기 배율 (캐릭터 체력은 하단 바로 옮겨 머리 위 바는 숨김)
+	property number MonsterBarScale = 1.5
+	property boolean ShowPlayerOverheadBar = false
 	property number PlayerBarHeight = -0.22
 	property number MonsterBarHeight = -0.22
 	-- 가로 화면 전투 카메라: 확대 비율과 카메라 중심(지면이 화면 가운데보다 조금 아래에 오도록)
@@ -336,6 +339,7 @@ script BattleHUDLogic extends Logic
 			self._T.lastProcSeq = nil
 			self._T.procTimer = 0
 			if isvalid(self.procText) and self.procText.Entity.Enable then self.procText.Entity:SetEnable(false) end
+			self:UpdateHeroRes(nil)
 			return
 		end
 
@@ -346,7 +350,15 @@ script BattleHUDLogic extends Logic
 			local showFloor = mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR"
 			if self.floorText.Entity.Enable ~= showFloor then self.floorText.Entity:SetEnable(showFloor) end
 		end
-		self:PlaceBar(self.playerHpRoot, self.playerHpFill, player, self.PlayerBarHeight, mgr.PlayerHp, mgr.PlayerMaxHp)
+		if self.ShowPlayerOverheadBar then
+			self:PlaceBar(self.playerHpRoot, self.playerHpFill, player, self.PlayerBarHeight, mgr.PlayerHp, mgr.PlayerMaxHp)
+		elseif isvalid(self.playerHpRoot) and self.playerHpRoot.Entity.Enable then
+			self.playerHpRoot.Entity:SetEnable(false)
+		end
+		if isvalid(self.monsterHpRoot) then
+			local sc = self.MonsterBarScale
+			if self.monsterHpRoot.UIScale.x ~= sc then self.monsterHpRoot.UIScale = Vector3(sc, sc, 1) end
+		end
 
 		local monster = nil
 		if mgr.MonsterName ~= "" then monster = map:GetChildByName(mgr.MonsterName) end
@@ -381,6 +393,31 @@ script BattleHUDLogic extends Logic
 		end
 		self:UpdateMesoDrop(delta, player)
 		self:UpdateProcText(mgr, player, delta)
+		self:UpdateHeroRes(mgr)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateHeroRes(Component mgr)
+		-- 히어로 상태 줄(버프·소환검·자상·인스팅트 대기). 히어로 판 전투 중에만. 콤보·마나는 다른 곳에 표시.
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/HeroRes")
+		if not isvalid(root) then return end
+		local show = mgr ~= nil and _HeroCombatLogic.Active and mgr.JobId == "Hero" and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		if root.Enable ~= show then root:SetEnable(show) end
+		if not show then return end
+		local function setText(path, s)
+			local e = _EntityService:GetEntityByPath("/ui/BattleHUD/HeroRes/" .. path)
+			if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+		end
+		-- 콤보 칸·마나 막대는 쓰지 않는다 (콤보는 캐릭터 주위 구슬, 마나는 하단 바 MP). 상태 줄(버프·대기시간)만 남김.
+		if not self._T.heroResSlim then
+			self._T.heroResSlim = true
+			for _, path in ipairs({ "Combo", "ComboLabel", "ComboNum", "ManaBg", "ManaLabel", "ManaNum" }) do
+				local e = _EntityService:GetEntityByPath("/ui/BattleHUD/HeroRes/" .. path)
+				if isvalid(e) then e:SetEnable(false) end
+			end
+			if isvalid(root.SpriteGUIRendererComponent) then root.SpriteGUIRendererComponent.Color = Color(0, 0, 0, 0) end
+		end
+		setText("Status", _HeroCombatLogic.StatusText)
 	end
 
 end

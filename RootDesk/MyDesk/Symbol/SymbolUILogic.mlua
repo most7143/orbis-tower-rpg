@@ -5,31 +5,21 @@ script SymbolUILogic extends Logic
 	property Entity dimEntity = "62d72bf8-73e9-4989-a3a9-78f2e9e73535"
 	property Entity panelEntity = "5fe924bc-b966-4442-90eb-889e5c03cb65"
 	property ButtonComponent btnClose = "04a94533-0fd5-4f34-bcf9-62d7f0c8ad76"
-	property ButtonComponent btnPrev = "3a25e138-2b80-4031-ab07-6b52a1bcd165"
-	property ButtonComponent btnNext = "ad397fb6-17cc-455f-b0df-b785e92fb84c"
-	property TextGUIRendererComponent pageText = "0518b35c-9df9-43ad-9cab-da010a6df252"
-	property TextGUIRendererComponent countText = "828d5589-caf3-4d7e-8d45-4c5a3f291b94"
-	property TextGUIRendererComponent permText = "b1936884-fa0e-4791-bd24-fb6bc4c6ff27"
-	property TextGUIRendererComponent infoTitle = "c625aef4-0bc9-4e10-9e5f-1d22319875df"
-	property TextGUIRendererComponent infoTier = "0f4915ba-0d78-49f4-ac8e-d1f69ce306d3"
-	property TextGUIRendererComponent tier1Text = "b3924f19-9733-4081-87e4-bee1b95aeaed"
-	property TextGUIRendererComponent tier2Text = "a6bd0470-bb75-4b34-a3ba-2b54516ebf8f"
-	property TextGUIRendererComponent tier3Text = "9ad87b1c-61e8-42c3-b35f-f2d5df0a6412"
-	property SpriteGUIRendererComponent infoIcon = "2347765b-d5ab-4bda-b67b-46729a84cc9e"
+	property string PanelPath = "/ui/SymbolUI/Panel/"
 	property string CellPath = "/ui/SymbolUI/Panel/Grid/Cell_"
 	property integer PageSize = 20
+	property integer PermRows = 6
 	property string TierTableName = "SymbolTierTable"
 	property string PermTableName = "SymbolPermTable"
 	property string FloorTableName = "FloorTable"
 	property string MonsterTableName = "MonsterTable"
-	-- 단계 효과 칸: 가진 단계 이하(밝게) / 아직 없는 단계(어둡게)
-	property Color OwnedTextColor = Color(0.95, 0.95, 0.95, 1)
-	property Color DimTextColor = Color(0.5, 0.5, 0.55, 1)
-	-- 단계 글자 색 / 미획득 아이콘 색
-	property Color Tier1Color = Color(0.6, 0.9, 1, 1)
-	property Color Tier2Color = Color(0.85, 0.6, 1, 1)
-	property Color Tier3Color = Color(1, 0.85, 0.35, 1)
-	property Color LockedIconColor = Color(0.12, 0.12, 0.15, 0.9)
+	property string CardRUID = "b98a964cddde44bc91cc608e648320d4"
+	property string CardLockedRUID = "9f3b7d70600c434dbf531456a34f4865"
+	property string OutlineRUID = "5ee1af3484dd4876859334a278bfa7db"
+	property Color MainTextColor = Color(0.91, 0.91, 0.89, 1)
+	property Color SubTextColor = Color(0.59, 0.59, 0.57, 1)
+	property Color LockedTextColor = Color(0.45, 0.45, 0.45, 1)
+	property Color GoldTextColor = Color(0.847, 0.733, 0.475, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -73,8 +63,11 @@ script SymbolUILogic extends Logic
 		end
 		self.clickHandlers = {}
 		self:Bind(self.btnClose, function() self:Close() end)
-		self:Bind(self.btnPrev, function() self:Turn(-1) end)
-		self:Bind(self.btnNext, function() self:Turn(1) end)
+		self:Bind(self:Get("Prev").ButtonComponent, function() self:Turn(-1) end)
+		self:Bind(self:Get("Next").ButtonComponent, function() self:Turn(1) end)
+		local skin = { normal = "75f3c6dbf2434bcaa0e4b2d430575e2d", hover = "6ba383acf31a4c5bb105720d50c0ccd4", disabled = "f2cf3f5019aa4da995e72294dacb3e64" }
+		_UIButtonLogic:SetSkin(self:Get("Prev"), skin)
+		_UIButtonLogic:SetSkin(self:Get("Next"), skin)
 		for i = 1, self.PageSize do
 			local idx = i
 			local cell = _EntityService:GetEntityByPath(self.CellPath .. tostring(i))
@@ -105,6 +98,26 @@ script SymbolUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method Entity Get(string name)
+		-- 패널 안 엔티티.
+		return _EntityService:GetEntityByPath(self.PanelPath .. name)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string name, string s)
+		-- 패널 안 글자 바꾸기.
+		local e = self:Get(name)
+		if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetColor(string name, Color c)
+		-- 패널 안 글자색 바꾸기.
+		local e = self:Get(name)
+		if isvalid(e) then e.TextGUIRendererComponent.FontColor = c end
+	end
+
+	@ExecSpace("ClientOnly")
 	method Component GetEngrave()
 		-- 로컬 플레이어의 저장 컴포넌트 (심볼 포함).
 		local player = _UserService.LocalPlayer
@@ -114,7 +127,7 @@ script SymbolUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Open()
-		-- 로비 [심볼] 버튼: 최고 클리어 층이 있는 페이지로 연다.
+		-- 성장 화면 심볼 탭: 최고 클리어 층이 있는 페이지로 연다.
 		local eng = self:GetEngrave()
 		if eng == nil or not eng.SymbolLoaded then return end
 		local floor = math.max(1, math.min(self._T.floorCount, eng.ClearedFloor))
@@ -190,33 +203,12 @@ script SymbolUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method string TierEffect(integer tier, integer floor)
-		-- 단계 효과 문구 (두 줄).
-		local t = self._T.tiers[tier]
-		if t == nil then return "" end
-		if tier >= 3 then
-			local p = self:PermOf(floor)
-			local perm = ""
-			if p ~= nil then perm = "모든 층 영구 " .. p.label .. " +" .. self:FormatNum(p.value) .. "%" end
-			return "2단계 효과 유지\n" .. perm
-		end
-		return "이 층에서 주는 피해 +" .. self:FormatNum(t.dmg) .. "% · 받는 피해 -" .. self:FormatNum(t.cut) .. "%\n메소·경험치 +" .. self:FormatNum(t.gain) .. "%"
-	end
-
-	@ExecSpace("ClientOnly")
-	method Color TierColor(integer tier)
-		-- 단계별 글자 색.
-		if tier >= 3 then return self.Tier3Color end
-		if tier == 2 then return self.Tier2Color end
-		return self.Tier1Color
-	end
-
-	@ExecSpace("ClientOnly")
 	method void Refresh()
-		-- 칸(아이콘·층·단계)과 오른쪽 정보, 획득 수·영구 효과 합계를 갱신한다.
+		-- 칸(심볼·층·단계)과 오른쪽 정보, 수집 수·영구 효과 합계를 갱신한다.
 		local eng = self:GetEngrave()
 		if eng == nil then return end
 		local base = (self._T.page - 1) * self.PageSize
+		local pageCount = 0
 		for i = 1, self.PageSize do
 			local floor = base + i
 			local path = self.CellPath .. tostring(i)
@@ -226,103 +218,145 @@ script SymbolUILogic extends Logic
 				if cell.Enable ~= exists then cell:SetEnable(exists) end
 				if exists then
 					local tier = eng.SymbolLv[tostring(floor)] or 0
-					local icon = _EntityService:GetEntityByPath(path .. "/Icon")
-					if isvalid(icon) then
-						local t = self._T.tiers[math.max(1, tier)]
-						if t ~= nil then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon) end
-						if tier > 0 then icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1) else icon.SpriteGUIRendererComponent.Color = self.LockedIconColor end
-					end
-					local label = _EntityService:GetEntityByPath(path .. "/Label")
-					if isvalid(label) then
-						local txt = label.TextGUIRendererComponent
-						if tier > 0 then
-							txt.Text = tostring(floor) .. "층 · " .. tostring(tier) .. "단계"
-							txt.FontColor = self:TierColor(tier)
-						else
-							txt.Text = tostring(floor) .. "층"
-							txt.FontColor = Color(0.5, 0.5, 0.55, 1)
-						end
-					end
-					local sel = _EntityService:GetEntityByPath(path .. "/Sel")
-					if isvalid(sel) then
-						local on = floor == self._T.selected
-						if sel.Enable ~= on then sel:SetEnable(on) end
+					if tier > 0 then pageCount = pageCount + 1 end
+					self:RefreshCell(path, cell, floor, tier)
+					if floor == self._T.selected then
+						local p = cell.UITransformComponent.anchoredPosition
+						self:Get("Grid/Select").UITransformComponent.anchoredPosition = p
 					end
 				end
 			end
 		end
 		local pages = math.floor((self._T.floorCount - 1) / self.PageSize) + 1
-		if isvalid(self.pageText) then
-			self.pageText.Text = tostring(base + 1) .. " ~ " .. tostring(math.min(self._T.floorCount, base + self.PageSize)) .. "층  (" .. tostring(self._T.page) .. "/" .. tostring(pages) .. ")"
-		end
-		if isvalid(self.countText) then self.countText.Text = "획득 " .. tostring(eng.SymbolCount) .. " / " .. tostring(self._T.floorCount) end
+		local lastFloor = math.min(self._T.floorCount, base + self.PageSize)
+		self:SetText("Range", tostring(base + 1) .. "-" .. tostring(lastFloor) .. "층")
+		self:SetText("PageCount", "획득 " .. tostring(pageCount) .. "개")
+		self:SetText("Page", tostring(self._T.page) .. " / " .. tostring(pages) .. " 페이지")
+		self:SetText("Count", tostring(eng.SymbolCount) .. " / " .. tostring(self._T.floorCount))
+		_UIButtonLogic:SetDisabled(self:Get("Prev"), self._T.page <= 1)
+		_UIButtonLogic:SetDisabled(self:Get("Next"), self._T.page >= pages)
 		self:RefreshInfo(eng)
 		self:RefreshPerm(eng)
 	end
 
 	@ExecSpace("ClientOnly")
-	method void RefreshInfo(Component eng)
-		-- 선택한 층: 심볼 이름(몬스터 이름)·지금 단계, [1단계]~[3단계] 효과와 확률 (가진 단계는 밝게).
-		local floor = self._T.selected or 1
-		local tier = eng.SymbolLv[tostring(floor)] or 0
-		if isvalid(self.infoTitle) then self.infoTitle.Text = self:SymbolName(floor, tier) end
-		if isvalid(self.infoIcon) then
-			local t = self._T.tiers[math.max(1, tier)]
-			if t ~= nil then self.infoIcon.ImageRUID = DataRef(t.icon) end
-			if tier > 0 then self.infoIcon.Color = Color(1, 1, 1, 1) else self.infoIcon.Color = self.LockedIconColor end
-		end
-		if isvalid(self.infoTier) then
-			if tier > 0 then
-				self.infoTier.Text = tostring(floor) .. "층 · " .. tostring(tier) .. "단계"
-				self.infoTier.FontColor = self:TierColor(tier)
+	method void RefreshCell(string path, Entity cell, integer floor, integer tier)
+		-- 획득 칸: 원본 심볼·층·단계 게이지. 미획득 칸: 작은 윤곽과 층.
+		local owned = tier > 0
+		local bg = self.CardLockedRUID
+		if owned then bg = self.CardRUID end
+		cell.SpriteGUIRendererComponent.ImageRUID = DataRef(bg)
+		local icon = _EntityService:GetEntityByPath(path .. "/Icon")
+		if isvalid(icon) then
+			local t = self._T.tiers[tier]
+			if owned and t ~= nil then
+				icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon)
+				icon.UITransformComponent.RectSize = Vector2(72, 72)
 			else
-				self.infoTier.Text = tostring(floor) .. "층 · 미획득"
-				self.infoTier.FontColor = Color(0.6, 0.6, 0.65, 1)
+				icon.SpriteGUIRendererComponent.ImageRUID = DataRef(self.OutlineRUID)
+				icon.UITransformComponent.RectSize = Vector2(32, 32)
 			end
 		end
-		local texts = { self.tier1Text, self.tier2Text, self.tier3Text }
+		local label = _EntityService:GetEntityByPath(path .. "/Label")
+		if isvalid(label) then
+			label.TextGUIRendererComponent.Text = tostring(floor) .. "층"
+			if owned then label.TextGUIRendererComponent.FontColor = self.MainTextColor else label.TextGUIRendererComponent.FontColor = self.LockedTextColor end
+		end
+		local gauge = _EntityService:GetEntityByPath(path .. "/Gauge")
+		if isvalid(gauge) and gauge.Enable ~= owned then gauge:SetEnable(owned) end
+		if owned then
+			for s = 1, 3 do
+				local fill = _EntityService:GetEntityByPath(path .. "/Gauge/Seg" .. tostring(s) .. "/Fill")
+				if isvalid(fill) and fill.Enable ~= (s <= tier) then fill:SetEnable(s <= tier) end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshInfo(Component eng)
+		-- 선택한 층: 심볼·이름·단계, 지금 받는 효과, 단계별 획득 확률.
+		local floor = self._T.selected or 1
+		local tier = eng.SymbolLv[tostring(floor)] or 0
+		local owned = tier > 0
+		self:SetText("InfoName", self:SymbolName(floor, tier))
+		local icon = self:Get("InfoIcon")
+		if isvalid(icon) then
+			local t = self._T.tiers[tier]
+			if owned and t ~= nil then
+				icon.SpriteGUIRendererComponent.ImageRUID = DataRef(t.icon)
+				icon.UITransformComponent.RectSize = Vector2(80, 80)
+			else
+				icon.SpriteGUIRendererComponent.ImageRUID = DataRef(self.OutlineRUID)
+				icon.UITransformComponent.RectSize = Vector2(48, 48)
+			end
+		end
+		if owned then self:SetText("InfoTier", tostring(floor) .. "층 · " .. tostring(tier) .. "단계") else self:SetText("InfoTier", tostring(floor) .. "층 · 미획득") end
+		local cur = self._T.tiers[tier]
+		if owned and cur ~= nil then
+			self:SetText("EffectValue1", "+" .. self:FormatNum(cur.dmg) .. "%")
+			self:SetText("EffectValue2", "-" .. self:FormatNum(cur.cut) .. "%")
+			self:SetText("EffectValue3", "+" .. self:FormatNum(cur.gain) .. "%")
+		else
+			for i = 1, 3 do self:SetText("EffectValue" .. tostring(i), "-") end
+		end
 		for t = 1, 3 do
-			local txt = texts[t]
-			if isvalid(txt) then
-				local info = self._T.tiers[t]
-				local chance = info ~= nil and self:FormatNum(info.chance) or "0"
-				txt.Text = "[" .. tostring(t) .. "단계]  획득 확률 " .. chance .. "%\n" .. self:TierEffect(t, floor)
-				if t <= tier then txt.FontColor = self:TierColor(t) else txt.FontColor = self.DimTextColor end
+			local info = self._T.tiers[t]
+			local key = tostring(t)
+			self:SetText("StepChance" .. key, "획득 " .. self:FormatNum(info ~= nil and info.chance or 0) .. "%")
+			local desc = "기본 층 효과"
+			if t == 2 then desc = "층 효과 증가" end
+			if t == 3 then
+				local p = self:PermOf(floor)
+				desc = "2단계 유지"
+				if p ~= nil then desc = desc .. " + 영구 " .. p.label .. " " .. self:FormatNum(p.value) .. "%" end
+			elseif t == tier then
+				desc = "현재 효과 적용"
+			end
+			self:SetText("StepDesc" .. key, desc)
+			local c = self.SubTextColor
+			if t == tier then c = self.GoldTextColor end
+			self:SetColor("StepName" .. key, c)
+			self:SetColor("StepChance" .. key, c)
+			self:SetColor("StepDesc" .. key, c)
+		end
+		local badge = self:Get("StepBadge")
+		if isvalid(badge) then
+			if badge.Enable ~= owned then badge:SetEnable(owned) end
+			if owned then
+				local pos = badge.UITransformComponent.anchoredPosition
+				badge.UITransformComponent.anchoredPosition = Vector2(pos.x, -28 - 38 * (tier - 1))
 			end
 		end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void RefreshPerm(Component eng)
-		-- 3단계 심볼로 얻은 모든 층 영구 능력치 합계.
-		if not isvalid(self.permText) then return end
+		-- 표에 있는 영구 효과별로 3단계 심볼 합계를 표시한다.
 		local sums = {}
-		local order = {}
+		local count = 0
 		for floor = 1, self._T.floorCount do
 			if (eng.SymbolLv[tostring(floor)] or 0) >= 3 then
+				count = count + 1
 				local p = self:PermOf(floor)
-				if p ~= nil then
-					if sums[p.label] == nil then
-						sums[p.label] = 0
-						table.insert(order, p.label)
-					end
-					sums[p.label] = sums[p.label] + p.value
-				end
+				if p ~= nil then sums[p.label] = (sums[p.label] or 0) + p.value end
 			end
 		end
-		local parts = {}
-		for _, label in ipairs(order) do table.insert(parts, label .. " +" .. self:FormatNum(sums[label]) .. "%") end
-		if #parts == 0 then
-			self.permText.Text = "아직 없음\n(3단계 심볼을 모으면 모든 층에 적용됩니다)"
-		else
-			-- 한 줄에 둘씩
-			local lines = {}
-			for i = 1, #parts, 2 do
-				local line = parts[i]
-				if parts[i + 1] ~= nil then line = line .. "     " .. parts[i + 1] end
-				table.insert(lines, line)
+		self:SetText("PermCount", "3단계 심볼 " .. tostring(count) .. "개")
+		for i = 1, self.PermRows do
+			local p = self._T.perm[i]
+			local key = tostring(i)
+			if p ~= nil then
+				local v = sums[p.label] or 0
+				self:SetText("PermName" .. key, p.label)
+				self:SetText("PermValue" .. key, "+" .. self:FormatNum(v) .. "%")
+				local c = self.SubTextColor
+				if v > 0 then c = self.GoldTextColor end
+				self:SetColor("PermName" .. key, c)
+				self:SetColor("PermValue" .. key, c)
+			else
+				self:SetText("PermName" .. key, "")
+				self:SetText("PermValue" .. key, "")
 			end
-			self.permText.Text = table.concat(lines, "\n")
 		end
 	end
 

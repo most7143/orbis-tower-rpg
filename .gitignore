@@ -8,3 +8,7 @@
 
 # OS
 .DS_Store
+
+# 로컬 AI 도구 설정 (.codex/config.toml에 MCP 토큰 포함)
+.codex/
+.agents/

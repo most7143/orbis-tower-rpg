@@ -1,30 +1,35 @@
 @Logic
 script GraceUILogic extends Logic
 
-	-- 미네르바의 은총 화면 (GraceUI.ui): 여신의 깃털로 은총 5줄 돌리기, 줄 잠금, 프리셋 3개.
+	-- 미네르바의 은총 화면 (GraceUI.ui): 여신의 깃털로 은총 5줄 돌리기, 줄 클릭 잠금, 프리셋 3개, 옵션 도감.
 	-- 데이터는 로컬 플레이어의 PlayerEngrave(GraceLines·Feathers 동기화)에서 읽고, 변경은 서버 요청.
 	property Entity dimEntity = "fe18e743-51e8-45dd-bc5e-c2a6039a1e60"
 	property Entity panelEntity = "469158c3-349f-4d40-aab1-a8418b6eeab3"
 	property ButtonComponent btnClose = "7caf70ca-77d5-4e3a-8097-68cd976b00ee"
-	property ButtonComponent btnRoll = "e4cce156-c48c-4b06-aa41-4a5314febfd0"
-	property ButtonComponent btnPreset1 = "a0ab76cb-e00f-479e-b2a7-03499e2a17f6"
-	property ButtonComponent btnPreset2 = "8f146c81-b156-4ac9-8cc0-d297363b9677"
-	property ButtonComponent btnPreset3 = "8c381427-78d7-4058-bd3b-6b3cc749622f"
-	property TextGUIRendererComponent featherText = "d5b1842a-ae55-4f0c-8d90-2e6f4c4a5ac9"
-	property TextGUIRendererComponent lockInfoText = "06aaf47f-e92d-4fad-ba69-241947a13704"
+	property ButtonComponent btnRoll = "bbbbab34-8c0e-40fb-9d78-84f97bf19300"
+	property ButtonComponent btnPreset1 = "b1736963-a4a5-46e4-9a31-d5b68faf3c56"
+	property ButtonComponent btnPreset2 = "9d1b107a-d1eb-46f1-8709-576e3fc2d178"
+	property ButtonComponent btnPreset3 = "969c43a3-7159-4f9c-98a4-4c5974ab9099"
+	property string PanelPath = "/ui/GraceUI/Panel/"
 	property string RowPath = "/ui/GraceUI/Panel/Rows/Row_"
 	property integer Slots = 5
 	property integer MaxLocks = 4
 	property integer BaseCost = 10
 	property integer LockCost = 10
-	property Color EmptyBgColor = Color(0.14, 0.14, 0.17, 1)
-	property Color PresetOnColor = Color(1, 0.82, 0.35, 1)
-	property Color PresetOffColor = Color(1, 1, 1, 1)
-	property Color RollOnColor = Color(1, 1, 1, 1)
-	property Color RollOffColor = Color(0.42, 0.42, 0.46, 1)
-	property Color LockOnColor = Color(1, 0.82, 0.35, 1)
-	property Color LockOffColor = Color(1, 1, 1, 1)
-	property Color TopStepColor = Color(1, 0.4, 0.4, 1)
+	property integer BookRows = 22
+	property string EmptySlotRUID = "f6c69495ec5e488c85c5ba8dce383045"
+	property string EmptyTagRUID = "2be121078e3d41ffbf0ba3c1226cfc17"
+	-- 잠글 수 있는 줄 위에 있을 때 쓰는 커서 (애니메이션 클립 LockCursor)
+	property string LockCursorRUID = "33b2e7c280394e9f90e98b25851da730"
+	-- 어두운 칸 이미지 위 글자색
+	property Color RowTextColor = Color(0.839, 0.839, 0.82, 1)
+	property Color SubTextColor = Color(0.545, 0.545, 0.53, 1)
+	property Color SilverTextColor = Color(0.824, 0.827, 0.839, 1)
+	property Color TopStepColor = Color(0.847, 0.733, 0.475, 1)
+	property string PipOnHex = "#D2D3D6"
+	property string PipOffHex = "#404040"
+	-- 깃털이 모자랄 때 보유 수 색
+	property string LackHex = "#C98B6B"
 	-- 새로 뽑힌 줄 반짝임 시간(초)
 	property number FlashTime = 0.45
 
@@ -35,6 +40,7 @@ script GraceUILogic extends Logic
 	method void OnBeginPlay()
 		-- 옵션·등급·단계표를 읽고 버튼을 연결한 뒤 닫힌 상태로 시작한다.
 		self._T.opts = {}
+		self._T.optList = {}
 		local optDs = _DataService:GetTable("GraceOptionTable")
 		if optDs ~= nil then
 			for i = 1, optDs:GetRowCount() do
@@ -43,21 +49,24 @@ script GraceUILogic extends Logic
 					o.ranges[g] = { min = tonumber(optDs:GetCell(i, "G" .. tostring(g) .. "Min")) or 0, max = tonumber(optDs:GetCell(i, "G" .. tostring(g) .. "Max")) or 0 }
 				end
 				self._T.opts[o.id] = o
+				table.insert(self._T.optList, o)
 			end
 		end
 		self._T.grades = {}
 		local gs = _DataService:GetTable("GraceGradeTable")
 		if gs ~= nil then
 			for i = 1, gs:GetRowCount() do
-				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = { name = gs:GetCell(i, "Name"), text = Color.FromHexCode(gs:GetCell(i, "TextHex")), bg = Color.FromHexCode(gs:GetCell(i, "BgHex")) }
+				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = { name = gs:GetCell(i, "Name"), chance = gs:GetCell(i, "Chance"), text = Color.FromHexCode(gs:GetCell(i, "TextHex")), slot = gs:GetCell(i, "SlotRUID"), hover = gs:GetCell(i, "HoverRUID"), tag = gs:GetCell(i, "TagRUID") }
 			end
 		end
 		self._T.steps = {}
 		local ss = _DataService:GetTable("GraceStepTable")
 		if ss ~= nil then
-			for i = 1, ss:GetRowCount() do self._T.steps[tonumber(ss:GetCell(i, "Step")) or i] = ss:GetCell(i, "Name") end
+			for i = 1, ss:GetRowCount() do self._T.steps[tonumber(ss:GetCell(i, "Step")) or i] = { name = ss:GetCell(i, "Name"), chance = ss:GetCell(i, "Chance") } end
 		end
 		self.clickHandlers = {}
+		self._T.touchHandlers = {}
+		self._T.hoverSlot = 0
 		self:Bind(self.btnClose, function() self:Close() end)
 		self:Bind(self.btnRoll, function() self:OnRoll() end)
 		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
@@ -67,13 +76,134 @@ script GraceUILogic extends Logic
 		end
 		for i = 1, self.Slots do
 			local slot = i
-			local lock = _EntityService:GetEntityByPath(self.RowPath .. tostring(i) .. "/Lock")
-			if isvalid(lock) and isvalid(lock.ButtonComponent) then self:Bind(lock.ButtonComponent, function() self:OnLock(slot) end) end
+			-- 줄 자체가 잠금 버튼: 클릭하면 잠금/해제, 마우스가 올라가면 커서 변경
+			local row = _EntityService:GetEntityByPath(self.RowPath .. tostring(i))
+			if isvalid(row) then
+				self:Bind(row.ButtonComponent, function() self:OnLock(slot) end)
+				local enter = row:ConnectEvent(UITouchEnterEvent, function(e) self:SetHover(slot) end)
+				local exit = row:ConnectEvent(UITouchExitEvent, function(e) if self._T.hoverSlot == slot then self:SetHover(0) end end)
+				table.insert(self._T.touchHandlers, { entity = row, enter = enter, exit = exit })
+			end
 		end
+		self:ApplySkins()
+		self:InitBook()
 		self._T.flash = {}
+		self._T.rowSlot = {}
 		self._T.open = true
 		self:SetOpen(false)
 		log("[VRF] GraceUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplySkins()
+		-- 프리셋(비선택 공용 + 은색 선택)과 은총 받기 버튼 이미지·글자색.
+		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
+		for _, b in ipairs(presets) do
+			if isvalid(b) then
+				_UIButtonLogic:SetSkin(b.Entity, {
+					normal = "75f3c6dbf2434bcaa0e4b2d430575e2d", hover = "6ba383acf31a4c5bb105720d50c0ccd4", pressed = "a79e3b3c39dd46d4bcf92f29ecf88733", disabled = "f2cf3f5019aa4da995e72294dacb3e64",
+					selected = "8b65aa5605394001960d0558e78304aa", selectedHover = "994b4f1aa8a44578a5bcbd5e0a44c5e4", selectedPressed = "e0c761bc31b94c1caa0e4bceeb107bc2",
+					textNormal = self.SubTextColor, textHover = self.RowTextColor, textSelected = self.SilverTextColor,
+				})
+			end
+		end
+		if isvalid(self.btnRoll) then
+			_UIButtonLogic:SetSkin(self.btnRoll.Entity, {
+				normal = "359ea90151c042ad89f3eccf3ed758b6", hover = "69b856b1b9c24e89845934f43ff84cf2", pressed = "42eb348e71354d949ea41664074dc230", disabled = "4058bc4ce0dc4ca09f560a08631ee64d",
+				textNormal = self.RowTextColor, textHover = self.SilverTextColor, textDisabled = self.SubTextColor,
+			})
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Get(string name)
+		-- 패널 안 엔티티.
+		return _EntityService:GetEntityByPath(self.PanelPath .. name)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string name, string s)
+		-- 패널 안 글자 바꾸기.
+		local e = self:Get(name)
+		if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void InitBook()
+		-- 옵션 도감: 22종 목록 연결, 등급·단계 확률은 표에서 한 번만 채운다.
+		for i = 1, self.BookRows do
+			local idx = i
+			local item = self:Get("Book/List/Item_" .. tostring(i))
+			if isvalid(item) then
+				local o = self._T.optList[i]
+				item:SetEnable(o ~= nil)
+				if o ~= nil then
+					self:SetText("Book/List/Item_" .. tostring(i) .. "/Label", o.name)
+					self:Bind(item.ButtonComponent, function() self:SelectBook(idx) end)
+					local enter = item:ConnectEvent(UITouchEnterEvent, function(e) self:SetBookHover(idx) end)
+					local exit = item:ConnectEvent(UITouchExitEvent, function(e) if self._T.bookHover == idx then self:SetBookHover(0) end end)
+					table.insert(self._T.touchHandlers, { entity = item, enter = enter, exit = exit })
+				end
+			end
+		end
+		self:SetText("Book/ListHead", "옵션 종류 · " .. tostring(#self._T.optList) .. "종")
+		for g = 1, 5 do
+			local info = self._T.grades[g]
+			local tag = self:Get("Book/Tag_" .. tostring(g))
+			if info ~= nil and isvalid(tag) then
+				tag.SpriteGUIRendererComponent.ImageRUID = DataRef(info.tag)
+				tag.TextGUIRendererComponent.Text = info.name
+				tag.TextGUIRendererComponent.FontColor = info.text
+				self:SetText("Book/Chance_" .. tostring(g), tostring(info.chance) .. "%")
+			end
+		end
+		for s = 1, 5 do
+			local info = self._T.steps[s]
+			if info ~= nil then
+				self:SetText("Book/StepName_" .. tostring(s), info.name)
+				self:SetText("Book/StepChance_" .. tostring(s), tostring(info.chance) .. "%")
+			end
+		end
+		self._T.bookHover = 0
+		self:SelectBook(1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetBookHover(integer idx)
+		-- 도감 목록 호버 글자색.
+		self._T.bookHover = idx
+		self:RefreshBookList()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectBook(integer idx)
+		-- 도감 종류 선택: 오른쪽에 등급별 최소~최대 표시.
+		local o = self._T.optList[idx]
+		if o == nil then return end
+		self._T.bookSel = idx
+		self:RefreshBookList()
+		self:SetText("Book/OptName", o.name)
+		for g = 1, 5 do
+			local r = o.ranges[g]
+			self:SetText("Book/Range_" .. tostring(g), self:FormatNum(r.min) .. " ~ " .. self:FormatNum(r.max) .. o.unit)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshBookList()
+		-- 도감 목록의 선택 틀과 글자색.
+		for i = 1, #self._T.optList do
+			local path = "Book/List/Item_" .. tostring(i)
+			local sel = self:Get(path .. "/Sel")
+			local label = self:Get(path .. "/Label")
+			local on = i == self._T.bookSel
+			if isvalid(sel) and sel.Enable ~= on then sel:SetEnable(on) end
+			if isvalid(label) then
+				local c = self.SubTextColor
+				if on then c = self.SilverTextColor elseif i == self._T.bookHover then c = self.RowTextColor end
+				label.TextGUIRendererComponent.FontColor = c
+			end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -91,6 +221,34 @@ script GraceUILogic extends Logic
 			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
 		end
 		self.clickHandlers = {}
+		for _, rec in ipairs(self._T.touchHandlers or {}) do
+			if isvalid(rec.entity) then
+				rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
+				rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+			end
+		end
+		self._T.touchHandlers = {}
+		self:ApplyCursor(false)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetHover(integer slot)
+		-- 마우스가 올라간 줄 기록 (0이면 없음) 후 커서 갱신.
+		self._T.hoverSlot = slot
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyCursor(boolean lockCursor)
+		-- 잠금 커서 켜기/끄기 (바뀔 때만).
+		if (self._T.cursorOn == true) == lockCursor then return end
+		self._T.cursorOn = lockCursor
+		if lockCursor then
+			_InputService:SetCursor(self.LockCursorRUID, Vector2.zero)
+		else
+			_InputService:ResetCursor()
+		end
+		log("[VRF] grace cursor lock=" .. tostring(lockCursor))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -131,6 +289,10 @@ script GraceUILogic extends Logic
 		self._T.open = open
 		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(open) end
 		if isvalid(self.panelEntity) then self.panelEntity:SetEnable(open) end
+		if not open then
+			self._T.hoverSlot = 0
+			self:ApplyCursor(false)
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -185,7 +347,7 @@ script GraceUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnLock(integer slot)
-		-- 줄 잠금/해제.
+		-- 줄 클릭: 잠금/해제.
 		local eng = self:GetEngrave()
 		if eng ~= nil then eng:RequestGraceLock(slot) end
 	end
@@ -199,17 +361,16 @@ script GraceUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Refresh()
-		-- 깃털 수, 프리셋 탭, 5줄(등급 배경·이름·수치·단계·잠금), 잠금 정보와 은총 받기 비용.
+		-- 프리셋 탭, 5줄(등급 배경·이름·수치·단계·잠금), 잠금 수 표시와 은총 받기 버튼(보유/필요 깃털).
 		local eng = self:GetEngrave()
 		if eng == nil then return end
 		local lines = self:CurrentLines(eng)
 		local locks = self:LockCount(lines)
 		local cost = self.BaseCost + self.LockCost * locks
-		if isvalid(self.featherText) then self.featherText.Text = tostring(eng.Feathers) end
 		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
 		for i, b in ipairs(presets) do
 			if isvalid(b) then
-				if i == eng.GracePreset then b.Entity.SpriteGUIRendererComponent.Color = self.PresetOnColor else b.Entity.SpriteGUIRendererComponent.Color = self.PresetOffColor end
+				_UIButtonLogic:SetSelected(b.Entity, i == eng.GracePreset)
 			end
 		end
 		for i = 1, self.Slots do
@@ -225,48 +386,57 @@ script GraceUILogic extends Logic
 				if color ~= nil then e.TextGUIRendererComponent.FontColor = color end
 			end
 			if isvalid(row) then
-				if g ~= nil then row.SpriteGUIRendererComponent.Color = g.bg else row.SpriteGUIRendererComponent.Color = self.EmptyBgColor end
+				-- 칸 배경: 등급별 이미지 (빈 칸은 전용 이미지)
+				local slotRuid = self.EmptySlotRUID
+				if g ~= nil then
+					slotRuid = g.slot
+					if self._T.hoverSlot == i then slotRuid = g.hover end
+				end
+				if self._T.rowSlot[i] ~= slotRuid then
+					self._T.rowSlot[i] = slotRuid
+					row.SpriteGUIRendererComponent.ImageRUID = DataRef(slotRuid)
+				end
 			end
 			local tag = _EntityService:GetEntityByPath(base .. "/Grade")
 			if o ~= nil and g ~= nil then
 				local r = o.ranges[line.grade]
 				local v = r.min + (r.max - r.min) * (line.step - 1) / 4
 				v = math.floor(v * 10 + 0.5) / 10
-				local unit = o.unit
-				if unit == "%p" then unit = "%p" end
 				setText("Grade", g.name, g.text)
-				if isvalid(tag) then tag.SpriteGUIRendererComponent.Color = Color(g.text.r * 0.35, g.text.g * 0.35, g.text.b * 0.35, 1) end
-				setText("Name", o.name, Color(1, 1, 1, 1))
-				setText("Value", "+" .. self:FormatNum(v) .. unit, g.text)
-				local stepName = self._T.steps[line.step] or ""
-				local stepColor = Color(0.85, 0.85, 0.85, 1)
+				if isvalid(tag) then tag.SpriteGUIRendererComponent.ImageRUID = DataRef(g.tag) end
+				setText("Name", o.name, self.RowTextColor)
+				setText("Value", "+" .. self:FormatNum(v) .. o.unit, self.RowTextColor)
+				local stepInfo = self._T.steps[line.step]
+				local stepName = stepInfo ~= nil and stepInfo.name or ""
+				local stepColor = self.SubTextColor
 				if line.step >= 5 then stepColor = self.TopStepColor end
 				setText("Step", stepName, stepColor)
 			else
-				setText("Grade", "-", Color(0.5, 0.5, 0.55, 1))
-				if isvalid(tag) then tag.SpriteGUIRendererComponent.Color = Color(0.2, 0.2, 0.23, 1) end
-				setText("Name", "비어 있음", Color(0.5, 0.5, 0.55, 1))
+				setText("Grade", "-", self.SubTextColor)
+				if isvalid(tag) then tag.SpriteGUIRendererComponent.ImageRUID = DataRef(self.EmptyTagRUID) end
+				setText("Name", "비어 있음", self.SubTextColor)
 				setText("Value", "", nil)
 				setText("Step", "", nil)
 			end
-			local lock = _EntityService:GetEntityByPath(base .. "/Lock")
-			if isvalid(lock) then
-				local locked = line ~= nil and line.lock
-				lock:SetEnable(line ~= nil)
-				if locked then
-					lock.SpriteGUIRendererComponent.Color = self.LockOnColor
-					lock.TextGUIRendererComponent.Text = "잠김"
-				else
-					lock.SpriteGUIRendererComponent.Color = self.LockOffColor
-					lock.TextGUIRendererComponent.Text = "잠금"
-				end
-			end
+			-- 빈 줄은 잠글 수 없다
+			if isvalid(row) and row.ButtonComponent.Enable ~= (line ~= nil) then row.ButtonComponent.Enable = line ~= nil end
+			local lockIcon = _EntityService:GetEntityByPath(base .. "/LockIcon")
+			if isvalid(lockIcon) then lockIcon:SetEnable(line ~= nil and line.lock) end
 		end
-		if isvalid(self.lockInfoText) then self.lockInfoText.Text = "잠금 " .. tostring(locks) .. " / " .. tostring(self.MaxLocks) .. "  ·  잠금 1줄당 깃털 +" .. tostring(self.LockCost) end
-		if isvalid(self.btnRoll) then
-			self.btnRoll.Entity.TextGUIRendererComponent.Text = "은총 받기   깃털 " .. tostring(cost)
-			if eng.Feathers >= cost then self.btnRoll.Entity.SpriteGUIRendererComponent.Color = self.RollOnColor else self.btnRoll.Entity.SpriteGUIRendererComponent.Color = self.RollOffColor end
+		local hover = self._T.hoverSlot or 0
+		self:ApplyCursor(self._T.open == true and hover > 0 and lines[hover] ~= nil)
+		-- 잠금 수: 네모 4칸 (쓴 칸만 밝게)
+		local pips = ""
+		for i = 1, self.MaxLocks do
+			local hex = self.PipOffHex
+			if i <= locks then hex = self.PipOnHex end
+			pips = pips .. "<color=" .. hex .. ">■</color> "
 		end
+		self:SetText("LockPips", pips)
+		local have = tostring(eng.Feathers)
+		if eng.Feathers < cost then have = "<color=" .. self.LackHex .. ">" .. have .. "</color>" end
+		self:SetText("Roll/Count", have .. " / " .. tostring(cost))
+		if isvalid(self.btnRoll) then _UIButtonLogic:SetDisabled(self.btnRoll.Entity, eng.Feathers < cost) end
 	end
 
 	@ExecSpace("ClientOnly")

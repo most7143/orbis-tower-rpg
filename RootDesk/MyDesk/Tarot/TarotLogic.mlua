@@ -1,30 +1,48 @@
 @Logic
 script TarotLogic extends Logic
 
-	-- 카드 UI: 판 시작 직업 선택 3장 / 레벨업 스킬 카드 3장 선택. 아이콘 없이 이름만 표시
+	-- 카드 UI: 판 시작 직업 선택 화면(JobSelect) / 레벨업 스킬 카드 3장 선택(Choice).
 	-- 직업·직업 스킬 표시 문구도 여기서 만든다 (MainPanelLogic 직업·스킬 탭이 함께 씀)
 	property Entity uiRoot = "a16d14bb-337a-4ea2-ae76-e74f6890a0cf"
 	property Entity draftRoot = "90336c1b-0f08-4f25-9d35-293c3a5ead55"
 	property Entity choiceRoot = "edbad653-a684-4ee9-aac6-948df8541a73"
 	property Entity dimEntity = "9628a1f6-3176-4a2e-a321-84658b0b7545"
 	property ButtonComponent confirmBtn = "c60050c0-f7aa-477e-a94d-678fa5a08648"
-	property ButtonComponent card1 = "4b0221c1-2f92-484d-8f71-f012d5f7c890"
-	property ButtonComponent card2 = "1a35acc6-61ea-406d-82d1-3dfcf3a5b3b6"
-	property ButtonComponent card3 = "225cd561-92ea-4db7-a3ef-56683b9b7fe0"
-	property TextGUIRendererComponent choiceSub = "e6894ec9-85d1-4f42-9f1d-000c89f9926f"
+	property ButtonComponent card1 = "ea9a3b4f-dcc6-48c8-a724-697d94190910"
+	property ButtonComponent card2 = "c8fa7ddc-bda1-44af-8e21-a1ed67e1227e"
+	property ButtonComponent card3 = "f7b353c6-daf6-4d67-ab87-1e1a0c5bc2d8"
+	property TextGUIRendererComponent choiceSub = "4d265494-2204-419e-bc8e-ca8cb349ad30"
 	property TextGUIRendererComponent choiceJob = "75cb595d-a176-4c5d-8029-5a35e51d37f8"
-	property TextGUIRendererComponent choiceRemain = "d75074fc-59dc-4c4d-888f-fbe40154dfb7"
+	property TextGUIRendererComponent choiceRemain = "06db7b0b-1ca6-4972-8b2b-b2a73cc8203a"
 	-- 각인 '재추첨' 버튼 (남은 횟수가 있을 때만 표시)
 	property ButtonComponent rerollBtn = "d617b190-510d-4dc7-afb0-6a0e94a76366"
 	property string TraitTableName = "TraitTable"
 	property string GradeTableName = "TraitGradeTable"
-	property string ChoiceCardPath = "/ui/TarotUI/Choice/Card"
+	property string ChoiceCardPath = "/ui/TarotUI/Choice/Pick/Card"
+	-- 스킬 선택 카드 (스킬선택 리소스 casual-color-four-types-v3): 종류별 카드 일반/선택, NEW 배지, NEW 배지 x위치
+	-- 종류: active 공격(빨강) / passive 패시브(회색) / hyper 하이퍼(보라, 히어로 등급 5) / fifth 5차(파랑, 히어로 등급 6)
+	property string CardActive = "fd40f6bef6a84c78bd2668e7b7257fd9|9e47a15097364e6eb8c0d11c4cf3ab8c|64cca23cf9f54cb6b40ccf04e6b3fdac|138"
+	property string CardPassive = "db132dc7f7784a15b194c783696db24e|cc1061a9c7b34728a3f65b325855cb74|204b99a52c434f949d22be13d677a7ef|133"
+	property string CardHyper = "3d706be3dfc4455493958f053a2c543d|af4cf2dea8834c1fbac977fd6b8aef77|b8df00fbcec144b68859592f2ac0022f|140"
+	property string CardFifth = "51ed0b6f5c224232ac548d7d6ba94061|7715426f7d864b06a931e3dd52fc83e3|0c11fa6ac32d4b7283ffea8b706fedf1|150"
+	property string CardStarFilled = "ba3ebade076a454c8df0a9bc62dcabc1"
+	property string CardStarEmpty = "a2deb30a737743a5b8394f678f214af8"
+	-- 한계돌파 공용 반짝임 (40프레임 60ms 반복)
+	property string CardGlintRUID = "0f170a2d8d2142f9b83309e05d818880"
 	property string StarEmptyRUID = "323538014a45418cb0b3b984e87a381d"
 	property string StarFullRUID = "9277a649640f450ab27b0986f7518816"
 	property string NewIconRUID = "7cc39aab109a4a9f80bc654afe418209"
 	-- 액티브 스킬 카드 색 (패시브는 등급 색 그대로)
 	property Color ActiveCardColor = Color(0.78, 0.2, 0.17, 1)
-	property string ChoiceTitlePath = "/ui/TarotUI/Choice/Title"
+	property string ChoiceTitlePath = "/ui/TarotUI/Choice/Pick/HeadingText"
+	property string ChoiceHeadingPath = "/ui/TarotUI/Choice/Pick/Heading"
+	-- 직업 선택 화면: 카드를 눌러 고르고 아래 버튼으로 확정한다
+	property Entity jobRoot = "accc987c-8fed-426a-9b6f-5229bfe07f7b"
+	property ButtonComponent jobConfirm = "06a56296-be77-4db6-bee4-231db4c6f1bb"
+	property string JobPath = "/ui/TarotUI/JobSelect/"
+	property number JobDimAlpha = 0.9
+	property number ChoiceDimAlpha = 0.93
+	property integer DefaultJobSlot = 2
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -34,17 +52,127 @@ script TarotLogic extends Logic
 		-- 테이블을 읽고 버튼을 연결한 뒤 화면을 숨긴다.
 		self:LoadTables()
 		self.clickHandlers = {}
+		self._T.hoverHandlers = {}
+		self:InitJobSelect()
 		self:Bind(self.rerollBtn, function() self:OnReroll() end)
 		local cards = { self.card1, self.card2, self.card3 }
+		self._T.cardVariant = {}
 		for i, c in ipairs(cards) do
 			local slot = i
 			self:Bind(c, function() self:OnPick(slot) end)
+			-- 마우스를 올리면 선택 상태 카드로 교체
+			if isvalid(c) then
+				local e = c.Entity
+				local h1 = e:ConnectEvent(UITouchEnterEvent, function() self:SetCardHover(slot, true) end)
+				local h2 = e:ConnectEvent(UITouchExitEvent, function() self:SetCardHover(slot, false) end)
+				table.insert(self._T.hoverHandlers, { entity = e, enter = h1, exit = h2 })
+			end
 		end
 		-- 처음엔 아무 화면도 기록되지 않은 상태(nil)로 두어야 Show("")가 실제로 전부 숨긴다
 		self._T.shown = nil
 		self._T.choiceSeq = -1
 		self:Show("")
 		log("[VRF] TarotLogic begin jobs=" .. tostring(#self._T.jobs) .. " grades=" .. tostring(#self._T.grades))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void InitJobSelect()
+		-- 직업별 완성 카드(기본·선택)와 확인 버튼 이미지, 화면 위치(왼쪽 위 x,y / 오른쪽 아래 x,y). 카드와 확인 버튼 연결.
+		self._T.jobArt = {
+			Hero = { normal = "3a86e6efc06b43b4997b55db44685b56", selected = "c43be2da55ac4f94932b71a7cf169945", confirm = "6563d4012a484e9c9e1e40cea121aea1", rect = { 204, 177, 706, 946 }, selRect = { 198, 160, 712, 949 } },
+			Paladin = { normal = "10c551cc8ae14e1a847f1f143ee52723", selected = "ceef873b268f4f8b922a508279450a37", confirm = "bbed152a69ea4fdaa723305537bc6ba2", rect = { 703, 160, 1217, 949 }, selRect = { 703, 160, 1217, 949 } },
+			DarkKnight = { normal = "cd6b6c5599bd468a825bb9ececedb0e6", selected = "a3396bb6322b493b95bb2b79c9962eaf", confirm = "f86aeb2fae7c4f728f38aeca9640239a", rect = { 1211, 177, 1716, 946 }, selRect = { 1206, 160, 1720, 949 } },
+		}
+		self._T.jobSlot = self.DefaultJobSlot
+		for i = 1, 3 do
+			local slot = i
+			local card = self:GetJobCard(i)
+			if isvalid(card) then self:Bind(card.ButtonComponent, function() self:SelectJob(slot) end) end
+		end
+		self:Bind(self.jobConfirm, function() self:OnJobConfirm() end)
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity GetJobCard(integer slot)
+		-- 직업 카드 엔티티.
+		return _EntityService:GetEntityByPath(self.JobPath .. "Cards/Card_" .. tostring(slot))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetJobCard(integer slot, table art, boolean selected)
+		-- 카드 이미지와 위치·크기를 상태에 맞춘다 (기본과 선택 이미지의 크기·위치가 다르다).
+		local card = self:GetJobCard(slot)
+		if not isvalid(card) then return end
+		local ruid = art.normal
+		local rect = art.rect
+		if selected then
+			ruid = art.selected
+			rect = art.selRect
+		end
+		card.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		card.UITransformComponent.RectSize = Vector2(rect[3] - rect[1], rect[4] - rect[2])
+		card.UITransformComponent.anchoredPosition = Vector2((rect[1] + rect[3]) / 2 - 960, 540 - (rect[2] + rect[4]) / 2)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillJobs(Component mgr)
+		-- 직업 카드 3장을 채우고 기본 카드를 고른다 (이미지가 없는 칸은 숨김).
+		for i = 1, 3 do
+			local card = self:GetJobCard(i)
+			if isvalid(card) then card:SetEnable(self._T.jobArt[mgr.ChoiceIds[tostring(i)] or ""] ~= nil) end
+		end
+		-- 기본 선택: 지정 칸이 잠겨 있으면 첫 고를 수 있는 칸
+		local slot = self.DefaultJobSlot
+		if not self:IsJobPickable(mgr, slot) then
+			for i = 1, 3 do
+				if self:IsJobPickable(mgr, i) then
+					slot = i
+					break
+				end
+			end
+		end
+		self:SelectJob(slot)
+		log("[VRF] job select filled seq=" .. tostring(mgr.ChoiceSeq))
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsJobPickable(Component mgr, integer slot)
+		-- 그 칸 직업을 고를 수 있는지 (카드 이미지가 있고 Playable).
+		local id = mgr.ChoiceIds[tostring(slot)] or ""
+		local j = self._T.jobById[id]
+		return self._T.jobArt[id] ~= nil and j ~= nil and j.playable
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectJob(integer slot)
+		-- 카드 선택: 고른 카드만 선택 이미지로 바꿔 맨 위로 올리고 확인 버튼을 바꾼다 (확정은 확인 버튼).
+		local mgr = self:GetManager()
+		if mgr == nil then return end
+		local picked = self._T.jobArt[mgr.ChoiceIds[tostring(slot)] or ""]
+		if picked == nil or not self:IsJobPickable(mgr, slot) then return end
+		self._T.jobSlot = slot
+		for i = 1, 3 do
+			local art = self._T.jobArt[mgr.ChoiceIds[tostring(i)] or ""]
+			if art ~= nil then
+				self:SetJobCard(i, art, i == slot)
+				-- 고를 수 없는 직업은 어둡게
+				local c = 1
+				if not self:IsJobPickable(mgr, i) then c = 0.35 end
+				self:GetJobCard(i).SpriteGUIRendererComponent.Color = Color(c, c, c, 1)
+			end
+		end
+		_UILogic:SetSiblingIndex(self:GetJobCard(slot).UITransformComponent, 2)
+		if isvalid(self.jobConfirm) then self.jobConfirm.Entity.SpriteGUIRendererComponent.ImageRUID = DataRef(picked.confirm) end
+		log("[VRF] job selected slot=" .. tostring(slot))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnJobConfirm()
+		-- 고른 직업 확정 → 서버에 반영.
+		local mgr = self:GetManager()
+		if mgr == nil or mgr.RunState ~= "JOBSELECT" then return end
+		mgr:RequestPickJob(self._T.jobSlot)
+		log("[VRF] job confirm slot=" .. tostring(self._T.jobSlot))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -62,6 +190,13 @@ script TarotLogic extends Logic
 			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
 		end
 		self.clickHandlers = {}
+		for _, rec in ipairs(self._T.hoverHandlers or {}) do
+			if isvalid(rec.entity) then
+				rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
+				rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+			end
+		end
+		self._T.hoverHandlers = {}
 	end
 
 	@ExecSpace("ClientOnly")
@@ -77,6 +212,7 @@ script TarotLogic extends Logic
 					id = ds:GetCell(i, "Id"), name = ds:GetCell(i, "Name"), familyName = ds:GetCell(i, "FamilyName"),
 					weapon = ds:GetCell(i, "Weapon") or "", keyword = ds:GetCell(i, "Keyword") or "", family = ds:GetCell(i, "Family") or "",
 					famColor = Color.FromHexCode(ds:GetCell(i, "FamilyColor")),
+				playable = (tonumber(ds:GetCell(i, "Playable")) or 0) == 1,
 				}
 				table.insert(self._T.jobs, j)
 				self._T.jobById[j.id] = j
@@ -99,15 +235,23 @@ script TarotLogic extends Logic
 				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
 				local sk = {
 					id = js:GetCell(i, "SkillId"), job = job, name = js:GetCell(i, "Name"), icon = js:GetCell(i, "IconRUID") or "",
-					trigger = js:GetCell(i, "Trigger") or "Proc", kind = js:GetCell(i, "SkillType") or "", cd = num("Cooldown"), chance = num("Chance"), breaks = 0, max = 30,
+					trigger = js:GetCell(i, "Trigger") or "Proc", kind = js:GetCell(i, "SkillType") or "", element = js:GetCell(i, "Element") or "", cd = num("Cooldown"), chance = num("Chance"), breaks = 0, max = 30, pool = js:GetCell(i, "StarPool") or "",
 				}
 				local text = js:GetCell(i, "Desc") or ""
-				local vals = { c = num("Chance"), p = num("Pct"), h = num("ProcHits"), cd = num("Cooldown"), bt = num("BuffTime"), v1 = num("V1"), v2 = num("V2") }
+				local vals = { c = num("Chance"), p = num("Pct"), h = num("ProcHits"), cd = num("Cooldown"), bt = num("BuffTime"), v1 = num("V1"), v2 = num("V2"), dp = num("DotPct"), dt = num("DotTime") }
 				for key, v in pairs(vals) do text = (string.gsub(text, "{" .. key .. "}", tostring(math.floor(v)))) end
 				sk.text = text
 				if self._T.jobSkills[job] == nil then self._T.jobSkills[job] = {} end
 				table.insert(self._T.jobSkills[job], sk)
 				self._T.skillById[sk.id] = sk
+			end
+		end
+		-- 히어로 스킬 등급 (카드 종류: 5 하이퍼, 6 5차)
+		local hs = _DataService:GetTable("HeroSkillTable")
+		if hs ~= nil then
+			for i = 1, hs:GetRowCount() do
+				local sk = self._T.skillById[hs:GetCell(i, "SkillId")]
+				if sk ~= nil then sk.grade = tonumber(hs:GetCell(i, "Grade")) or 0 end
 			end
 		end
 		-- 별 옵션·돌파 옵션 설명
@@ -126,6 +270,11 @@ script TarotLogic extends Logic
 				if sk ~= nil then
 					sk.breaks = sk.breaks + 1
 					sk.max = sk.breaks * 3
+					-- 히어로: 돌파는 스킬당 최대 3개, Lv.9까지
+					if sk.pool == "HeroStar" then
+						sk.breaks = math.min(sk.breaks, 3)
+						sk.max = 9
+					end
 				end
 			end
 		end
@@ -149,6 +298,14 @@ script TarotLogic extends Logic
 	method table GetJobSkills(string jobId)
 		-- 스킬 목록: 직업 액티브 + 계열 공용 패시브.
 		local list = {}
+		-- 히어로: 이번 판에 장착해 온 스킬(Lv.1 이상)만, 공용 패시브 없음
+		if jobId == "Hero" then
+			local mgr = self:GetManager()
+			for _, sk in ipairs(self._T.jobSkills[jobId] or {}) do
+				if mgr ~= nil and (mgr.SkillLv[sk.id] or 0) > 0 then table.insert(list, sk) end
+			end
+			return list
+		end
 		for _, sk in ipairs(self._T.jobSkills[jobId] or {}) do table.insert(list, sk) end
 		local job = self._T.jobById[jobId]
 		if job ~= nil then
@@ -164,11 +321,10 @@ script TarotLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method string SkillChip(table sk)
-		-- 카드 아래 표시: 패시브 / 쿨타임 / 확률.
-		if sk.trigger == "Cooldown" then return "쿨타임" end
-		if sk.trigger == "Proc" then return "확률" end
-		return "패시브"
+	method Color ElementColor(string element)
+		-- 속성별 글자 색: 불/얼음/번개/독/신성/암흑/출혈.
+		local colors = { ["불"] = Color(1, 0.48, 0.22, 1), ["얼음"] = Color(0.5, 0.85, 1, 1), ["번개"] = Color(1, 0.9, 0.3, 1), ["독"] = Color(0.55, 0.9, 0.35, 1), ["신성"] = Color(1, 0.96, 0.7, 1), ["암흑"] = Color(0.75, 0.55, 1, 1), ["출혈"] = Color(1, 0.3, 0.35, 1) }
+		return colors[element] or Color(1, 1, 1, 1)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -230,65 +386,50 @@ script TarotLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method void RelayoutCard(string path, boolean skillCard)
-		-- 카드 배치. 스킬 카드: 이름표 / 아이콘 / 별 3칸 / 설명 / 타입. 직업 카드: 이름 / 무기 / 계열 / 특징 글자만.
-		local shine = _EntityService:GetEntityByPath(path .. "/Gold/Face/ShineMask")
-		if isvalid(shine) then shine:SetEnable(false) end
-		local icon = _EntityService:GetEntityByPath(path .. "/Gold/Face/Icon")
-		if isvalid(icon) then
-			icon:SetEnable(skillCard)
-			icon.UITransformComponent.anchoredPosition = Vector2(0, 62)
-		end
-		for i = 1, 3 do
-			local star = _EntityService:GetEntityByPath(path .. "/Gold/Face/Star" .. tostring(i))
-			if isvalid(star) then
-				star:SetEnable(skillCard)
-			end
-		end
-		-- NEW 표시는 신규 스킬 카드에서만 FillCard가 켠다
-		local newIcon = _EntityService:GetEntityByPath(path .. "/New")
-		if isvalid(newIcon) then newIcon:SetEnable(false) end
-		local ys = { Trait = 80, Grade = 42, Progress = 8, Next = -66 }
-		if skillCard then ys = { Trait = 116, Grade = 500, Progress = -120, Next = -48 } end
-		for name, y in pairs(ys) do
-			local e = _EntityService:GetEntityByPath(path .. "/Gold/Face/" .. name)
-			if isvalid(e) then
-				local ap = e.UITransformComponent.anchoredPosition
-				e.UITransformComponent.anchoredPosition = Vector2(ap.x, y)
-				if name == "Next" then e.UITransformComponent.RectSize = Vector2(e.UITransformComponent.RectSize.x, 96) end
-				local tc = e.TextGUIRendererComponent
-				if isvalid(tc) then
-					if (self._T.fontBase or {})[path .. name] == nil then
-						if self._T.fontBase == nil then self._T.fontBase = {} end
-						self._T.fontBase[path .. name] = true
-						tc.MaxSize = tc.FontSize
-					end
-					tc.MinSize = 10
-					tc.BestFit = true
-				end
-				-- 이름표·타입 칸 배경
-				if (name == "Trait" or name == "Progress") and isvalid(e.SpriteGUIRendererComponent) then
-					local a = 0
-					if skillCard then a = 0.85 end
-					e.SpriteGUIRendererComponent.Color = Color(0.06, 0.06, 0.08, a)
-				end
-			end
-		end
+	method string CardVariant(table sk)
+		-- 카드 종류: 패시브 / 하이퍼(히어로 등급 5) / 5차(히어로 등급 6) / 그 외 공격.
+		if sk.trigger == "Passive" then return "passive" end
+		if (sk.grade or 0) == 5 then return "hyper" end
+		if (sk.grade or 0) >= 6 then return "fifth" end
+		return "active"
+	end
+
+	@ExecSpace("ClientOnly")
+	method table CardArt(string variant)
+		-- 종류별 리소스 { normal, selected, newBadge, badgeX }.
+		local src = self.CardActive
+		if variant == "passive" then src = self.CardPassive elseif variant == "hyper" then src = self.CardHyper elseif variant == "fifth" then src = self.CardFifth end
+		local p = {}
+		for v in string.gmatch(src, "[^|]+") do table.insert(p, v) end
+		return { normal = p[1], selected = p[2], badge = p[3], badgeX = tonumber(p[4]) or 138 }
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetCardHover(integer slot, boolean on)
+		-- 마우스를 올린 카드는 선택 완성본, 아니면 일반 본체 (선택 테두리를 겹쳐 쓰지 않는다).
+		local v = self._T.cardVariant[slot]
+		if v == nil then return end
+		local e = _EntityService:GetEntityByPath(self.ChoiceCardPath .. tostring(slot))
+		if not isvalid(e) then return end
+		local art = self:CardArt(v)
+		local ruid = art.normal
+		if on then ruid = art.selected end
+		e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
 	end
 
 	@ExecSpace("ClientOnly")
 	method void SetCardStars(string path, integer filled, boolean next)
-		-- 별 3칸: 채운 칸(꽉 찬 별) / 이번에 채워질 칸(꽉 찬 별 반투명) / 나머지(빈 별).
+		-- 별 3칸: 채운 칸(채운 별) / 이번에 채워질 칸(채운 별 반투명) / 나머지(빈 별).
 		for i = 1, 3 do
-			local star = _EntityService:GetEntityByPath(path .. "/Gold/Face/Star" .. tostring(i))
+			local star = _EntityService:GetEntityByPath(path .. "/Star" .. tostring(i))
 			if isvalid(star) then
 				local sr = star.SpriteGUIRendererComponent
-				local ruid = self.StarEmptyRUID
+				local ruid = self.CardStarEmpty
 				local alpha = 1
 				if i <= filled then
-					ruid = self.StarFullRUID
+					ruid = self.CardStarFilled
 				elseif i == filled + 1 and next then
-					ruid = self.StarFullRUID
+					ruid = self.CardStarFilled
 					alpha = 0.45
 				end
 				sr.ImageRUID = DataRef(ruid)
@@ -299,57 +440,34 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Show(string mode)
-		-- "CHOICE"(직업 선택·스킬 카드 공용) / "" 에 맞춰 화면을 켜고 끈다. 예전 직업 펼침(Draft) 화면은 쓰지 않음.
+		-- "JOB"(직업 선택) / "CHOICE"(스킬 카드) / "" 에 맞춰 화면을 켜고 끈다. 예전 직업 펼침(Draft) 화면은 쓰지 않음.
 		if self._T.shown == mode then return end
 		self._T.shown = mode
-		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(mode ~= "") end
+		if isvalid(self.dimEntity) then
+			self.dimEntity:SetEnable(mode ~= "")
+			local a = self.ChoiceDimAlpha
+			if mode == "JOB" then a = self.JobDimAlpha end
+			self.dimEntity.SpriteGUIRendererComponent.Color = Color(0, 0, 0, a)
+		end
 		if isvalid(self.draftRoot) then self.draftRoot:SetEnable(false) end
 		if isvalid(self.choiceRoot) then self.choiceRoot:SetEnable(mode == "CHOICE") end
+		if isvalid(self.jobRoot) then self.jobRoot:SetEnable(mode == "JOB") end
 		log("[VRF] tarot show '" .. mode .. "'")
 	end
 
 	@ExecSpace("ClientOnly")
-	method void PaintCard(string path, Color c)
-		-- 카드 테두리(바깥·안쪽)와 면을 한 색 계열로 칠한다.
-		local root = _EntityService:GetEntityByPath(path)
-		if isvalid(root) then root.SpriteGUIRendererComponent.Color = c end
-		local border = _EntityService:GetEntityByPath(path .. "/Gold")
-		if isvalid(border) then border.SpriteGUIRendererComponent.Color = Color(c.r * 0.75, c.g * 0.75, c.b * 0.75, 1) end
-		local face = _EntityService:GetEntityByPath(path .. "/Gold/Face")
-		if isvalid(face) then face.SpriteGUIRendererComponent.Color = Color(0.05 + c.r * 0.2, 0.05 + c.g * 0.2, 0.07 + c.b * 0.2, 1) end
-	end
-
-	@ExecSpace("ClientOnly")
-	method void FillCard(string path, string id, Component mgr, boolean jobSelect, string mode)
-		-- 카드 한 장 채우기. 직업 카드: 이름 / 무기 / 계열 / 특징.
-		-- 스킬 카드(mode): learn 신규 습득 / break 돌파 / option 돌파 옵션 / 그 외 별 옵션 Id.
-		self:RelayoutCard(path, not jobSelect)
-		local function txt(sub, s, color)
-			local e = _EntityService:GetEntityByPath(path .. "/Gold/Face/" .. sub)
-			if isvalid(e) then
-				e.TextGUIRendererComponent.Text = s
-				if color ~= nil then e.TextGUIRendererComponent.FontColor = color end
-			end
-		end
-		local white = Color(1, 1, 1, 1)
-		if jobSelect then
-			local j = self._T.jobById[id]
-			if j == nil then return end
-			local fc = j.famColor
-			self:PaintCard(path, fc)
-			txt("Trait", j.name, white)
-			txt("Grade", j.weapon, Color(0.55 + fc.r * 0.45, 0.55 + fc.g * 0.45, 0.55 + fc.b * 0.45, 1))
-			txt("Progress", j.familyName, white)
-			txt("Next", j.keyword, white)
-			return
-		end
-		local gold = Color(1, 0.72, 0.17, 1)
+	method void FillCard(integer slot, string id, Component mgr, string mode)
+		-- 스킬 카드 한 장 (mode): learn 신규 습득(NEW 배지) / break 돌파 / option 돌파 옵션(한계돌파 반짝임) / 그 외 별 옵션 Id.
+		-- 카드 색은 스킬 종류(공격·패시브·하이퍼·5차)를 그대로 유지한다.
+		local path = self.ChoiceCardPath .. tostring(slot)
+		local function sub(name) return _EntityService:GetEntityByPath(path .. "/" .. name) end
 		local title = ""
 		local desc = ""
 		local sk = nil
 		local filled = 0
 		local nextStar = true
-		local border = (self._T.grades[1] or { color = Color(0.6, 0.6, 0.64, 1) }).color
+		local isNew = false
+		local limitBreak = false
 		if mode == "option" then
 			local b = self._T.breakById[id]
 			if b == nil then return end
@@ -358,7 +476,7 @@ script TarotLogic extends Logic
 			desc = b.desc
 			filled = 3
 			nextStar = false
-			border = gold
+			limitBreak = true
 		else
 			sk = self._T.skillById[id]
 			if sk == nil then return end
@@ -366,83 +484,92 @@ script TarotLogic extends Logic
 			title = sk.name
 			if lv > 0 then filled = (lv - 1) % 3 + 1 end
 			if mode == "learn" then
-				border = (self._T.grades[2] or { color = white }).color
+				isNew = true
 				desc = sk.text
-				local newIcon = _EntityService:GetEntityByPath(path .. "/New")
-				if isvalid(newIcon) then
-					newIcon:SetEnable(true)
-					newIcon.SpriteGUIRendererComponent.ImageRUID = DataRef(self.NewIconRUID)
-					newIcon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1)
-				end
 			elseif mode == "break" then
-				border = gold
+				limitBreak = true
 				local n = math.floor((lv + 1) / 3)
 				desc = "스킬 돌파 " .. tostring(n) .. " / " .. tostring(sk.breaks) .. "\n옵션 3개 중 1개를 골라 강화합니다"
 			else
 				local o = self._T.starById[mode]
-				desc = "별 강화\n"
-				if o ~= nil then desc = desc .. o.desc end
+				if o ~= nil then desc = o.desc end
 			end
 		end
 		if sk == nil then return end
-		-- 액티브는 붉은 카드 (돌파 카드는 금색 유지)
-		if sk.trigger ~= "Passive" and mode ~= "option" and mode ~= "break" then border = self.ActiveCardColor end
-		self:PaintCard(path, border)
-		txt("Trait", title, white)
-		txt("Grade", "", nil)
-		txt("Next", desc, white)
-		txt("Progress", self:SkillChip(sk), Color(0.95, 0.82, 0.48, 1))
+		local variant = self:CardVariant(sk)
+		local art = self:CardArt(variant)
+		self._T.cardVariant[slot] = variant
+		local root = _EntityService:GetEntityByPath(path)
+		if isvalid(root) then
+			root.SpriteGUIRendererComponent.ImageRUID = DataRef(art.normal)
+			root.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1)
+		end
+		local name = sub("Name")
+		if isvalid(name) then name.TextGUIRendererComponent.Text = title end
+		local d = sub("Desc")
+		if isvalid(d) then d.TextGUIRendererComponent.Text = desc end
+		local icon = sub("Icon")
+		if isvalid(icon) then
+			icon:SetEnable(sk.icon ~= "")
+			if sk.icon ~= "" then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(sk.icon) end
+		end
+		local badge = sub("Badge")
+		if isvalid(badge) then
+			badge:SetEnable(isNew)
+			if isNew then
+				badge.SpriteGUIRendererComponent.ImageRUID = DataRef(art.badge)
+				badge.UITransformComponent.anchoredPosition = Vector2(art.badgeX, 267)
+			end
+		end
+		-- 한계돌파(돌파 카드·돌파 옵션)만 공용 반짝임, 아니면 숨겨서 재생도 멈춘다
+		local glint = sub("Glint")
+		if isvalid(glint) then
+			glint:SetEnable(limitBreak)
+			if limitBreak then glint.SpriteGUIRendererComponent.ImageRUID = DataRef(self.CardGlintRUID) end
+		end
 		self:SetCardStars(path, filled, nextStar)
-		local icon = _EntityService:GetEntityByPath(path .. "/Gold/Face/Icon")
-		if isvalid(icon) and sk.icon ~= "" then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(sk.icon) end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void FillChoice(Component mgr)
-		-- 카드 3장 (빈 칸은 숨김) + 제목·안내 문구. 직업 선택과 레벨업 스킬 카드가 같은 화면을 쓴다.
-		local jobSelect = mgr.RunState == "JOBSELECT"
+		-- 스킬 카드 3장 (빈 칸은 숨김) + 제목·안내 문구.
 		for i = 1, 3 do
 			local key = tostring(i)
 			local id = mgr.ChoiceIds[key] or ""
 			local path = self.ChoiceCardPath .. key
 			local root = _EntityService:GetEntityByPath(path)
 			if isvalid(root) then root:SetEnable(id ~= "") end
-			if id ~= "" then self:FillCard(path, id, mgr, jobSelect, mgr.ChoiceOpts[key] or "") end
+			if id ~= "" then self:FillCard(i, id, mgr, mgr.ChoiceOpts[key] or "") end
 		end
 		local title = _EntityService:GetEntityByPath(self.ChoiceTitlePath)
-		local job = self._T.jobById[mgr.JobId]
-		if jobSelect then
-			if isvalid(title) then title.TextGUIRendererComponent.Text = "직업을 선택하세요" end
-			if isvalid(self.choiceSub) then self.choiceSub.Text = "게임 시작" end
-			if isvalid(self.choiceJob) then self.choiceJob.Text = "직업마다 무기와 스킬이 다릅니다" end
-		else
-			local titleText = "강화할 스킬을 고르세요"
-			local subText = "Lv." .. tostring(mgr.Level) .. " — 스킬 강화"
-			if mgr.RunState == "BREAK" then
-				local sk = self._T.skillById[mgr.BreakSkill]
-				titleText = "돌파 옵션을 고르세요"
-				if sk ~= nil then subText = sk.name .. " 돌파" end
-			end
-			if isvalid(title) then title.TextGUIRendererComponent.Text = titleText end
-			if isvalid(self.choiceSub) then self.choiceSub.Text = subText end
-			if isvalid(self.choiceJob) then self.choiceJob.Text = "" end
+		local titleText = "강화할 스킬을 고르세요"
+		local subText = "Lv." .. tostring(mgr.Level) .. " — 스킬 강화"
+		if mgr.RunState == "BREAK" then
+			local sk = self._T.skillById[mgr.BreakSkill]
+			titleText = "돌파 옵션을 고르세요"
+			if sk ~= nil then subText = sk.name .. " 돌파" end
 		end
+		-- 기본 제목은 이미지(스킬 선택 제목판), 돌파 옵션 화면은 글자 제목
+		local heading = _EntityService:GetEntityByPath(self.ChoiceHeadingPath)
+		if isvalid(heading) then heading:SetEnable(mgr.RunState ~= "BREAK") end
+		if isvalid(title) then
+			title:SetEnable(mgr.RunState == "BREAK")
+			title.TextGUIRendererComponent.Text = titleText
+		end
+		if isvalid(self.choiceSub) then self.choiceSub.Text = subText end
+		if isvalid(self.choiceJob) then self.choiceJob.Text = "" end
 		if isvalid(self.choiceRemain) then
-			if not jobSelect and mgr.PendingPicks > 1 then self.choiceRemain.Text = "남은 선택 " .. tostring(mgr.PendingPicks) else self.choiceRemain.Text = "" end
+			if mgr.PendingPicks > 1 then self.choiceRemain.Text = "남은 선택 " .. tostring(mgr.PendingPicks) else self.choiceRemain.Text = "" end
 		end
-		log("[VRF] tarot choice filled seq=" .. tostring(mgr.ChoiceSeq) .. " jobSelect=" .. tostring(jobSelect))
+		log("[VRF] tarot choice filled seq=" .. tostring(mgr.ChoiceSeq))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void OnPick(integer slot)
-		-- 카드 선택 → 서버에 반영 (직업 선택 / 스킬 카드).
+		-- 스킬 카드 선택 → 서버에 반영.
 		local mgr = self:GetManager()
 		if mgr == nil then return end
-		if mgr.RunState == "JOBSELECT" then
-			mgr:RequestPickJob(slot)
-		elseif mgr.RunState == "CHOICE" or mgr.RunState == "BREAK" then
-			mgr:RequestPick(slot)
-		end
+		if mgr.RunState == "CHOICE" or mgr.RunState == "BREAK" then mgr:RequestPick(slot) end
 		log("[VRF] tarot pick " .. tostring(slot))
 	end
 
@@ -469,14 +596,20 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
-		-- 판 상태에 맞춰 화면 전환: 직업 선택(JOBSELECT)·스킬 카드(CHOICE)일 때 카드 화면.
+		-- 판 상태에 맞춰 화면 전환: 직업 선택(JOBSELECT) 화면 / 스킬 카드(CHOICE·BREAK) 화면.
 		local mgr = self:GetManager()
 		if mgr == nil then
 			self:Show("")
 			return
 		end
 		local state = mgr.RunState
-		if state == "JOBSELECT" or state == "CHOICE" or state == "BREAK" then
+		if state == "JOBSELECT" then
+			if self._T.shown ~= "JOB" or self._T.choiceSeq ~= mgr.ChoiceSeq then
+				self._T.choiceSeq = mgr.ChoiceSeq
+				self:FillJobs(mgr)
+			end
+			self:Show("JOB")
+		elseif state == "CHOICE" or state == "BREAK" then
 			if self._T.shown ~= "CHOICE" or self._T.choiceSeq ~= mgr.ChoiceSeq then
 				self._T.choiceSeq = mgr.ChoiceSeq
 				self:FillChoice(mgr)

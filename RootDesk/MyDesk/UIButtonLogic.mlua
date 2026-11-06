@@ -1,0 +1,146 @@
+@Logic
+script UIButtonLogic extends Logic
+
+	-- 게임 전체 글자 버튼 공용 연출: 상태별 배경 이미지(.ui의 SpriteSwap)에 맞춰 글자색을 바꾼다.
+	-- 다른 UI 로직은 비활성/선택 표시를 SetDisabled·SetSelected로만 요청한다.
+	property string NormalRUID = "a5e2d12f2b6742b5a25f0979ed60a72c"
+	property string HoverRUID = "e38cdce235d54681b4906e24f01ac8dd"
+	property string DisabledRUID = "b51f729cc53349f3b5e93e81b24fc550"
+	property Color TextNormalColor = Color(0.84, 0.88, 1, 1)
+	property Color TextHoverColor = Color(1, 1, 1, 1)
+	property Color TextSelectedColor = Color(1, 0.83, 0.42, 1)
+	property Color TextDisabledColor = Color(0.45, 0.48, 0.56, 1)
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- UI 전체를 훑어 SpriteSwap 글자 버튼에 호버 연출을 연결한다.
+		if self._T.recs == nil then self._T.recs = {} end
+		self:Scan(_EntityService:GetEntityByPath("/ui"))
+		local n = 0
+		for _, rec in pairs(self._T.recs) do n = n + 1 end
+		log("[VRF] UIButtonLogic begin buttons=" .. tostring(n))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Scan(Entity entity)
+		-- 자식까지 재귀 탐색.
+		if not isvalid(entity) then return end
+		self:GetRec(entity)
+		for _, child in ipairs(entity.Children) do self:Scan(child) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table GetRec(Entity entity)
+		-- 버튼 기록 (처음 보면 호버 이벤트 연결). 글자 버튼이 아니면 nil.
+		if self._T.recs == nil then self._T.recs = {} end
+		local rec = self._T.recs[entity.Id]
+		if rec ~= nil then return rec end
+		local button = entity.ButtonComponent
+		if not isvalid(button) or button.Transition ~= TransitionType.SpriteSwap or not isvalid(entity.TextGUIRendererComponent) then return nil end
+		rec = { entity = entity, hover = false, selected = false, disabled = false }
+		self._T.recs[entity.Id] = rec
+		-- 클릭 뒤 엔진의 선택 상태가 남으면 다른 곳을 누를 때까지 이미지가 안 바뀌므로 끈다
+		button.Selectable = false
+		entity:ConnectEvent(UITouchEnterEvent, function(e)
+			rec.hover = true
+			self._T.hoverRec = rec
+			self:ApplyText(rec)
+		end)
+		entity:ConnectEvent(UITouchExitEvent, function(e) self:ClearHover(rec) end)
+		return rec
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ClearHover(table rec)
+		-- 호버 해제.
+		rec.hover = false
+		if self._T.hoverRec == rec then self._T.hoverRec = nil end
+		if isvalid(rec.entity) then self:ApplyText(rec) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyText(table rec)
+		-- 상태에 맞는 글자색 (비활성 > 선택 > 호버 > 기본).
+		local skin = rec.skin or {}
+		local color = skin.textNormal or self.TextNormalColor
+		if rec.disabled then
+			color = skin.textDisabled or self.TextDisabledColor
+		elseif rec.selected then
+			color = skin.textSelected or self.TextSelectedColor
+		elseif rec.hover then
+			color = skin.textHover or self.TextHoverColor
+		end
+		rec.entity.TextGUIRendererComponent.FontColor = color
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplySprite(table rec)
+		-- 비활성은 전환을 끄고 비활성 이미지 고정, 선택은 호버 이미지를 기본으로 쓴다.
+		local skin = rec.skin or {}
+		local ruid = skin.normal or self.NormalRUID
+		local transition = TransitionType.SpriteSwap
+		if rec.disabled then
+			ruid = skin.disabled or self.DisabledRUID
+			transition = TransitionType.None
+		elseif rec.selected then
+			ruid = skin.selected or skin.hover or self.HoverRUID
+		end
+		-- 선택 상태 전용 호버·누름 이미지가 있으면 버튼 전환 이미지도 함께 바꾼다
+		if skin.selected ~= nil then
+			local set = rec.entity.ButtonComponent.ImageRUIDs:Clone()
+			if rec.selected then
+				set.HighlightedSprite = DataRef(skin.selectedHover or skin.selected)
+				set.PressedSprite = DataRef(skin.selectedPressed or skin.selected)
+			else
+				set.HighlightedSprite = DataRef(skin.hover)
+				set.PressedSprite = DataRef(skin.pressed)
+			end
+			rec.entity.ButtonComponent.ImageRUIDs = set
+		end
+		-- 전환을 한 번 껐다 켜서, 마우스가 버튼 위에 있어도 바뀐 이미지가 바로 보이게 한다
+		rec.entity.ButtonComponent.Transition = TransitionType.None
+		rec.entity.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		rec.entity.ButtonComponent.Transition = transition
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetSkin(Entity entity, table skin)
+		-- 공용 이미지 대신 전용 이미지·글자색을 쓰는 버튼 (normal, hover, pressed, disabled, selected, selectedHover, selectedPressed, textNormal, textHover, textSelected, textDisabled).
+		if not isvalid(entity) then return end
+		local rec = self:GetRec(entity)
+		if rec == nil then return end
+		rec.skin = skin
+		self:ApplySprite(rec)
+		self:ApplyText(rec)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetDisabled(Entity entity, boolean disabled)
+		-- 살 수 없음 등 누를 수 없는 상태 표시 (클릭 차단은 각 로직이 한다).
+		if not isvalid(entity) then return end
+		local rec = self:GetRec(entity)
+		if rec == nil or rec.disabled == disabled then return end
+		rec.disabled = disabled
+		self:ApplySprite(rec)
+		self:ApplyText(rec)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetSelected(Entity entity, boolean selected)
+		-- 열린 탭·현재 프리셋 표시.
+		if not isvalid(entity) then return end
+		local rec = self:GetRec(entity)
+		if rec == nil or rec.selected == selected then return end
+		rec.selected = selected
+		self:ApplySprite(rec)
+		self:ApplyText(rec)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 호버 중 화면이 닫히면 나감 이벤트가 오지 않으므로 직접 해제한다.
+		local rec = self._T.hoverRec
+		if rec ~= nil and (not isvalid(rec.entity) or not rec.entity.EnabledInHierarchy) then self:ClearHover(rec) end
+	end
+
+end

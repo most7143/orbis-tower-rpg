@@ -1,25 +1,33 @@
-﻿JobId,SkillId,Name,IconRUID,Trigger,SkillType,Cooldown,BuffTime,ProcType,Chance,Pct,ProcHits,Type1,V1,Type2,V2,Desc
-Hero,HeroBrandish,브랜디쉬,22916c14ce3b4ef69611347947fcb54d,Cooldown,검술,6,,Strike,0,220,2,,,,,{cd}초마다 공격력 {p}% {h}연타
-Hero,HeroPanic,패닉,8d71243d59684151b349cb3583a6c46a,Cooldown,콤보,12,,Strike,0,420,1,,,,,{cd}초마다 공격력 {p}% 강타
-Hero,HeroComa,코마,38a6aefef6784c42967a997795dba30f,Cooldown,콤보,15,,Freeze,0,220,1,,,,,{cd}초마다 공격력 {p}% + 기절 2초
-Hero,HeroEnrage,인레이지,14c64ff02eb64da0be624eed933e9d9c,Cooldown,콤보,20,8,Buff,0,0,1,AtkPct,20,CritDmg,30,"{cd}초마다 {bt}초간 공격력 +{v1}%, 크리티컬 데미지 +{v2}%"
-Hero,HeroSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,검술,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 공격력 {p}% {h}연타
-Hero,HeroComboAttack,콤보 어택,7328c199a3494a2ab0c12335f637c762,Proc,콤보,0,,Strike,15,100,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 공격
-Hero,HeroFinalAttack,파이널 어택,1446e8e558f64df2b805e94e74e32d7d,Proc,검술,0,,Strike,25,70,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 타격
-Warrior,WarriorIronBody,아이언 바디,52162587bc534b9385af8c77513d93d4,Passive,강인함,0,,,0,0,0,DefPct,6,HpPct,8,"방어력 +{v1}%, 최대 체력 +{v2}%"
-Warrior,WarriorWeaponMastery,웨폰 마스터리,d5cc33ccae844ba3b41d9c553f52200a,Passive,검술,0,,,0,0,0,Mastery,10,Acc,4,"숙련도 +{v1}%, 명중률 +{v2}%"
-Warrior,WarriorAchilles,아킬레스,6fa15fd3a0004b409ea516c11a67e533,Passive,강인함,0,,,0,0,0,DmgReduce,4,DefPct,5,"받는 피해 -{v1}%, 방어력 +{v2}%"
-Warrior,WarriorSelfRecovery,셀프 리커버리,dc628babea834dde8a7130cdf50b97b9,Passive,강인함,0,,,0,0,0,SelfRegen,1,,,5초마다 최대 체력 {v1}% 회복
-Warrior,WarriorChanceAttack,찬스 어택,50a17d6899e04e2eab21fe0f2d315519,Passive,콤보,0,,,0,0,0,Crit,3,StunDmg,10,"크리티컬 확률 +{v1}%, 기절한 몬스터에게 피해 +{v2}%"
-Paladin,PaladinSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,검술,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 전방 2연타 (각 공격력 {p}%)
-Paladin,PaladinFireCharge,파이어 차지,a1c1a122cfef44b08d21b77bc8337bcb,Proc,검술,0,,Strike,18,160,1,,,,,공격 시 {c}% 확률로 화염 속성 공격력 {p}% 추가 피해
-Paladin,PaladinIceCharge,아이스 차지,663b41e92d9444f283fff626fd2dc9b8,Proc,검술,0,,Freeze,15,150,1,,,,,공격 시 {c}% 확률로 빙결 속성 공격력 {p}% + 몬스터 2초 빙결
-Paladin,PaladinChargeBlow,차지 블로우,9aac955d159f49c1bc913ef96128e781,Proc,검술,0,,Strike,15,220,1,,,,,공격 시 {c}% 확률로 속성 차지 범위 공격 (공격력 {p}%)
-Paladin,PaladinBlast,블래스트,b67f324531034fe58dbcc040e2b850ed,Proc,검술,0,,Strike,15,300,1,,,,,공격 시 {c}% 확률로 단일 대상에게 공격력 {p}% 강력한 피해
-Paladin,PaladinSanctuary,생츄어리,01d9771554b74783bb4f837705dba08c,Proc,검술,0,,Strike,12,80,3,,,,,공격 시 {c}% 확률로 넓은 범위에 신성 3연타 (각 공격력 {p}%)
-DarkKnight,DarkKnightSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,검술,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 전방 2연타 (각 공격력 {p}%)
-DarkKnight,DarkKnightDragonBuster,드래곤 버스터,4464d8f09b00428c90f6867613c5041d,Proc,검술,0,,Strike,20,70,3,,,,,공격 시 {c}% 확률로 3연타 (각 공격력 {p}%)
-DarkKnight,DarkKnightDragonThrasher,드래곤 쓰레셔,,Proc,검술,0,,Strike,18,130,1,,,,,공격 시 {c}% 확률로 넓은 범위를 휘둘러 공격력 {p}% 피해
-DarkKnight,DarkKnightSacrifice,새크리파이스,8a0b0d445b0448eb8265cb123245b38f,Proc,검술,0,,Pierce,15,200,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 피해 (방어 무시)
-DarkKnight,DarkKnightDragonRoar,드래곤 로어,5b95027b2e3e409a9a0e5d7565bb82a8,Proc,검술,0,,Strike,14,280,1,,,,,공격 시 {c}% 확률로 주변 광역 공격 (공격력 {p}%)
-DarkKnight,DarkKnightBeholder,비홀더,ff2d6cadf81a4633bf56b5fa462f40bc,Proc,검술,0,,Strike,25,60,1,,,,,비홀더가 {c}% 확률로 공격력 {p}% 추가 피해
+﻿JobId,SkillId,Name,IconRUID,Trigger,StarPool,SkillType,Element,DotPct,DotTime,Cooldown,BuffTime,ProcType,Chance,Pct,ProcHits,Type1,V1,Type2,V2,Desc,Mana,ComboUse,ComboBonus,Bleed
+Hero,H01,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,120,1,,,,,"마나 8 · 쿨타임 {cd}초. 공격력 {p}% 베기, 콤보 +1",8,0,0,0
+Hero,H02,브랜디쉬,429228115d56462ab0f65e7294a51609,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,110,2,,,,,마나 10 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 베기. 30% 확률로 재발동,10,0,0,0
+Hero,H03,패닉,8d71243d59684151b349cb3583a6c46a,Skill,HeroStar,콤보,,,,6,0,HeroStrike,0,420,1,,,,,마나 20 · 쿨타임 {cd}초. 공격력 {p}% 강타. 콤보 3을 소비하면 피해 +60%,20,3,60,0
+Hero,H04,코마,38a6aefef6784c42967a997795dba30f,Skill,HeroStar,콤보,,,,7,0,HeroStun,0,300,1,,,,,마나 25 · 쿨타임 {cd}초. 공격력 {p}% + 기절 2초. 콤보 2를 소비하면 피해 +50%,25,2,50,0
+Hero,H05,인레이지,14c64ff02eb64da0be624eed933e9d9c,Cooldown,HeroStar,버프,,,,20,8,HeroBuff,0,0,1,AtkPct,25,,,"{cd}초마다 {bt}초간 공격력 +{v1}%, 기본 공격 콤보 획득 2",0,0,0,0
+Hero,H06,인사이징,69acc0a1482143d5a25f80da945e0f22,Skill,HeroStar,검술,출혈,,,5,0,HeroStrike,0,180,1,,,,,마나 12 · 쿨타임 {cd}초. 공격력 {p}% 베기 + 자상 3중첩 (중첩당 초당 공격력 15%),12,0,0,3
+Hero,H07,오라 블레이드,483690e55c974444aef84df3a6331d93,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,260,1,,,,,마나 15 · 쿨타임 {cd}초. 공격력 {p}% 관통 검기 발사. 30% 확률로 재발동,15,0,0,0
+Hero,H08,레이징 블로우,644fc39bcc684c209264eb9d9a4cd6f8,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,90,3,,,,,마나 12 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 베기. 최대 콤보면 확정 치명타,12,0,0,0
+Hero,H09,레이지 업라이징,355f4ea810e94b76bc42b8a8b36c11b3,Skill,HeroStar,콤보,,,,10,0,HeroStrike,0,650,1,,,,,마나 30 · 쿨타임 {cd}초. 공격력 {p}% 내려찍기. 콤보 5를 소비하면 피해 +70%,30,5,70,0
+Hero,H10,발할라,237cc541ba1a402496c3eb45dc9719a6,Cooldown,HeroStar,버프,,,,30,12,HeroBuff,0,150,1,AtkPct,30,,,{cd}초마다 {bt}초간 공격력 +{v1}%. 검술 발동 시 공격력 {p}% 추가 검격,0,0,0,0
+Hero,H11,에픽 어드벤쳐,2d489bb379454100b32f50c2c5b5f698,Cooldown,HeroStar,버프,,,,35,12,HeroBuff,0,0,1,AllDmg,30,ManaRegen,50,"{cd}초마다 {bt}초간 모든 피해 +{v1}%, 마나 회복 +{v2}%",0,0,0,0
+Hero,H12,소드 오브 버닝 소울,f97f557e480f482db24679f0d53e6e30,Cooldown,HeroStar,소환,,,,30,15,HeroSummon,0,120,1,,,,,{cd}초마다 {bt}초간 불타는 검 소환 (1.5초마다 공격력 {p}%). 검술 5회마다 강화 공격,0,0,0,0
+Hero,H13,콤보 데스폴트,4df8fa30bd6e4c9994b3378b122c8d6f,Skill,HeroStar,콤보,,,,12,0,HeroStrike,0,1000,1,,,,,마나 60 · 쿨타임 {cd}초. 공격력 {p}% 참격 + 1초 무적. 콤보 5를 소비하면 피해 +70%,60,5,70,0
+Hero,H14,소드 일루전,9f53d154bc344ebc87303c6018b7e3ed,Skill,HeroStar,검술,출혈,,,12,0,HeroStrike,0,150,5,,,,,마나 50 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 환영 참격. 자상을 최대 5중첩 소비해 중첩당 공격력 80% 파열,50,0,0,0
+Hero,H15,콤보 인스팅트,941c7381b20d4a92896f34da0a56fe18,Instinct,HeroStar,버프,,,,15,10,HeroInstinct,100,60,1,,,,,"기본 공격 적중 시 발동해 {bt}초간 콤보당 피해 +5%, 기본 공격에 공격력 {p}% 균열. 재발동 대기 15초",0,0,0,0
+Warrior,WarriorFinalAttack,파이널 어택,c269972a7d9f4fd497fdcec195dacc56,Passive,ProcStrike,검술,,,,0,,Strike,25,70,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 피해,,,,
+Warrior,WarriorIronBody,아이언 바디,52162587bc534b9385af8c77513d93d4,Passive,PassGuard,강인함,,,,0,,,0,0,0,DefPct,6,HpPct,8,"방어력 +{v1}%, 최대 체력 +{v2}%",,,,
+Warrior,WarriorWeaponMastery,웨폰 마스터리,d5cc33ccae844ba3b41d9c553f52200a,Passive,PassMastery,검술,,,,0,,,0,0,0,Mastery,10,Acc,4,"숙련도 +{v1}%, 명중률 +{v2}%",,,,
+Warrior,WarriorSelfRecovery,셀프 리커버리,dc628babea834dde8a7130cdf50b97b9,Passive,PassRegen,강인함,,,,0,,,0,0,0,SelfRegen,1,,,5초마다 최대 체력 {v1}% 회복,,,,
+Warrior,WarriorChanceAttack,찬스 어택,50a17d6899e04e2eab21fe0f2d315519,Passive,PassCrit,콤보,,,,0,,,0,0,0,Crit,3,StunDmg,10,"크리티컬 확률 +{v1}%, 기절한 몬스터에게 피해 +{v2}%",,,,
+Paladin,PaladinSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,ProcStrike,검술,,,,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 전방 2연타 (각 공격력 {p}%),,,,
+Paladin,PaladinFireCharge,파이어 차지,a1c1a122cfef44b08d21b77bc8337bcb,Proc,ProcStrike,검술,불,,,0,,Strike,18,160,1,,,,,공격 시 {c}% 확률로 화염 속성 공격력 {p}% 추가 피해,,,,
+Paladin,PaladinIceCharge,아이스 차지,663b41e92d9444f283fff626fd2dc9b8,Proc,ProcFreeze,검술,얼음,,,0,,Freeze,15,150,1,,,,,공격 시 {c}% 확률로 빙결 속성 공격력 {p}% + 몬스터 2초 빙결,,,,
+Paladin,PaladinChargeBlow,차지 블로우,9aac955d159f49c1bc913ef96128e781,Proc,ProcStrike,검술,,,,0,,Strike,15,220,1,,,,,공격 시 {c}% 확률로 속성 차지 범위 공격 (공격력 {p}%),,,,
+Paladin,PaladinBlast,블래스트,b67f324531034fe58dbcc040e2b850ed,Proc,ProcStrike,검술,,,,0,,Strike,15,300,1,,,,,공격 시 {c}% 확률로 단일 대상에게 공격력 {p}% 강력한 피해,,,,
+Paladin,PaladinSanctuary,생츄어리,01d9771554b74783bb4f837705dba08c,Proc,ProcStrike,검술,신성,,,0,,Strike,12,80,3,,,,,공격 시 {c}% 확률로 넓은 범위에 신성 3연타 (각 공격력 {p}%),,,,
+DarkKnight,DarkKnightSlashBlast,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Proc,ProcStrike,검술,,,,0,,Strike,20,80,2,,,,,공격 시 {c}% 확률로 전방 2연타 (각 공격력 {p}%),,,,
+DarkKnight,DarkKnightDragonBuster,드래곤 버스터,4464d8f09b00428c90f6867613c5041d,Proc,ProcStrike,검술,,,,0,,Strike,20,70,3,,,,,공격 시 {c}% 확률로 3연타 (각 공격력 {p}%),,,,
+DarkKnight,DarkKnightDragonThrasher,드래곤 쓰레셔,,Proc,ProcStrike,검술,,,,0,,Strike,18,130,1,,,,,공격 시 {c}% 확률로 넓은 범위를 휘둘러 공격력 {p}% 피해,,,,
+DarkKnight,DarkKnightSacrifice,새크리파이스,8a0b0d445b0448eb8265cb123245b38f,Proc,ProcStrike,검술,,,,0,,Pierce,15,200,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 피해 (방어 무시),,,,
+DarkKnight,DarkKnightDragonRoar,드래곤 로어,5b95027b2e3e409a9a0e5d7565bb82a8,Proc,ProcStrike,검술,,,,0,,Strike,14,280,1,,,,,공격 시 {c}% 확률로 주변 광역 공격 (공격력 {p}%),,,,
+DarkKnight,DarkKnightBeholder,비홀더,ff2d6cadf81a4633bf56b5fa462f40bc,Proc,ProcStrike,검술,,,,0,,Strike,25,60,1,,,,,비홀더가 {c}% 확률로 공격력 {p}% 추가 피해,,,,

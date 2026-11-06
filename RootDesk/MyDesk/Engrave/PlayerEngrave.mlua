@@ -53,6 +53,70 @@ script PlayerEngrave extends Component
 	@Sync
 	property integer GraceSeq = 0
 
+	-- 슬롯 강화: 장비 부위별 영구 단계와 주문서. 키 OrbisSlot (SlotRateTable / SlotScrollTable / SlotMilestoneTable)
+	property string SlotKey = "OrbisSlot"
+	property integer SlotMaxLevel = 30
+	property integer SlotMaxScrolls = 3
+	-- 실패할 때마다 그 시도 성공 확률의 10%를 슬롯에 쌓는다
+	property number SlotFailRatio = 0.1
+	@Sync
+	property boolean SlotLoaded = false
+	@Sync
+	property SyncTable<string, integer> SlotLv
+	-- 실패로 쌓인 추가 확률(%)
+	@Sync
+	property SyncTable<string, number> SlotBonus
+	-- "부위_단계" → 보유 수
+	@Sync
+	property SyncTable<string, integer> Scrolls
+	@Sync
+	property integer SlotSeq = 0
+	@Sync
+	property boolean SlotOk = false
+
+	-- 히어로 스킬: 뽑기(스킬북)로 얻고, 같은 스킬을 모아 레벨업(최대 11), 같은 스킬 3개 합성으로 상위 등급 도전, 5칸 장착. 키 OrbisSkill
+	property string SkillKey = "OrbisSkill"
+	property string SkillTableName = "HeroSkillTable"
+	property string SkillGradeTableName = "SkillGradeTable"
+	property integer SkillEquipSlots = 5
+	-- 처음부터 가진 스킬 (표 순서 1~5)
+	property integer SkillStartCount = 5
+	@Sync
+	property boolean SkillLoaded = false
+	@Sync
+	property integer SkillBooks = 0
+	-- 스킬 Id → 레벨 (0이면 미보유)
+	@Sync
+	property SyncTable<string, integer> SkillOwnLv
+	-- 스킬 Id → 레벨업·합성 재료로 모은 개수
+	@Sync
+	property SyncTable<string, integer> SkillCnt
+	-- 장착 칸 "1"~"5" → 스킬 Id (빈 칸은 "")
+	@Sync
+	property SyncTable<string, string> SkillEquip
+	-- 마지막 뽑기·합성 결과 "Id:신규(1/0),..."
+	@Sync
+	property string SkillResult = ""
+	@Sync
+	property integer SkillSeq = 0
+	@Sync
+	property string SkillMsg = ""
+	-- 고유 패시브 '콤보 어택' 레벨 (0이면 잠김: 인게임 콤보가 쌓이지 않음). 스킬북으로 올린다.
+	@Sync
+	property integer ComboAttackLv = 0
+	property integer ComboAttackMaxLv = 11
+	-- 레벨업 스킬북 비용 = 기본 + 현재 레벨 × 증가 (Lv.0→1 해금 20권, 이후 30·40…)
+	property integer ComboAttackBaseCost = 20
+	property integer ComboAttackStepCost = 10
+
+	@HideFromInspector
+	property boolean SkillDirty = false
+	@HideFromInspector
+	property number SkillRetryTimer = 0
+	@HideFromInspector
+	property boolean SlotDirty = false
+	@HideFromInspector
+	property number SlotRetryTimer = 0
 	@HideFromInspector
 	property boolean GraceDirty = false
 	@HideFromInspector
@@ -77,12 +141,24 @@ script PlayerEngrave extends Component
 		self:LoadSymbols()
 		self:LoadGraceTables()
 		self:LoadGrace()
+		self:LoadSlotTables()
+		self:LoadSlots()
+		self:LoadSkillTables()
+		self:LoadSkills()
 		log("[VRF] PlayerEngrave begin nodes=" .. tostring(#self._T.nodes) .. " cleared=" .. tostring(self.ClearedFloor) .. " spent=" .. tostring(self.Spent))
 	end
 
 	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
 		-- 불러오기에 실패했으면 잠시 뒤 다시 시도한다 (실패 상태에서는 저장하지 않음).
+		if not self.SkillLoaded then
+			self.SkillRetryTimer = self.SkillRetryTimer - delta
+			if self.SkillRetryTimer <= 0 then self:LoadSkills() end
+		end
+		if not self.SlotLoaded then
+			self.SlotRetryTimer = self.SlotRetryTimer - delta
+			if self.SlotRetryTimer <= 0 then self:LoadSlots() end
+		end
 		if not self.GraceLoaded then
 			self.GraceRetryTimer = self.GraceRetryTimer - delta
 			if self.GraceRetryTimer <= 0 then self:LoadGrace() end
@@ -103,6 +179,14 @@ script PlayerEngrave extends Component
 		if self.GraceLoaded and self.GraceDirty then
 			local code = ds:SetAndWait(self.GraceKey, self:EncodeGrace())
 			if code ~= 0 then log_warning("[VRF] grace final save failed code=" .. tostring(code)) end
+		end
+		if self.SkillLoaded and self.SkillDirty then
+			local code = ds:SetAndWait(self.SkillKey, self:EncodeSkills())
+			if code ~= 0 then log_warning("[VRF] skill final save failed code=" .. tostring(code)) end
+		end
+		if self.SlotLoaded and self.SlotDirty then
+			local code = ds:SetAndWait(self.SlotKey, self:EncodeSlots())
+			if code ~= 0 then log_warning("[VRF] slot final save failed code=" .. tostring(code)) end
 		end
 		if self.SymbolLoaded and self.SymbolDirty then
 			local code = ds:SetAndWait(self.SymbolKey, self:EncodeSymbols())
@@ -623,6 +707,497 @@ script PlayerEngrave extends Component
 		if not self:CanEditGrace(senderUserId) then return end
 		self.GracePreset = math.max(1, math.min(self.GracePresetCount, preset))
 		self:SaveGrace()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSlotTables()
+		-- 단계 구간별 기본 확률, 주문서 효율, 단계 보너스.
+		self._T.slotIds = {}
+		self._T.scrollPower = {}
+		local ss = _DataService:GetTable("SlotScrollTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do
+				local slot = ss:GetCell(i, "Slot")
+				local tier = math.floor(tonumber(ss:GetCell(i, "Tier")) or 1)
+				if self._T.scrollPower[slot] == nil then
+					self._T.scrollPower[slot] = {}
+					table.insert(self._T.slotIds, slot)
+				end
+				self._T.scrollPower[slot][tier] = tonumber(ss:GetCell(i, "Power")) or 1
+			end
+		end
+		self._T.slotRates = {}
+		local rs = _DataService:GetTable("SlotRateTable")
+		if rs ~= nil then
+			for i = 1, rs:GetRowCount() do table.insert(self._T.slotRates, { min = tonumber(rs:GetCell(i, "MinLevel")) or 0, rate = tonumber(rs:GetCell(i, "Rate")) or 0 }) end
+		end
+		self._T.slotMiles = {}
+		local ms = _DataService:GetTable("SlotMilestoneTable")
+		if ms ~= nil then
+			for i = 1, ms:GetRowCount() do
+				table.insert(self._T.slotMiles, { slot = ms:GetCell(i, "Slot"), level = tonumber(ms:GetCell(i, "Level")) or 0, type = ms:GetCell(i, "Type"), value = tonumber(ms:GetCell(i, "Value")) or 0 })
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSlots()
+		-- 저장된 슬롯을 읽는다. {"lv":{부위:단계},"b":{부위:추가 확률},"s":{"부위_단계":보유}}
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.SlotKey)
+		local t = {}
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			t = _HttpService:JSONDecode(raw) or {}
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] slot load failed code=" .. tostring(errorCode))
+			self.SlotRetryTimer = self.LoadRetryDelay
+			return
+		end
+		local lv = t["lv"] or {}
+		local bonus = t["b"] or {}
+		local scrolls = t["s"] or {}
+		for _, slot in ipairs(self._T.slotIds) do
+			self.SlotLv[slot] = math.max(0, math.min(self.SlotMaxLevel, math.floor(lv[slot] or 0)))
+			self.SlotBonus[slot] = math.max(0, tonumber(bonus[slot]) or 0)
+			for tier, _ in pairs(self._T.scrollPower[slot]) do
+				local key = slot .. "_" .. tostring(tier)
+				self.Scrolls[key] = math.max(0, math.floor(scrolls[key] or 0))
+			end
+		end
+		self.SlotLoaded = true
+		log("[VRF] slots loaded " .. self:EncodeSlots())
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeSlots()
+		-- 저장 문자열 (0인 값은 생략, 빈 테이블은 JSONEncode가 지원하지 않으므로 키째 뺀다).
+		local data = { v = 1 }
+		local lv = {}
+		local bonus = {}
+		local scrolls = {}
+		for _, slot in ipairs(self._T.slotIds) do
+			if (self.SlotLv[slot] or 0) > 0 then
+				lv[slot] = self.SlotLv[slot]
+				data["lv"] = lv
+			end
+			if (self.SlotBonus[slot] or 0) > 0 then
+				bonus[slot] = self.SlotBonus[slot]
+				data["b"] = bonus
+			end
+			for tier, _ in pairs(self._T.scrollPower[slot]) do
+				local key = slot .. "_" .. tostring(tier)
+				if (self.Scrolls[key] or 0) > 0 then
+					scrolls[key] = self.Scrolls[key]
+					data["s"] = scrolls
+				end
+			end
+		end
+		return _HttpService:JSONEncode(data)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveSlots()
+		-- 슬롯 저장 (비동기).
+		if not self.SlotLoaded then return end
+		self.SlotDirty = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.SlotKey, self:EncodeSlots(), function(errorCode, key)
+			if errorCode == 0 then
+				self.SlotDirty = false
+			else
+				log_warning("[VRF] slot save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddScrolls(string slot, integer tier, integer n)
+		-- 전투 중 주문서 획득: 바로 저장하지 않고 표시만 (판이 끝날 때·나갈 때 저장).
+		if not self.SlotLoaded or n <= 0 then return end
+		local key = slot .. "_" .. tostring(tier)
+		self.Scrolls[key] = (self.Scrolls[key] or 0) + n
+		self.SlotDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FlushSlots()
+		-- 바뀐 슬롯(주문서 포함)이 있으면 저장.
+		if self.SlotLoaded and self.SlotDirty then self:SaveSlots() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SlotBaseRate(integer level)
+		-- 그 단계에서 효율 1배 주문서 1장의 성공 확률.
+		local rate = 0
+		for _, r in ipairs(self._T.slotRates) do
+			if level >= r.min then rate = r.rate end
+		end
+		return rate
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SlotRunData()
+		-- 판 시작 시 적용할 슬롯 효과. 부위별 {단계, 강화 확률, 비용 감소, 시작 강화, 이중 강화} + 능력치 보너스 합계.
+		local data = { slots = {}, bonus = {} }
+		if not self.SlotLoaded then return data end
+		for _, slot in ipairs(self._T.slotIds) do data.slots[slot] = { lv = self.SlotLv[slot] or 0, enhRate = 0, costDown = 0, startEnh = 0, doubleEnh = 0 } end
+		for _, m in ipairs(self._T.slotMiles) do
+			local s = data.slots[m.slot]
+			if s ~= nil and s.lv >= m.level then
+				if m.type == "SlotEnhRate" then s.enhRate = s.enhRate + m.value
+				elseif m.type == "SlotCostDown" then s.costDown = s.costDown + m.value
+				elseif m.type == "SlotStartEnh" then s.startEnh = s.startEnh + m.value
+				elseif m.type == "SlotDoubleEnh" then s.doubleEnh = s.doubleEnh + m.value
+				else data.bonus[m.type] = (data.bonus[m.type] or 0) + m.value
+				end
+			end
+		end
+		return data
+	end
+
+	@ExecSpace("Server")
+	method void RequestSlotUpgrade(string slot, integer tier, integer count)
+		-- 슬롯 강화: 같은 주문서 1~3장 사용. 성공 확률 = 기본 × 효율 × 장수 + 추가 확률. 실패하면 시도 확률의 10%가 쌓이고 성공하면 초기화.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId or not self.SlotLoaded then return end
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return end
+		local powers = self._T.scrollPower[slot]
+		if powers == nil or powers[tier] == nil or count < 1 or count > self.SlotMaxScrolls then return end
+		local lv = self.SlotLv[slot] or 0
+		local key = slot .. "_" .. tostring(tier)
+		if lv >= self.SlotMaxLevel or (self.Scrolls[key] or 0) < count then return end
+		self.Scrolls[key] = self.Scrolls[key] - count
+		local rate = math.min(100, self:SlotBaseRate(lv) * powers[tier] * count + (self.SlotBonus[slot] or 0))
+		local ok = _UtilLogic:RandomDouble() * 100 < rate
+		if ok then
+			self.SlotLv[slot] = lv + 1
+			self.SlotBonus[slot] = 0
+		else
+			self.SlotBonus[slot] = (self.SlotBonus[slot] or 0) + math.floor(rate * self.SlotFailRatio * 100 + 0.5) / 100
+		end
+		self.SlotOk = ok
+		self.SlotSeq = self.SlotSeq + 1
+		self:SaveSlots()
+		log("[VRF] slot upgrade " .. slot .. " tier=" .. tostring(tier) .. " x" .. tostring(count) .. " rate=" .. tostring(rate) .. " ok=" .. tostring(ok) .. " lv=" .. tostring(self.SlotLv[slot]) .. " bonus=" .. tostring(self.SlotBonus[slot]))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSkillTables()
+		-- 스킬표(순서·등급)·등급표(뽑기·합성 확률)와 RunConfig의 뽑기·레벨업 수치.
+		self._T.skills = {}
+		self._T.skillById = {}
+		self._T.gradeSkills = {}
+		self._T.grades = {}
+		local ds = _DataService:GetTable(self.SkillTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local sk = { id = ds:GetCell(i, "SkillId"), order = tonumber(ds:GetCell(i, "Order")) or i, grade = tonumber(ds:GetCell(i, "Grade")) or 1 }
+				table.insert(self._T.skills, sk)
+				self._T.skillById[sk.id] = sk
+				if self._T.gradeSkills[sk.grade] == nil then self._T.gradeSkills[sk.grade] = {} end
+				table.insert(self._T.gradeSkills[sk.grade], sk.id)
+			end
+		end
+		local gs = _DataService:GetTable(self.SkillGradeTableName)
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do
+				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = { name = gs:GetCell(i, "Name"), rate = tonumber(gs:GetCell(i, "GachaRate")) or 0, synth = tonumber(gs:GetCell(i, "SynthRate")) or 0 }
+			end
+		end
+		local cfg = { GachaCost = 10, GachaTenCost = 100, SkillUpBase = 5, SkillMaxLv = 11, SkillSynthCount = 3 }
+		local rc = _DataService:GetTable("RunConfig")
+		if rc ~= nil then
+			for i = 1, rc:GetRowCount() do
+				local k = rc:GetCell(i, "Key")
+				if cfg[k] ~= nil then cfg[k] = tonumber(rc:GetCell(i, "Value")) or cfg[k] end
+			end
+		end
+		self._T.skillCfg = cfg
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSkills()
+		-- 저장된 스킬을 읽는다. {"b":스킬북,"o":{Id:레벨},"c":{Id:개수},"e":{"칸":Id}}. 처음이면 1~5번 보유·장착.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.SkillKey)
+		local t = nil
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			t = _HttpService:JSONDecode(raw)
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] skill load failed code=" .. tostring(errorCode))
+			self.SkillRetryTimer = self.LoadRetryDelay
+			return
+		end
+		local maxLv = self._T.skillCfg.SkillMaxLv
+		if t == nil then
+			t = { b = 0, o = {}, c = {}, e = {} }
+			for _, sk in ipairs(self._T.skills) do
+				if sk.order <= self.SkillStartCount then
+					t.o[sk.id] = 1
+					t.e[tostring(sk.order)] = sk.id
+				end
+			end
+		end
+		local own = t["o"] or {}
+		local cnt = t["c"] or {}
+		local equip = t["e"] or {}
+		self.SkillBooks = math.max(0, math.floor(t["b"] or 0))
+		self.ComboAttackLv = math.max(0, math.min(self.ComboAttackMaxLv, math.floor(t["p"] or 0)))
+		for _, sk in ipairs(self._T.skills) do
+			self.SkillOwnLv[sk.id] = math.max(0, math.min(maxLv, math.floor(own[sk.id] or 0)))
+			self.SkillCnt[sk.id] = math.max(0, math.floor(cnt[sk.id] or 0))
+		end
+		local used = {}
+		for i = 1, self.SkillEquipSlots do
+			local id = equip[tostring(i)] or ""
+			if (self.SkillOwnLv[id] or 0) <= 0 or used[id] then id = "" end
+			if id ~= "" then used[id] = true end
+			self.SkillEquip[tostring(i)] = id
+		end
+		-- 장착 칸은 항상 5칸 모두 채운다 (빈 칸은 장착하지 않은 보유 스킬을 표 순서대로)
+		for i = 1, self.SkillEquipSlots do
+			local key = tostring(i)
+			if self.SkillEquip[key] == "" then
+				for _, sk in ipairs(self._T.skills) do
+					if (self.SkillOwnLv[sk.id] or 0) > 0 and not used[sk.id] then
+						self.SkillEquip[key] = sk.id
+						used[sk.id] = true
+						break
+					end
+				end
+			end
+		end
+		self.SkillLoaded = true
+		log("[VRF] skills loaded " .. self:EncodeSkills())
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeSkills()
+		-- 저장 문자열 (0·빈 값은 생략).
+		local data = { b = self.SkillBooks }
+		if self.ComboAttackLv > 0 then data["p"] = self.ComboAttackLv end
+		local own = {}
+		local cnt = {}
+		local equip = {}
+		for _, sk in ipairs(self._T.skills) do
+			if (self.SkillOwnLv[sk.id] or 0) > 0 then
+				own[sk.id] = self.SkillOwnLv[sk.id]
+				data["o"] = own
+			end
+			if (self.SkillCnt[sk.id] or 0) > 0 then
+				cnt[sk.id] = self.SkillCnt[sk.id]
+				data["c"] = cnt
+			end
+		end
+		for i = 1, self.SkillEquipSlots do
+			local id = self.SkillEquip[tostring(i)] or ""
+			if id ~= "" then
+				equip[tostring(i)] = id
+				data["e"] = equip
+			end
+		end
+		return _HttpService:JSONEncode(data)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveSkills()
+		-- 스킬 저장 (비동기).
+		if not self.SkillLoaded then return end
+		self.SkillDirty = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.SkillKey, self:EncodeSkills(), function(errorCode, key)
+			if errorCode == 0 then
+				self.SkillDirty = false
+			else
+				log_warning("[VRF] skill save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddSkillBooks(integer n)
+		-- 전투 중 스킬북 획득: 표시만 바꾸고 판이 끝날 때 저장.
+		if not self.SkillLoaded or n <= 0 then return end
+		self.SkillBooks = self.SkillBooks + n
+		self.SkillDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FlushSkills()
+		-- 바뀐 스킬 정보(스킬북 포함)가 있으면 저장.
+		if self.SkillLoaded and self.SkillDirty then self:SaveSkills() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanEditSkill(string fromUserId)
+		-- 본인 요청 + 불러오기 완료 + 로비에 있을 때만 스킬을 바꿀 수 있다.
+		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.SkillLoaded then return false end
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean GainSkill(string id)
+		-- 스킬 1개 획득: 처음이면 Lv.1로 해금, 이미 있으면 재료 +1. 신규 여부를 돌려준다.
+		if (self.SkillOwnLv[id] or 0) <= 0 then
+			self.SkillOwnLv[id] = 1
+			return true
+		end
+		self.SkillCnt[id] = (self.SkillCnt[id] or 0) + 1
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method string RandomSkillOfGrade(integer grade)
+		-- 그 등급 스킬 중 하나 (균등).
+		local list = self._T.gradeSkills[grade] or {}
+		if #list == 0 then return "" end
+		return list[_UtilLogic:RandomIntegerRange(1, #list)]
+	end
+
+	@ExecSpace("ServerOnly")
+	method string RollGachaSkill()
+		-- 뽑기 1회: 등급표 확률로 등급을 고르고 그 등급에서 균등하게 스킬 하나.
+		local sum = 0
+		for g, info in pairs(self._T.grades) do
+			if #(self._T.gradeSkills[g] or {}) > 0 then sum = sum + info.rate end
+		end
+		local r = _UtilLogic:RandomDouble() * sum
+		local pick = 1
+		for g = 1, #self._T.grades do
+			local info = self._T.grades[g]
+			if info ~= nil and #(self._T.gradeSkills[g] or {}) > 0 then
+				pick = g
+				r = r - info.rate
+				if r <= 0 then break end
+			end
+		end
+		return self:RandomSkillOfGrade(pick)
+	end
+
+	@ExecSpace("Server")
+	method void RequestGacha(integer count)
+		-- 스킬 뽑기 1회·10회 (스킬북 소모). 결과는 SkillResult로 알린다.
+		if not self:CanEditSkill(senderUserId) then return end
+		local cfg = self._T.skillCfg
+		local cost = cfg.GachaCost
+		if count == 10 then cost = cfg.GachaTenCost elseif count ~= 1 then return end
+		if self.SkillBooks < cost then return end
+		self.SkillBooks = self.SkillBooks - cost
+		local parts = {}
+		for i = 1, count do
+			local id = self:RollGachaSkill()
+			if id ~= "" then
+				local isNew = self:GainSkill(id)
+				local flag = "0"
+				if isNew then flag = "1" end
+				table.insert(parts, id .. ":" .. flag)
+			end
+		end
+		self.SkillResult = table.concat(parts, ",")
+		self.SkillMsg = "gacha"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] gacha x" .. tostring(count) .. " books=" .. tostring(self.SkillBooks) .. " " .. self.SkillResult)
+	end
+
+	@ExecSpace("Server")
+	method void RequestSkillUpgrade(string id)
+		-- 스킬 레벨업: 재료 (레벨 × 5)개 소모, 최대 11레벨.
+		if not self:CanEditSkill(senderUserId) then return end
+		local lv = self.SkillOwnLv[id] or 0
+		local cfg = self._T.skillCfg
+		if lv <= 0 or lv >= cfg.SkillMaxLv then return end
+		local need = lv * cfg.SkillUpBase
+		if (self.SkillCnt[id] or 0) < need then return end
+		self.SkillCnt[id] = self.SkillCnt[id] - need
+		self.SkillOwnLv[id] = lv + 1
+		self.SkillResult = id .. ":0"
+		self.SkillMsg = "upgrade"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] skill upgrade " .. id .. " lv=" .. tostring(lv + 1))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer ComboAttackCost()
+		-- 콤보 어택 다음 레벨 스킬북 비용.
+		return self.ComboAttackBaseCost + self.ComboAttackLv * self.ComboAttackStepCost
+	end
+
+	@ExecSpace("Server")
+	method void RequestComboAttackUpgrade()
+		-- 고유 패시브 콤보 어택 레벨업 (Lv.0→1 해금). 스킬북 소모.
+		if not self:CanEditSkill(senderUserId) then return end
+		if self.ComboAttackLv >= self.ComboAttackMaxLv then return end
+		local cost = self:ComboAttackCost()
+		if self.SkillBooks < cost then return end
+		self.SkillBooks = self.SkillBooks - cost
+		self.ComboAttackLv = self.ComboAttackLv + 1
+		self.SkillResult = "ComboAttack:0"
+		self.SkillMsg = "passive"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] combo attack lv=" .. tostring(self.ComboAttackLv) .. " books=" .. tostring(self.SkillBooks))
+	end
+
+	@ExecSpace("Server")
+	method void RequestSkillSynth(string id)
+		-- 합성: 같은 스킬 재료 3개로 등급표 확률에 따라 한 등급 위 스킬, 실패하면 같은 등급 스킬 하나.
+		if not self:CanEditSkill(senderUserId) then return end
+		local sk = self._T.skillById[id]
+		local need = self._T.skillCfg.SkillSynthCount
+		if sk == nil or (self.SkillCnt[id] or 0) < need then return end
+		local info = self._T.grades[sk.grade]
+		if info == nil or info.synth <= 0 or #(self._T.gradeSkills[sk.grade + 1] or {}) == 0 then return end
+		self.SkillCnt[id] = self.SkillCnt[id] - need
+		local ok = _UtilLogic:RandomDouble() * 100 < info.synth
+		local grade = sk.grade
+		if ok then grade = grade + 1 end
+		local got = self:RandomSkillOfGrade(grade)
+		local flag = "0"
+		if self:GainSkill(got) then flag = "1" end
+		self.SkillResult = got .. ":" .. flag
+		self.SkillMsg = "synth_fail"
+		if ok then self.SkillMsg = "synth_ok" end
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] skill synth " .. id .. " ok=" .. tostring(ok) .. " got=" .. got)
+	end
+
+	@ExecSpace("Server")
+	method void RequestSkillEquip(integer slot, string id)
+		-- 장착 칸 교체 (해제는 없다). 다른 칸에 있던 같은 스킬은 자리를 바꾼다.
+		if not self:CanEditSkill(senderUserId) then return end
+		if slot < 1 or slot > self.SkillEquipSlots then return end
+		local key = tostring(slot)
+		if id == "" or (self.SkillOwnLv[id] or 0) <= 0 then return end
+		local prev = self.SkillEquip[key] or ""
+		for i = 1, self.SkillEquipSlots do
+			local k = tostring(i)
+			if k ~= key and self.SkillEquip[k] == id then self.SkillEquip[k] = prev end
+		end
+		self.SkillEquip[key] = id
+		self.SkillMsg = "equip"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] skill equip slot=" .. key .. " id=" .. id)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SkillRunData()
+		-- 판 시작 시 쓸 장착 스킬과 레벨 { equip = {Id...}, lv = {Id: 레벨} }.
+		local data = { equip = {}, lv = {}, comboLv = 0 }
+		if not self.SkillLoaded then return data end
+		data.comboLv = self.ComboAttackLv
+		for i = 1, self.SkillEquipSlots do
+			local id = self.SkillEquip[tostring(i)] or ""
+			if id ~= "" then
+				table.insert(data.equip, id)
+				data.lv[id] = self.SkillOwnLv[id] or 1
+			end
+		end
+		return data
 	end
 
 	@ExecSpace("ServerOnly")

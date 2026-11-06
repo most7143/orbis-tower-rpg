@@ -54,7 +54,9 @@ script SkillTestManager extends Component
 		local at = _DataService:GetTable("SkillActionTable")
 		if at ~= nil then
 			for i = 1, at:GetRowCount() do
-				actions[at:GetCell(i, "SkillId")] = { name = at:GetCell(i, "Action") or "", frames = at:GetCell(i, "ActionFrames") or "", time = tonumber(at:GetCell(i, "ActionTime")) or 0.8, caster = at:GetCell(i, "CasterFx") or "", hit = at:GetCell(i, "HitFx") or "", scale = tonumber(at:GetCell(i, "FxScale")) or 1 }
+				actions[at:GetCell(i, "SkillId")] = { name = at:GetCell(i, "Action") or "", frames = at:GetCell(i, "ActionFrames") or "", time = tonumber(at:GetCell(i, "ActionTime")) or 0.8, caster = at:GetCell(i, "CasterFx") or "", hit = at:GetCell(i, "HitFx") or "", scale = tonumber(at:GetCell(i, "FxScale")) or 1,
+					mob = at:GetCell(i, "MobFx") or "", policy = at:GetCell(i, "HitPolicy") or "", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
+					gap = tonumber(at:GetCell(i, "HitGap")) or 0, hitY = tonumber(at:GetCell(i, "HitY")) or 0.45 }
 			end
 		end
 		local js = _DataService:GetTable(self.JobSkillTableName)
@@ -70,12 +72,14 @@ script SkillTestManager extends Component
 						if pt == "Double" then hits = 2 end
 					end
 					local desc = js:GetCell(i, "Desc") or ""
-					local keys = { v1 = "V1", v2 = "V2", c = "Chance", p = "Pct", h = "ProcHits", cd = "Cooldown", bt = "BuffTime" }
+					local keys = { v1 = "V1", v2 = "V2", c = "Chance", p = "Pct", h = "ProcHits", cd = "Cooldown", bt = "BuffTime", dp = "DotPct", dt = "DotTime" }
 					for key, col in pairs(keys) do desc = (string.gsub(desc, "{" .. key .. "}", tostring(math.floor(tonumber(js:GetCell(i, col)) or 0)))) end
 					if self._T.skills[id] == nil then self._T.skills[id] = {} end
-					table.insert(self._T.skills[id], { name = js:GetCell(i, "Name"), desc = desc, type = pt,
+					table.insert(self._T.skills[id], { id = js:GetCell(i, "SkillId"), name = js:GetCell(i, "Name"), desc = desc, type = pt,
 						pct = tonumber(js:GetCell(i, "Pct")) or 0, hits = hits, fx = a.hit, fxScale = a.scale,
-						actionName = a.name, actionFrames = a.frames, actionTime = a.time, casterFx = a.caster })
+						actionName = a.name, actionFrames = a.frames, actionTime = a.time, casterFx = a.caster,
+						mobFx = a.mob, policy = a.policy, useSound = a.useSound, hitSound = a.hitSound, gap = a.gap, hitY = a.hitY,
+						kind = js:GetCell(i, "SkillType") or "" })
 					self._T.fxCount = self._T.fxCount + 1
 				end
 			end
@@ -123,8 +127,8 @@ script SkillTestManager extends Component
 		end
 		if isvalid(player.PlayerControllerComponent) then player.PlayerControllerComponent.LookDirectionX = 1 end
 		player.PlayerComponent:SetWorldPosition(self.PlayerPos)
-		self.InfoTitle = "직업을 고르세요"
-		self.InfoDesc = "고른 직업의 이펙트 스킬이 차례로 재생됩니다"
+		self.InfoTitle = "스킬을 고르세요"
+		self.InfoDesc = "히어로는 스킬 버튼을 누르면 그 스킬만 실행되고, 다른 직업은 이펙트 스킬이 차례로 재생됩니다"
 		self:SpawnMonster()
 		log("[VRF] skill test player setup user=" .. tostring(player.PlayerComponent.UserId))
 	end
@@ -189,6 +193,24 @@ script SkillTestManager extends Component
 		end
 	end
 
+	@ExecSpace("Server")
+	method void RequestPlaySkill(string jobId, string jobName, string skillId)
+		-- 스킬 버튼(히어로): 그 스킬 하나만 실제 전투와 같은 연출로 실행한다. 재생 중이면 끊고 새로 시작.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		self:ClearTimers()
+		self.PlaySeq = self.PlaySeq + 1
+		local list = self._T.skills[jobId] or {}
+		for i, sk in ipairs(list) do
+			if sk.id == skillId then
+				log("[VRF] skill test single " .. skillId)
+				self:PlaySkill(sk, jobName, i, #list)
+				return
+			end
+		end
+		log_warning("[VRF] skill test single not found " .. tostring(skillId))
+	end
+
 	@ExecSpace("ServerOnly")
 	method void PlaySkill(table sk, string jobName, integer idx, integer total)
 		-- 스킬 하나: 공격 동작 → (HitDelay 뒤) 연타 수만큼 이펙트 + 피해 숫자 (회복 스킬은 캐릭터 위).
@@ -196,12 +218,94 @@ script SkillTestManager extends Component
 		local monster = self._T.monster
 		if not isvalid(player) or not isvalid(monster) then return end
 		self.InfoTitle = jobName .. " - " .. sk.name .. "  (" .. tostring(idx) .. "/" .. tostring(total) .. ")"
-		self.InfoDesc = sk.desc .. "\n" .. sk.type .. " · " .. tostring(sk.hits) .. "타 · 이펙트 크기 " .. tostring(sk.fxScale) .. " · 액션 " .. sk.actionName
+		-- 자기 동작이 없는 스킬(콤보 인스팅트처럼 다른 공격 적중 때 같이 발동)은 일반 공격 모션으로 보여 준다
+		local action = sk.actionName
+		if (sk.actionFrames or "") == "" then action = "일반 공격 (적중 시 동반 발동)" end
+		self.InfoDesc = sk.desc .. "\n" .. sk.type .. " · " .. tostring(sk.hits) .. "타 · 이펙트 크기 " .. tostring(sk.fxScale) .. " · 액션 " .. action
 		local tp = player:GetComponent("script.TowerPlayer")
-		if tp ~= nil then tp:PlayAttackMotion(0, sk.actionFrames, sk.actionTime, sk.casterFx, player.PlayerComponent.UserId) end
-		for h = 1, sk.hits do
+		-- HitPolicy "random": 변형 묶음 중 하나를 골라 같은 번호의 이펙트·소리를 쓴다 (콤보 인스팅트 3종)
+		if sk.policy == "random" then
+			local fxs = {}
+			for ruid in string.gmatch(sk.fx or "", "[^|]+") do table.insert(fxs, ruid) end
+			local k = _UtilLogic:RandomIntegerRange(1, math.max(1, #fxs))
+			local function at(list)
+				local n = 0
+				local last = ""
+				for v in string.gmatch(list or "", "[^|]+") do
+					n = n + 1
+					last = v
+					if n == k then return v end
+				end
+				return last
+			end
+			local copy = {}
+			for key, v in pairs(sk) do copy[key] = v end
+			copy.fx = at(sk.fx)
+			copy.casterFx = at(sk.casterFx)
+			copy.useSound = at(sk.useSound)
+			copy.hitSound = at(sk.hitSound)
+			copy.policy = "per_hit"
+			sk = copy
+			self.InfoTitle = self.InfoTitle .. "  [변형 " .. tostring(k) .. "]"
+		end
+		-- 캐릭터 이펙트도 FxScale 크기로 ("ruid@크기")
+		local caster = sk.casterFx or ""
+		if caster ~= "" and (sk.fxScale or 1) ~= 1 then
+			local parts = {}
+			for ruid in string.gmatch(caster, "[^|]+") do table.insert(parts, ruid .. "@" .. tostring(sk.fxScale)) end
+			caster = table.concat(parts, "|")
+		end
+		if tp ~= nil then tp:PlayAttackMotion(0, sk.actionFrames, sk.actionTime, caster, sk.useSound or "", player.PlayerComponent.UserId) end
+		-- 타격 시점: 동작 데이터의 음수→양수 전환 순간 (TowerPlayer와 같은 규칙, 없으면 HitDelay)
+		local hitDelay = self.HitDelay
+		if tp ~= nil then
+			local ht = tp:HitTimeOf(sk.actionFrames or "")
+			if ht > 0 then hitDelay = ht end
+		end
+		-- 버프·소환은 피격 없음 (시전 동작·이펙트만)
+		local hits = sk.hits
+		if sk.kind == "버프" or sk.kind == "소환" then hits = 0 end
+		if sk.id == "H15" then hits = 1 end
+		local gap = self.ProcHitInterval
+		if (sk.gap or 0) > 0 then gap = sk.gap end
+		-- 발사체 스킬 (오라 블레이드): 몸 중심에서 몬스터 쪽으로 발사체를 날리고, 닿는 순간부터 타격
+		local travel = 0
+		local shot = _HeroCombatLogic:ShotRUID(sk.id or "")
+		if shot ~= "" and hits > 0 then
+			local hc = _HeroCombatLogic
+			local pp = player.TransformComponent.WorldPosition
+			local mp = monster.TransformComponent.WorldPosition
+			local start = Vector3(pp.x + hc.ShotOrigin.x, pp.y + hc.ShotOrigin.y, pp.z)
+			local dx = mp.x - start.x
+			local dy = (mp.y + (sk.hitY or 0.45)) - start.y
+			local len = math.max(0.001, math.sqrt(dx * dx + dy * dy))
+			local dir = Vector3(dx / len, dy / len, 0)
+			local reach = math.max(0, math.abs(dx) - hc.ShotReach) / math.max(0.001, math.abs(dir.x))
+			travel = reach / hc.ShotSpeed
+			self._T.shotSeq = (self._T.shotSeq or 0) + 1
+			local sid = 100000 + self._T.shotSeq
+			local uid = player.PlayerComponent.UserId
+			-- 관통형은 몬스터를 지나 화면 밖까지, 아니면 닿는 순간 사라짐
+			local pierce = hc:ShotType(sk.id) == "pierce"
+			local range = reach + 0.05
+			if pierce then range = hc.ShotRange end
+			self:Later(function() hc:ShowShot(sid, shot, start, dir, hc.ShotSpeed, range, sk.fxScale or 1, uid) end, hitDelay)
+			if not pierce then self:Later(function() hc:EndShot(sid, uid) end, hitDelay + travel) end
+			log("[VRF] skill test shot " .. sk.id .. " travel=" .. string.format("%.2f", travel))
+		end
+		for h = 1, hits do
 			local hit = h
-			self:Later(function() self:PlayHit(sk, hit) end, self.HitDelay + (h - 1) * self.ProcHitInterval)
+			self:Later(function() self:PlayHit(sk, hit) end, hitDelay + travel + (h - 1) * gap)
+		end
+		-- 상태이상 그림 (코마 기절 별 등): 몬스터 머리 위 2초
+		if (sk.mobFx or "") ~= "" then
+			self:Later(function()
+				local mon = self._T.monster
+				if not isvalid(mon) then return end
+				local wp = mon.TransformComponent.WorldPosition
+				local serial = _EffectService:PlayEffect(sk.mobFx, mon, Vector3(wp.x, wp.y + 0.75, wp.z), 0, Vector3(1, 1, 1), true)
+				self:Later(function() _EffectService:RemoveEffect(serial) end, 2)
+			end, hitDelay + 0.05)
 		end
 		log("[VRF] skill test fx " .. sk.name .. " type=" .. sk.type .. " hits=" .. tostring(sk.hits) .. " scale=" .. tostring(sk.fxScale))
 	end
@@ -222,7 +326,16 @@ script SkillTestManager extends Component
 		if h == 1 then ox = 0 end
 		local fxList = {}
 		for ruid in string.gmatch(sk.fx, "[^|]+") do table.insert(fxList, ruid) end
-		if #fxList > 0 then _EffectService:PlayEffect(fxList[(h - 1) % #fxList + 1], who, Vector3(wp.x + ox, wp.y + 0.45 + oy, wp.z), 0, Vector3(sk.fxScale, sk.fxScale, 1), false, { FlipX = true }) end
+		-- 히트 이펙트: 긴 이펙트(once)는 첫 타에만, 짧은 이펙트(per_hit)는 타마다
+		local showFx = sk.policy ~= "once" or h == 1
+		if sk.policy == "once" then
+			ox = 0
+			oy = 0
+		end
+		local hy = sk.hitY or 0.45
+		if #fxList > 0 and showFx then _EffectService:PlayEffect(fxList[(h - 1) % #fxList + 1], who, Vector3(wp.x + ox, wp.y + hy + oy, wp.z), 0, Vector3(sk.fxScale, sk.fxScale, 1), false, { FlipX = true }) end
+		-- 피격음은 히트 이펙트와 같은 순간 (긴 이펙트는 첫 타에만, 짧은 이펙트는 타마다)
+		if showFx and (sk.hitSound or "") ~= "" then _SoundService:PlaySound(sk.hitSound, 0.7) end
 		local tp = player:GetComponent("script.TowerPlayer")
 		if tp == nil then return end
 		-- 피해 숫자는 예시 값 (스킬 계수 %), 주사위는 무작위

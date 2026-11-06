@@ -72,10 +72,13 @@ script ResultPopupLogic extends Logic
 		if show and isvalid(self.bodyText) then
 			local best = "최고 기록 " .. tostring(mgr.BestFloor) .. "층"
 			if mgr.IsNewBest then best = best .. " (신기록!)" end
-			self.bodyText.Text = "도달   " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
+			local body = "도달   " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
 				.. "레벨   Lv." .. tostring(mgr.Level) .. "\n"
 				.. "획득 메소   " .. tostring(mgr.RunMeso) .. "\n"
-				.. "여신의 깃털   +" .. tostring(mgr.RunFeathers) .. "\n" .. best
+				.. "여신의 깃털   +" .. tostring(mgr.RunFeathers) .. "\n"
+				.. "강화 주문서   +" .. tostring(mgr.RunScrolls) .. "\n"
+				.. "스킬북   +" .. tostring(mgr.RunBooks) .. "\n" .. best
+			self.bodyText.Text = body
 		end
 	end
 

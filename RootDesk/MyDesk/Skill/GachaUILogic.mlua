@@ -1,0 +1,536 @@
+@Logic
+script GachaUILogic extends Logic
+
+	-- 스킬 뽑기 화면 (GachaUI.ui): 스킬북으로 1회·10회 뽑기.
+	-- 연출: 상자 열림 → 1회는 주문서 1장, 10회는 주문서 10장이 한 번에 튀어오름 → 슬롯 순차 공개(하이퍼·5차 테두리 강조) → 신규 해금이면 해금 팝업에서 확인 대기.
+	-- [전체 공개]는 남은 일반 연출만 건너뛰고, 신규 해금 팝업은 항상 띄운다. 결과는 서버(PlayerEngrave)가 이미 확정한 값을 순서대로 보여 줄 뿐이다.
+	property Entity dimEntity = "e575db16-ec09-4a6b-9743-d65edaae3530"
+	property Entity panelEntity = "61590471-acf4-4fb9-97dd-63fd52c45d8a"
+	property string PanelPath = "/ui/GachaUI/Panel/"
+	property integer ResultSlots = 10
+	property string SkillTableName = "HeroSkillTable"
+	property string GradeTableName = "SkillGradeTable"
+	-- 상자 선택: 직업별 상자 "직업Id:닫힌 상자:열림 클립" 순서대로 (직업표 Playable=1만 뽑기 가능)
+	property string JobTableName = "TraitTable"
+	property string ChestSet = "Hero:b9b05862fbe140c3a6202f0f461e8005:2b573fef0c984854b962825276999a91;Paladin:0b042c62da844f8f964d4bf9d248e4bb:efad42bccb834233a77a1d66590d1399;DarkKnight:57c03dbb32f4432ab6a78bce8f0b01c5:48f6b1e372e542f9b57487544dbb5878"
+	-- 하이퍼·5차 등급 번호 (SkillGradeTable)
+	property integer HyperGrade = 5
+	property integer FifthGrade = 6
+	-- 애니메이션 클립 (리소스 스토리지)
+	property string ChestClipRUID = "9e3469652712434c9d9cc2a7edec8c61"
+	property string ChestIdleRUID = "2a5fc64633bf4e90bd9eb3f1105297bc"
+	property string ScrollClipRUID = "b58b11f86e804c56bb83ed54ba0a3856"
+	-- 10회: 주문서 10장 동시 튀어오름 (한 번만 재생)
+	property string BurstClipRUID = "1f9a2ab97a094236b9eec6b9e8ba36b6"
+	property string HyperBorderClipRUID = "fe9ae8971f0f401ebaf43e91db975ce5"
+	property string FifthBorderClipRUID = "0e465d7a71a84f319810189dfc5a6c84"
+	property string HyperUnlockClipRUID = "d5c8a49dc3884d12beac57dd300c90df"
+	property string FifthUnlockClipRUID = "8724a8bdc8194881b6168bc664a210be"
+	property string SlotNormalRUID = "10ffed199f9f4fb885a31293d87ff6b8"
+	property string SlotPendingRUID = "1ac90204875d4943aab325c655756239"
+	-- 연출 시간(초): 상자 8프레임 합, 주문서 1장 18 × 40ms, 10장 27 × 40ms, 10회 결과 칸 사이 간격
+	property number ChestTime = 0.42
+	property number ScrollTime = 0.72
+	property number BurstTime = 1.08
+	property number RevealInterval = 0.15
+	property Color MainTextColor = Color(0.91, 0.91, 0.89, 1)
+	property Color SubTextColor = Color(0.59, 0.59, 0.57, 1)
+	property Color NewColor = Color(1, 0.84, 0.36, 1)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 스킬·등급표와 비용을 읽고 버튼을 연결한 뒤 닫힌 상태로 시작한다.
+		self._T.skillById = {}
+		local ds = _DataService:GetTable(self.SkillTableName)
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				self._T.skillById[ds:GetCell(i, "SkillId")] = { name = ds:GetCell(i, "Name"), grade = tonumber(ds:GetCell(i, "Grade")) or 1, icon = ds:GetCell(i, "IconRUID") or "" }
+			end
+		end
+		self._T.grades = {}
+		local rates = {}
+		local gs = _DataService:GetTable(self.GradeTableName)
+		if gs ~= nil then
+			for i = 1, gs:GetRowCount() do
+				local g = { name = gs:GetCell(i, "Name"), rate = tonumber(gs:GetCell(i, "GachaRate")) or 0, color = Color.FromHexCode(gs:GetCell(i, "ColorHex")) }
+				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = g
+				table.insert(rates, g.name .. " " .. tostring(g.rate) .. "%")
+			end
+		end
+		self._T.rateText = table.concat(rates, "   ·   ")
+		self._T.cost = { one = 10, ten = 100 }
+		local rc = _DataService:GetTable("RunConfig")
+		if rc ~= nil then
+			for i = 1, rc:GetRowCount() do
+				local k = rc:GetCell(i, "Key")
+				if k == "GachaCost" then self._T.cost.one = tonumber(rc:GetCell(i, "Value")) or 10 end
+				if k == "GachaTenCost" then self._T.cost.ten = tonumber(rc:GetCell(i, "Value")) or 100 end
+			end
+		end
+		-- 직업별 상자: 상자 세트 순서, 이름·계열·뽑기 가능 여부는 직업표에서
+		local info = {}
+		local js = _DataService:GetTable(self.JobTableName)
+		if js ~= nil then
+			for i = 1, js:GetRowCount() do
+				info[js:GetCell(i, "Id")] = { name = js:GetCell(i, "Name"), family = js:GetCell(i, "FamilyName"), color = js:GetCell(i, "FamilyColor") or "#FFFFFF", playable = js:GetCell(i, "Playable") == "1" }
+			end
+		end
+		self._T.jobs = {}
+		for entry in string.gmatch(self.ChestSet, "[^;]+") do
+			local id, closed, open = string.match(entry, "^([^:]+):([^:]+):([^:]+)$")
+			local j = info[id or ""]
+			if j ~= nil then table.insert(self._T.jobs, { id = id, name = j.name, family = j.family, color = j.color, playable = j.playable, closed = closed, open = open }) end
+		end
+		self.clickHandlers = {}
+		-- 공용 은색 버튼 4상태 (글자는 텍스트로)
+		local skin = { normal = "4cda7409719148bca599e51460951375", hover = "7996b53cd3304d1badb3b64a83798f1a", pressed = "168a1a4f47494afd86c3b09175decca1", disabled = "31cf599e483840a093fa84ec6a3f3c85",
+			textNormal = Color(0.15, 0.15, 0.18, 1), textHover = Color(0.1, 0.1, 0.12, 1), textDisabled = Color(0.62, 0.62, 0.62, 1) }
+		for _, name in ipairs({ "BtnOne", "BtnTen", "BtnSkip", "BtnDone", "Unlock/BtnOk", "Select/BtnSelect" }) do _UIButtonLogic:SetSkin(self:Get(name), skin) end
+		local sub = { normal = "75f3c6dbf2434bcaa0e4b2d430575e2d", hover = "6ba383acf31a4c5bb105720d50c0ccd4", pressed = "a79e3b3c39dd46d4bcf92f29ecf88733", disabled = "f2cf3f5019aa4da995e72294dacb3e64" }
+		_UIButtonLogic:SetSkin(self:Get("Close"), sub)
+		-- 좌우 화살표 4상태 (글자 없음)
+		_UIButtonLogic:SetSkin(self:Get("Select/Prev"), { normal = "e1c076b6073d47a48093c780ef21ea47", hover = "dd548209d7274010a9f11f495c3ec046", pressed = "abac4d0938e54423a06dcfdb422de81c", disabled = "e187939e61a04db380f524f2c8133d70" })
+		_UIButtonLogic:SetSkin(self:Get("Select/Next"), { normal = "c93cc2b45903428fb7b7a39f89c5b050", hover = "e41226cc9cd54dba91b2575255e7adb0", pressed = "d3c7ed9c61d246d29eddbd1e19a6d15f", disabled = "49931af99dae4b4ebb8491a16b03f3ea" })
+		self:Bind(self:Get("Select/Prev"), function() self:TurnChest(-1) end)
+		self:Bind(self:Get("Select/Next"), function() self:TurnChest(1) end)
+		self:Bind(self:Get("Select/BtnSelect"), function() self:OnSelectChest() end)
+		self:Bind(self:Get("BtnOne"), function() self:OnPull(1) end)
+		self:Bind(self:Get("BtnTen"), function() self:OnPull(10) end)
+		self:Bind(self:Get("BtnSkip"), function() self:OnSkip() end)
+		self:Bind(self:Get("BtnDone"), function() self:OnDone() end)
+		self:Bind(self:Get("Unlock/BtnOk"), function() self:OnUnlockOk() end)
+		self:Bind(self:Get("Close"), function() self:OnClose() end)
+		self._T.phase = "idle"
+		self._T.results = {}
+		self._T.open = true
+		self:SetOpen(false)
+		log("[VRF] GachaUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Get(string name)
+		-- 패널 안 엔티티.
+		return _EntityService:GetEntityByPath(self.PanelPath .. name)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string name, string s, Color c)
+		-- 패널 안 글자(와 색) 바꾸기.
+		local e = self:Get(name)
+		if not isvalid(e) then return end
+		if e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+		if c ~= nil then e.TextGUIRendererComponent.FontColor = c end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetImage(string name, string ruid)
+		-- 패널 안 이미지(애니메이션 클립 포함) 바꾸기. 클립은 이미지가 바뀔 때 처음부터 재생된다.
+		local e = self:Get(name)
+		if isvalid(e) then e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(string name, boolean on)
+		-- 패널 안 엔티티 켜고 끄기.
+		local e = self:Get(name)
+		if isvalid(e) and e.Enable ~= on then e:SetEnable(on) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 로컬 플레이어의 저장 컴포넌트 (스킬 포함).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [뽑기] 버튼: 직업별 상자 선택 화면부터 연다.
+		local eng = self:GetEngrave()
+		if eng == nil or not eng.SkillLoaded then return end
+		self._T.seq = eng.SkillSeq
+		if self._T.jobIndex == nil then
+			self._T.jobIndex = 1
+			for i, job in ipairs(self._T.jobs) do
+				if job.playable then self._T.jobIndex = i break end
+			end
+		end
+		self:ResetStage()
+		self:ShowSelect()
+		self:SetOpen(true)
+		self:Refresh()
+		log("[VRF] gacha open books=" .. tostring(eng.SkillBooks))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowSelect()
+		-- 상자 선택 화면: 뽑기 화면 요소를 숨기고 현재 직업 상자를 보여 준다.
+		self._T.mode = "select"
+		self._T.phase = "idle"
+		for _, name in ipairs({ "Stage", "Results", "Single", "ProgressBg", "BtnOne", "BtnTen", "BtnSkip", "BtnDone", "Rates", "Unlock" }) do self:Show(name, false) end
+		self:Show("Select", true)
+		self:SetText("Title", "스킬 상자 선택", nil)
+		self:SetText("Close", "닫기", nil)
+		self:UpdateSelect()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateSelect()
+		-- 현재 직업 상자: 전용 닫힌 상자, 이름표(계열 색 + 직업명), 쪽수, 준비 중이면 [선택] 막기.
+		local n = #self._T.jobs
+		local job = self._T.jobs[self._T.jobIndex]
+		if job == nil then return end
+		self:SetText("Select/Tag/Text", "<color=" .. job.color .. ">" .. job.family .. "</color>  " .. job.name, nil)
+		self:SetText("Select/Page", tostring(self._T.jobIndex) .. " / " .. tostring(n), nil)
+		self:SetImage("Select/Chest", job.closed)
+		if job.playable then self:SetText("Select/BtnSelect", "선택", nil) else self:SetText("Select/BtnSelect", "준비 중", nil) end
+		_UIButtonLogic:SetDisabled(self:Get("Select/BtnSelect"), not job.playable)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void TurnChest(integer d)
+		-- ◀ ▶: 이전/다음 직업 상자 (끝에서 반대쪽으로 넘어감).
+		local n = #self._T.jobs
+		if n == 0 or self._T.mode ~= "select" then return end
+		self._T.jobIndex = ((self._T.jobIndex - 1 + d) % n) + 1
+		self:UpdateSelect()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSelectChest()
+		-- [선택]: 고른 직업 상자의 뽑기 화면으로 넘어간다.
+		local job = self._T.jobs[self._T.jobIndex]
+		if job == nil or not job.playable or self._T.mode ~= "select" then return end
+		self._T.mode = "gacha"
+		self:Show("Select", false)
+		for _, name in ipairs({ "Stage", "Results", "Rates" }) do self:Show(name, true) end
+		self._T.chestIdle = job.closed
+		self._T.chestOpen = job.open
+		self:ResetStage()
+		self:SetText("Title", job.name .. " 스킬 상자", nil)
+		self:SetText("Close", "뒤로", nil)
+		self:Refresh()
+		log("[VRF] gacha chest select " .. job.id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnClose()
+		-- [닫기]/[뒤로]: 뽑기 화면이면 상자 선택으로, 선택 화면이면 닫는다 (결과는 서버에 이미 반영돼 있다).
+		if self._T.mode == "gacha" then
+			self:ResetStage()
+			self:ShowSelect()
+			return
+		end
+		self:Close()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기 (연출 중이어도 닫는다. 결과는 서버에 이미 반영돼 있다).
+		self:SetOpen(false)
+		self._T.phase = "idle"
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsOpen()
+		-- 뽑기 화면이 열려 있는지.
+		return self._T.open == true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOpen(boolean open)
+		-- 배경·패널 표시 전환.
+		if self._T.open == open then return end
+		self._T.open = open
+		if isvalid(self.dimEntity) then self.dimEntity:SetEnable(open) end
+		if isvalid(self.panelEntity) then self.panelEntity:SetEnable(open) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ResetStage()
+		-- 대기 화면: 닫힌 상자, 결과·주문서·해금 팝업 숨김, 뽑기 버튼 표시.
+		self._T.phase = "idle"
+		self._T.results = {}
+		self._T.skip = false
+		self:SetImage("Stage/Chest", self._T.chestIdle or self.ChestIdleRUID)
+		self:Show("Stage/Scroll", false)
+		self:Show("Stage/Burst", false)
+		self:Show("Unlock", false)
+		self:Show("Single", false)
+		for i = 1, self.ResultSlots do self:Show("Results/Cell_" .. tostring(i), false) end
+		self:Show("ProgressBg", false)
+		self:ShowButtons("pull")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowButtons(string mode)
+		-- 대기는 1회·10회(pull), 연출 중 [전체 공개](skip), 모두 공개 후 [확인](done).
+		self:Show("BtnOne", mode == "pull")
+		self:Show("BtnTen", mode == "pull")
+		self:Show("BtnSkip", mode == "skip")
+		self:Show("BtnDone", mode == "done")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnDone()
+		-- 결과 [확인]: 대기 화면으로 돌아간다.
+		if self._T.phase ~= "done" then return end
+		self:ResetStage()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateProgress()
+		-- 공개한 결과 수 "n / 전체".
+		local n = math.max(0, math.min(self._T.index or 0, #self._T.results))
+		self:SetText("ProgressBg/Text", tostring(n) .. " / " .. tostring(#self._T.results), nil)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnPull(integer count)
+		-- 뽑기 요청 (연출 중이거나 스킬북이 모자라면 무시).
+		local eng = self:GetEngrave()
+		if eng == nil or self._T.phase ~= "idle" then return end
+		local cost = self._T.cost.one
+		if count == 10 then cost = self._T.cost.ten end
+		if eng.SkillBooks < cost then return end
+		self._T.phase = "wait"
+		self:ShowButtons("skip")
+		_UIButtonLogic:SetDisabled(self:Get("BtnSkip"), true)
+		eng:RequestGacha(count)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSkip()
+		-- [전체 공개]: 남은 일반 연출만 건너뛴다 (신규 해금 팝업은 그대로).
+		if self._T.phase == "idle" or self._T.phase == "wait" or self._T.phase == "done" then return end
+		self._T.skip = true
+		log("[VRF] gacha skip at " .. tostring(self._T.index))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUnlockOk()
+		-- 해금 팝업 [확인]: 다음 결과로 이어 간다.
+		if self._T.phase ~= "unlock" then return end
+		self:Show("Unlock", false)
+		self:NextResult()
+	end
+
+	@ExecSpace("ClientOnly")
+	method string CellPath(integer i)
+		-- i번째 결과 칸 (1회는 큰 칸 하나).
+		if #self._T.results == 1 then return "Single" end
+		return "Results/Cell_" .. tostring(i)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void StartReveal(string result)
+		-- 서버 결과 "Id:신규,..."를 받아 연출을 시작한다: 결과 칸을 공개 전 상태로 깔고 상자를 연다.
+		local list = {}
+		for part in string.gmatch(result, "[^,]+") do
+			local id = string.match(part, "^([^:]+):")
+			if id ~= nil and self._T.skillById[id] ~= nil then table.insert(list, { id = id, isNew = string.match(part, ":1$") ~= nil }) end
+		end
+		self._T.results = list
+		self._T.index = 0
+		self._T.skip = false
+		self:Show("Single", false)
+		for i = 1, self.ResultSlots do self:Show("Results/Cell_" .. tostring(i), false) end
+		for i = 1, #list do
+			local path = self:CellPath(i)
+			self:Show(path, true)
+			self:Show(path .. "/Icon", false)
+			self:Show(path .. "/Border", false)
+			self:SetImage(path .. "/Frame", self.SlotPendingRUID)
+			self:SetText(path .. "/Name", "", nil)
+			self:SetText(path .. "/Grade", "", nil)
+			self:SetText(path .. "/Tag", "", nil)
+		end
+		self:Show("ProgressBg", true)
+		self:UpdateProgress()
+		_UIButtonLogic:SetDisabled(self:Get("BtnSkip"), false)
+		self:SetImage("Stage/Chest", self._T.chestOpen or self.ChestClipRUID)
+		self._T.phase = "chest"
+		self._T.timer = self.ChestTime
+		log("[VRF] gacha reveal start n=" .. tostring(#list))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void NextResult()
+		-- 다음 결과: 전체 공개 중 일반 결과는 바로 공개. 1회는 주문서 연출 뒤, 10회는 간격을 두고 순서대로 공개. 모두 끝나면 완료.
+		self._T.index = self._T.index + 1
+		local r = self._T.results[self._T.index]
+		if r == nil then
+			self:FinishReveal()
+			return
+		end
+		if self._T.skip and not r.isNew then
+			self:RevealCell(self._T.index, false)
+			self:NextResult()
+			return
+		end
+		if #self._T.results == 1 then
+			self:Show("Stage/Scroll", true)
+			self:SetImage("Stage/Scroll", self.ScrollClipRUID)
+			self._T.phase = "scroll"
+			self._T.timer = self.ScrollTime
+			return
+		end
+		self:RevealAndWait(self._T.index)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RevealAndWait(integer i)
+		-- 칸을 열고, 신규 해금이면 팝업에서 대기, 아니면 다음 칸까지 잠깐 쉰다.
+		self:RevealCell(i, not self._T.skip)
+		if self._T.results[i].isNew then
+			self:ShowUnlock(i)
+			return
+		end
+		self._T.phase = "reveal"
+		self._T.timer = self.RevealInterval
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RevealCell(integer i, boolean animate)
+		-- 결과 칸 공개: 아이콘·이름·등급 배지·NEW, 하이퍼·5차는 테두리 강조 반복.
+		local r = self._T.results[i]
+		local sk = self._T.skillById[r.id]
+		local g = self._T.grades[sk.grade] or { name = "", color = self.SubTextColor }
+		local path = self:CellPath(i)
+		self:SetImage(path .. "/Icon", sk.icon)
+		self:Show(path .. "/Icon", true)
+		self:SetImage(path .. "/Frame", self.SlotNormalRUID)
+		self:SetText(path .. "/Name", sk.name, self.MainTextColor)
+		-- 등급 배지: 큰 칸(1회)은 항상, 10회 칸은 하이퍼·5차만
+		local badge = ""
+		if path == "Single" or sk.grade >= self.HyperGrade then badge = g.name end
+		self:SetText(path .. "/Grade", badge, g.color)
+		local tag = ""
+		if r.isNew then tag = "NEW" end
+		self:SetText(path .. "/Tag", tag, self.NewColor)
+		self:UpdateProgress()
+		-- 하이퍼·5차 칸 테두리 강조는 결과가 보이는 동안 계속 반복 (전체 공개로 바로 연 칸도 동일)
+		local border = ""
+		if sk.grade == self.FifthGrade then
+			border = self.FifthBorderClipRUID
+		elseif sk.grade == self.HyperGrade then
+			border = self.HyperBorderClipRUID
+		end
+		if border ~= "" then
+			self:Show(path .. "/Border", true)
+			self:SetImage(path .. "/Border", border)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowUnlock(integer i)
+		-- 신규 해금 팝업: 하이퍼·5차는 해금 효과 클립, 아이콘·이름·등급과 [확인].
+		local sk = self._T.skillById[self._T.results[i].id]
+		local g = self._T.grades[sk.grade] or { name = "", color = self.SubTextColor }
+		self:Show("Unlock", true)
+		self:SetImage("Unlock/Icon", sk.icon)
+		self:SetText("Unlock/Name", sk.name, self.MainTextColor)
+		self:SetText("Unlock/Grade", "[ " .. g.name .. " ]", g.color)
+		local fx = ""
+		if sk.grade == self.FifthGrade then fx = self.FifthUnlockClipRUID elseif sk.grade == self.HyperGrade then fx = self.HyperUnlockClipRUID end
+		-- 해금 반짝임은 [확인]을 누를 때까지 반복 재생 (팝업과 함께 숨김)
+		self:Show("Unlock/Fx", fx ~= "")
+		if fx ~= "" then self:SetImage("Unlock/Fx", fx) end
+		self._T.phase = "unlock"
+		log("[VRF] gacha unlock " .. self._T.results[i].id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FinishReveal()
+		-- 모든 결과 공개 완료: 결과를 둔 채 [확인]을 보여 준다 (누르면 대기 화면).
+		self._T.phase = "done"
+		self:Show("Stage/Scroll", false)
+		self:Show("Stage/Burst", false)
+		self:UpdateProgress()
+		self:ShowButtons("done")
+		log("[VRF] gacha reveal done")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Tick(number delta)
+		-- 연출 진행: 상자 → (1회 주문서 | 10회 동시 튀어오름) → 순차 공개(해금이면 대기).
+		local phase = self._T.phase
+		if phase ~= "chest" and phase ~= "burst" and phase ~= "scroll" and phase ~= "reveal" then return end
+		self._T.timer = self._T.timer - delta
+		if self._T.timer > 0 then return end
+		if phase == "chest" then
+			if #self._T.results > 1 and self.BurstClipRUID ~= "" and not self._T.skip then
+				self:Show("Stage/Burst", true)
+				self:SetImage("Stage/Burst", self.BurstClipRUID)
+				self._T.phase = "burst"
+				self._T.timer = self.BurstTime
+			else
+				self:NextResult()
+			end
+		elseif phase == "burst" then
+			self:Show("Stage/Burst", false)
+			self:NextResult()
+		elseif phase == "scroll" then
+			self:Show("Stage/Scroll", false)
+			self:RevealAndWait(self._T.index)
+		else
+			self:NextResult()
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 스킬북·비용·확률 문구와 버튼 상태, 새 결과가 오면 연출 시작.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		if eng.SkillSeq ~= self._T.seq then
+			self._T.seq = eng.SkillSeq
+			if eng.SkillMsg == "gacha" and self._T.phase == "wait" then self:StartReveal(eng.SkillResult) end
+		end
+		self:SetText("Books", "보유 스킬북  " .. tostring(eng.SkillBooks), nil)
+		self:SetText("Rates", self._T.rateText, nil)
+		self:SetText("BtnOne", "1회 뽑기  ·  " .. tostring(self._T.cost.one), nil)
+		self:SetText("BtnTen", "10회 뽑기  ·  " .. tostring(self._T.cost.ten), nil)
+		_UIButtonLogic:SetDisabled(self:Get("BtnOne"), eng.SkillBooks < self._T.cost.one)
+		_UIButtonLogic:SetDisabled(self:Get("BtnTen"), eng.SkillBooks < self._T.cost.ten)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있는 동안 연출 진행과 갱신 (로비를 벗어나면 닫음).
+		if not self._T.open then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= "Lobby" then
+			self:Close()
+			return
+		end
+		self:Tick(delta)
+		self._T.refreshT = (self._T.refreshT or 0) + delta
+		if self._T.refreshT >= 0.1 then
+			self._T.refreshT = 0
+			self:Refresh()
+		end
+	end
+
+end

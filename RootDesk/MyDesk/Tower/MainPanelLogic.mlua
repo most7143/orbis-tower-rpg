@@ -19,6 +19,11 @@ script MainPanelLogic extends Logic
 	property SpriteGUIRendererComponent expFill = "ef0fbf00-5db1-46cf-bba5-b897f8f34146"
 	property TextGUIRendererComponent expText = "23323398-5c89-4684-9767-3f62a3fcf40f"
 	property number ExpFillSpeed = 4
+	-- 하단 바 HP·MP (경험치 바와 같은 모양, UIBuilder bind로 주입)
+	property SpriteGUIRendererComponent hpFill = "f4915c29-30e9-412f-9361-b80829893458"
+	property TextGUIRendererComponent hpText = "f7de2dd8-f263-45b7-a21f-4765b9e3b9af"
+	property SpriteGUIRendererComponent mpFill = "25251ce9-70af-43da-b746-08dd6ac6a089"
+	property TextGUIRendererComponent mpText = "6f465816-2755-47dc-aebd-ab9960aa4fe4"
 	-- 스킬 탭 (안내 문구 / 메시지 / 스크롤 목록 줄은 경로로 찾는다). 줄 11개를 직업 스킬 순서대로 채워 쓴다
 	property TextGUIRendererComponent stoneText = "4837108d-cbf5-4524-ad27-1e0fb967356b"
 	property TextGUIRendererComponent skillMsgText = "47f3c450-6aca-4725-b08b-5597dc4f672c"
@@ -44,7 +49,6 @@ script MainPanelLogic extends Logic
 	-- 가로 화면: 왼쪽 세로 탭 + 밀려나오는 패널, 하단 정보 바
 	property Entity sideTabsRoot = "78968938-e653-491e-af51-62db15224f47"
 	property Entity bottomBarRoot = "4ab4771e-72ad-49e8-b2b2-c9ea76400d03"
-	property TextGUIRendererComponent headerText = "48f228bd-84b4-47a8-b735-2d072270df02"
 	property ButtonComponent closeBtn = "c1816458-ff21-486a-bf38-506b211175fe"
 	property TextGUIRendererComponent levelText = "88eb395c-bbe2-471b-b55d-ea29294df8c9"
 	property TextGUIRendererComponent barMesoText = "559357e6-7881-47ee-a5d8-68a954cd7ffd"
@@ -55,7 +59,7 @@ script MainPanelLogic extends Logic
 	property ButtonComponent confirmYes = "ea6d0389-755b-4f29-9dfb-3ae535f0c01f"
 	property ButtonComponent confirmNo = "c3cc6611-3acf-4571-b390-8c9949e28ca2"
 	-- 패널 위치(1920 기준 왼쪽에서 x): 열림 / 닫힘, 미끄러지는 시간(초). 실제 화면 폭에 맞춰 ApplyScreenLayout이 보정
-	property number PanelOpenX = 154
+	property number PanelOpenX = 184
 	property number PanelClosedX = -1200
 	property number SlideTime = 0.25
 	-- 패널이 열리면 전투 카메라를 이만큼(월드 단위) 왼쪽으로 옮겨 전투가 남은 화면 가운데에 보이게
@@ -63,10 +67,6 @@ script MainPanelLogic extends Logic
 	-- 패널이 열리면 층 이름을 이만큼(px) 오른쪽으로
 	property number PanelFloorTextShift = 420
 
-	property Color TabOnColor = Color(1, 1, 1, 1)
-	property Color TabOffColor = Color(0.43, 0.43, 0.46, 1)
-	property Color BuyOnColor = Color(1, 1, 1, 1)
-	property Color BuyOffColor = Color(0.42, 0.42, 0.46, 1)
 
 	@HideFromInspector
 	property integer SelectedTab = 1
@@ -426,7 +426,7 @@ script MainPanelLogic extends Logic
 					row.name.TextGUIRendererComponent.Text = "[" .. self._T.slotName[slot] .. "] " .. info.name .. "  +" .. tostring(enh)
 				end
 				if isvalid(row.stat) then
-					local v = info.value * (1 + 0.1 * enh)
+					local v = info.value * (1 + 0.1 * enh) * (1 + mgr.SlotStatStep * (mgr.SlotLevels[slot] or 0))
 					local fmt = self._T.statLabel[slot]
 					local vs = tostring(math.floor(v + 0.5))
 					if slot == "Glove" or slot == "Cape" then vs = string.format("%.1f", v) end
@@ -446,10 +446,10 @@ script MainPanelLogic extends Logic
 							label = "업그레이드\n" .. tostring(cost) .. " 메소"
 						end
 					else
-						label = "강화 " .. self:FormatSkillValue(math.max(0, mgr.EnhanceBaseRate - mgr.EnhanceRateStep * enh) + mgr.EnhanceBonus) .. "%\n" .. tostring(cost) .. " 메소"
+						label = "강화 " .. self:FormatSkillValue(math.max(0, mgr.EnhanceBaseRate - mgr.EnhanceRateStep * enh) + mgr.EnhanceBonus + (mgr.SlotEnhRate[slot] or 0)) .. "%\n" .. tostring(cost) .. " 메소"
 					end
 					row.btn.TextGUIRendererComponent.Text = label
-					if canBuy then row.btn.SpriteGUIRendererComponent.Color = self.BuyOnColor else row.btn.SpriteGUIRendererComponent.Color = self.BuyOffColor end
+					_UIButtonLogic:SetDisabled(row.btn, not canBuy)
 				end
 			end
 		end
@@ -475,21 +475,16 @@ script MainPanelLogic extends Logic
 		for i = 1, 4 do
 			if isvalid(contents[i]) then contents[i]:SetEnable(i == index) end
 		end
-		local titles = { "캐릭터 정보", "직업", "장비", "스킬" }
-		if isvalid(self.headerText) then self.headerText.Text = titles[index] or "" end
 		self:UpdateTabColors()
 	end
 
 	@ExecSpace("ClientOnly")
 	method void UpdateTabColors()
-		-- 열려 있는 탭만 밝게.
+		-- 열려 있는 탭만 선택 표시.
 		local tabs = { self.tabInfo, self.tabTrait, self.tabStat, self.tabSkill }
 		for i = 1, 4 do
 			if isvalid(tabs[i]) then
-				local sprite = tabs[i].Entity.SpriteGUIRendererComponent
-				if isvalid(sprite) then
-					if self._T.open and i == self.SelectedTab then sprite.Color = self.TabOnColor else sprite.Color = self.TabOffColor end
-				end
+				_UIButtonLogic:SetSelected(tabs[i].Entity, self._T.open and i == self.SelectedTab)
 			end
 		end
 	end
@@ -604,9 +599,19 @@ script MainPanelLogic extends Logic
 				rt.anchoredPosition = Vector2(x, rt.anchoredPosition.y)
 				if w ~= nil then rt.RectSize = Vector2(w, rt.RectSize.y) end
 			end
-			place("Exp", 118, expW)
-			place("Exp/Fill", 0, expW - 6)
-			place("Exp/Text", 0, expW - 6)
+			-- 경험치 자리를 HP · MP · EXP 세 칸으로 나눈다
+			local gap = 8
+			local hpW = math.floor((expW - gap * 2) * 0.3)
+			local exW = expW - gap * 2 - hpW * 2
+			local function bar(name, x, w)
+				place(name, x, w)
+				place(name .. "/Center", 16, w - 32)
+				place(name .. "/Fill", 0, w - 12)
+				place(name .. "/Text", 0, w - 6)
+			end
+			bar("Hp", 118, hpW)
+			bar("Mp", 118 + hpW + gap, hpW)
+			bar("Exp", 118 + (hpW + gap) * 2, exW)
 			place("MesoIcon", 118 + expW + 34, nil)
 			place("Meso", 118 + expW + 70, 150)
 			place("Job", -14, jobW)
@@ -628,6 +633,31 @@ script MainPanelLogic extends Logic
 		if isvalid(self.barJobText) then
 			local s = "직업  " .. _TarotLogic:GetJobLabel(mgr)
 			if self.barJobText.Text ~= s then self.barJobText.Text = s end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateHpMpBar(Component mgr)
+		-- 하단 바 HP·MP: 캐릭터 체력, 히어로 마나 (마나가 없는 직업이면 MP 칸은 비운다).
+		if isvalid(self.hpFill) then
+			local r = 0
+			if mgr.PlayerMaxHp > 0 then r = math.max(0, math.min(1, mgr.PlayerHp / mgr.PlayerMaxHp)) end
+			self.hpFill.FillAmount = r
+		end
+		if isvalid(self.hpText) then
+			local s = "HP " .. tostring(math.floor(mgr.PlayerHp)) .. " / " .. tostring(math.floor(mgr.PlayerMaxHp))
+			if self.hpText.Text ~= s then self.hpText.Text = s end
+		end
+		local hero = _HeroCombatLogic.Active
+		if isvalid(self.mpFill) then
+			local r = 0
+			if hero and _HeroCombatLogic.ManaMax > 0 then r = math.max(0, math.min(1, _HeroCombatLogic.Mana / _HeroCombatLogic.ManaMax)) end
+			self.mpFill.FillAmount = r
+		end
+		if isvalid(self.mpText) then
+			local s = "MP -"
+			if hero then s = "MP " .. tostring(math.floor(_HeroCombatLogic.Mana)) .. " / " .. tostring(math.floor(_HeroCombatLogic.ManaMax)) end
+			if self.mpText.Text ~= s then self.mpText.Text = s end
 		end
 	end
 
@@ -677,13 +707,14 @@ script MainPanelLogic extends Logic
 		if not inTower then return end
 		self:ApplyScreenLayout()
 		self:UpdateExpBar(mgr, delta)
+		self:UpdateHpMpBar(mgr)
 		self:UpdateBottomBar(mgr)
 		self:UpdateSlide(delta)
 
 		if self.SelectedTab == 1 and isvalid(self.infoText) then
 			local speed = 0
 			if mgr.PlayerAttackInterval > 0 then speed = 1 / mgr.PlayerAttackInterval end
-			self.infoText.Text = "레벨        Lv." .. tostring(mgr.Level) .. "\n"
+			local info = "레벨        Lv." .. tostring(mgr.Level) .. "\n"
 				.. "경험치      " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. "\n"
 				.. "메소        " .. tostring(mgr.Meso) .. "\n"
 				.. "직업        " .. _TarotLogic:GetJobLabel(mgr) .. "\n\n"
@@ -697,7 +728,8 @@ script MainPanelLogic extends Logic
 				.. "현재 층      " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
 				.. "최고 층      " .. tostring(mgr.BestFloor) .. "층"
 			-- 악마의 거래 대가 (진행 중일 때만)
-			if mgr.CurseText ~= "" then self.infoText.Text = self.infoText.Text .. "\n대가        " .. mgr.CurseText end
+			if mgr.CurseText ~= "" then info = info .. "\n대가        " .. mgr.CurseText end
+			self.infoText.Text = info
 		elseif self.SelectedTab == 2 then
 			_TarotLogic:UpdateTraitTab(mgr)
 		elseif self.SelectedTab == 3 then

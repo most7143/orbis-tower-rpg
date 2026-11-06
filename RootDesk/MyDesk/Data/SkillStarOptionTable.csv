@@ -1,11 +1,33 @@
-﻿Trigger,OptionId,Name,Effect,Value,Weight,Desc
-Cooldown,CdPct,스킬 계수,Pct,12,1,스킬 계수 +12%p
-Cooldown,CdCool,쿨타임 감소,CooldownPct,4,1,쿨타임 -4%
-Cooldown,CdSpeed,공격 속도,Speed,2,1,공격 속도 +2%
-Proc,PrPct,스킬 계수,Pct,8,1,스킬 계수 +8%p
-Proc,PrChance,발동 확률,Chance,2,1,발동 확률 +2%p
-Proc,PrSpeed,공격 속도,Speed,2,1,공격 속도 +2%
-Passive,PaAtk,공격력,AtkPct,1,1,공격력 +1%
-Passive,PaHp,최대 체력,HpPct,2,1,최대 체력 +2%
-Passive,PaDef,방어력,DefPct,2,1,방어력 +2%
-Passive,PaSpeed,공격 속도,Speed,1,1,공격 속도 +1%
+﻿Pool,OptionId,Name,Effect,Value,Weight,Desc
+CoolStrike,CsPct,스킬 계수,Pct,12,1,스킬 계수 +12%p
+CoolStrike,CsCool,쿨타임 감소,CooldownPct,4,1,쿨타임 -4%
+CoolStrike,CsCrit,크리티컬 확률,CritChance,4,1,이 스킬 크리티컬 확률 +4%
+CoolStun,CtPct,스킬 계수,Pct,12,1,스킬 계수 +12%p
+CoolStun,CtCool,쿨타임 감소,CooldownPct,4,1,쿨타임 -4%
+CoolStun,CtStun,기절 시간,StunSec,0.2,1,기절 시간 +0.2초
+CoolBurn,CbPct,스킬 계수,Pct,12,1,스킬 계수 +12%p
+CoolBurn,CbCool,쿨타임 감소,CooldownPct,4,1,쿨타임 -4%
+CoolBurn,CbDot,화상 피해,DotPct,4,1,화상 피해 +4%p
+CoolBurn,CbTime,화상 지속,DotTime,0.5,1,화상 지속 시간 +0.5초
+CoolBuff,CfPower,버프 효과,Pct,10,1,버프 효과 +10%
+CoolBuff,CfCool,쿨타임 감소,CooldownPct,4,1,쿨타임 -4%
+CoolBuff,CfTime,버프 지속,BuffTime,0.5,1,버프 지속 시간 +0.5초
+ProcStrike,PsPct,스킬 계수,Pct,8,1,스킬 계수 +8%p
+ProcStrike,PsChance,발동 확률,Chance,2,1,발동 확률 +2%p
+ProcStrike,PsCrit,크리티컬 확률,CritChance,3,1,이 스킬 크리티컬 확률 +3%
+ProcFreeze,PfPct,스킬 계수,Pct,8,1,스킬 계수 +8%p
+ProcFreeze,PfChance,발동 확률,Chance,2,1,발동 확률 +2%p
+ProcFreeze,PfStun,빙결 시간,StunSec,0.2,1,빙결 시간 +0.2초
+PassGuard,PgDef,방어력,DefPct,2,1,방어력 +2%
+PassGuard,PgHp,최대 체력,HpPct,2,1,최대 체력 +2%
+PassMastery,PmMastery,숙련도,Mastery,1,1,숙련도 +1%
+PassMastery,PmAcc,명중률,Acc,1,1,명중률 +1%
+PassMastery,PmAtk,공격력,AtkPct,1,1,공격력 +1%
+PassRegen,PrRegen,회복량,SelfRegen,0.1,1,5초마다 회복량 +0.1%p
+PassRegen,PrHeal,받는 회복,HealRecv,3,1,받는 회복량 +3%
+PassCrit,PcCrit,크리티컬 확률,Crit,1,1,크리티컬 확률 +1%
+PassCrit,PcStun,기절 추가 피해,StunDmg,2,1,기절한 몬스터에게 피해 +2%
+PassCrit,PcDmg,크리티컬 데미지,CritDmg,2,1,크리티컬 데미지 +2%
+HeroStar,HsPower,위력 강화,StarPower,30,1,이 스킬 피해 +30% (버프는 효과 +30%)
+HeroStar,HsTempo,속도·지속 강화,StarTempo,20,1,"공격 동작 속도 +20% (소환검 공격속도 +20%, 버프 지속 +25%)"
+HeroStar,HsCrit,치명 강화,StarCrit,10,1,"치명타 확률 +10%p, 치명타 피해 +20%p"

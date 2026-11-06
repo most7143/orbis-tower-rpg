@@ -13,7 +13,6 @@ script SkillTestUILogic extends Logic
 
 	property string TestMapName = "SkillTest"
 	property string TraitTableName = "TraitTable"
-	property Color SelectedColor = Color(1, 0.85, 0.3, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -25,25 +24,41 @@ script SkillTestUILogic extends Logic
 		self._T.rows = {}
 		self._T.selected = nil
 		self._T.last = nil
-		-- 직업마다 액티브 스킬 수
+		-- 직업마다 액티브 스킬 목록
 		local fx = {}
+		local skills = {}
 		local js = _DataService:GetTable("JobSkillTable")
 		if js ~= nil then
 			for i = 1, js:GetRowCount() do
 				if (js:GetCell(i, "ProcType") or "") ~= "" then
 					local id = js:GetCell(i, "JobId")
 					fx[id] = (fx[id] or 0) + 1
+					if skills[id] == nil then skills[id] = {} end
+					table.insert(skills[id], { id = js:GetCell(i, "SkillId"), name = js:GetCell(i, "Name") })
 				end
 			end
 		end
-		-- 줄 구성: 스킬이 있는 직업마다 한 줄 (첫 버튼 = 그 직업 이펙트 스킬 전체 재생). 남는 줄·버튼은 숨김
+		-- 줄 구성:
+		--  · 히어로: 스킬 목록 (한 줄에 버튼 3개, 버튼 = 그 스킬 하나만 실행)
+		--  · 그 밖의 직업: 한 줄 (첫 버튼 = 그 직업 이펙트 스킬 전체 재생)
 		local lines = {}
 		local ds = _DataService:GetTable(self.TraitTableName)
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
 				local id = ds:GetCell(i, "Id")
 				if fx[id] ~= nil then
-					table.insert(lines, { id = id, name = ds:GetCell(i, "Name"), color = Color.FromHexCode(ds:GetCell(i, "FamilyColor")), n = fx[id] })
+					local name = ds:GetCell(i, "Name")
+					local color = Color.FromHexCode(ds:GetCell(i, "FamilyColor"))
+					if id == "Hero" then
+						local list = skills[id]
+						for k = 1, #list, 3 do
+							local label = ""
+							if k == 1 then label = name end
+							table.insert(lines, { id = id, name = label, job = name, color = color, skills = { list[k], list[k + 1], list[k + 2] } })
+						end
+					else
+						table.insert(lines, { id = id, name = name, job = name, color = color, n = fx[id] })
+					end
 				end
 			end
 		end
@@ -64,14 +79,23 @@ script SkillTestUILogic extends Logic
 					for b = 1, 3 do
 						local btn = row:GetChildByName("Btn" .. tostring(b))
 						if isvalid(btn) then
-							btn:SetEnable(b == 1)
-							if b == 1 then
-								btn.TextGUIRendererComponent.Text = "스킬 재생 (" .. tostring(line.n) .. ")"
-								local base = Color(0.18, 0.34, 0.5, 1)
-								btn.SpriteGUIRendererComponent.Color = base
-								local rec = { id = line.id, job = line.name, btn = btn, base = base }
-								table.insert(self._T.rows, rec)
-								self:Bind(btn.ButtonComponent, function() self:OnJob(rec) end)
+							if line.skills ~= nil then
+								local sk = line.skills[b]
+								btn:SetEnable(sk ~= nil)
+								if sk ~= nil then
+									btn.TextGUIRendererComponent.Text = sk.name
+									local rec = { id = line.id, job = line.job, skill = sk.id, btn = btn }
+									table.insert(self._T.rows, rec)
+									self:Bind(btn.ButtonComponent, function() self:OnJob(rec) end)
+								end
+							else
+								btn:SetEnable(b == 1)
+								if b == 1 then
+									btn.TextGUIRendererComponent.Text = "스킬 재생 (" .. tostring(line.n) .. ")"
+									local rec = { id = line.id, job = line.job, btn = btn }
+									table.insert(self._T.rows, rec)
+									self:Bind(btn.ButtonComponent, function() self:OnJob(rec) end)
+								end
 							end
 						end
 					end
@@ -119,15 +143,19 @@ script SkillTestUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnJob(table rec)
-		-- 직업 버튼: 선택 표시 후 서버에 재생 요청.
+		-- 직업·스킬 버튼: 선택 표시 후 서버에 재생 요청 (스킬 버튼이면 그 스킬 하나만).
 		local mgr = self:GetManager()
 		if mgr == nil then return end
 		local prev = self._T.selected
-		if prev ~= nil and isvalid(prev.btn) then prev.btn.SpriteGUIRendererComponent.Color = prev.base end
+		if prev ~= nil then _UIButtonLogic:SetSelected(prev.btn, false) end
 		self._T.selected = rec
 		self._T.last = rec
-		rec.btn.SpriteGUIRendererComponent.Color = self.SelectedColor
-		mgr:RequestPlayJob(rec.id, rec.job)
+		_UIButtonLogic:SetSelected(rec.btn, true)
+		if rec.skill ~= nil then
+			mgr:RequestPlaySkill(rec.id, rec.job, rec.skill)
+		else
+			mgr:RequestPlayJob(rec.id, rec.job)
+		end
 	end
 
 	@ExecSpace("ClientOnly")

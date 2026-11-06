@@ -1,0 +1,119 @@
+@Logic
+script GrowthUILogic extends Logic
+
+	-- 성장 화면 (GrowthUI.ui): 탭 5개. 1 슬롯 강화, 2 각인, 3 심볼, 4 은총, 5 스킬을 내용 영역에 띄운다.
+	property string RootPath = "/ui/GrowthUI/Root"
+	property string LobbyMapName = "Lobby"
+	property integer TabCount = 5
+	property Color TabTextColor = Color(0.84, 0.88, 1, 1)
+	property Color TabSelectedColor = Color(1, 1, 1, 1)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 탭·닫기 버튼 연결. 처음에는 닫힌 상태.
+		self.clickHandlers = {}
+		self._T.frames = { "383bde064a6849b5bbb6ed1d5dbfc446", "8fced207c79943128d91f663e3da173d", "37863da139f34bf48e2b094f05dd35c7", "2ab3e37e42c54a19ad4eddf9c82b96a5", "fc7465e100894a1b975fbd0d68d712fe" }
+		self._T.tab = 0
+		self._T.open = false
+		for i = 1, self.TabCount do
+			local index = i
+			self:Bind(_EntityService:GetEntityByPath(self.RootPath .. "/Tab" .. tostring(i)), function() self:SelectTab(index) end)
+		end
+		self:Bind(_EntityService:GetEntityByPath(self.RootPath .. "/Close"), function() self:Close() end)
+		log("[VRF] GrowthUILogic begin tabs=" .. tostring(self.TabCount))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [성장] 버튼: 첫 탭부터 연다.
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if not isvalid(root) then return end
+		root:SetEnable(true)
+		self._T.open = true
+		self._T.tab = 0
+		self:SelectTab(1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기: 열려 있는 탭 내용까지 함께 닫는다.
+		self:CloseContent()
+		self._T.open = false
+		self._T.tab = 0
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CloseContent()
+		-- 지금 탭의 기존 화면을 닫는다.
+		if self._T.tab == 1 then _SlotUILogic:Close() end
+		if self._T.tab == 2 then _EngraveUILogic:Close() end
+		if self._T.tab == 3 then _SymbolUILogic:Close() end
+		if self._T.tab == 4 then _GraceUILogic:Close() end
+		if self._T.tab == 5 then _HeroSkillUILogic:Close() end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectTab(integer index)
+		-- 탭 전환: 프레임 이미지·탭 글자·내용을 바꾼다. 기존 화면의 어두운 배경은 쓰지 않는다.
+		if self._T.tab == index then return end
+		self:CloseContent()
+		self._T.tab = index
+		local frame = _EntityService:GetEntityByPath(self.RootPath .. "/Frame")
+		if isvalid(frame) then frame.SpriteGUIRendererComponent.ImageRUID = DataRef(self._T.frames[index]) end
+		for i = 1, self.TabCount do
+			local tab = _EntityService:GetEntityByPath(self.RootPath .. "/Tab" .. tostring(i))
+			if isvalid(tab) then
+				if i == index then tab.TextGUIRendererComponent.FontColor = self.TabSelectedColor else tab.TextGUIRendererComponent.FontColor = self.TabTextColor end
+			end
+		end
+		local empty = _EntityService:GetEntityByPath(self.RootPath .. "/Empty")
+		if isvalid(empty) then empty:SetEnable(index > 5) end
+		if index == 1 then
+			_SlotUILogic:Open()
+		elseif index == 2 then
+			_EngraveUILogic:Open()
+			_EngraveUILogic.dimEntity:SetEnable(false)
+		elseif index == 3 then
+			_SymbolUILogic:Open()
+			_SymbolUILogic.dimEntity:SetEnable(false)
+		elseif index == 4 then
+			_GraceUILogic:Open()
+			_GraceUILogic.dimEntity:SetEnable(false)
+		elseif index == 5 then
+			_HeroSkillUILogic:Open()
+			_HeroSkillUILogic.dimEntity:SetEnable(false)
+		end
+		log("[VRF] growth tab=" .. tostring(index))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 로비를 벗어나면 닫는다.
+		if not self._T.open then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then self:Close() end
+	end
+
+end

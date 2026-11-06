@@ -1,4 +1,4 @@
-Key,Value,#Desc
+﻿Key,Value,#Desc
 MonsterHpBase,20,몬스터 체력 = (기본 + 레벨당 × 몬스터 레벨) × 타입 배율
 MonsterHpPerLevel,10,몬스터 체력 레벨당 증가
 MonsterAtkBase,5,몬스터 공격력 기본
@@ -34,3 +34,18 @@ MesoProcRatio,0.25,메소 사냥꾼 발동 메소 비율
 FeatherChance,8,일반 몬스터 여신의 깃털 확률(%)
 BossFeatherMin,2,층 보스 깃털 최소
 BossFeatherMax,4,층 보스 깃털 최대
+SlotStatStep,0.1,슬롯 강화 단계당 장비 수치 증가 비율
+ScrollChance,3,일반 몬스터 주문서 드랍 기본 확률(%)
+ScrollChancePerFloor,0.01,층마다 드랍 확률 증가(%p)
+ScrollChancePerStage,0.1,스테이지마다 드랍 확률 증가(%p)
+ScrollBossMin,1,층 보스 주문서 최소
+ScrollBossMax,2,층 보스 주문서 최대
+ScrollStageShift,0.2,스테이지마다 1단계 비율에서 2·3단계로 옮기는 비율(%p)
+SkillBookBossBase,3,층 보스 처치 스킬북 기본 수
+SkillBookBossPerFloor,0.2,층마다 보스 스킬북 증가
+GachaCost,10,스킬 뽑기 1회 스킬북
+GachaTenCost,100,스킬 뽑기 10회 스킬북
+SkillUpBase,5,스킬 레벨업 필요 개수(레벨 × 값)
+SkillMaxLv,11,스킬 최대 레벨
+SkillLvPower,20,스킬 레벨당 기본 능력치 증가(%)
+SkillSynthCount,3,합성에 쓰는 같은 스킬 개수

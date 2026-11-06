@@ -9,8 +9,6 @@ script DealUILogic extends Logic
 	property ButtonComponent skipBtn = "03d78429-b949-481c-8ebd-8de2fce41e64"
 	property string ColPath = "/ui/DealUI/Deal/Col_"
 	property string DealTableName = "DealTable"
-	property Color BuyOnColor = Color(1, 1, 1, 1)
-	property Color BuyOffColor = Color(0.42, 0.42, 0.46, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -100,7 +98,7 @@ script DealUILogic extends Logic
 		end
 		if isvalid(self.merchantBtn) then
 			local can = mgr.Meso >= mgr.DealCost
-			if can then self.merchantBtn.Entity.SpriteGUIRendererComponent.Color = self.BuyOnColor else self.merchantBtn.Entity.SpriteGUIRendererComponent.Color = self.BuyOffColor end
+			_UIButtonLogic:SetDisabled(self.merchantBtn.Entity, not can)
 			if can then self.merchantBtn.Entity.TextGUIRendererComponent.Text = "획득" else self.merchantBtn.Entity.TextGUIRendererComponent.Text = "메소 부족" end
 		end
 	end

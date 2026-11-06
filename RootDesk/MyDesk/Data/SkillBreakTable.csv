@@ -1,74 +1,90 @@
 ﻿SkillId,OptionId,Name,Effect,Value,Desc
-HeroBrandish,HeroBrandish_1,삼연격,Hits,1,타수 +1
-HeroBrandish,HeroBrandish_2,쌍룡,Pct,60,타당 계수 +60%p
-HeroBrandish,HeroBrandish_3,신속 연타,CooldownSec,1.5,쿨타임 -1.5초
-HeroBrandish,HeroBrandish_4,치명의 칼날,CritChance,25,이 스킬 크리티컬 확률 +25%
-HeroBrandish,HeroBrandish_5,피의 칼날,HealCast,3,발동 시 최대 체력 3% 회복
-HeroBrandish,HeroBrandish_6,관통 베기,SkillDefIgnore,40,몬스터 방어력 40% 무시
-HeroBrandish,HeroBrandish_7,잔상,Repeat,40,40% 확률로 한 번 더 발동
-HeroBrandish,HeroBrandish_8,약점 베기,SkillLowHp,60,체력 30% 이하 몬스터에게 피해 +60%
-HeroBrandish,HeroBrandish_9,거인 사냥,SkillElite,50,강화 몬스터에게 피해 +50%
-HeroBrandish,HeroBrandish_10,전장의 기세,PostSpeed,15,발동 후 4초간 공격 속도 +15%
-HeroPanic,HeroPanic_1,공포,Pct,150,계수 +150%p
-HeroPanic,HeroPanic_2,집중,CooldownSec,2,쿨타임 -2초
-HeroPanic,HeroPanic_3,확정 일격,AlwaysCrit,1,항상 크리티컬
-HeroPanic,HeroPanic_4,약화,Vuln,15,적중 몬스터가 5초간 받는 피해 +15%
-HeroPanic,HeroPanic_5,공황,MonDelay,30,적중 몬스터 공격 간격 3초간 +30%
-HeroPanic,HeroPanic_6,마지막 일격,SkillLowHp,80,체력 30% 이하 몬스터에게 피해 +80%
-HeroPanic,HeroPanic_7,방어 붕괴,SkillDefIgnore,50,몬스터 방어력 50% 무시
-HeroPanic,HeroPanic_8,이중 패닉,Repeat,30,30% 확률로 한 번 더 발동
-HeroPanic,HeroPanic_9,승전,ResetOnKill,1,이 스킬로 처치하면 쿨타임 초기화
-HeroPanic,HeroPanic_10,흡혈 강타,SkillDrain,8,준 피해의 8% 회복
-HeroComa,HeroComa_1,깊은 기절,StunSec,1.5,기절 시간 +1.5초
-HeroComa,HeroComa_2,충격파,Pct,120,계수 +120%p
-HeroComa,HeroComa_3,연속 제압,CooldownSec,3,쿨타임 -3초
-HeroComa,HeroComa_4,약점 노출,StunVuln,25,기절한 몬스터가 받는 피해 +25%
-HeroComa,HeroComa_5,마무리,StunCrit,1,기절한 몬스터에게 스킬 크리티컬 확정
-HeroComa,HeroComa_6,여진,EndBurst,150,기절이 끝날 때 공격력 150% 추가 피해
-HeroComa,HeroComa_7,숨 고르기,HealCast,5,발동 시 최대 체력 5% 회복
-HeroComa,HeroComa_8,이중 충격,Hits,1,타수 +1
-HeroComa,HeroComa_9,강자 제압,EliteStun,1,강화 몬스터 기절 시간 +1초
-HeroComa,HeroComa_10,기세,PostAtk,15,발동 후 5초간 공격력 +15%
-HeroEnrage,HeroEnrage_1,긴 분노,BuffTime,3,지속 시간 +3초
-HeroEnrage,HeroEnrage_2,끓는 피,CooldownSec,4,쿨타임 -4초
-HeroEnrage,HeroEnrage_3,광전사,BuffAtk,12,지속 중 공격력 +12%
-HeroEnrage,HeroEnrage_4,치명 분노,BuffCritDmg,40,지속 중 크리티컬 데미지 +40%
-HeroEnrage,HeroEnrage_5,폭주,BuffSpeed,15,지속 중 공격 속도 +15%
-HeroEnrage,HeroEnrage_6,강철 분노,BuffReduce,15,지속 중 받는 피해 -15%
-HeroEnrage,HeroEnrage_7,피의 굶주림,BuffDrain,3,지속 중 준 피해의 3% 회복
-HeroEnrage,HeroEnrage_8,재기,HealCast,15,발동 시 최대 체력 15% 회복
-HeroEnrage,HeroEnrage_9,날 선 감각,BuffCrit,15,지속 중 크리티컬 확률 +15%
-HeroEnrage,HeroEnrage_10,분노 폭발,BuffBurst,300,끝날 때 공격력 300% 추가 피해
-HeroSlashBlast,HeroSlashBlast_1,확산 베기,Hits,1,타수 +1
-HeroSlashBlast,HeroSlashBlast_2,깊은 베기,Pct,40,타당 계수 +40%p
-HeroSlashBlast,HeroSlashBlast_3,빠른 손놀림,Chance,8,발동 확률 +8%p
-HeroSlashBlast,HeroSlashBlast_4,치명 베기,CritChance,20,이 스킬 크리티컬 확률 +20%
-HeroSlashBlast,HeroSlashBlast_5,갈라 베기,SkillDefIgnore,30,몬스터 방어력 30% 무시
-HeroSlashBlast,HeroSlashBlast_6,여파,Repeat,30,30% 확률로 한 번 더 발동
-HeroSlashBlast,HeroSlashBlast_7,거인 베기,SkillElite,40,강화 몬스터에게 피해 +40%
-HeroSlashBlast,HeroSlashBlast_8,숨 돌리기,CdOnCast,0.5,발동 시 쿨타임 스킬 쿨타임 0.5초 감소
-HeroSlashBlast,HeroSlashBlast_9,피의 베기,SkillDrain,5,준 피해의 5% 회복
-HeroSlashBlast,HeroSlashBlast_10,약점 베기,SkillLowHp,50,체력 30% 이하 몬스터에게 피해 +50%
-HeroComboAttack,HeroComboAttack_1,끝없는 콤보,Chance,8,발동 확률 +8%p
-HeroComboAttack,HeroComboAttack_2,콤보 강타,Pct,30,계수 +30%p
-HeroComboAttack,HeroComboAttack_3,겹치기,Hits,1,추가 공격 +1회
-HeroComboAttack,HeroComboAttack_4,치명 콤보,CritChance,15,이 스킬 크리티컬 확률 +15%
-HeroComboAttack,HeroComboAttack_5,콤보 리듬,PostSpeedShort,10,발동 후 2초간 공격 속도 +10%
-HeroComboAttack,HeroComboAttack_6,연계,CdOnCast,0.3,발동 시 쿨타임 스킬 쿨타임 0.3초 감소
-HeroComboAttack,HeroComboAttack_7,콤보 흡혈,SkillDrain,2,준 피해의 2% 회복
-HeroComboAttack,HeroComboAttack_8,콤보 마감,SkillLowHp,40,체력 30% 이하 몬스터에게 피해 +40%
-HeroComboAttack,HeroComboAttack_9,갑옷 찢기,SkillDefIgnore,25,몬스터 방어력 25% 무시
-HeroComboAttack,HeroComboAttack_10,폭발 콤보,SkillCritDmg,50,이 스킬 크리티컬 데미지 +50%
-HeroFinalAttack,HeroFinalAttack_1,이중 마무리,Hits,1,타수 +1
-HeroFinalAttack,HeroFinalAttack_2,결정타,Pct,50,계수 +50%p
-HeroFinalAttack,HeroFinalAttack_3,끝없는 추격,Chance,10,발동 확률 +10%p
-HeroFinalAttack,HeroFinalAttack_4,치명타,CritChance,20,이 스킬 크리티컬 확률 +20%
-HeroFinalAttack,HeroFinalAttack_5,따라 베기,Follow,1,다른 스킬 발동 시 반드시 함께 발동
-HeroFinalAttack,HeroFinalAttack_6,찌르기,SkillDefIgnore,30,몬스터 방어력 30% 무시
-HeroFinalAttack,HeroFinalAttack_7,마무리 일격,SkillLowHp,50,체력 30% 이하 몬스터에게 피해 +50%
-HeroFinalAttack,HeroFinalAttack_8,거인 추격,SkillElite,40,강화 몬스터에게 피해 +40%
-HeroFinalAttack,HeroFinalAttack_9,수확,KillHealSkill,5,이 스킬로 처치하면 최대 체력 5% 회복
-HeroFinalAttack,HeroFinalAttack_10,잔향,Repeat,20,20% 확률로 한 번 더 발동
+H01,H01_B1,끝없는 베기,HeroBreak,1,쿨타임 5 → 3초
+H01,H01_B2,잔상 베기,HeroBreak,1,발동 후 원래 피해의 60%로 추가 베기 1회
+H01,H01_B3,투지의 원천,HeroBreak,1,발동 시 추가 콤보 획득량 1 → 3
+H01,H01_B4,상처 새기기,HeroBreak,1,발동당 자상 2중첩 부여
+H01,H01_B5,연쇄 베기,HeroBreak,1,25% 확률로 재발동
+H02,H02_B1,삼연격,HeroBreak,1,기본 2타에 동일 위력 타격 1회 추가
+H02,H02_B2,멈추지 않는 검,HeroBreak,1,쿨타임 5 → 3초
+H02,H02_B3,완숙한 검술,HeroBreak,1,8콤보 이상일 때 이 스킬 피해 +80%
+H02,H02_B4,연속 재발동,HeroBreak,1,재발동 확률 30% → 55%
+H02,H02_B5,투지 회수,HeroBreak,1,"발동 시 콤보 2, 마나 4 획득"
+H02,H02_B6,날 선 메아리,HeroBreak,1,재발동된 브랜디쉬 피해 +60%
+H03,H03_B1,공포의 일격,HeroBreak,1,이 스킬 피해 +60%
+H03,H03_B2,가벼운 처형,HeroBreak,1,마나 비용 20 → 12
+H03,H03_B3,과잉 응축,HeroBreak,1,콤보 3 소비 보너스 +60% → +150%
+H03,H03_B4,마지막 공포,HeroBreak,1,몬스터 체력 50% 이하일 때 피해 +100%
+H03,H03_B5,흉터 파열,HeroBreak,1,"자상 최대 3중첩 소비, 중첩당 공격력 150% 추가 피해"
+H04,H04_B1,파괴적인 충격,HeroBreak,1,이 스킬 피해 +60%
+H04,H04_B2,가벼운 제압,HeroBreak,1,마나 비용 25 → 15
+H04,H04_B3,압축된 투지,HeroBreak,1,콤보 2 소비 보너스 +50% → +140%
+H04,H04_B4,완전한 약점,HeroBreak,1,적중 후 4초간 몬스터가 받는 모든 피해 +20%
+H04,H04_B5,제압의 보상,HeroBreak,1,적중 후 3초간 기본 공격에 콤보 1·마나 3 추가
+H05,H05_B1,광전사의 분노,HeroBreak,1,공격력 증가 +25% → +40%
+H05,H05_B2,끝없는 분노,HeroBreak,1,쿨타임 20 → 12초
+H05,H05_B3,콤보 폭주,HeroBreak,1,"지속 중 기본 공격 콤보 획득 3, 콤보 소모 기술 피해 +25%"
+H05,H05_B4,절제된 격노,HeroBreak,1,"지속 중 콤보 감소 정지, 8콤보 이상이면 직접 공격 피해 +30%"
+H05,H05_B5,영혼의 격노,HeroBreak,1,"지속 중 소환검 공격속도 +40%, 소환검 피해 +20%"
+H06,H06_B1,영혼 절개,HeroBreak,1,직접 타격과 이 스킬이 부여한 자상 피해 +60%
+H06,H06_B2,끊임없는 각인,HeroBreak,1,쿨타임 5 → 3초
+H06,H06_B3,아물지 않는 상처,HeroBreak,1,"자상 최대 중첩 10 → 15, 지속 6 → 9초"
+H06,H06_B4,피로 물든 검,HeroBreak,1,"모든 검술이 자상 1중첩 부여, 인사이징은 1 추가"
+H06,H06_B5,자상 폭발,HeroBreak,1,"적중 직전 자상 8중첩 이상이면 4중첩 소비, 중첩당 공격력 120%"
+H07,H07_B1,거대한 검기,HeroBreak,1,이 스킬 피해 +60%
+H07,H07_B2,가벼운 검기,HeroBreak,1,마나 비용 15 → 9
+H07,H07_B3,돌아오는 검기,HeroBreak,1,최초 검기 피해의 60%로 귀환 공격 1회
+H07,H07_B4,메아리 검기,HeroBreak,1,재발동한 검기 피해 +60%
+H07,H07_B5,공명하는 검기,HeroBreak,1,"소환검 충전 2, 소환검 다음 공격 피해 +30%"
+H08,H08_B1,폭풍의 검격,HeroBreak,1,기본 위력 타격 3회 추가
+H08,H08_B2,끝없는 맹공,HeroBreak,1,쿨타임 5 → 3초
+H08,H08_B3,완성된 검,HeroBreak,1,최대 콤보에서 이 스킬 피해 +80%
+H08,H08_B4,투지의 순환,HeroBreak,1,"발동 시 콤보 2 획득, 최대 콤보였다면 대신 피해 +50%"
+H08,H08_B5,상흔 난무,HeroBreak,1,"마지막 타격이 자상 최대 3중첩 소비, 중첩당 공격력 200%"
+H09,H09_B1,고대의 격노,HeroBreak,1,이 스킬 피해 +60%
+H09,H09_B2,빠른 분출,HeroBreak,1,쿨타임 10 → 6초
+H09,H09_B3,응축된 분출,HeroBreak,1,콤보 5 소비 보너스 +70% → +170%
+H09,H09_B4,재발동의 탄력,HeroBreak,1,브랜디쉬·오라 블레이드가 재발동할 때마다 이 스킬 쿨타임 2초 감소
+H09,H09_B5,분노의 여진,HeroBreak,1,발동 1초 후 최초 타격의 60% 피해로 여진
+H10,H10_B1,선조의 군세,HeroBreak,1,추가 검격마다 그 검격의 60% 잔상 검격
+H10,H10_B2,영원한 전장,HeroBreak,1,쿨타임 30 → 18초
+H10,H10_B3,검술의 합창,HeroBreak,1,추가 검격 피해 +80%
+H10,H10_B4,전사의 현신,HeroBreak,1,공격력 증가 +30% → +48%
+H10,H10_B5,영혼의 동행,HeroBreak,1,"추가 검격마다 소환검 충전 1, 지속 중 소환검 피해 +20%"
+H11,H11_B1,영웅의 전설,HeroBreak,1,모든 피해 증가 +30% → +48%
+H11,H11_B2,끝나지 않는 모험,HeroBreak,1,쿨타임 35 → 21초
+H11,H11_B3,마나의 축복,HeroBreak,1,"마나 회복 보너스 +50% → +150%, 발동 시 마나 15"
+H11,H11_B4,불굴의 도전자,HeroBreak,1,지속 중 콤보 소모 기술 피해 +60%
+H11,H11_B5,피와 영혼의 서사,HeroBreak,1,지속 중 소환검·출혈·자상 소비 피해 +60%
+H12,H12_B1,쌍영검,HeroBreak,1,60% 피해 소환검 1개 추가
+H12,H12_B2,영원한 영혼,HeroBreak,1,쿨타임 30 → 18초
+H12,H12_B3,스스로 깨어난 검,HeroBreak,1,"2초마다 충전 1, 강화 공격 피해 +40%"
+H12,H12_B4,검술 공명,HeroBreak,1,"검술 충전 1 → 2, 일반 소환검 피해 +20%"
+H12,H12_B5,피를 먹는 검,HeroBreak,1,"공격마다 자상 1중첩, 8중첩 이상 적에게 피해 +40%"
+H13,H13_B1,차원 절단,HeroBreak,1,이 스킬 피해 +60%
+H13,H13_B2,가벼운 응축,HeroBreak,1,마나 비용 60 → 36
+H13,H13_B3,전력 해방,HeroBreak,1,콤보 5 소비 보너스 +70% → +170%
+H13,H13_B4,재기의 검,HeroBreak,1,"발동 후 콤보 2, 4초간 기본 공격 마나 2 → 5"
+H13,H13_B5,파멸의 잔흔,HeroBreak,1,다음 검술 2회에 데스폴트 피해 30% 추가 참격
+H14,H14_B1,무한의 참격,HeroBreak,1,참격 피해 +60%
+H14,H14_B2,가벼운 환영,HeroBreak,1,마나 비용 50 → 30
+H14,H14_B3,상흔 붕괴,HeroBreak,1,"자상 소비 상한 5 → 8, 중첩당 80% → 150%"
+H14,H14_B4,검의 지휘자,HeroBreak,1,"소환검 지속 +2초, 강화 공격 1회 명령"
+H14,H14_B5,완벽한 환영,HeroBreak,1,최대 콤보에서 피해 +80%
+H15,H15_B1,본능의 각성,HeroBreak,1,발동 확률 10% → 16%
+H15,H15_B2,끝없는 몰입,HeroBreak,1,지속시간 10 → 15초
+H15,H15_B3,한계를 넘은 투지,HeroBreak,1,콤보당 피해 +5% → +8%
+H15,H15_B4,찢어진 공간,HeroBreak,1,"균열 피해 +60%, 균열 적중 시 마나 1"
+H15,H15_B5,본능의 순환,HeroBreak,1,"소비한 콤보의 40% 환급, 마나 회복 +30%"
+WarriorFinalAttack,WarriorFinalAttack_1,이중 마무리,Hits,1,타수 +1
+WarriorFinalAttack,WarriorFinalAttack_2,결정타,Pct,50,계수 +50%p
+WarriorFinalAttack,WarriorFinalAttack_3,끝없는 추격,Chance,10,발동 확률 +10%p
+WarriorFinalAttack,WarriorFinalAttack_4,치명타,CritChance,20,이 스킬 크리티컬 확률 +20%
+WarriorFinalAttack,WarriorFinalAttack_5,따라 베기,Follow,1,다른 스킬 발동 시 반드시 함께 발동
+WarriorFinalAttack,WarriorFinalAttack_6,찌르기,SkillDefIgnore,30,몬스터 방어력 30% 무시
+WarriorFinalAttack,WarriorFinalAttack_7,마무리 일격,SkillLowHp,50,체력 30% 이하 몬스터에게 피해 +50%
+WarriorFinalAttack,WarriorFinalAttack_8,거인 추격,SkillElite,40,강화 몬스터에게 피해 +40%
+WarriorFinalAttack,WarriorFinalAttack_9,수확,KillHealSkill,5,이 스킬로 처치하면 최대 체력 5% 회복
+WarriorFinalAttack,WarriorFinalAttack_10,잔향,Repeat,20,20% 확률로 한 번 더 발동
 WarriorIronBody,WarriorIronBody_1,철인,HpPct,15,최대 체력 +15%
 WarriorIronBody,WarriorIronBody_2,단단한 몸,DefPct,10,방어력 +10%
 WarriorIronBody,WarriorIronBody_3,둔감,DmgReduce,5,받는 피해 -5%
@@ -89,16 +105,6 @@ WarriorWeaponMastery,WarriorWeaponMastery_7,틈새 공략,DefIgnore,10,몬스터
 WarriorWeaponMastery,WarriorWeaponMastery_8,장비 손질,EnhRate,5,장비 강화 확률 +5%
 WarriorWeaponMastery,WarriorWeaponMastery_9,검소한 수리,EquipCostDown,10,장비 강화 비용 -10%
 WarriorWeaponMastery,WarriorWeaponMastery_10,무기 공명,WeaponEnhAtk,0.5,무기 강화 단계마다 공격력 +0.5%
-WarriorAchilles,WarriorAchilles_1,불굴의 몸,DmgReduce,6,받는 피해 -6%
-WarriorAchilles,WarriorAchilles_2,철벽,DefPct,15,방어력 +15%
-WarriorAchilles,WarriorAchilles_3,회피 본능,Evade,5,몬스터 공격 회피 +5%
-WarriorAchilles,WarriorAchilles_4,가시 갑옷,Thorns,20,받은 피해의 20% 반사
-WarriorAchilles,WarriorAchilles_5,위압,MonSlow,10,몬스터 공격 간격 +10%
-WarriorAchilles,WarriorAchilles_6,벼랑 끝,LowHpReduce,15,체력 30% 이하일 때 받는 피해 -15%
-WarriorAchilles,WarriorAchilles_7,거인 방패,EliteReduce,10,강화 몬스터에게 받는 피해 -10%
-WarriorAchilles,WarriorAchilles_8,피격 회복,HitHeal,3,피격 시 10% 확률로 최대 체력 3% 회복
-WarriorAchilles,WarriorAchilles_9,보호막,FloorShield,10,층 시작 시 최대 체력 10% 보호막
-WarriorAchilles,WarriorAchilles_10,반격 자세,EvadeCounter,100,회피 시 공격력 100% 반격
 WarriorSelfRecovery,WarriorSelfRecovery_1,빠른 회복,RegenSec,1,회복 주기 -1초
 WarriorSelfRecovery,WarriorSelfRecovery_2,깊은 회복,SelfRegen,1,회복량 +1%p
 WarriorSelfRecovery,WarriorSelfRecovery_3,전투 회복,KillHeal,2,처치 시 최대 체력 2% 회복

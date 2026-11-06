@@ -1,0 +1,362 @@
+@Logic
+script SlotUILogic extends Logic
+
+	-- 슬롯 강화 화면 (GrowthUI 1번 탭): 왼쪽 부위 선택, 오른쪽 현재 상태와 다음 단계, 주문서 선택과 강화.
+	-- 데이터는 로컬 플레이어의 PlayerEngrave(SlotLv·SlotBonus·Scrolls 동기화)에서 읽고, 강화는 서버에 요청한다.
+	property string RootPath = "/ui/GrowthUI/Root/Slot"
+	property integer MaxLevel = 30
+	property integer MaxScrolls = 3
+	property number StatStep = 10
+	property string FxSuccessRUID = "6d5a507b49764376bc71df113c5d7cf2"
+	property string FxFailRUID = "9431812f102a414f81bd677701623ce1"
+	property number FxDuration = 4
+	property Vector2 FxPos = Vector2(-32, 134)
+	-- 클립 피봇 보정 (인게임 강화 연출과 같은 값)
+	property Vector2 FxSuccessOffset = Vector2(-24, -51)
+	property number FxFailScale = 0.7
+	property number BusyTimeout = 2
+	property Color SelectedTextColor = Color(0.847, 0.733, 0.475, 1)
+	property Color NormalTextColor = Color(0.588, 0.588, 0.573, 1)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 표를 읽고 버튼을 연결한다. 처음에는 닫힌 상태.
+		self.clickHandlers = {}
+		self._T.open = false
+		self._T.slot = "Weapon"
+		self._T.tier = 1
+		self._T.count = 1
+		self._T.busy = 0
+		self._T.fxIndex = 0
+		self._T.fxTimers = {}
+		self:LoadTables()
+		for _, slot in ipairs(self._T.slots) do
+			local id = slot
+			self:Bind(self:Get("/Slot_" .. id), function()
+				self._T.slot = id
+				self:Refresh()
+			end)
+		end
+		for tier = 1, 3 do
+			local value = tier
+			self:Bind(self:Get("/Card" .. tostring(value)), function()
+				self._T.tier = value
+				self:Refresh()
+			end)
+		end
+		for count = 1, self.MaxScrolls do
+			local value = count
+			self:Bind(self:Get("/Qty" .. tostring(value)), function()
+				self._T.count = value
+				self:Refresh()
+			end)
+		end
+		self:Bind(self:Get("/Upgrade"), function() self:Upgrade() end)
+		local goldText = self.SelectedTextColor
+		local grayText = self.NormalTextColor
+		for i = 1, self.MaxScrolls do
+			_UIButtonLogic:SetSkin(self:Get("/Qty" .. tostring(i)), {
+				normal = "a1c5e3c4eb604a4f92d52c3178d0fdc7", hover = "241c8e2a9c4443179f69a1fab0e5fbd0", pressed = "1dea82f853b4457e930649dfdbbb1389", disabled = "0663be3c05f14dd7ac2f687b0e407134",
+				selected = "86a5d23325424db296710694953e9c8f", selectedHover = "41eb53898a2a4c51932f12b18746b3d5", selectedPressed = "0b8fc2cb5ac24838bc7d1d3ffb6ba536",
+				textNormal = grayText, textHover = Color(0.75, 0.75, 0.73, 1), textSelected = goldText, textDisabled = Color(0.46, 0.46, 0.45, 1),
+			})
+		end
+		for tier = 1, 3 do
+			_UIButtonLogic:SetSkin(self:Get("/Card" .. tostring(tier)), {
+				normal = "b98a964cddde44bc91cc608e648320d4", hover = "39cde8030aef40c68b7e8afc4e62aa15", pressed = "39cde8030aef40c68b7e8afc4e62aa15", disabled = "9f3b7d70600c434dbf531456a34f4865",
+				selected = "71e3f450afe64feb8e864b21924d3be5", selectedHover = "26f6423680b54a17a08f2e0b9a5fadb5", selectedPressed = "26f6423680b54a17a08f2e0b9a5fadb5",
+			})
+		end
+		_UIButtonLogic:SetSkin(self:Get("/Upgrade"), {
+			normal = "359ea90151c042ad89f3eccf3ed758b6", hover = "69b856b1b9c24e89845934f43ff84cf2", disabled = "4058bc4ce0dc4ca09f560a08631ee64d",
+			textNormal = Color(0.812, 0.812, 0.8, 1), textHover = Color(0.9, 0.9, 0.88, 1), textDisabled = Color(0.463, 0.463, 0.451, 1),
+		})
+		for i = 1, 2 do
+			local fx = self:Get("/Fx" .. tostring(i))
+			local key = i
+			if isvalid(fx) then
+				local h = fx:ConnectEvent(SpriteGUIAnimPlayerEndEvent, function() self:EndFx(key) end)
+				table.insert(self.clickHandlers, { entity = fx, eventHandler = h, isFx = true })
+			end
+		end
+		log("[VRF] SlotUILogic begin slots=" .. tostring(#self._T.slots) .. " miles=" .. tostring(#self._T.miles))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then
+				if rec.isFx then
+					rec.entity:DisconnectEvent(SpriteGUIAnimPlayerEndEvent, rec.eventHandler)
+				else
+					rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler)
+				end
+			end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결 + 해제 기록.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e)
+			_UISoundLogic:PlayClick()
+			fn()
+		end)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Get(string path)
+		-- 화면 안 엔티티.
+		return _EntityService:GetEntityByPath(self.RootPath .. path)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadTables()
+		-- 부위 이름·아이콘, 주문서, 단계 구간별 확률, 단계 보너스.
+		self._T.slots = {}
+		self._T.slotName = {}
+		self._T.slotIcon = {}
+		self._T.statName = { Weapon = "공격력", Cap = "최대 체력", Coat = "방어력", Glove = "치명타 확률", Shoes = "치명타 데미지", Cape = "명중률" }
+		local sd = _DataService:GetTable("EquipSlotTable")
+		if sd ~= nil then
+			for i = 1, sd:GetRowCount() do
+				local slot = sd:GetCell(i, "Slot")
+				table.insert(self._T.slots, slot)
+				self._T.slotName[slot] = sd:GetCell(i, "SlotName")
+				self._T.slotIcon[slot] = sd:GetCell(i, "IconRUID")
+			end
+		end
+		self._T.scrolls = {}
+		local ss = _DataService:GetTable("SlotScrollTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do
+				self._T.scrolls[ss:GetCell(i, "Slot") .. "_" .. ss:GetCell(i, "Tier")] = { name = ss:GetCell(i, "Name"), power = tonumber(ss:GetCell(i, "Power")) or 1, icon = ss:GetCell(i, "IconRUID") }
+			end
+		end
+		self._T.rates = {}
+		local rs = _DataService:GetTable("SlotRateTable")
+		if rs ~= nil then
+			for i = 1, rs:GetRowCount() do table.insert(self._T.rates, { min = tonumber(rs:GetCell(i, "MinLevel")) or 0, rate = tonumber(rs:GetCell(i, "Rate")) or 0 }) end
+		end
+		self._T.miles = {}
+		local ms = _DataService:GetTable("SlotMilestoneTable")
+		if ms ~= nil then
+			for i = 1, ms:GetRowCount() do
+				table.insert(self._T.miles, { slot = ms:GetCell(i, "Slot"), level = tonumber(ms:GetCell(i, "Level")) or 0, desc = ms:GetCell(i, "Desc") })
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 로컬 플레이어의 저장 컴포넌트.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 성장 화면 1번 탭을 고르면 연다.
+		local root = self:Get("")
+		if not isvalid(root) then return end
+		local eng = self:GetEngrave()
+		if eng ~= nil then self._T.lastSeq = eng.SlotSeq end
+		self._T.busy = 0
+		self._T.open = true
+		root:SetEnable(true)
+		self:Refresh()
+		log("[VRF] slot ui open")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 탭을 옮기거나 성장 화면을 닫을 때.
+		self._T.open = false
+		self._T.fxTimers = {}
+		for i = 1, 2 do self:EndFx(i) end
+		local root = self:Get("")
+		if isvalid(root) then root:SetEnable(false) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method number BaseRate(integer level)
+		-- 그 단계의 효율 1배 주문서 1장 성공 확률.
+		local rate = 0
+		for _, r in ipairs(self._T.rates) do
+			if level >= r.min then rate = r.rate end
+		end
+		return rate
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Num(number v)
+		-- 소수는 필요할 때만 표시.
+		if math.abs(v - math.floor(v)) < 0.005 then return tostring(math.floor(v)) end
+		return string.format("%.2f", v)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string path, string text)
+		-- 글자 바꾸기.
+		local e = self:Get(path)
+		if isvalid(e) then e.TextGUIRendererComponent.Text = text end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 선택한 부위·주문서 기준으로 화면 전체를 다시 그린다.
+		if not self._T.open then return end
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local slot = self._T.slot
+		local lv = eng.SlotLv[slot] or 0
+		local bonus = eng.SlotBonus[slot] or 0
+		local name = self._T.slotName[slot] or ""
+		for _, id in ipairs(self._T.slots) do
+			local sel = self:Get("/Slot_" .. id .. "/Selected")
+			if isvalid(sel) then sel:SetEnable(id == slot) end
+		end
+		local icon = self:Get("/Preview/Icon")
+		if isvalid(icon) then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(self._T.slotIcon[slot]) end
+		-- 현재 상태 → 다음 단계
+		local statName = self._T.statName[slot] or ""
+		local info = name .. " 슬롯  +" .. tostring(lv) .. "\n\n"
+		if lv >= self.MaxLevel then
+			info = info .. "장비 " .. statName .. "  +" .. self:Num(self.StatStep * lv) .. "%\n최대 단계입니다"
+		else
+			info = info .. "장비 " .. statName .. "  +" .. self:Num(self.StatStep * lv) .. "%  →  +" .. self:Num(self.StatStep * (lv + 1)) .. "%\n"
+			info = info .. "누적 추가 확률  +" .. self:Num(bonus) .. "%\n"
+			for _, m in ipairs(self._T.miles) do
+				if m.slot == slot and m.level > lv then
+					info = info .. "다음 보너스 (" .. tostring(math.floor(m.level)) .. "단계)  " .. m.desc
+					break
+				end
+			end
+		end
+		self:SetText("/Info", info)
+		-- 주문서 카드
+		for tier = 1, 3 do
+			local s = self._T.scrolls[slot .. "_" .. tostring(tier)]
+			local cardIcon = self:Get("/Card" .. tostring(tier) .. "/Icon")
+			if s ~= nil and isvalid(cardIcon) then cardIcon.SpriteGUIRendererComponent.ImageRUID = DataRef(s.icon) end
+			self:SetText("/Card" .. tostring(tier) .. "/Count", "보유 " .. tostring(eng.Scrolls[slot .. "_" .. tostring(tier)] or 0) .. "장")
+			local selected = tier == self._T.tier
+			_UIButtonLogic:SetSelected(self:Get("/Card" .. tostring(tier)), selected)
+			_UIButtonLogic:SetDisabled(self:Get("/Card" .. tostring(tier)), lv >= self.MaxLevel)
+			local nameText = self:Get("/Card" .. tostring(tier) .. "/Name")
+			if isvalid(nameText) then
+				if selected then nameText.TextGUIRendererComponent.FontColor = self.SelectedTextColor else nameText.TextGUIRendererComponent.FontColor = self.NormalTextColor end
+			end
+		end
+		for count = 1, self.MaxScrolls do
+			_UIButtonLogic:SetSelected(self:Get("/Qty" .. tostring(count)), count == self._T.count)
+			_UIButtonLogic:SetDisabled(self:Get("/Qty" .. tostring(count)), lv >= self.MaxLevel)
+		end
+		-- 성공 확률
+		local scroll = self._T.scrolls[slot .. "_" .. tostring(self._T.tier)]
+		local have = eng.Scrolls[slot .. "_" .. tostring(self._T.tier)] or 0
+		local base = self:BaseRate(lv)
+		local power = 1
+		if scroll ~= nil then power = scroll.power end
+		local rate = math.min(100, base * power * self._T.count + bonus)
+		local msg = ""
+		local haveColor = "#CFCFCC"
+		if have < self._T.count then haveColor = "#C97A6A" end
+		self:SetText("/Have", "보유   <color=" .. haveColor .. ">" .. tostring(have) .. "장</color>      /      필요   <color=#CFCFCC>" .. tostring(self._T.count) .. "장</color>")
+		if lv >= self.MaxLevel then
+			self:SetText("/Rate", "최대 단계")
+			self:SetText("/RateDetail", "")
+			self:SetText("/RateBonus", "")
+		else
+			self:SetText("/Rate", self:Num(rate) .. "%")
+			self:SetText("/RateDetail", "기본 " .. self:Num(base) .. "% × 주문서 효율 " .. tostring(math.floor(power)) .. "배 × " .. tostring(self._T.count) .. "장")
+			self:SetText("/RateBonus", "추가 성공 확률 +" .. self:Num(bonus) .. "%")
+			if have < self._T.count then msg = "주문서가 부족합니다" end
+		end
+		self:SetText("/Msg", msg)
+		_UIButtonLogic:SetDisabled(self:Get("/Upgrade"), lv >= self.MaxLevel or have < self._T.count)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Upgrade()
+		-- 강화하기: 결과가 돌아올 때까지 다시 누를 수 없다.
+		local eng = self:GetEngrave()
+		if eng == nil or not eng.SlotLoaded or self._T.busy > 0 then return end
+		local slot = self._T.slot
+		if (eng.SlotLv[slot] or 0) >= self.MaxLevel then return end
+		if (eng.Scrolls[slot .. "_" .. tostring(self._T.tier)] or 0) < self._T.count then return end
+		self._T.busy = self.BusyTimeout
+		eng:RequestSlotUpgrade(slot, self._T.tier, self._T.count)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PlayFx(boolean ok)
+		-- 인게임 강화와 같은 성공/실패 애니메이션을 부위 칸 위에서 재생한다.
+		self._T.fxIndex = (self._T.fxIndex % 2) + 1
+		for i = 1, 2 do
+			if i ~= self._T.fxIndex then self:EndFx(i) end
+		end
+		local fx = self:Get("/Fx" .. tostring(self._T.fxIndex))
+		if not isvalid(fx) then return end
+		local ruid = self.FxFailRUID
+		local pos = self.FxPos
+		local scale = self.FxFailScale
+		if ok then
+			ruid = self.FxSuccessRUID
+			pos = self.FxPos + self.FxSuccessOffset
+			scale = 1
+		end
+		fx:SetEnable(false)
+		local sr = fx.SpriteGUIRendererComponent
+		sr.AnimClipPlayType = SpriteAnimClipPlayType.Onetime
+		sr.PlayRate = 1
+		sr.ImageRUID = DataRef(ruid)
+		fx.UITransformComponent.anchoredPosition = pos
+		fx.UITransformComponent.UIScale = Vector3(scale, scale, 1)
+		fx:SetEnable(true)
+		self._T.fxTimers[self._T.fxIndex] = self.FxDuration
+		log("[VRF] slot fx ok=" .. tostring(ok))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void EndFx(integer index)
+		-- 이펙트 끄기.
+		self._T.fxTimers[index] = nil
+		local fx = self:Get("/Fx" .. tostring(index))
+		if isvalid(fx) then fx:SetEnable(false) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 서버 결과를 받으면 연출을 재생하고 화면을 갱신한다.
+		if not self._T.open then return end
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		if self._T.busy > 0 then self._T.busy = self._T.busy - delta end
+		if eng.SlotSeq ~= self._T.lastSeq then
+			self._T.lastSeq = eng.SlotSeq
+			self._T.busy = 0
+			self:PlayFx(eng.SlotOk)
+			self:Refresh()
+		end
+		for i = 1, 2 do
+			local t = self._T.fxTimers[i]
+			if t ~= nil then
+				if t - delta <= 0 then
+					self:EndFx(i)
+				else
+					self._T.fxTimers[i] = t - delta
+				end
+			end
+		end
+	end
+
+end
