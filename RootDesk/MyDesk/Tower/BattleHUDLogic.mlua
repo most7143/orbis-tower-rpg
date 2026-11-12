@@ -31,7 +31,12 @@ script BattleHUDLogic extends Logic
 	property number SymbolBannerTime = 3.0
 	property number BarWidth = 62
 	-- 몬스터 체력바 크기 배율 (캐릭터 체력은 하단 바로 옮겨 머리 위 바는 숨김)
-	property number MonsterBarScale = 1.5
+	property number MonsterBarScale = 1
+	-- 맨 앞이 아닌 웨이브 몬스터 체력바 크기 (맨 앞 대비)
+	property number QueueBarScale = 0.75
+	-- 새 HUD: 몬스터 체력바는 머리 위(시각적 꼭대기 + MonsterBarGap px), 이름표는 발밑(- NameTagGap px)
+	property number MonsterBarGap = 32
+	property number NameTagGap = 32
 	property boolean ShowPlayerOverheadBar = false
 	property number PlayerBarHeight = -0.22
 	property number MonsterBarHeight = -0.22
@@ -299,6 +304,91 @@ script BattleHUDLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method number MonsterTop(Entity target)
+		-- 몬스터 발밑에서 머리 꼭대기까지 높이(월드 단위): 등장할 때 대기 그림 첫 프레임으로 한 번 잰다 (크기 배율 반영).
+		if self._T.monTopId ~= target.Id then
+			self._T.monTopId = target.Id
+			local top = 0.8
+			-- 그림을 불러오는 동안(대기 중) 다음 프레임이 읽어도 되게 기본값 먼저
+			self._T.monTop = top
+			local ruid = isvalid(target.SpriteRendererComponent) and target.SpriteRendererComponent.SpriteRUID or ""
+			if ruid ~= "" then
+				local clip = _ResourceService:LoadAnimationClipAndWait(ruid)
+				if clip ~= nil then
+					local frames = clip.Frames:ToTable()
+					if #frames > 0 and frames[1].FrameSprite ~= nil then
+						local sp = frames[1].FrameSprite
+						local h = sp.Height / 100
+						local above = h - sp.PivotPixel.y / 100
+						if above <= 0.05 or above > h then above = h * (1 - sp.Pivot.y) end
+						if above > 0.05 then top = above end
+					end
+				end
+			end
+			self._T.monTop = top
+		end
+		return self._T.monTop * math.abs(target.TransformComponent.Scale.y)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateQueueBars(Entity map, Entity front)
+		-- 맨 앞이 아닌 웨이브 몬스터마다 작은 체력바 (맨 앞 체력바를 복제해 재사용). 체력은 몬스터의 동기화 값.
+		if self._T.qbars == nil then self._T.qbars = {} end
+		local mons = {}
+		if isvalid(map) then
+			local comps = map:GetChildComponentsByTypeName("script.TowerMonster", false)
+			for _, tm in ipairs(comps or {}) do
+				if isvalid(tm) and tm.Entity ~= front and tm.IsQueued and not tm.IsDead and tm.MaxHp > 0 then table.insert(mons, tm) end
+			end
+		end
+		local src = isvalid(self.monsterHpRoot) and self.monsterHpRoot.Entity or nil
+		if src == nil then return end
+		local fillName = isvalid(self.monsterHpFill) and self.monsterHpFill.Entity.Name or ""
+		while #self._T.qbars < #mons do
+			local b = _SpawnService:SpawnByEntity(src, "QueueHpBar" .. tostring(#self._T.qbars + 1), Vector3(0, 0, 0), src.Parent, true)
+			if b == nil then break end
+			table.insert(self._T.qbars, b)
+		end
+		local top = self._T.monTop or 0.8
+		for i, b in ipairs(self._T.qbars) do
+			local tm = mons[i]
+			if not isvalid(b) then continue end
+			if tm == nil then
+				if b.Enable then b:SetEnable(false) end
+				continue
+			end
+			if not b.Enable then b:SetEnable(true) end
+			local e = tm.Entity
+			local wp = e.TransformComponent.WorldPosition
+			local p = self:ToUI(_UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y + top * math.abs(e.TransformComponent.Scale.y))))
+			local ut = b.UITransformComponent
+			ut.anchoredPosition = Vector2(p.x, p.y + self.MonsterBarGap * 0.8)
+			local sc = self.MonsterBarScale * self.QueueBarScale
+			if ut.UIScale.x ~= sc then ut.UIScale = Vector3(sc, sc, 1) end
+			local fill = b:GetChildByName(fillName, true)
+			if isvalid(fill) and isvalid(fill.SpriteGUIRendererComponent) then
+				fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, tm.Hp / tm.MaxHp))
+			end
+		end
+	end
+
+	method void PlaceMonsterBar(Entity target, number hp, number maxHp)
+		-- 몬스터 머리 위 체력바: 프레임 112×24 + 채움(Filled) FillAmount.
+		local root = self.monsterHpRoot
+		local fill = self.monsterHpFill
+		if not isvalid(root) or not isvalid(fill) then return end
+		if not isvalid(target) or maxHp <= 0 then
+			if root.Entity.Enable then root.Entity:SetEnable(false) end
+			return
+		end
+		if not root.Entity.Enable then root.Entity:SetEnable(true) end
+		local wp = target.TransformComponent.WorldPosition
+		local p = self:ToUI(_UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y + self:MonsterTop(target))))
+		root.anchoredPosition = Vector2(p.x, p.y + self.MonsterBarGap)
+		local ratio = math.max(0, math.min(1, hp / maxHp))
+		fill.Entity.SpriteGUIRendererComponent.FillAmount = ratio
+	end
+
 	method void PlaceNameTag(Entity target, string label, boolean elite)
 		-- 몬스터 발밑(HP 바 아래)에 "Lv.N 이름" 네임태그를 표시한다. 접두사 강화 몬스터는 붉은 글씨.
 		if not isvalid(self.monsterNameText) or not isvalid(self.monsterTagRoot) then return end
@@ -306,10 +396,18 @@ script BattleHUDLogic extends Logic
 		if self.monsterTagRoot.Entity.Enable ~= show then self.monsterTagRoot.Entity:SetEnable(show) end
 		if not show then return end
 		local wp = target.TransformComponent.WorldPosition
-		local screenPos = _UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y + self.NameTagHeight))
-		self.monsterTagRoot.anchoredPosition = self:ToUI(screenPos)
+		local p = self:ToUI(_UILogic:WorldToScreenPosition(Vector2(wp.x, wp.y)))
+		self.monsterTagRoot.anchoredPosition = Vector2(p.x, p.y - self.NameTagGap)
 		if self.monsterNameText.Text ~= label then
 			self.monsterNameText.Text = label
+			-- 긴 이름은 배경 폭을 늘린다 (기본 160×40, 글자 영역은 좌우 10px 여백)
+			local w = 20
+			for _, code in utf8.codes(label) do
+				if code > 127 then w = w + 26 else w = w + 15 end
+			end
+			w = math.max(160, w)
+			self.monsterTagRoot.RectSize = Vector2(w, 40)
+			self.monsterNameText.Entity.UITransformComponent.RectSize = Vector2(w - 20, 36)
 			if elite then
 				self.monsterNameText.FontColor = self.EliteNameColor
 			else
@@ -329,10 +427,22 @@ script BattleHUDLogic extends Logic
 
 		local mgr = map:GetComponent("script.TowerRunManager")
 		if isvalid(self.floorText) then self.floorText.Entity:SetEnable(mgr ~= nil) end
+		-- 층 바닥 타일셋 (원작 맵): 서버 FloorTileSet이 바뀌면 탑 맵 TileMap의 타일셋을 교체 (타일 배치는 그대로)
+		if mgr ~= nil and (mgr.FloorTileSet or "") ~= "" and self._T.tileSet ~= mgr.FloorTileSet then
+			local tm = map:GetChildByName("TileMap")
+			if isvalid(tm) and isvalid(tm.TileMapComponent) then
+				tm.TileMapComponent.TileSetRUID = mgr.FloorTileSet
+				self._T.tileSet = mgr.FloorTileSet
+				log("[VRF] floor tileset -> " .. mgr.FloorTileSet)
+			end
+		end
 		if mgr == nil then
 			if isvalid(self.playerHpRoot) then self.playerHpRoot.Entity:SetEnable(false) end
 			if isvalid(self.monsterHpRoot) then self.monsterHpRoot.Entity:SetEnable(false) end
 			if isvalid(self.monsterTagRoot) then self.monsterTagRoot.Entity:SetEnable(false) end
+			for _, qb in ipairs(self._T.qbars or {}) do
+				if isvalid(qb) and qb.Enable then qb:SetEnable(false) end
+			end
 			self:ClearMesoDrop()
 			self._T.lastKillSeq = nil
 			self._T.lastMesoProcSeq = nil
@@ -362,8 +472,9 @@ script BattleHUDLogic extends Logic
 
 		local monster = nil
 		if mgr.MonsterName ~= "" then monster = map:GetChildByName(mgr.MonsterName) end
-		self:PlaceBar(self.monsterHpRoot, self.monsterHpFill, monster, self.MonsterBarHeight, mgr.MonsterHp, mgr.MonsterMaxHp)
+		self:PlaceMonsterBar(monster, mgr.MonsterHp, mgr.MonsterMaxHp)
 		self:PlaceNameTag(monster, mgr.MonsterLabel, mgr.MonsterElite)
+		self:UpdateQueueBars(map, monster)
 
 		-- 몬스터 처치(KillSeq 증가) 시 메소 드롭 연출. 강화 몬스터는 동전을 더 많이.
 		if self._T.lastKillSeq == nil then

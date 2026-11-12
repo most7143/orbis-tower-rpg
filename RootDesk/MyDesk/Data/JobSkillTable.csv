@@ -1,18 +1,18 @@
 ﻿JobId,SkillId,Name,IconRUID,Trigger,StarPool,SkillType,Element,DotPct,DotTime,Cooldown,BuffTime,ProcType,Chance,Pct,ProcHits,Type1,V1,Type2,V2,Desc,Mana,ComboUse,ComboBonus,Bleed
 Hero,H01,슬래시 블러스트,1dc02c9673284efb94da9c86e7414eeb,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,120,1,,,,,"마나 8 · 쿨타임 {cd}초. 공격력 {p}% 베기, 콤보 +1",8,0,0,0
 Hero,H02,브랜디쉬,429228115d56462ab0f65e7294a51609,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,110,2,,,,,마나 10 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 베기. 30% 확률로 재발동,10,0,0,0
-Hero,H03,패닉,8d71243d59684151b349cb3583a6c46a,Skill,HeroStar,콤보,,,,6,0,HeroStrike,0,420,1,,,,,마나 20 · 쿨타임 {cd}초. 공격력 {p}% 강타. 콤보 3을 소비하면 피해 +60%,20,3,60,0
+Hero,H03,패닉,8d71243d59684151b349cb3583a6c46a,Skill,HeroStar,콤보,,,,6,0,HeroStrike,0,420,1,,,,,"마나 20 · 쿨타임 {cd}초. 공격력 {p}% 강타. 콤보를 최대 3 소비, 소비한 콤보 1당 피해 +20%",20,3,20,0
 Hero,H04,코마,38a6aefef6784c42967a997795dba30f,Skill,HeroStar,콤보,,,,7,0,HeroStun,0,300,1,,,,,마나 25 · 쿨타임 {cd}초. 공격력 {p}% + 기절 2초. 콤보 2를 소비하면 피해 +50%,25,2,50,0
-Hero,H05,인레이지,14c64ff02eb64da0be624eed933e9d9c,Cooldown,HeroStar,버프,,,,20,8,HeroBuff,0,0,1,AtkPct,25,,,"{cd}초마다 {bt}초간 공격력 +{v1}%, 기본 공격 콤보 획득 2",0,0,0,0
-Hero,H06,인사이징,69acc0a1482143d5a25f80da945e0f22,Skill,HeroStar,검술,출혈,,,5,0,HeroStrike,0,180,1,,,,,마나 12 · 쿨타임 {cd}초. 공격력 {p}% 베기 + 자상 3중첩 (중첩당 초당 공격력 15%),12,0,0,3
+Hero,H05,인레이지,14c64ff02eb64da0be624eed933e9d9c,Cooldown,HeroStar,버프,,,,25,10,HeroBuff,0,0,1,AtkPct,25,,,"{cd}초마다 자동 발동, {bt}초간 공격력 +{v1}%",0,0,0,0
+Hero,H06,인사이징,69acc0a1482143d5a25f80da945e0f22,Skill,HeroStar,검술,불,,,5,0,HeroStrike,0,180,1,,,,,마나 12 · 쿨타임 {cd}초. 공격력 {p}% 베기 + 화상 (5초간 1초마다 공격력 20%),12,0,0,0
 Hero,H07,오라 블레이드,483690e55c974444aef84df3a6331d93,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,260,1,,,,,마나 15 · 쿨타임 {cd}초. 공격력 {p}% 관통 검기 발사. 30% 확률로 재발동,15,0,0,0
-Hero,H08,레이징 블로우,644fc39bcc684c209264eb9d9a4cd6f8,Skill,HeroStar,검술,,,,5,0,HeroStrike,0,90,3,,,,,마나 12 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 베기. 최대 콤보면 확정 치명타,12,0,0,0
-Hero,H09,레이지 업라이징,355f4ea810e94b76bc42b8a8b36c11b3,Skill,HeroStar,콤보,,,,10,0,HeroStrike,0,650,1,,,,,마나 30 · 쿨타임 {cd}초. 공격력 {p}% 내려찍기. 콤보 5를 소비하면 피해 +70%,30,5,70,0
-Hero,H10,발할라,237cc541ba1a402496c3eb45dc9719a6,Cooldown,HeroStar,버프,,,,30,12,HeroBuff,0,150,1,AtkPct,30,,,{cd}초마다 {bt}초간 공격력 +{v1}%. 검술 발동 시 공격력 {p}% 추가 검격,0,0,0,0
-Hero,H11,에픽 어드벤쳐,2d489bb379454100b32f50c2c5b5f698,Cooldown,HeroStar,버프,,,,35,12,HeroBuff,0,0,1,AllDmg,30,ManaRegen,50,"{cd}초마다 {bt}초간 모든 피해 +{v1}%, 마나 회복 +{v2}%",0,0,0,0
-Hero,H12,소드 오브 버닝 소울,f97f557e480f482db24679f0d53e6e30,Cooldown,HeroStar,소환,,,,30,15,HeroSummon,0,120,1,,,,,{cd}초마다 {bt}초간 불타는 검 소환 (1.5초마다 공격력 {p}%). 검술 5회마다 강화 공격,0,0,0,0
-Hero,H13,콤보 데스폴트,4df8fa30bd6e4c9994b3378b122c8d6f,Skill,HeroStar,콤보,,,,12,0,HeroStrike,0,1000,1,,,,,마나 60 · 쿨타임 {cd}초. 공격력 {p}% 참격 + 1초 무적. 콤보 5를 소비하면 피해 +70%,60,5,70,0
-Hero,H14,소드 일루전,9f53d154bc344ebc87303c6018b7e3ed,Skill,HeroStar,검술,출혈,,,12,0,HeroStrike,0,150,5,,,,,마나 50 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 환영 참격. 자상을 최대 5중첩 소비해 중첩당 공격력 80% 파열,50,0,0,0
+Hero,H08,레이징 블로우,644fc39bcc684c209264eb9d9a4cd6f8,Skill,HeroStar,검술,,,,10,0,HeroStrike,0,90,3,,,,,마나 20 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 베기. 15% 확률로 재발동,20,0,0,0
+Hero,H09,레이지 업라이징,355f4ea810e94b76bc42b8a8b36c11b3,Skill,HeroStar,콤보,,,,30,0,HeroStrike,0,650,1,,,,,마나 60 · 쿨타임 {cd}초. 공격력 {p}% 내려찍기,60,0,0,0
+Hero,H10,발할라,237cc541ba1a402496c3eb45dc9719a6,Cooldown,HeroStar,충전,,,,20,0,HeroBuff,0,150,1,,,,,마나 0 · 시전 시 5회 충전. 직접 공격 스킬 적중마다 충전 1회로 0.3초 뒤 공격력 {p}% 추가타. 충전을 모두 쓰면 쿨타임 {cd}초,0,0,0,0
+Hero,H11,에픽 어드벤쳐,2d489bb379454100b32f50c2c5b5f698,Cooldown,HeroStar,버프,,,,40,10,HeroBuff,0,0,1,,,,,{cd}초마다 최대 체력 20% 회복 + {bt}초간 최대 체력 30% 보호막,0,0,0,0
+Hero,H12,소드 오브 버닝 소울,f97f557e480f482db24679f0d53e6e30,Cooldown,HeroStar,소환,,,,30,20,HeroSummon,0,200,1,,,,,{cd}초마다 {bt}초간 불타는 검 소환. 3초마다 공격력 {p}% 공격,0,0,0,0
+Hero,H13,콤보 데스폴트,4df8fa30bd6e4c9994b3378b122c8d6f,Skill,HeroStar,콤보,,,,20,0,HeroStrike,0,170,6,,,,,마나 100 · 쿨타임 {cd}초 · 콤보 5 이상일 때 시전. 콤보를 모두 소비해 공격력 {p}% 6연속 참격 + 참격 동안 무적,100,5,0,0
+Hero,H14,소드 일루전,9f53d154bc344ebc87303c6018b7e3ed,Skill,HeroStar,검술,출혈,,,12,0,HeroStrike,0,150,5,,,,,"마나 50 · 쿨타임 {cd}초. 공격력 {p}% 환영 참격 5회 + 자상 파열. 자상을 걸 때마다 환영 스택이 쌓이고(최대 20), 사용 시 스택당 피해 +10%",50,0,0,0
 Hero,H15,콤보 인스팅트,941c7381b20d4a92896f34da0a56fe18,Instinct,HeroStar,버프,,,,15,10,HeroInstinct,100,60,1,,,,,"기본 공격 적중 시 발동해 {bt}초간 콤보당 피해 +5%, 기본 공격에 공격력 {p}% 균열. 재발동 대기 15초",0,0,0,0
 Warrior,WarriorFinalAttack,파이널 어택,c269972a7d9f4fd497fdcec195dacc56,Passive,ProcStrike,검술,,,,0,,Strike,25,70,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 피해,,,,
 Warrior,WarriorIronBody,아이언 바디,52162587bc534b9385af8c77513d93d4,Passive,PassGuard,강인함,,,,0,,,0,0,0,DefPct,6,HpPct,8,"방어력 +{v1}%, 최대 체력 +{v2}%",,,,

@@ -146,6 +146,13 @@ script TowerPlayer extends AttackComponent
 	end
 
 	@ExecSpace("Client")
+	method void ShowProcDamageAt(Entity target, integer amount, boolean crit, number yOff)
+		-- 연타 피해 숫자: 같은 스킬의 타격 순서마다 위로 yOff만큼 띄워 겹치지 않게 한다.
+		if not isvalid(target) then return end
+		_DamageSkinService:Play(target, self.HitSkinRUID, 0, { amount }, DamageSkinTweenType.Default, crit, Vector2(0, 0.8 + yOff), Vector2(1, 1), 1.0, 1.0, LitMode.Default)
+	end
+
+	@ExecSpace("Client")
 	method void ShowHeal(integer amount)
 		-- 흡혈 회복량을 회복 데미지 스킨으로 표시.
 		_DamageSkinService:Play(self.Entity, self.HealSkinRUID, 0, { amount }, DamageSkinTweenType.Default, false, Vector2(0, 0.5), Vector2(1, 1), 1.0, 1.0, LitMode.Default)
@@ -159,11 +166,14 @@ script TowerPlayer extends AttackComponent
 		local sc = self.Entity.StateComponent
 		for ruid in string.gmatch(castSounds or "", "[^|]+") do _SoundService:PlaySound(ruid, 0.7) end
 		-- 캐릭터에 붙는 스킬 이펙트 (메이플 그림은 왼쪽 기준이라 뒤집는다). 동작 없는 동반 스킬 이펙트도 여기서.
-		-- 항목 형식: "ruid" 또는 "ruid@크기"
+		-- 항목 형식: "ruid", "ruid@크기", "ruid@크기@x,y" (x: 캐릭터 앞(오른쪽)으로, y: 위로 옮길 월드 단위)
 		for entry in string.gmatch(casterFx or "", "[^|]+") do
-			local ruid, sc = string.match(entry, "^([^@]+)@?(.*)$")
+			local ruid, sc, off = string.match(entry, "^([^@]+)@?([^@]*)@?(.*)$")
 			local s = tonumber(sc) or 1
-			_EffectService:PlayEffectAttached(ruid, self.Entity, Vector3(0, 0, 0), 0, Vector3(s, s, 1), false, { FlipX = true })
+			local ox, oy = string.match(off or "", "^([^,]*),?(.*)$")
+			local x = tonumber(ox) or 0
+			local y = tonumber(oy) or 0
+			_EffectService:PlayEffectAttached(ruid, self.Entity, Vector3(x, y, 0), 0, Vector3(s, s, 1), false, { FlipX = true })
 		end
 		if actionFrames ~= nil and actionFrames ~= "" then
 			self:PlayAction(actionFrames, actionTime)
@@ -295,7 +305,8 @@ script TowerPlayer extends AttackComponent
 		if not isvalid(defender) then return false end
 		local tm = defender:GetComponent("script.TowerMonster")
 		-- 쓰러진 몬스터(사망 애니메이션 중인 시체)는 대상에서 제외
-		if tm == nil or tm.IsDead then return false end
+		-- 웨이브 대기열에 서 있는 몬스터도 제외 (맨 앞 몬스터만 맞는다)
+		if tm == nil or tm.IsDead or tm.IsQueued then return false end
 		return __base:IsAttackTarget(defender, attackInfo)
 	end
 

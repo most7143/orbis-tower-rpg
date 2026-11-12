@@ -16,6 +16,8 @@ script SkillTestManager extends Component
 	property number ProcHitInterval = 0.12
 	-- 공격 동작 시작 후 이펙트가 나올 때까지 (TowerPlayer.HitSyncDelay와 같게)
 	property number HitDelay = 0.3
+	-- 히어로 스킬을 볼 때 드는 양손검 (장비 표 히어로 무기 1단계)
+	property string HeroWeaponRUID = "43ad7bfeb9184252b24e6d60f76c17e5"
 
 	-- 화면 표시용 (클라이언트 SkillTestUILogic이 읽음)
 	@Sync
@@ -26,6 +28,21 @@ script SkillTestManager extends Component
 	property string MonsterLabel = ""
 	@Sync
 	property integer PlaySeq = 0
+
+	-- 히어로 스킬은 실제 전투 로직(_HeroCombatLogic)으로 실행한다. 이 컴포넌트가 TowerRunManager 대신 전투 정보를 넘겨준다.
+	-- 허수아비 몬스터 체력 (0이 되면 다시 가득), 피해 기준 공격력 100 → 피해 숫자 = 스킬 계수%
+	property string RunState = "FIGHT"
+	property number MonsterMaxHp = 3000
+	property number MonsterHp = 3000
+	property number PlayerAtk = 100
+	property number CritRate = 0
+	property number CritDmg = 150
+	property number PlayerAttackTimer = 0
+	-- 회복·보호막 확인용 플레이어 체력 (히어로 스킬 시전마다 60%로 맞춘다)
+	property number PlayerMaxHp = 1000
+	property number PlayerHp = 600
+	@HideFromInspector
+	property table SkillLv = {}
 
 	@ExecSpace("ServerOnly")
 	method void OnBeginPlay()
@@ -57,6 +74,14 @@ script SkillTestManager extends Component
 				actions[at:GetCell(i, "SkillId")] = { name = at:GetCell(i, "Action") or "", frames = at:GetCell(i, "ActionFrames") or "", time = tonumber(at:GetCell(i, "ActionTime")) or 0.8, caster = at:GetCell(i, "CasterFx") or "", hit = at:GetCell(i, "HitFx") or "", scale = tonumber(at:GetCell(i, "FxScale")) or 1,
 					mob = at:GetCell(i, "MobFx") or "", policy = at:GetCell(i, "HitPolicy") or "", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
 					gap = tonumber(at:GetCell(i, "HitGap")) or 0, hitY = tonumber(at:GetCell(i, "HitY")) or 0.45 }
+			end
+		end
+		-- 돌파 목록 (히어로 스킬 테스트에서 켠 돌파 이름 표시)
+		self._T.breakRows = {}
+		local bs = _DataService:GetTable("SkillBreakTable")
+		if bs ~= nil then
+			for i = 1, bs:GetRowCount() do
+				table.insert(self._T.breakRows, { skill = bs:GetCell(i, "SkillId"), id = bs:GetCell(i, "OptionId"), name = bs:GetCell(i, "Name") })
 			end
 		end
 		local js = _DataService:GetTable(self.JobSkillTableName)
@@ -127,6 +152,12 @@ script SkillTestManager extends Component
 		end
 		if isvalid(player.PlayerControllerComponent) then player.PlayerControllerComponent.LookDirectionX = 1 end
 		player.PlayerComponent:SetWorldPosition(self.PlayerPos)
+		-- 원래 무기 기억 (히어로가 아닌 직업을 볼 때 되돌림)
+		local cm = player.CostumeManagerComponent
+		if isvalid(cm) then
+			self._T.origOne = cm:GetEquip(MapleAvatarItemCategory.OneHandedWeapon)
+			self._T.origTwo = cm:GetEquip(MapleAvatarItemCategory.TwoHandedWeapon)
+		end
 		self.InfoTitle = "스킬을 고르세요"
 		self.InfoDesc = "히어로는 스킬 버튼을 누르면 그 스킬만 실행되고, 다른 직업은 이펙트 스킬이 차례로 재생됩니다"
 		self:SpawnMonster()
@@ -146,6 +177,7 @@ script SkillTestManager extends Component
 			return
 		end
 		self._T.monster = monster
+		self.MonsterHp = self.MonsterMaxHp
 		local mc = monster:GetComponent("script.TowerMonster")
 		if mc ~= nil then mc:ApplyLook(look.stand, look.attack, look.hit, look.die, look.hitSound, look.dieSound) end
 		self.MonsterLabel = tostring(self._T.monsterIndex) .. "층 " .. look.name
@@ -172,12 +204,32 @@ script SkillTestManager extends Component
 		table.insert(self._T.timers, _TimerService:SetTimerOnce(fn, math.max(0.01, delay)))
 	end
 
+	@ExecSpace("ServerOnly")
+	method void EquipForJob(string jobId)
+		-- 히어로 스킬은 양손검을 들고(스킬 동작도 양손검 계열 프레임), 다른 직업은 원래 무기로.
+		local player = self._T.player
+		if not isvalid(player) then return end
+		local cm = player.CostumeManagerComponent
+		local tp = player:GetComponent("script.TowerPlayer")
+		if not isvalid(cm) then return end
+		if jobId == "Hero" then
+			cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, "")
+			cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, self.HeroWeaponRUID)
+			if tp ~= nil then tp.WeaponFamily = "T" end
+		else
+			cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, self._T.origTwo or "")
+			cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, self._T.origOne or "")
+			if tp ~= nil then tp.WeaponFamily = "O" end
+		end
+	end
+
 	@ExecSpace("Server")
 	method void RequestPlayJob(string jobId, string jobName)
 		-- 직업 버튼: 그 직업의 이펙트 스킬을 하나씩 재생한다. 재생 중이면 끊고 새로 시작.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		self:ClearTimers()
+		self:EquipForJob(jobId)
 		self.PlaySeq = self.PlaySeq + 1
 		local list = self._T.skills[jobId] or {}
 		log("[VRF] skill test play " .. jobId .. " skills=" .. tostring(#list))
@@ -199,8 +251,13 @@ script SkillTestManager extends Component
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		self:ClearTimers()
+		self:EquipForJob(jobId)
 		self.PlaySeq = self.PlaySeq + 1
 		local list = self._T.skills[jobId] or {}
+		if jobId == "Hero" and _HeroCombatLogic._T.skills ~= nil and _HeroCombatLogic._T.skills[skillId] ~= nil then
+			self:PlayHeroSkill(skillId)
+			return
+		end
 		for i, sk in ipairs(list) do
 			if sk.id == skillId then
 				log("[VRF] skill test single " .. skillId)
@@ -264,7 +321,7 @@ script SkillTestManager extends Component
 		end
 		-- 버프·소환은 피격 없음 (시전 동작·이펙트만)
 		local hits = sk.hits
-		if sk.kind == "버프" or sk.kind == "소환" then hits = 0 end
+		if sk.kind == "버프" or sk.kind == "소환" or sk.kind == "충전" then hits = 0 end
 		if sk.id == "H15" then hits = 1 end
 		local gap = self.ProcHitInterval
 		if (sk.gap or 0) > 0 then gap = sk.gap end
@@ -350,6 +407,220 @@ script SkillTestManager extends Component
 		end
 	end
 
+	-- ========== 히어로: 실제 전투 로직 + 돌파 토글 ==========
+
+	@ExecSpace("Server")
+	method void RequestSetBreak(string breakId, boolean on)
+		-- 돌파 토글 (스킬 테스트 전용): 켠 돌파는 다음 시전부터 적용된다.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self._T.breaks == nil then self._T.breaks = {} end
+		if on then self._T.breaks[breakId] = true else self._T.breaks[breakId] = nil end
+		log("[VRF] skill test break " .. breakId .. "=" .. tostring(on))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetupHero()
+		-- 히어로 전투 로직을 테스트용으로 준비: 모든 히어로 스킬을 배운 상태, 이 컴포넌트를 전투 매니저로.
+		local hc = _HeroCombatLogic
+		hc:ClearState()
+		hc._T.mgr = self
+		-- 스킬 테스트에서는 인레이지가 저절로 발동하지 않게 (버튼으로만)
+		hc._T.noAutoBuff = true
+		for id, _ in pairs(hc._T.skills) do
+			table.insert(hc._T.equip, id)
+			hc._T.ownLv[id] = 1
+			self.SkillLv[id] = 1
+		end
+		hc.Active = true
+		hc.Mana = hc.ManaMax
+		self._T.heroReady = true
+		self.MonsterHp = self.MonsterMaxHp
+		log("[VRF] skill test hero ready skills=" .. tostring(#hc._T.equip))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PlayHeroSkill(string skillId)
+		-- 히어로 스킬 하나를 실제 전투와 같은 계산·연출로: 시전 동작 → 타격 순간(동작의 음수→양수 전환)에 적용.
+		-- 시전마다 콤보·마나 가득, 쿨타임 무시. 켠 돌파가 그대로 반영된다.
+		local hc = _HeroCombatLogic
+		if not self._T.heroReady then self:SetupHero() end
+		hc._T.mgr = self
+		local player = self._T.player
+		local monster = self._T.monster
+		if not isvalid(player) or not isvalid(monster) then return end
+		local sk = hc._T.skills[skillId]
+		-- 인레이지: 동작 없이 자동 발동 버프 → 시전 그림 후 버프 (쿨타임 무시하고 바로)
+		if skillId == "H05" then
+			hc._T.cd.H05 = 0
+			hc:StartInrage()
+			self.InfoTitle = "히어로 - " .. sk.name
+			self.InfoDesc = "시전 그림이 끝나면 버프 + 지속 동안 캐릭터 이펙트"
+			return
+		end
+		hc.Combo = hc:ComboCap()
+		hc.Mana = hc.ManaMax
+		self.PlayerHp = self.PlayerMaxHp * 0.6
+		hc._T.cd[skillId] = 0
+		hc._T.till[skillId] = 0
+		local r = hc:MakeCast(sk)
+		local on = {}
+		for _, row in ipairs(self._T.breakRows or {}) do
+			if row.skill == skillId and self._T.breaks ~= nil and self._T.breaks[row.id] then table.insert(on, row.name) end
+		end
+		self.InfoTitle = "히어로 - " .. sk.name
+		local brk = "돌파 없음"
+		if #on > 0 then brk = "돌파: " .. table.concat(on, ", ") end
+		local hitN = #(r.hitDmg or {})
+		self.InfoDesc = brk .. "\n" .. tostring(hitN) .. "타 · 콤보·마나 가득에서 시전 (실제 전투 계산)"
+		local tp = player:GetComponent("script.TowerPlayer")
+		local delay = self.HitDelay
+		if tp ~= nil then
+			tp:PlayAttackMotion(0, r.actionFrames or "", r.actionTime or 0.8, r.casterFx or "", r.useSound or "", player.PlayerComponent.UserId)
+			local ht = tp:HitTimeOf(r.actionFrames or "")
+			if ht > 0 then delay = ht end
+		end
+		self:Later(function()
+			if isvalid(self._T.monster) then hc:ApplyCast(self, r, self._T.monster) end
+		end, delay)
+		log("[VRF] skill test hero " .. skillId .. " hits=" .. tostring(hitN) .. " breaks=" .. tostring(#on))
+		-- 발할라: 충전만 하는 스킬이라, 이어서 일반 공격을 반복해 추가타를 보여 준다
+		if skillId == "H10" then
+			self.InfoDesc = brk .. "\n충전 " .. tostring(hc._T.valCharge or 0) .. "회 · 이어서 일반 공격으로 추가타 확인 (테스트 전용: 일반 공격도 직접 공격 스킬처럼 충전을 씀)"
+			self:Later(function() self:ValhallaDemoHit(1) end, delay + 0.6)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ValhallaDemoHit(integer n)
+		-- 발할라 테스트: 일반 공격 1회 + 남은 충전으로 추가타. 충전이 다 떨어진 뒤 한 번 더 치고 끝 (최대 15회).
+		local hc = _HeroCombatLogic
+		local player = self._T.player
+		local monster = self._T.monster
+		if not isvalid(player) or not isvalid(monster) then return end
+		local left = hc._T.valCharge or 0
+		local tp = player:GetComponent("script.TowerPlayer")
+		if tp ~= nil then tp:PlayAttackMotion(0, "", 0.6, "", "", player.PlayerComponent.UserId) end
+		self:Later(function()
+			if not isvalid(self._T.monster) then return end
+			local target = self._T.monster
+			local dmg = math.floor(self.PlayerAtk)
+			self:ApplyMonsterDamage(dmg)
+			if tp ~= nil then tp:ShowProcDamage(target, dmg, false) end
+			local r = {}
+			hc:UseValhalla(r)
+			if r.valhalla ~= nil then hc:PlayValhalla(target, r.valhalla.dmg, r.valhalla.crit, 0, r.valhalla.combo == true, r.valhalla.bleed == true) end
+			log("[VRF] valhalla demo hit " .. tostring(n) .. " charge " .. tostring(left) .. " -> " .. tostring(hc._T.valCharge or 0))
+		end, self.HitDelay)
+		if left > 0 and n < 15 then self:Later(function() self:ValhallaDemoHit(n + 1) end, 0.9) end
+	end
+
+	-- TowerRunManager 대신 히어로 전투 로직에 넘겨주는 정보 (이름을 맞춘다)
+	@ExecSpace("ServerOnly")
+	method boolean HeroBreak(string skillId, string breakId)
+		-- 켠 돌파인지.
+		return self._T.breaks ~= nil and self._T.breaks[breakId] == true
+	end
+
+	@ExecSpace("ServerOnly")
+	method number HeroStarVal(string skillId, string key)
+		-- 별 강화는 테스트에서 0.
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HealPlayer(number amount)
+		-- 회복: 체력을 채우고 회복 숫자 표시.
+		local heal = math.floor(amount + 0.5)
+		if heal <= 0 then return end
+		self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + heal)
+		local pc = self:GetPlayerAttack()
+		if pc ~= nil then pc:ShowHeal(heal) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number PlayerHitDamage()
+		-- 피해 기준 공격력.
+		return self.PlayerAtk
+	end
+
+	@ExecSpace("ServerOnly")
+	method Entity HeroMonster()
+		-- 허수아비 몬스터.
+		return self._T.monster
+	end
+
+	@ExecSpace("ServerOnly")
+	method Entity HeroPlayer()
+		-- 플레이어.
+		return self._T.player
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component GetPlayerAttack()
+		-- 피해 숫자 표시용 TowerPlayer.
+		local player = self._T.player
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.TowerPlayer")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyMonsterDamage(number dmg)
+		-- 허수아비 체력 감소 (0이 되면 다시 가득) + 피격 모션. 체력은 몬스터 이름 옆에 표시.
+		self.MonsterHp = self.MonsterHp - dmg
+		if self.MonsterHp <= 0 then
+			self.MonsterHp = self.MonsterMaxHp
+			log("[VRF] skill test dummy refilled")
+		end
+		local mon = self._T.monster
+		if isvalid(mon) then
+			local mc = mon:GetComponent("script.TowerMonster")
+			if mc ~= nil then mc:SetClip(mc.HitRUID, mc.HitAnimTime) end
+		end
+		self:UpdateMonsterLabel()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateMonsterLabel()
+		-- 몬스터 이름 + 허수아비 체력.
+		local list = self._T.floorMonsters
+		local look = list[math.min(self._T.monsterIndex, #list)]
+		if look == nil then return end
+		self.MonsterLabel = tostring(self._T.monsterIndex) .. "층 " .. look.name .. "  (체력 " .. tostring(math.max(0, math.floor(self.MonsterHp))) .. "/" .. tostring(math.floor(self.MonsterMaxHp)) .. ")"
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnPlayerCrit()
+		-- 테스트에서는 없음.
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HeroSetStun(number sec)
+		-- 테스트 허수아비는 공격하지 않아 기절 지연 없음.
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HeroSetVuln(number pct, number sec)
+		-- 테스트에서는 없음.
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddBuff(string tag, string key, number value, number duration, number burst)
+		-- 테스트에서는 버프 수치 없음 (연출만).
+	end
+
+	@ExecSpace("ServerOnly")
+	method number Bonus(string effType)
+		-- 각인·직업 보너스 없음.
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component GetEngrave()
+		-- 아웃게임 각인 없음.
+		return nil
+	end
+
 	@ExecSpace("Server")
 	method void RequestNextMonster()
 		-- 몬스터 변경 버튼: 다음 층 몬스터로 바꾼다 (몬스터 크기에 따라 이펙트가 어떻게 보이는지 확인).
@@ -382,6 +653,14 @@ script SkillTestManager extends Component
 			self:DestroyMonster()
 			self._T.player = nil
 			player = nil
+		end
+		if self._T.heroReady then
+			if isvalid(player) then
+				_HeroCombatLogic:Tick(self, delta)
+			else
+				self._T.heroReady = false
+				_HeroCombatLogic:ClearState()
+			end
 		end
 		if not isvalid(player) then
 			local found = self:FindPlayer()

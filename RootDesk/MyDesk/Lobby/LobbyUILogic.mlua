@@ -11,6 +11,30 @@ script LobbyUILogic extends Logic
 	-- 스킬 뽑기 화면
 	property ButtonComponent btnGacha = "e5b66d96-8849-405a-9d82-a3656a2f7e30"
 	property TextGUIRendererComponent noticeText = "d93951f9-f2bd-464b-a3a1-97ca120a9d6c"
+	property TextGUIRendererComponent energyCountText = "fe688efc-922b-435d-bacc-8650a93b1f75"
+	property TextGUIRendererComponent energyEntriesText = "33ef45cc-c2ca-4810-bf4c-0b3ef3ec9f16"
+	property TextGUIRendererComponent energyTimerText = "17873579-e6dd-4e4d-a927-8e1211479730"
+	-- 층 선택 창 (플레이 → 스테이지 고르기 → 입장). 스테이지 = 5층 묶음, 앞 스테이지를 깨야 다음이 열림
+	property Entity stageRoot = "7349262b-7dfe-4296-87a2-479c8c772bdf"
+	property TextGUIRendererComponent stageNoText = "94997364-85b0-4b76-b74f-cd54c5ef2998"
+	property TextGUIRendererComponent stageFloorsText = "fa840e85-5b01-4443-99e2-61cac29b96ac"
+	property TextGUIRendererComponent stageRegionText = "89dbeed1-706c-4ca1-8806-775ad1618313"
+	property TextGUIRendererComponent stageStateText = "c7b0831f-09ef-4542-a5ad-265ecdf2e3bd"
+	property TextGUIRendererComponent stageRewardText = "340a60d2-5d94-4646-a321-8d9f25166536"
+	property TextGUIRendererComponent stageBigText = "c62cce82-2e28-47d3-8f23-6815db6d8bcd"
+	property ButtonComponent btnStagePrev = "b9ddeeac-3176-4361-9417-efd5cba44fe1"
+	property ButtonComponent btnStageNext = "c0cb1ec4-7e63-4487-9ce4-faed2be8fbad"
+	property ButtonComponent btnStageEnter = "b0da606a-d0ae-49d3-b81d-617b8c92e13f"
+	property ButtonComponent btnStageClose = "8a1015aa-a11f-48ab-9f6f-a1d7a8f49249"
+	property Entity stageDetail = "22a5f2a9-2bee-471a-9337-27080b182d39"
+	property Entity stageListFrame = "31a180d1-f2f7-4e20-8601-baadb23ab072"
+	property Entity floorList = "5414da43-300d-45fd-9845-c184a0043cfe"
+	property integer FloorsPerStage = 1
+	-- 보상 미리보기 (TowerRunManager 스테이지 클리어 임시 보상과 같은 식)
+	property number StageBookBase = 10
+	property number StageBookPerStage = 2
+	property number StageFeatherBase = 3
+	property number StageFeatherPerStage = 1
 
 	property string LobbyMapName = "Lobby"
 	-- 메인화면 버튼 (메인화면 리소스): 배경은 SpriteSwap, 아이콘·Label은 자식. 글자색은 상태별로 여기서 바꾼다.
@@ -34,7 +58,19 @@ script LobbyUILogic extends Logic
 		-- 로비 버튼 연결. 업적은 아직 준비 중 안내만 띄운다.
 		self.clickHandlers = {}
 		self._T.menuHandlers = {}
-		self:Bind(self.btnPlay, function() self:OnPlay() end)
+		self._T.wheelHandler = _InputService:ConnectEvent(MouseScrollEvent, function(e) self:ScrollFloors(e.ScrollDelta) end)
+		self:Bind(self.btnPlay, function() self:OpenStageSelect() end)
+		self:Bind(self.btnStagePrev, function() self:MoveStage(-1) end)
+		self:Bind(self.btnStageNext, function() self:MoveStage(1) end)
+		self:Bind(self.btnStageEnter, function() self:OnPlay() end)
+		self:Bind(self.btnStageClose, function() self:CloseStageSelect() end)
+		if isvalid(self.stageRoot) then self.stageRoot:SetEnable(false) end
+		self._T.stage = 1
+		for i = 1, self:MaxStage() do
+			local index = i
+			local row = self.floorList:GetChildByName("Floor" .. tostring(i))
+			if isvalid(row) then self:Bind(row.ButtonComponent, function() self:SelectFloor(index) end) end
+		end
 		self:Bind(self.btnGrowth, function() _GrowthUILogic:Open() end)
 		self:Bind(self.btnGacha, function() _GachaUILogic:Open() end)
 		self:Bind(self.btnAchieve, function() self:ShowNotice("업적은 준비 중입니다") end)
@@ -130,6 +166,7 @@ script LobbyUILogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void OnEndPlay()
 		-- 버튼 이벤트 해제.
+		if self._T.wheelHandler ~= nil then _InputService:DisconnectEvent(MouseScrollEvent, self._T.wheelHandler) self._T.wheelHandler = nil end
 		for _, rec in ipairs(self.clickHandlers) do
 			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
 		end
@@ -141,14 +178,295 @@ script LobbyUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method integer UnlockedStage()
+		-- 열린 스테이지 = 클리어한 층 / 5 + 1 (최대 스테이지 수까지).
+		local player = _UserService.LocalPlayer
+		local cleared = 0
+		if isvalid(player) then
+			local eng = player:GetComponent("script.PlayerEngrave")
+			if eng ~= nil then cleared = eng.ClearedFloor end
+		end
+		return math.max(1, math.min(self:MaxStage(), math.floor(cleared / self.FloorsPerStage) + 1))
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer MaxStage()
+		-- 층 테이블 층 수 / 5.
+		if self._T.floorNames == nil then
+			self._T.floorNames = {}
+			local ds = _DataService:GetTable("FloorTable")
+			if ds ~= nil then
+				for i = 1, ds:GetRowCount() do table.insert(self._T.floorNames, ds:GetCell(i, "FloorName")) end
+			end
+		end
+		return math.max(1, math.floor(#self._T.floorNames / self.FloorsPerStage))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OpenStageSelect()
+		-- 플레이 버튼: 층 선택 창을 연다 (처음에는 가장 높은 열린 스테이지).
+		if not isvalid(self.stageRoot) then
+			self:OnPlay()
+			return
+		end
+		self._T.stage = self:UnlockedStage()
+		self._T.closeT = nil
+		self._T.rowColorFar = false
+		self.stageRoot:SetEnable(true)
+		self:RefreshStage()
+		self:AnimateStageDetail()
+		self._T.listReveal = 0
+		-- 창 열기 연출: 배경 어둡게 → 제목 내려오기 → 목록 행이 위에서부터 차례로 → 버튼 튀어나오기
+		self._T.openT = 0
+		self:PrepareOpenAnim()
+		if isvalid(self.floorList) then self.floorList.ScrollLayoutGroupComponent:SetScrollPositionByItemIndex(self._T.stage) end
+		log("[VRF] stage select open unlocked=" .. tostring(self._T.stage))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CloseStageSelect()
+		-- 층 선택 창 닫기.
+		self._T.wheelTarget = nil
+		if not isvalid(self.stageRoot) or not self.stageRoot.Enable then return end
+		-- 닫기 연출: 0.18초 동안 목록·상세·배경을 흐리게 한 뒤 끈다
+		self._T.openT = nil
+		self._T.closeT = 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity StageEnt(string sub)
+		-- 층 선택 창 안의 엔티티 (경로: StageSelect/sub).
+		return _EntityService:GetEntityByPath("/ui/LobbyUI/Root/StageSelect/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PrepareOpenAnim()
+		-- 열기 연출 시작 상태: 처음 한 번 원래 위치·색을 기억해 두고, 투명·작게 시작한다.
+		if self._T.animBase == nil then
+			local base = {}
+			for _, k in ipairs({ "Title", "Ornaments", "Enter", "Close", "Prev", "Next" }) do
+				local e = self:StageEnt(k)
+				if isvalid(e) then base[k] = e.UITransformComponent.anchoredPosition end
+			end
+			self._T.animBase = base
+		end
+		self:ApplyOpenAnim(0)
+	end
+
+	@ExecSpace("ClientOnly")
+	method number EaseOutBack(number t)
+		-- 살짝 넘쳤다 돌아오는 ease-out (버튼·행 등장용).
+		local c1 = 1.70158
+		local c3 = c1 + 1
+		return 1 + c3 * (t - 1) ^ 3 + c1 * (t - 1) ^ 2
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyOpenAnim(number t)
+		-- 열기 연출 t초 시점 상태 (0.0 ~ 0.75초).
+		local base = self._T.animBase or {}
+		local function clamp01(x) return math.max(0, math.min(1, x)) end
+		local function outCubic(x) return 1 - (1 - x) ^ 3 end
+		-- 배경 어둡게 하기는 기존 창 연출 그대로 둔다
+		-- 제목·장식: 위에서 40px 내려오며 나타남 (0.05 ~ 0.4초)
+		local k = outCubic(clamp01((t - 0.05) / 0.35))
+		for _, name in ipairs({ "Title", "Ornaments" }) do
+			local e = self:StageEnt(name)
+			local p = base[name]
+			if isvalid(e) and p ~= nil then
+				e.UITransformComponent.anchoredPosition = Vector2(p.x, p.y + 40 * (1 - k))
+				if isvalid(e.TextGUIRendererComponent) then
+					local fc = e.TextGUIRendererComponent.FontColor
+					e.TextGUIRendererComponent.FontColor = Color(fc.r, fc.g, fc.b, k)
+				elseif isvalid(e.SpriteGUIRendererComponent) then
+					local sc = e.SpriteGUIRendererComponent.Color
+					e.SpriteGUIRendererComponent.Color = Color(sc.r, sc.g, sc.b, k)
+				end
+			end
+		end
+		-- 버튼: 작게 시작해 살짝 튀며 커짐 (입장 0.35초, 나머지 0.25초부터)
+		for name, delay in pairs({ Enter = 0.35, Close = 0.25, Prev = 0.3, Next = 0.3 }) do
+			local e = self:StageEnt(name)
+			if isvalid(e) then
+				local u = clamp01((t - delay) / 0.3)
+				local sc = 0.6 + 0.4 * self:EaseOutBack(u)
+				if u <= 0 then sc = 0.6 end
+				e.UITransformComponent.UIScale = Vector3(sc, sc, 1)
+			end
+		end
+		-- 목록 행: 선택된 층 근처 행이 위에서부터 0.04초 간격으로 커지며 나타남 (0.15초부터)
+		if isvalid(self.floorList) then
+			local n = self._T.stage or 1
+			local idx = 0
+			for i = math.max(1, n - 3), math.min(self:MaxStage(), n + 8) do
+				local row = self.floorList:GetChildByName("Floor" .. tostring(i))
+				if isvalid(row) then
+					local u = clamp01((t - 0.15 - idx * 0.04) / 0.28)
+					local sc = 0.85 + 0.15 * self:EaseOutBack(u)
+					if u <= 0 then sc = 0.85 end
+					row.UITransformComponent.UIScale = Vector3(sc, sc, 1)
+				end
+				idx = idx + 1
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyCloseAnim(number t)
+		-- 닫기 연출: 목록·상세·배경을 0.18초 동안 흐리게.
+		local k = math.max(0, 1 - t / 0.18)
+		if isvalid(self.stageListFrame) then self.stageListFrame.CanvasGroupComponent.GroupAlpha = k end
+		if isvalid(self.stageDetail) then self.stageDetail.CanvasGroupComponent.GroupAlpha = k end
+		for _, name in ipairs({ "Title", "Ornaments", "Enter", "Close", "Prev", "Next" }) do
+			local e = self:StageEnt(name)
+			if isvalid(e) then
+				local sc = 0.92 + 0.08 * k
+				e.UITransformComponent.UIScale = Vector3(sc, sc, 1)
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadFloorIcons()
+		-- 층마다 대표 아이콘: FloorTable 몬스터의 대기 모션 (맵 마크 그림을 구하면 바꿀 자리).
+		if self._T.floorIcons ~= nil then return end
+		self._T.floorIcons = {}
+		local stand = {}
+		local mt = _DataService:GetTable("MonsterTable")
+		if mt ~= nil then
+			for i = 1, mt:GetRowCount() do stand[mt:GetCell(i, "id")] = mt:GetCell(i, "StandRUID") or "" end
+		end
+		local ft = _DataService:GetTable("FloorTable")
+		if ft ~= nil then
+			for i = 1, ft:GetRowCount() do self._T.floorIcons[i] = stand[ft:GetCell(i, "MonsterId")] or "" end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectFloor(integer index)
+		-- 목록 클릭은 상세 정보만 바꾸며 입장 재화를 소모하지 않는다.
+		local prev = self._T.stage
+		self._T.stage = math.max(1, math.min(self:MaxStage(), index))
+		self:RefreshStage()
+		self:AnimateStageDetail()
+		-- 고른 행이 살짝 커졌다 돌아오는 연출
+		if prev ~= self._T.stage then self._T.pulse = { i = self._T.stage, t = 0 } end
+		log("[VRF] floor selected=" .. tostring(self._T.stage) .. " enter=" .. tostring(self.btnStageEnter.Enable))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void MoveStage(integer d)
+		-- 이전·다음 스테이지 (1 ~ 최대).
+		self._T.stage = math.max(1, math.min(self:MaxStage(), (self._T.stage or 1) + d))
+		self:RefreshStage()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshStage()
+		-- 고른 스테이지 정보: 층 범위·지역 이름·상태(클리어/도전/잠김)·클리어 보상, 잠긴 스테이지는 입장 비활성.
+		local n = self._T.stage or 1
+		local first = (n - 1) * self.FloorsPerStage + 1
+		local last = n * self.FloorsPerStage
+		local unlocked = self:UnlockedStage()
+		local names = self._T.floorNames or {}
+		local region = names[first] or ""
+		if names[last] ~= nil and names[last] ~= region then region = region .. " ~ " .. names[last] end
+		local state = "도전 가능"
+		local stateColor = Color(1, 0.88, 0.45, 1)
+		if n < unlocked then
+			state = "클리어 완료"
+			stateColor = Color(0.6, 0.95, 0.6, 1)
+		elseif n > unlocked then
+			if self.FloorsPerStage == 1 then
+				state = "잠김 · " .. tostring(n - 1) .. "층 클리어 필요"
+			else
+				state = "잠김 · 스테이지 " .. tostring(n - 1) .. " 클리어 필요"
+			end
+			stateColor = Color(0.75, 0.75, 0.78, 1)
+		end
+		-- 층 하나 = 한 판이면 "N층 + 층 이름", 여러 층 묶음이면 "스테이지 N + 층 범위·지역"
+		local single = self.FloorsPerStage == 1
+		if isvalid(self.stageNoText) then self.stageNoText.Text = single and "층" or "스테이지" end
+		if isvalid(self.stageBigText) then self.stageBigText.Text = tostring(n) end
+		if isvalid(self.stageFloorsText) then
+			if single then self.stageFloorsText.Text = names[first] or (tostring(n) .. "층")
+			else self.stageFloorsText.Text = tostring(first) .. " ~ " .. tostring(last) .. "층" end
+		end
+		if isvalid(self.stageRegionText) then self.stageRegionText.Text = single and "15스테이지 · 3구간" or region end
+		if isvalid(self.stageStateText) then
+			self.stageStateText.Text = state
+			self.stageStateText.FontColor = stateColor
+		end
+		local books = math.floor(self.StageBookBase + n * self.StageBookPerStage)
+		local feathers = math.floor(self.StageFeatherBase + n * self.StageFeatherPerStage)
+		if isvalid(self.stageRewardText) then self.stageRewardText.Text = "클리어 보상: 스킬북 " .. tostring(books) .. " · 여신의 깃털 " .. tostring(feathers) end
+		local eng = self:GetEntryEnergy()
+		local canEnter = eng ~= nil and eng.Loaded and eng.EnergyLoaded and eng.Energy >= eng.EnergyCost
+		self:SetStageButton(self.btnStageEnter, n > unlocked or not canEnter)
+		if isvalid(self.btnStageEnter) then
+			local tx = self.btnStageEnter.Entity.TextGUIRendererComponent
+			if isvalid(tx) then tx.Text = n > unlocked and "잠긴 층" or canEnter and ("입장 · 에너지 " .. tostring(eng.EnergyCost)) or "입장 에너지 부족" end
+		end
+		if isvalid(self.floorList) then
+			for i = 1, self:MaxStage() do
+				local row = self.floorList:GetChildByName("Floor" .. tostring(i))
+				if isvalid(row) then
+					-- 대표 아이콘 (한 번만 넣음), 잠긴 층은 어둡게
+					local icon = row:GetChildByName("Icon")
+					if isvalid(icon) then
+						self:LoadFloorIcons()
+						local ruid = self._T.floorIcons[i] or ""
+						-- 잠긴 층은 움직이지 않는 썸네일로 어둡게, 열린 층은 대기 모션 그대로
+						if i > unlocked and ruid ~= "" then ruid = "thumbnail://" .. ruid end
+						local sp = icon.SpriteGUIRendererComponent
+						-- 그림은 한 번만 넣는다 (다시 넣으면 대기 모션이 처음부터 재생됨)
+						if self._T.iconSet == nil then self._T.iconSet = {} end
+						if self._T.iconSet[i] ~= ruid then
+							self._T.iconSet[i] = ruid
+							sp.ImageRUID = ruid
+						end
+						sp.Color = i > unlocked and Color(0.35, 0.35, 0.4, 1) or Color(1, 1, 1, 1)
+					end
+					local label = tostring(i) .. "층  " .. (names[(i - 1) * self.FloorsPerStage + 1] or "")
+					local status = i < unlocked and "클리어" or (i == unlocked and "도전 가능" or "잠김")
+					row.TextGUIRendererComponent.Text = label .. "\n" .. status
+					-- 선택 색은 바로 바꾸지 않고 OnUpdate에서 부드럽게 바뀐다
+					if self._T.rowColor == nil then self._T.rowColor = {} end
+					self._T.rowColor[i] = i == n and Color(0.28, 0.43, 0.72, 1) or Color(0.18, 0.14, 0.28, 1)
+					row.TextGUIRendererComponent.FontColor = i > unlocked and Color(0.62, 0.61, 0.67, 1) or self.LabelNormal
+				end
+			end
+		end
+		self:SetStageButton(self.btnStagePrev, n <= 1)
+		self:SetStageButton(self.btnStageNext, n >= self:MaxStage())
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetStageButton(ButtonComponent button, boolean disabled)
+		-- 층 선택 창 버튼 비활성: 클릭 막고 배경·글자를 어둡게.
+		if not isvalid(button) then return end
+		button.Enable = not disabled
+		local sp = button.Entity.SpriteGUIRendererComponent
+		if isvalid(sp) then sp.Color = disabled and Color(0.45, 0.45, 0.5, 1) or Color(1, 1, 1, 1) end
+		local tx = button.Entity.TextGUIRendererComponent
+		if isvalid(tx) then tx.FontColor = disabled and self.LabelDisabled or self.LabelNormal end
+	end
+
+	@ExecSpace("ClientOnly")
 	method void OnPlay()
-		-- 로비 맵 서버 컴포넌트에 입장 요청.
+		-- 층 선택 '입장': 고른 스테이지로 로비 맵 서버 컴포넌트에 입장 요청 (잠긴 스테이지는 무시).
+		local n = self._T.stage or 1
+		if n > self:UnlockedStage() then return end
+		local eng = self:GetEntryEnergy()
+		if eng == nil or not eng.Loaded or not eng.EnergyLoaded then self:ShowNotice("입장 에너지를 불러오는 중입니다") return end
+		if eng.Energy < eng.EnergyCost then self:ShowNotice("입장 에너지가 부족합니다") return end
 		local player = _UserService.LocalPlayer
 		if not isvalid(player) or not isvalid(player.CurrentMap) then return end
 		local lobby = player.CurrentMap:GetComponent("script.LobbyManager")
 		if lobby == nil then return end
-		_ScreenFadeLogic:FadeOut(function() lobby:RequestPlay() end)
-		log("[VRF] play button clicked")
+		self:CloseStageSelect()
+		_ScreenFadeLogic:FadeOut(function() lobby:RequestPlay(n) end)
+		log("[VRF] play button clicked stage=" .. tostring(n))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -173,10 +491,165 @@ script LobbyUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method Component GetEntryEnergy()
+		-- 로컬 플레이어의 서버 동기화된 입장 재화를 조회한다.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshEnergy()
+		-- 우측 상단: 보유량, 입장 가능 횟수, 다음 1개 충전까지 남은 시간.
+		local eng = self:GetEntryEnergy()
+		local ready = eng ~= nil and eng.EnergyLoaded
+		local count = "-- / 30"
+		local entries = "불러오는 중"
+		local timer = ""
+		if ready then
+			count = tostring(eng.Energy) .. " / " .. tostring(eng.EnergyMax)
+			entries = "입장 가능 " .. tostring(math.floor(eng.Energy / eng.EnergyCost)) .. "회 · 1회 " .. tostring(eng.EnergyCost) .. "개"
+			if eng.Energy >= eng.EnergyMax then
+				timer = "충전 완료"
+			else
+				local left = math.max(0, eng.EnergyRemaining)
+				timer = string.format("다음 충전 %02d:%02d  (+1)", math.floor(left / 60), left % 60)
+			end
+		end
+		if isvalid(self.energyCountText) then self.energyCountText.Text = count end
+		if isvalid(self.energyEntriesText) then self.energyEntriesText.Text = entries end
+		if isvalid(self.energyTimerText) then self.energyTimerText.Text = timer end
+		local sig = ready and (tostring(eng.Energy) .. ":" .. tostring(eng.Loaded)) or "loading"
+		if self._T.energySignature ~= sig then
+			self._T.energySignature = sig
+			if isvalid(self.stageRoot) and self.stageRoot.Enable then self:RefreshStage() end
+			log("[VRF] energy HUD count=" .. count .. " entries=" .. entries .. " timer=" .. timer)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ScrollFloors(number amount)
+		-- 목록 안에서만 휠을 받아 빈 여백에서도 일정한 거리만큼 이동한다.
+		if not isvalid(self.stageRoot) or not self.stageRoot.Enable then return end
+		local tr = self.floorList.UITransformComponent
+		local point = _UILogic:ScreenToLocalUIPosition(_InputService:GetCursorPosition(), tr)
+		if math.abs(point.x) > tr.RectSize.x / 2 or math.abs(point.y) > tr.RectSize.y / 2 then return end
+		local scroll = self.floorList.ScrollLayoutGroupComponent
+		local range = math.max(1, self:MaxStage() * 106 + 16 - tr.RectSize.y)
+		local target = self._T.wheelTarget or scroll:GetScrollNormalizedPosition().y
+		self._T.wheelTarget = math.max(0, math.min(1, target - amount * 220 / range))
+		log("[VRF] floor wheel target=" .. tostring(self._T.wheelTarget))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void AnimateStageDetail()
+		-- 새 선택은 이전 애니메이션을 취소하고 짧은 슬라이드·페이드로 교체한다.
+		self._T.detailReveal = 0
+		if isvalid(self.stageDetail) then
+			self.stageDetail.CanvasGroupComponent.GroupAlpha = 0
+			self.stageDetail.UITransformComponent.anchoredPosition = Vector2(430, 0)
+		end
+		log("[VRF] detail reveal start floor=" .. tostring(self._T.stage))
+	end
+
+	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
+		-- 화면 진입과 상세 선택은 프레임 시간에 따라 ease-out으로 보간한다.
+		if isvalid(self.stageRoot) and self.stageRoot.Enable then
+			if self._T.openT ~= nil then
+				self._T.openT = self._T.openT + delta
+				self:ApplyOpenAnim(self._T.openT)
+				if self._T.openT >= 0.8 then self._T.openT = nil end
+			end
+			if self._T.closeT ~= nil then
+				self._T.closeT = self._T.closeT + delta
+				self:ApplyCloseAnim(self._T.closeT)
+				if self._T.closeT >= 0.18 then
+					self._T.closeT = nil
+					self.stageRoot:SetEnable(false)
+					-- 다음에 열 때를 위해 크기·투명도 원래대로
+					self:ApplyOpenAnim(1)
+					if isvalid(self.stageListFrame) then self.stageListFrame.CanvasGroupComponent.GroupAlpha = 1 end
+					if isvalid(self.stageDetail) then self.stageDetail.CanvasGroupComponent.GroupAlpha = 1 end
+					return
+				end
+			end
+			-- 행 선택 색 부드럽게 (초당 12배 속도로 목표 색에 다가감)
+			if self._T.rowColor ~= nil and isvalid(self.floorList) then
+				local a = math.min(1, delta * 12)
+				local n = self._T.stage or 1
+				for i = math.max(1, n - 12), math.min(self:MaxStage(), n + 12) do
+					local row = self.floorList:GetChildByName("Floor" .. tostring(i))
+					local target = self._T.rowColor[i]
+					if isvalid(row) and target ~= nil then
+						local c = row.SpriteGUIRendererComponent.Color
+						if math.abs(c.r - target.r) + math.abs(c.g - target.g) + math.abs(c.b - target.b) > 0.004 then
+							row.SpriteGUIRendererComponent.Color = Color(c.r + (target.r - c.r) * a, c.g + (target.g - c.g) * a, c.b + (target.b - c.b) * a, 1)
+						end
+					end
+				end
+				-- 화면 밖 행은 바로 맞춘다 (한 번만)
+				if not self._T.rowColorFar then
+					self._T.rowColorFar = true
+					for i, target in pairs(self._T.rowColor) do
+						if i < n - 12 or i > n + 12 then
+							local row = self.floorList:GetChildByName("Floor" .. tostring(i))
+							if isvalid(row) then row.SpriteGUIRendererComponent.Color = target end
+						end
+					end
+				end
+			end
+			-- 고른 행 크기 펄스 (0.25초: 1 → 1.04 → 1)
+			if self._T.pulse ~= nil and isvalid(self.floorList) then
+				local p = self._T.pulse
+				p.t = p.t + delta
+				local row = self.floorList:GetChildByName("Floor" .. tostring(p.i))
+				local u = math.min(1, p.t / 0.25)
+				local sc = 1 + 0.04 * math.sin(u * math.pi)
+				if isvalid(row) then row.UITransformComponent.UIScale = Vector3(sc, sc, 1) end
+				if u >= 1 then self._T.pulse = nil end
+			end
+			-- 입장 버튼 숨쉬기 (누를 수 있을 때만, 열기 연출이 끝난 뒤)
+			if self._T.openT == nil and self._T.closeT == nil and isvalid(self.btnStageEnter) then
+				self._T.breath = (self._T.breath or 0) + delta
+				local sc = 1
+				if self.btnStageEnter.Enable then sc = 1 + 0.025 * math.sin(self._T.breath * 3.2) end
+				self.btnStageEnter.Entity.UITransformComponent.UIScale = Vector3(sc, sc, 1)
+			end
+			if self._T.wheelTarget ~= nil then
+				local scroll = self.floorList.ScrollLayoutGroupComponent
+				local current = scroll:GetScrollNormalizedPosition().y
+				local target = self._T.wheelTarget
+				local nextPos = current + (target - current) * math.min(1, delta * 18)
+				scroll:SetScrollNormalizedPosition(UITransformAxis.Vertical, nextPos)
+				if math.abs(target - nextPos) < 0.00002 then scroll:SetScrollNormalizedPosition(UITransformAxis.Vertical, target) self._T.wheelTarget = nil end
+			end
+			if self._T.detailReveal ~= nil then
+				local t = math.min(1, self._T.detailReveal + delta / 0.28)
+				self._T.detailReveal = t
+				local eased = 1 - (1 - t) ^ 3
+				self.stageDetail.UITransformComponent.anchoredPosition = Vector2(390 + 40 * (1 - eased), 0)
+				self.stageDetail.CanvasGroupComponent.GroupAlpha = eased
+				if t >= 1 then self._T.detailReveal = nil log("[VRF] detail reveal complete") end
+			end
+			if self._T.listReveal ~= nil then
+				local t = math.min(1, self._T.listReveal + delta / 0.32)
+				self._T.listReveal = t
+				self.stageListFrame.UITransformComponent.anchoredPosition = Vector2(-420 - 36 * (1 - t) ^ 3, -20)
+				self.stageListFrame.CanvasGroupComponent.GroupAlpha = t
+				if t >= 1 then self._T.listReveal = nil end
+			end
+		end
 		-- 로비 맵에 있을 때만 로비 UI를 켠다.
 		local player = _UserService.LocalPlayer
 		local inLobby = isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap.Name == self.LobbyMapName
+		if inLobby then
+			self._T.energyUiTick = (self._T.energyUiTick or 0) - delta
+			if self._T.energyUiTick <= 0 then
+				self._T.energyUiTick = 0.2
+				self:RefreshEnergy()
+			end
+		end
 		if isvalid(self.lobbyRoot) and self.lobbyRoot.Enable ~= inLobby then
 			self.lobbyRoot:SetEnable(inLobby)
 		end

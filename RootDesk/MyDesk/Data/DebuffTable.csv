@@ -1,0 +1,5 @@
+﻿Id,Name,Effect,Value,Duration,MaxStack,Chance,MobFxRUID,Desc
+Darkness,암흑,MissChance,80,5,1,50,f8428a1cefaf4fce9dc5b07ccaa55dc8,명중률 80% 감소: 몬스터의 공격이 80% 확률로 빗나간다 (MISS)
+Bleed,자상,DefenseDown,5,6,10,100,,"방어력 감소: 중첩당 몬스터가 받는 피해 +5%, 최대 10중첩 (머리 위 숫자 그림은 HeroCombatLogic.BleedMarkRUIDs)"
+Burn,화상,DoT,40,5,1,70,ae070e6b15934f64a723d57f0bb67313,"지속 피해: 1초마다 공격력 40% 피해, 5초 (다시 걸면 시간 갱신)"
+IncisingBurn,화상,DoT,20,5,1,70,0f385e7efd004aeb8c5917f15a12ce98,"인사이징 화상: 1초마다 공격력 20% 피해, 5초 (레이지 업라이징 화상과 따로 걸림, 돌파 4·5는 HeroCombatLogic.DotDamage)"

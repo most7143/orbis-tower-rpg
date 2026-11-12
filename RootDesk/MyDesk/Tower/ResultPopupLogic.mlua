@@ -4,8 +4,10 @@ script ResultPopupLogic extends Logic
 	-- ResultPopup.ui 바인딩 (UIBuilder injectBindings로 주입)
 	property Entity popupRoot = "77c3b0ad-3691-4ce2-80f2-b1794fa3dd26"
 	property TextGUIRendererComponent bodyText = "baad52fb-9c19-4e54-a8e2-60d2793641b9"
+	property TextGUIRendererComponent titleText = "1376cec9-498d-4380-973f-20b09914d9f5"
 	property ButtonComponent btnRetry = "0d85da3a-b2c2-43dd-94aa-37303323e945"
 	property ButtonComponent btnLobby = "8ff0ec59-5e5c-4a88-9ae3-e75870cc3624"
+	property TextGUIRendererComponent entryInfoText = "f1e4edb6-0052-4d70-a26b-bf3505e7b714"
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -46,6 +48,10 @@ script ResultPopupLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void OnRetry()
 		-- 다시 도전 요청.
+		local player = _UserService.LocalPlayer
+		local eng = isvalid(player) and player:GetComponent("script.PlayerEngrave") or nil
+		if eng == nil or not eng.EnergyLoaded then self:ShowEntryNotice("입장 에너지를 불러오는 중입니다") return end
+		if eng.Energy < eng.EnergyCost then self:ShowEntryNotice("입장 에너지가 부족합니다") return end
 		local mgr = self:GetManager()
 		if mgr ~= nil then mgr:RequestRetry() end
 		log("[VRF] retry clicked")
@@ -60,19 +66,51 @@ script ResultPopupLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void ShowEntryNotice(string msg)
+		-- 결과창에서 재도전 거절 사유를 잠시 표시한다.
+		self._T.entryNotice = msg
+		self._T.entryNoticeTime = 4
+	end
+
+	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
 		-- 판 상태가 RESULT일 때만 팝업을 띄우고 결과를 채운다.
 		if not isvalid(self.popupRoot) then return end
 		local mgr = self:GetManager()
 		local show = mgr ~= nil and mgr.RunState == "RESULT"
+		if show then
+			local player = _UserService.LocalPlayer
+			local eng = isvalid(player) and player:GetComponent("script.PlayerEngrave") or nil
+			local info = "입장 에너지 불러오는 중"
+			if eng ~= nil and eng.EnergyLoaded then info = "재도전 " .. tostring(eng.EnergyCost) .. "개 · 보유 " .. tostring(eng.Energy) .. "/" .. tostring(eng.EnergyMax) end
+			if (self._T.entryNoticeTime or 0) > 0 then
+				self._T.entryNoticeTime = self._T.entryNoticeTime - delta
+				info = self._T.entryNotice
+			end
+			if isvalid(self.entryInfoText) then self.entryInfoText.Text = info end
+		end
 		if self.popupRoot.Enable ~= show then
 			self.popupRoot:SetEnable(show)
 			if show then log("[VRF] result popup shown floor=" .. tostring(mgr.Floor)) end
 		end
+		if show and isvalid(self.bodyText) and mgr.IsStageClear then
+			-- 스테이지 클리어: 스테이지·층 범위·클리어 보상
+			local single = mgr.StageStartFloor == mgr.StageEndFloor
+			if isvalid(self.titleText) then self.titleText.Text = single and (tostring(mgr.StageEndFloor) .. "층 클리어") or "스테이지 클리어" end
+			local head = "스테이지 " .. tostring(mgr.StageNo) .. " (" .. tostring(mgr.StageStartFloor) .. "~" .. tostring(mgr.StageEndFloor) .. "층)\n"
+			if single then head = "15스테이지 돌파 · Lv." .. tostring(mgr.Level) .. "\n" end
+			self.bodyText.Text = head
+				.. "스킬북 +" .. tostring(mgr.RunBooks) .. "\n"
+				.. "여신의 깃털 +" .. tostring(mgr.RunFeathers) .. "\n"
+				.. "강화 주문서 +" .. tostring(mgr.RunScrolls) .. "\n"
+				.. (single and "다음 층이 열렸습니다" or "다음 스테이지가 열렸습니다")
+			return
+		end
+		if show and isvalid(self.titleText) then self.titleText.Text = "도전 종료" end
 		if show and isvalid(self.bodyText) then
 			local best = "최고 기록 " .. tostring(mgr.BestFloor) .. "층"
 			if mgr.IsNewBest then best = best .. " (신기록!)" end
-			local body = "도달   " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
+			local body = tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지에서 실패\n"
 				.. "레벨   Lv." .. tostring(mgr.Level) .. "\n"
 				.. "획득 메소   " .. tostring(mgr.RunMeso) .. "\n"
 				.. "여신의 깃털   +" .. tostring(mgr.RunFeathers) .. "\n"

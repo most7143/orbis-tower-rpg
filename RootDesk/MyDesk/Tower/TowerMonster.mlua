@@ -20,9 +20,42 @@ script TowerMonster extends AttackComponent
 	@HideFromInspector
 	property number CurrentCritDmg = 150
 	@HideFromInspector
+	@Sync
 	property boolean IsDead = false
 	@HideFromInspector
 	property number AnimTimer = 0
+	-- 웨이브 대기열: 맨 앞이 아닌 몬스터는 공격 대상이 아니다 (TowerRunManager가 앞으로 불러올 때 false)
+	@HideFromInspector
+	@Sync
+	property boolean IsQueued = false
+	-- 대기열 몬스터 자기 체력 (범위 스킬에 맞으면 줄고, 맨 앞으로 나오면 매니저 체력으로 넘어감)
+	-- 원거리 몬스터 (근거리 자리보다 뒤에서 공격), 대기열 몬스터 자기 공격 타이머 (-1 = 자리 도착 전)
+	@HideFromInspector
+	property boolean IsRanged = false
+	@HideFromInspector
+	property number AtkTimer = -1
+	-- 걷는 속도 배율·도착 자리 흔들림 (몬스터마다 조금씩 달라 자연스럽게 몰려온다)
+	@HideFromInspector
+	property number SpeedMul = 1
+	@HideFromInspector
+	property number SlotJitter = 0
+	-- 체력은 클라이언트에도 보내 몬스터마다 머리 위 체력바를 그린다
+	@HideFromInspector
+	@Sync
+	property number Hp = 0
+	@HideFromInspector
+	@Sync
+	property number MaxHp = 0
+	-- 기절 끝나는 시각 (줄 선 몬스터용, 서버 시간)
+	@HideFromInspector
+	property number StunUntil = 0
+	-- 걸어가기: 목표 X까지 초당 MoveSpeed로 이동 (바디가 없어 Transform 직접 이동)
+	@HideFromInspector
+	property number MoveTargetX = 0
+	@HideFromInspector
+	property number MoveSpeed = 0
+	@HideFromInspector
+	property boolean Moving = false
 	
 	@ExecSpace("ServerOnly")
 	method void OnBeginPlay()
@@ -64,9 +97,32 @@ script TowerMonster extends AttackComponent
 	end
 	
 	@ExecSpace("ServerOnly")
+	method void WalkTo(number x, number speed)
+		-- 목표 X 위치까지 걸어간다 (웨이브 등장·대기열 한 칸 전진).
+		self.MoveTargetX = x
+		self.MoveSpeed = speed
+		self.Moving = true
+	end
+
+	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
-		-- 공격/피격 모션이 끝나면 stand로 복귀.
-		if self.IsDead or self.AnimTimer <= 0 then return end
+		-- 걸어가기, 공격/피격 모션이 끝나면 stand로 복귀.
+		if self.IsDead then return end
+		if self.Moving then
+			local tf = self.Entity.TransformComponent
+			local p = tf.Position
+			local dx = self.MoveTargetX - p.x
+			local step = self.MoveSpeed * delta
+			if math.abs(dx) <= step then
+				tf.Position = Vector3(self.MoveTargetX, p.y, p.z)
+				self.Moving = false
+			elseif dx > 0 then
+				tf:Translate(step, 0)
+			else
+				tf:Translate(-step, 0)
+			end
+		end
+		if self.AnimTimer <= 0 then return end
 		self.AnimTimer = self.AnimTimer - delta
 		if self.AnimTimer <= 0 then self:SetClip(self.StandRUID, 0) end
 	end
@@ -141,8 +197,8 @@ script TowerMonster extends AttackComponent
 	@ExecSpace("ServerOnly")
 	@EventSender("Self")
 	handler HandleHitEvent(HitEvent event)
-		-- 플레이어 공격을 매니저에 전달하고 피격 모션을 재생한다.
-		if self.IsDead then return end
+		-- 플레이어 공격을 매니저에 전달하고 피격 모션을 재생한다. 대기열 몬스터는 무시.
+		if self.IsDead or self.IsQueued then return end
 		local map = self.Entity.CurrentMap
 		if isvalid(map) then
 			local mgr = map:GetComponent("script.TowerRunManager")

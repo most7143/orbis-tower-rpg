@@ -18,7 +18,7 @@ script HeroSkillUILogic extends Logic
 	-- 고유 패시브: 장착 칸을 쓰지 않고 해제·교체할 수 없다
 	property string PassiveName = "콤보 어택"
 	property string PassiveIconRUID = "7328c199a3494a2ab0c12335f637c762"
-	property string PassiveDesc = "콤보를 소비하지 않는 직접 공격 적중 시 30% 확률로 콤보 1 획득 (최대 12, 자연 감소 없음). 콤보당 기본 공격력 증가"
+	property string PassiveDesc = "콤보를 소비하지 않는 직접 공격 적중 시 30% 확률로 콤보 1 획득 (최대 5, 코마 돌파로 10, 자연 감소 없음). 콤보당 기본 공격력 증가"
 	-- 인게임 수치 (HeroCombatLogic과 같게): 콤보당 공격력 % = 기본 + (레벨-1) × 증가
 	property number ComboAtkBase = 1
 	property number ComboAtkPerLv = 0.2

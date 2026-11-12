@@ -10,6 +10,8 @@ script SkillTestUILogic extends Logic
 	property ButtonComponent btnReplay = "c824316f-dc7c-41f0-b603-c2b3fc64eb32"
 	property ButtonComponent btnMonster = "fd6f1e7a-0ce1-4bd5-9e27-50e4978207ee"
 	property ButtonComponent btnLobby = "9803e95c-b985-4dcd-a55e-679f64a91a9c"
+	-- 히어로 돌파 토글 버튼 묶음 (Btn1~Btn5)
+	property Entity breakRoot = "e24339ad-e258-4a21-8d1c-a75695fe8238"
 
 	property string TestMapName = "SkillTest"
 	property string TraitTableName = "TraitTable"
@@ -104,6 +106,7 @@ script SkillTestUILogic extends Logic
 				row = self.listEntity:GetChildByName("Row_" .. tostring(i))
 			end
 		end
+		self:InitBreaks()
 		self:Bind(self.btnReplay, function() if self._T.last ~= nil then self:OnJob(self._T.last) end end)
 		self:Bind(self.btnMonster, function()
 			local mgr = self:GetManager()
@@ -114,6 +117,65 @@ script SkillTestUILogic extends Logic
 			if mgr ~= nil then _ScreenFadeLogic:FadeOut(function() mgr:RequestLobby() end) end
 		end)
 		log("[VRF] SkillTestUILogic begin rows=" .. tostring(count) .. " jobs=" .. tostring(#self._T.rows))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void InitBreaks()
+		-- 히어로 돌파 토글: 스킬별 돌파 1~5 이름을 읽고, 버튼 5개를 연결한다 (누를 때마다 켜기/끄기, 서버에 전달).
+		self._T.breakList = {}
+		self._T.breakOn = {}
+		local bs = _DataService:GetTable("SkillBreakTable")
+		if bs ~= nil then
+			for i = 1, bs:GetRowCount() do
+				local sid = bs:GetCell(i, "SkillId")
+				if self._T.breakList[sid] == nil then self._T.breakList[sid] = {} end
+				table.insert(self._T.breakList[sid], { id = bs:GetCell(i, "OptionId"), name = bs:GetCell(i, "Name"), desc = bs:GetCell(i, "Desc") })
+			end
+		end
+		if not isvalid(self.breakRoot) then return end
+		for i = 1, 5 do
+			local k = i
+			local btn = self.breakRoot:GetChildByName("Btn" .. tostring(i))
+			if isvalid(btn) then self:Bind(btn.ButtonComponent, function() self:OnBreak(k) end) end
+		end
+		self:RefreshBreaks()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshBreaks()
+		-- 고른 히어로 스킬의 돌파 1~5를 버튼에 표시 (켠 돌파는 선택 표시). 히어로 스킬이 아니면 숨김.
+		if not isvalid(self.breakRoot) then return end
+		local list = nil
+		if self._T.curSkill ~= nil then list = self._T.breakList[self._T.curSkill] end
+		self.breakRoot:SetEnable(list ~= nil and #list > 0)
+		if list == nil then return end
+		for i = 1, 5 do
+			local btn = self.breakRoot:GetChildByName("Btn" .. tostring(i))
+			local b = list[i]
+			if isvalid(btn) then
+				btn:SetEnable(b ~= nil)
+				if b ~= nil then
+					local on = self._T.breakOn[b.id] == true
+					local mark = on and "● " or "○ "
+					btn.TextGUIRendererComponent.Text = mark .. b.name
+					_UIButtonLogic:SetSelected(btn, on)
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBreak(integer i)
+		-- 돌파 i 켜기/끄기 → 서버에 알린다 (다음 시전·다시 재생부터 적용).
+		local mgr = self:GetManager()
+		local list = self._T.curSkill ~= nil and self._T.breakList[self._T.curSkill] or nil
+		if mgr == nil or list == nil or list[i] == nil then return end
+		local b = list[i]
+		local on = not (self._T.breakOn[b.id] == true)
+		if on then self._T.breakOn[b.id] = true else self._T.breakOn[b.id] = nil end
+		mgr:RequestSetBreak(b.id, on)
+		self:RefreshBreaks()
+		log("[VRF] skill test break toggle " .. b.id .. "=" .. tostring(on))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -151,6 +213,9 @@ script SkillTestUILogic extends Logic
 		self._T.selected = rec
 		self._T.last = rec
 		_UIButtonLogic:SetSelected(rec.btn, true)
+		self._T.curSkill = nil
+		if rec.skill ~= nil and rec.id == "Hero" then self._T.curSkill = rec.skill end
+		self:RefreshBreaks()
 		if rec.skill ~= nil then
 			mgr:RequestPlaySkill(rec.id, rec.job, rec.skill)
 		else

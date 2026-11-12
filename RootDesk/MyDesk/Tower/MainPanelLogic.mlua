@@ -49,6 +49,8 @@ script MainPanelLogic extends Logic
 	-- 가로 화면: 왼쪽 세로 탭 + 밀려나오는 패널, 하단 정보 바
 	property Entity sideTabsRoot = "78968938-e653-491e-af51-62db15224f47"
 	property Entity bottomBarRoot = "4ab4771e-72ad-49e8-b2b2-c9ea76400d03"
+	-- 오른쪽 아래 스킬 아이콘 슬롯 6칸 (Slot1~6, 각 칸: Icon / Cool / CoolText) — 히어로 장착 스킬과 쿨타임 표시
+	property Entity skillSlotsRoot = "7b98f946-4af2-4970-9fb6-c3395d5dead7"
 	property ButtonComponent closeBtn = "c1816458-ff21-486a-bf38-506b211175fe"
 	property TextGUIRendererComponent levelText = "88eb395c-bbe2-471b-b55d-ea29294df8c9"
 	property TextGUIRendererComponent barMesoText = "559357e6-7881-47ee-a5d8-68a954cd7ffd"
@@ -59,7 +61,7 @@ script MainPanelLogic extends Logic
 	property ButtonComponent confirmYes = "ea6d0389-755b-4f29-9dfb-3ae535f0c01f"
 	property ButtonComponent confirmNo = "c3cc6611-3acf-4571-b390-8c9949e28ca2"
 	-- 패널 위치(1920 기준 왼쪽에서 x): 열림 / 닫힘, 미끄러지는 시간(초). 실제 화면 폭에 맞춰 ApplyScreenLayout이 보정
-	property number PanelOpenX = 184
+	property number PanelOpenX = 160
 	property number PanelClosedX = -1200
 	property number SlideTime = 0.25
 	-- 패널이 열리면 전투 카메라를 이만큼(월드 단위) 왼쪽으로 옮겨 전투가 남은 화면 가운데에 보이게
@@ -92,6 +94,7 @@ script MainPanelLogic extends Logic
 		self:SetupSkillRows()
 		self._T.fxTimers = {}
 		self:SetupFxEndEvents()
+		self:ApplyHudSkins()
 		self:Bind(self.closeBtn, function() self:SetPanelOpen(false) end)
 		self:Bind(self.giveUpBtn, function() self:ShowConfirm(true) end)
 		self:Bind(self.confirmNo, function() self:ShowConfirm(false) end)
@@ -109,6 +112,68 @@ script MainPanelLogic extends Logic
 		end
 		self._T.slideT = 1
 		log("[VRF] MainPanelLogic begin handlers=" .. tostring(#self.clickHandlers))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyHudSkins()
+		-- 인게임 HUD 버튼 4상태(활성·비활성·하이라이트·셀렉트) 이미지와 상태별 글자색 (README_구현가이드 / text_style.json).
+		local text = { textNormal = Color(1, 0.953, 0.843, 1), textHover = Color(1, 1, 1, 1), textSelected = Color(1, 0.831, 0.42, 1), textDisabled = Color(0.714, 0.714, 0.745, 1) }
+		local function skin(entity, a, d, h, s)
+			local t = { normal = a, disabled = d, hover = h, pressed = s, selected = s, selectedHover = s, selectedPressed = s }
+			for k, v in pairs(text) do t[k] = v end
+			_UIButtonLogic:SetSkin(entity, t)
+		end
+		if isvalid(self.giveUpBtn) then skin(self.giveUpBtn.Entity, "5de8dc96e17142cfb3997fd0c64847b7", "5a39238442dc4826a2f22afde10e6599", "394368685c064befaec58de7984d1b41", "85df1041759843c68e7628433a9ab78b") end
+		local tabSkins = {
+			{ self.tabInfo, "82725f3a0dd5474b8f30a5b804279aae", "4ec3729e0ccd43198e844732fe3eb7a4", "7764e459b6dc4821be864bacd6ac30c5", "6f65959f1bcf4047a0423ddd15a7c861" },
+			{ self.tabTrait, "f7c03e1d96c64e96840f982b03c257b0", "277ced79f51f462f812cac49009f4f4c", "4312eed8ede14a0f95c0c61fabfc20fc", "d1f41da4bf744748b2c60b653acc5e98" },
+			{ self.tabStat, "1145d74d3eae4372a7ca5c20e2be4bb9", "566685f06e5945a386908682de0d831e", "70062f6284f0427888efa3c46d109da4", "6dc77c67889247858a5846f3cce5c5cc" },
+			{ self.tabSkill, "712e42fcce344c8cb71a73b3c2e04945", "f5d459b2c6cb4091a82a160f33fadfaf", "7bc0ee88d641404abdbfe4b9d4b39cc3", "759aa64fca7d46cba930d8fea1e6218e" },
+		}
+		for _, t in ipairs(tabSkins) do
+			if isvalid(t[1]) then skin(t[1].Entity, t[2], t[3], t[4], t[5]) end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateSkillSlots()
+		-- 오른쪽 아래 스킬 슬롯 6칸: 히어로 장착 스킬 아이콘 + 남은 쿨타임(어둡게 덮고 초 표시). 히어로가 아니면 빈 칸.
+		if not isvalid(self.skillSlotsRoot) then return end
+		if self._T.slotIcons == nil then
+			self._T.slotIcons = {}
+			local t = _DataService:GetTable("HeroSkillTable")
+			if t ~= nil then
+				for i = 1, t:GetRowCount() do self._T.slotIcons[t:GetCell(i, "SkillId")] = t:GetCell(i, "IconRUID") or "" end
+			end
+		end
+		local list = {}
+		if _HeroCombatLogic.Active then
+			for entry in string.gmatch(_HeroCombatLogic.SlotInfo, "[^|]+") do
+				local id, left, max = string.match(entry, "^([^:]+):([^:]+):([^:]+)$")
+				if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0 }) end
+			end
+		end
+		local base = "/ui/MainPanel/SkillSlots/Slot"
+		for i = 1, 6 do
+			local info = list[i]
+			local icon = _EntityService:GetEntityByPath(base .. tostring(i) .. "/Icon")
+			local cool = _EntityService:GetEntityByPath(base .. tostring(i) .. "/Cool")
+			local coolText = _EntityService:GetEntityByPath(base .. tostring(i) .. "/CoolText")
+			local ruid = info ~= nil and (self._T.slotIcons[info.id] or "") or ""
+			if isvalid(icon) then
+				local show = ruid ~= ""
+				if icon.Enable ~= show then icon:SetEnable(show) end
+				if show and icon.SpriteGUIRendererComponent.ImageRUID.DataId ~= ruid then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid) end
+			end
+			local ratio = 0
+			if info ~= nil and info.max > 0 then ratio = math.max(0, math.min(1, info.left / info.max)) end
+			if isvalid(cool) then cool.SpriteGUIRendererComponent.FillAmount = ratio end
+			if isvalid(coolText) then
+				local s = ""
+				if info ~= nil and info.left > 0 then s = tostring(math.ceil(info.left)) end
+				if coolText.TextGUIRendererComponent.Text ~= s then coolText.TextGUIRendererComponent.Text = s end
+			end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -574,47 +639,24 @@ script MainPanelLogic extends Logic
 		local dx = self:EdgeShift()
 		if isvalid(self.giveUpBtn) then
 			local grt = self.giveUpBtn.Entity.UITransformComponent
-			grt.anchoredPosition = Vector2(12 + dx, grt.anchoredPosition.y)
+			grt.anchoredPosition = Vector2(16 + dx, grt.anchoredPosition.y)
 		end
 		if isvalid(self.sideTabsRoot) then
 			local trt = self.sideTabsRoot.UITransformComponent
-			trt.anchoredPosition = Vector2(8 + dx, trt.anchoredPosition.y)
+			trt.anchoredPosition = Vector2(20 + dx, trt.anchoredPosition.y)
+		end
+		if isvalid(self.skillSlotsRoot) then
+			local srt = self.skillSlotsRoot.UITransformComponent
+			srt.anchoredPosition = Vector2(-36 - dx, srt.anchoredPosition.y)
 		end
 		if isvalid(self.panelRoot) then
 			local prt = self.panelRoot.UITransformComponent
 			if self._T.open then prt.anchoredPosition = Vector2(self:OpenX(), prt.anchoredPosition.y) else prt.anchoredPosition = Vector2(self:ClosedX(), prt.anchoredPosition.y) end
 		end
-		-- 하단 바: 1.5배 확대 기준 폭 = 보이는 폭 / 1.5
+		-- 왼쪽 아래 상태 패널 960×160: 고정 크기, 왼쪽 여백 20
 		if isvalid(self.bottomBarRoot) then
-			local baseW = (1920 - 2 * dx) / 1.5
 			local brt = self.bottomBarRoot.UITransformComponent
-			brt.RectSize = Vector2(baseW, brt.RectSize.y)
-			local path = "/ui/MainPanel/BottomBar/"
-			local jobW = math.min(360, baseW * 0.28)
-			local expW = math.max(150, baseW - 118 - 14 - jobW - 30 - 150 - 50)
-			local function place(name, x, w)
-				local e = _EntityService:GetEntityByPath(path .. name)
-				if not isvalid(e) then return end
-				local rt = e.UITransformComponent
-				rt.anchoredPosition = Vector2(x, rt.anchoredPosition.y)
-				if w ~= nil then rt.RectSize = Vector2(w, rt.RectSize.y) end
-			end
-			-- 경험치 자리를 HP · MP · EXP 세 칸으로 나눈다
-			local gap = 8
-			local hpW = math.floor((expW - gap * 2) * 0.3)
-			local exW = expW - gap * 2 - hpW * 2
-			local function bar(name, x, w)
-				place(name, x, w)
-				place(name .. "/Center", 16, w - 32)
-				place(name .. "/Fill", 0, w - 12)
-				place(name .. "/Text", 0, w - 6)
-			end
-			bar("Hp", 118, hpW)
-			bar("Mp", 118 + hpW + gap, hpW)
-			bar("Exp", 118 + (hpW + gap) * 2, exW)
-			place("MesoIcon", 118 + expW + 34, nil)
-			place("Meso", 118 + expW + 70, 150)
-			place("Job", -14, jobW)
+			brt.anchoredPosition = Vector2(20 + dx, brt.anchoredPosition.y)
 		end
 		log("[VRF] screen layout " .. key .. " edgeShift=" .. string.format("%.0f", dx))
 	end
@@ -631,7 +673,7 @@ script MainPanelLogic extends Logic
 			if self.barMesoText.Text ~= s then self.barMesoText.Text = s end
 		end
 		if isvalid(self.barJobText) then
-			local s = "직업  " .. _TarotLogic:GetJobLabel(mgr)
+			local s = _TarotLogic:GetJobLabel(mgr)
 			if self.barJobText.Text ~= s then self.barJobText.Text = s end
 		end
 	end
@@ -681,6 +723,8 @@ script MainPanelLogic extends Logic
 		self.expFill.FillAmount = shown
 		if isvalid(self.expText) then
 			local label = "EXP " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. " (" .. string.format("%.1f", target * 100) .. "%)"
+			-- 스테이지 레벨업 모드: 막대 = 이번 스테이지 웨이브 처치 수
+			if mgr.StageLevelUp then label = "스테이지 " .. tostring(mgr.Stage) .. "/" .. tostring(mgr.StagesPerFloor) .. "  처치 " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) end
 			if self.expText.Text ~= label then self.expText.Text = label end
 		end
 	end
@@ -690,7 +734,7 @@ script MainPanelLogic extends Logic
 		-- 탑 맵에서만 패널을 보이고, 열린 탭 내용을 판 상태(@Sync)로 갱신한다.
 		local mgr = self:GetManager()
 		local inTower = mgr ~= nil
-		for _, root in ipairs({ self.sideTabsRoot, self.bottomBarRoot }) do
+		for _, root in ipairs({ self.sideTabsRoot, self.bottomBarRoot, self.skillSlotsRoot }) do
 			if isvalid(root) and root.Enable ~= inTower then root:SetEnable(inTower) end
 		end
 		-- 중단하기: 전투 진행 중에만 보이고, 패배·결과 상태가 되면 확인 창도 닫는다
@@ -709,6 +753,7 @@ script MainPanelLogic extends Logic
 		self:UpdateExpBar(mgr, delta)
 		self:UpdateHpMpBar(mgr)
 		self:UpdateBottomBar(mgr)
+		self:UpdateSkillSlots()
 		self:UpdateSlide(delta)
 
 		if self.SelectedTab == 1 and isvalid(self.infoText) then

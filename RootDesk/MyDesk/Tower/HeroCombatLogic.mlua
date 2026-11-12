@@ -3,18 +3,66 @@ script HeroCombatLogic extends Logic
 
 	-- 히어로 전투(2단계): 장착한 히어로 스킬 5종의 발동·콤보·마나·자상·소환검·버프·별 강화·돌파를 처리한다.
 	-- TowerRunManager가 히어로 판일 때 이 로직을 부른다 (판정은 서버, HUD용 수치만 동기화).
-	property integer ComboMax = 12
+	-- 콤보 최대치: 기본 ComboBaseMax(5), 코마 돌파 3 '어드밴스드 콤보'를 얻으면 ComboMax(10). 5를 넘는 콤보는 어드밴스드 그림으로 바뀐다.
+	property integer ComboMax = 10
+	property integer ComboBaseMax = 5
+	-- 콤보 데스폴트 돌파 5 '콤보 어택 강화': 최대 15스택 (11스택~ 3단계 주황 그림: 메이플월드_리소스/스킬/어드밴스드_콤보)
+	property integer ComboSuperMax = 15
+	property string SuperComboBgRUID = "b57194c231d84534a6b800c88443dad1"
+	property string SuperComboIconRUIDs = "06805948b68d44528a0c770910427cb8|a9b6a540da4448f6bf901a17864645c9|b61750ccc0a24e3d925819bb5d28c559|d5304ad7e300428c9f8e6baa6a18fb1d|b94cf514af9e4da9a0bb2b9802c7fc6e"
 	-- 콤보 어택 (아웃게임 고유 패시브, Lv.0이면 잠김): 콤보를 소비하지 않는 직접 공격 적중 시 ComboGainChance% 확률로 콤보 +1.
 	-- 콤보당 기본 공격력 +(ComboAtkBase + (레벨-1)×ComboAtkPerLv)%. 자연 감소 없음.
 	property number ComboGainChance = 30
+	-- 인레이지: 쿨타임이 되면 자동 발동 (캐릭터 동작 없음). 시전 그림(동작 표 CasterFx)이 끝난 뒤 버프 + 지속 동안 InrageAuraRUID가 캐릭터에 붙어 반복
+	property string InrageAuraRUID = "09eb97c9202547c6ae13638f47d63968"
+	property number InrageSpeedPct = 20
+	property number InrageDurBonusPct = 50
+	property number InrageComboChancePct = 50
+	property number InrageBleedChance = 25
+	property number InrageReducePct = 20
 	-- 연타 중 몬스터가 죽어 넘어간 남은 타격: 다음 몬스터 등장 후 이 시간 뒤부터 이어서 들어감
 	property number CarryDelay = 0.35
 	-- 재발동: 브랜디쉬·오라 블레이드 기본 RecastChance% 확률로 같은 스킬이 한 번 더 (동작 끝난 뒤 RecastDelay초)
 	property number RecastChance = 30
 	property number RecastDelay = 0.3
+	-- 연타 피해 숫자 간격: 같은 스킬 안의 타격 순서마다 숫자를 이만큼 위로 띄운다 (월드 단위)
+	property number HitNumGap = 0.32
+	-- 레이지 업라이징: 기본 시전 그림은 effect만, 돌파 1 '고대의 격노'면 effect0 + effect1 (1121052)
+	property string UprisingEnhCasterFx = "70f46ad083cb43dd985a5004a816608b|9202efa66e9644f5b24aebed27f7e7b3"
+	property integer UprisingSplitHits = 5
+	-- 인사이징: 기본 화상(디버프 표 IncisingBurn, 레이지 업라이징 화상과 따로 걸림)
+	-- 돌파 1 '영혼 절개': 기본 시전 이펙트(effect) 없이 effect0 전체 22프레임(베기 + 붉은 폭발)만, 자상 1중첩당 이 스킬 피해 +IncisingBleedPct%
+	property string IncisingEnhCasterFx = "f5388463164b4a998a3e31ba7353a430"
+	property number IncisingBleedPct = 6
+	property integer IncisingBleedAdd = 3
+	-- 돌파 4 '타오르는 칼날': 인사이징 화상 피해 +100%, 지속 7초. 돌파 5 '업화': 화상 1초마다 몬스터 현재 체력 3% (한 번에 최대 공격력 300%)
+	property number IncisingBurnUpPct = 100
+	property number IncisingBurnUpTime = 7
+	property number IncisingHpPct = 3
+	property number IncisingHpCapPct = 300
+	property number UprisingSplitGap = 0.5
+	-- 레이징 블로우: 기본 3타는 1121008 리소스(동작 표), 돌파 1 '폭풍의 검격'이면 6연타 + 1120017 리소스
+	property string RagingStormCasterFx = "5308ef85369c4f31843d6e8cde4b1012"
+	property string RagingStormHitFx = "b79cbdf6d06b487382f03d625a1fc464"
+	property string RagingStormHitSound = "aa92fddf0e404d35bf6406cef6bc7ad5"
+	property number RagingRecastChance = 15
+	property number RagingRecastChanceUp = 35
+	property number RagingSpeedPct = 50
+	-- 돌파 4 '자상 폭발': 마지막 타격 뒤 쌓인 자상을 전부 터트림 (중첩마다 폭발 1번, 전체 RagingBurstTime초 안에, 위치는 조금씩 랜덤)
+	property string RagingBurstFxRUID = "16dee8f1c8d5442ab93ae28b1e448e2b"
+	property number RagingBurstPct = 150
+	property number RagingBurstTime = 0.3
+	property number RagingBurstJitter = 0.25
 	-- 발사체 스킬 (스킬id:발사체 그림:타입;...). 발사체 전용 모델 heroshot 하나에 그림만 바꿔 쓰고, 끝나면 숨겨 두었다 다시 쓴다(풀링).
 	-- 타입: pierce = 관통형 (닿은 몬스터에 피해를 주고 그대로 화면 밖까지 날아감), stop = 첫 몬스터에 닿으면 사라짐
 	property string ShotRUIDs = "H07:2a128f46b0c54f4d8bfafdd2fb29f568:pierce"
+	-- 오라 블레이드 돌파 1 '거대한 검기' 강화 연출 (스킬 폴더 리소스): 붉은 시전 이펙트, 교차 초승달 검기 발사체
+	property string AuraEnhCastRUID = "3d6240f494cc4c53adf2a2b12db01aa8"
+	property string AuraEnhShotRUID = "a07ce3d193b14caa9cb41a80580e4cb1"
+	-- 강화 연출 크기 배율 (직접 올린 스프라이트가 메이플 리소스보다 약 2배 크게 그려져 0.5로 원본과 맞춤, 메이커에서 나란히 띄워 확인)
+	property number AuraEnhScale = 0.5
+	-- 강화 시전 이펙트는 원본 시전 이펙트와 프레임 크기가 같아 1 (피벗 보정판, 메이커에서 원본과 나란히 확인)
+	property number AuraEnhCastScale = 1
 	-- 초당 20 = 2000px
 	property number ShotSpeed = 20
 	-- 화면(가로 12.8) 밖까지 충분히
@@ -35,14 +83,80 @@ script HeroCombatLogic extends Logic
 	property number BleedPct = 15
 	property number BleedTime = 6
 	property integer BleedMax = 10
-	property number SummonPeriod = 1.5
+	property number SummonPeriod = 3
 	property integer SummonChargeNeed = 5
-	property number ValhallaGap = 1
+	-- 발할라: 시전 시 ValhallaCharges회 충전 (돌파 2면 ValhallaChargesUp). 직접 공격 스킬 적중마다 1회 써서 0.3초 뒤 추가타.
+	-- 충전을 다 써야 쿨타임이 돈다. 돌파 1 콤보 40%, 돌파 3 충전 반환 50%, 돌파 4 자상 50%, 돌파 5 1회 발동(충전량만큼 피해 배수, 쿨타임 3초)
+	property integer ValhallaCharges = 5
+	-- 콤보 데스폴트: 시전 그림 2번째(공간 가르기, 9aac6392)만 크게. 타격 6회는 그 그림이 하얗게 터지는 순간(1.86초)부터 0.12초 간격
+	property string DeathfaultCastRUID = "fa4309d8353440ca8abe6f6992fb7106"
+	property string DeathfaultSlashRUID = "9aac6392c97e4b7f96899d3b02de1cf9"
+	property number DeathfaultSlashScale = 2.5
+	-- 위치: 시전 그림(fa4309d8) 15번째 프레임의 베기 선에 맞춤 (캐릭터 앞 6.2, 위 1.3)
+	property number DeathfaultSlashX = 6.2
+	property number DeathfaultSlashY = 1.3
+	-- 돌파 1 콤보 1당 피해 +DeathfaultComboPct%, 돌파 3 타수 +DeathfaultHitsUp
+	property number DeathfaultComboPct = 20
+	property integer DeathfaultHitsUp = 4
+	-- 소드 일루전: 자상을 1중첩 걸 때마다 환영 스택 +1 (최대 IllusionMaxStack). 시전 시 스택당 이 스킬 피해 +IllusionStackPct%, 스택 초기화
+	property integer IllusionMaxStack = 20
+	property number IllusionStackPct = 10
+	property integer IllusionMaxStackUp = 40
+	-- 돌파 4: 체력 DeathfaultFreshHpPct% 이상인 적에게 피해 DeathfaultFreshMul배
+	property number DeathfaultFreshHpPct = 90
+	property number DeathfaultFreshMul = 1.5
+	-- 에픽 어드벤쳐: 시전 시 최대 체력 EpicHealPct% 회복 + BuffTime초간 최대 체력 EpicShieldPct% 보호막. 지속 동안 EpicAuraRUID 반복
+	property number EpicHealPct = 20
+	property number EpicShieldPct = 30
+	property string EpicAuraRUID = "887cb0eadfb74929ba8e90e95d924e0a"
+	-- 돌파 1 보호막 50%, 돌파 2 직접 공격 1타마다 쿨타임 -0.5초, 돌파 3 회복 35% + 초당 2%, 돌파 4 지속 +5초 + 초당 보호막 2%,
+	-- 돌파 5 보호막 대신 보호막 양(최대 체력 대비 %)만큼 공격력 % 증가
+	property number EpicShieldUpPct = 50
+	property number EpicCdPerHit = 0.5
+	property number EpicHealUpPct = 35
+	property number EpicRegenPct = 2
+	property number EpicDurUp = 5
+	property number EpicShieldRegenPct = 2
+	property integer ValhallaChargesUp = 8
+	property number ValhallaComboChance = 40
+	property number ValhallaRefundChance = 50
+	property number ValhallaBleedChance = 50
+	property number ValhallaOneShotCd = 3
+	-- 돌파 5 피해 배수 = 충전량 × ValhallaOneShotMulPct% (5충전 2.5배, 8충전 4배)
+	property number ValhallaOneShotMulPct = 50
 	property number SoundVolume = 0.7
 	-- 공용 연출 리소스 (메이플 리소스 팩)
 	-- 기절: skill/1111.img/skill/11111003 코마 mob (머리 위 별) / 자상: skill/112.img/skill/1121015 인사이징 mob
 	property string StunFxRUID = "b798d9bdc19e4bfab33ccc906f4ccd2a"
+	-- 코마 돌파 1 '충격파': 적중 ComaFieldDelay초 뒤 몬스터 발밑에 장판이 생겨 ComaFieldTime초 남고, ComaFieldTick초마다 기절 ComaFieldStun초
+	property string ComaFieldRUID = "aa0cc3fe96684b6bbc01bf6f79710cef"
+	property number ComaFieldDelay = 1
+	property number ComaFieldTime = 3
+	property number ComaFieldTick = 1
+	property number ComaFieldStun = 2
+	property number ComaFieldScale = 1
+	-- 장판 그림의 피벗이 그림 가운데보다 오른쪽이라(약 53px) 몬스터 발밑 가운데에 오도록 옮기는 값
+	property number ComaFieldOffsetX = 0.53
 	property string BleedFxRUID = "0f385e7efd004aeb8c5917f15a12ce98"
+	-- 자상 중첩 표시 (데스 블레싱 skill/6311.img/skill/63110011 mob/0~19: "x1"~"x20" 숫자 그림), 몬스터 머리 위 높이
+	property string BleedMarkRUIDs = "1f0eefbcd6884416b6597674889b1dae|827e671910c34037a1755c47c5b8c9cd|e0518cdb0264496aa9a6d9e9e366353b|ac15904feb27477dbf870861f88ec5ca|5d60ad555e2344ef8e2a09cdcffcd740|4b7b131af250441f86a1f6c41be64cad|246c05ee55614401b911bac50e1f42f4|394801da5331410b93d3ec0e5466d044|b0c7b32739614ea5ad4251634cbd75d1|032ba16ced8c4015977cf800305a10ac|bd67f4aa270c4c468e8c40ef7851a4f8|227720ef2319456897c468f4998ad8eb|024c17f462e84630b3b54ec6528c4af4|3eaade9c72e8421d95775ff6b6848f30|6b96178061564fd5848ffbd1e2c99436|f4c69ea56de649d0b014971153cb084d|63006be8164f40f0b128ffb6fd7f712f|c89be6635de8468f8905ff184b2b3381|5325c7590f664421a0df8d65859ab865|06a857c36e664e5eb0ca4b89023236de"
+	property number BleedMarkY = -0.22
+	-- 자상 숫자 그림 크기 (원본이 커서 줄임)
+	property number BleedIconScale = 0.7
+	-- 머리 위 상태 표시(기절·암흑 등 디버프·자상)를 가로로 나란히, 가운데 정렬. 표시 사이 간격
+	property number IconGap = 0.05
+	-- 표시 폭 (가로 배치 계산용): 기절 별·디버프 그림 / 자상 숫자 그림
+	property number IconWidth = 0.6
+	property number BleedIconWidth = 0.77
+	-- 디버프 표 (암흑 등: 효과 종류·수치·지속시간·몬스터 머리 위 그림)
+	property string DebuffTableName = "DebuffTable"
+	-- 패닉 '처형자': 몬스터 체력이 이 비율 이하이면 즉시 처치
+	property number PanicExecuteRatio = 0.15
+	-- 패닉 돌파 5 '흉터' 강화 연출 (스킬 폴더 '스카링_소드_붉은색': 원본 패닉 팩 1111003의 붉은색판, 위치·피벗 동일)
+	property string PanicRedCasterFx = "d79b0245395a491c85927182ead62e8d|c472e189324a4f55880a736c79e77eba"
+	property string PanicRedHitFx = "c5f093e9c73d41d982ebc309dec4917c"
+	-- 크기 배율: 프레임 크기·피벗이 원본과 같아 1이면 원본과 같은 크기 (메이커에서 나란히 띄워 확인)
+	property number PanicRedScale = 1
 	-- 코마 시전 그림: 쓰기 직전 콤보 수(1~10)에 맞는 finish/1~10 (코마 리소스팩)
 	property string ComaFinishRUIDs = "8f260fa8eb49460691544a8806e80342|e6eefdb13ca4452ba51437f1bca9d165|7b5b0596abbd4f44afaa332f11943ebf|6c60534394bf4fba8a2553528f3f9ec3|8d638b1a7d5a4fac9de02f4c875ab956|7805bdc3c28b471fb90fc27b51801d1b|1e5b27a588564f44ab0ffc30040c1308|895a0c9854634b88af00e658e2fb5327|2672e793d7274cb5b8e4daa716671832|3f6088e8a7134c5aaa65b4f5ac12e374"
 	-- 소드 오브 버닝 소울: skill/40001.img/skill/400011001 summon
@@ -59,6 +173,20 @@ script HeroCombatLogic extends Logic
 	property string SwordDieSound = "b611ddc6fdc1457e871f33e4a9db40e8"
 	property Vector3 SwordOffset = Vector3(-0.55, 0.45, 0)
 	property Vector3 TwinOffset = Vector3(-0.85, 0.7, 0)
+	-- 소드 오브 버닝 소울: 기본 20초 소환, SummonPeriod초마다 공격 (강화 공격 없음)
+	-- 돌파 1 지속 30초, 돌파 2 공격 3회마다 강화 공격, 돌파 3 소환 시 콤보를 모두 소모해 콤보 1당 피해 +SwordComboPct%,
+	-- 돌파 4 작은 검 2개(원본 공격을 따라 하며 피해 30%), 돌파 5 공격 간격 -30%
+	property number SwordDurUp = 30
+	property integer SwordEnhEvery = 3
+	property number SwordComboPct = 15
+	property number SwordMiniPct = 30
+	property number SwordMiniScale = 0.55
+	property Vector3 MiniOffset1 = Vector3(-0.95, 0.85, 0)
+	property Vector3 MiniOffset2 = Vector3(-0.95, 0.15, 0)
+	property number SwordSpeedCutPct = 30
+	-- 분신검 공격은 원본보다 MiniDelay1/2초 늦게 (동시에 치지 않게)
+	property number MiniDelay1 = 0.18
+	property number MiniDelay2 = 0.36
 	-- 발할라 추가 검격: skill/112.img/skill/1121055 summon/attack1~6
 	property string ValhallaSlashRUIDs = "e14608f966224da2b03c7e52d4b76d0e|4c21454522464bb8945d764ba30aaba5|698b0dadc46340c9a251136d8a702b07|1d85b5a2c02647e3b49042f95dc0355b|28f0803db0504c889ca8b44d15184f85|a3b351e2b8144f188d78187b0c7bf8cd"
 	-- 콤보 인스팅트 균열 (400011074 hit) / 콤보 어택 구슬 (110.img 1101013 state)
@@ -67,12 +195,12 @@ script HeroCombatLogic extends Logic
 	property string ComboOrbRUID = "33fcc4a5124a41abbac728f221074be8"
 	-- 캐릭터 주위 콤보 표시 (클라이언트 전용 엔티티, 모델 comboorb)
 	-- 콤보 어택 skill/1111.img/skill/11111001 state: 0프레임=배경, 1~5프레임=아이콘
-	-- 어드밴스드 콤보 skill/112.img/skill/1120003 state: 7스택부터 아이콘을 순서대로 교체, 배경도 교체(회전 없음)
+	-- 어드밴스드 콤보 skill/112.img/skill/1120003 state: 6스택부터 아이콘을 순서대로 교체, 배경도 교체(회전 없음)
 	property string ComboBgRUID = "9cfc22d7db1842608b648d9d7b5d216e"
 	property string ComboIconRUIDs = "594f34c4103145a28951780047e71e42|eefe86c8b370407aa16c9fe34f12c98d|dfb6702ddc994b8b8b24acf3c695020b|18b94fa75cc54db0a806f522564ba449|1c603235dffd468f8b28b36aa8cb3df2"
 	property string AdvComboBgRUID = "7f96f8f404b043729f2522cf4a0daf0e"
 	property string AdvComboIconRUIDs = "83c2c729437c4af5a21f821445b8db38|4b689eb14af04207bf54a027002f23c8|5e34b194750e4926ab2ce3d164b96292|8fbf37a673c44ac9a54918df1af509c9|3bdc2213433f483bb37ce7a657417546"
-	property integer ComboIconSlots = 6
+	property integer ComboIconSlots = 5
 	property Vector3 ComboCenter = Vector3(0, 0.38, 0)
 	property number ComboRadius = 0.42
 	property number ComboBgSpin = 108
@@ -100,6 +228,9 @@ script HeroCombatLogic extends Logic
 	property number InstinctLeft = 0
 	@Sync
 	property string StatusText = ""
+	-- 오른쪽 아래 스킬 슬롯 표시용: 장착 순서대로 "스킬id:남은쿨타임:쿨타임|..." (0.2초마다)
+	@Sync
+	property string SlotInfo = ""
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
@@ -117,14 +248,17 @@ script HeroCombatLogic extends Logic
 			v = self:MakeComboFx(player)
 			if v == nil then return end
 		end
-		local combo = math.max(0, math.min(self.ComboMax, self.Combo))
+		local combo = math.max(0, math.min(self.ComboSuperMax, self.Combo))
 		local slots = self.ComboIconSlots
 		local count = math.min(combo, slots)
-		local adv = math.max(0, combo - slots)
+		local adv = math.max(0, math.min(combo, slots * 2) - slots)
+		-- 3단계(11스택~): 콤보 데스폴트 돌파 5. 주황 배경·아이콘
+		local sup = math.max(0, combo - slots * 2)
 		v.t = v.t + delta
-		-- 배경: 콤보가 있을 때만. 어드밴스드(7스택~)면 그림 교체 + 회전 정지
+		-- 배경: 콤보가 있을 때만. 어드밴스드(6스택~)면 그림 교체 + 회전 정지
 		v.bg.Visible = combo > 0
-		local bgRuid = adv > 0 and self.AdvComboBgRUID or self.ComboBgRUID
+		local bgRuid = self.ComboBgRUID
+		if sup > 0 then bgRuid = self.SuperComboBgRUID elseif adv > 0 then bgRuid = self.AdvComboBgRUID end
 		if v.bgRuid ~= bgRuid then
 			v.bg.SpriteRendererComponent.SpriteRUID = bgRuid
 			v.bgRuid = bgRuid
@@ -144,9 +278,11 @@ script HeroCombatLogic extends Logic
 		for i = 1, slots do
 			local icon = v.icons[i]
 			local on = i <= count
-			local kind = (i <= adv) and 2 or 1
+			local kind = 1
+			if i <= sup then kind = 3 elseif i <= adv then kind = 2 end
 			if on and (v.kind[i] ~= kind) then
-				local list = kind == 2 and v.advRuids or v.ruids
+				local list = v.ruids
+				if kind == 3 then list = v.supRuids elseif kind == 2 then list = v.advRuids end
 				icon.SpriteRendererComponent.SpriteRUID = list[((i - 1) % #list) + 1]
 				v.pop[i] = self.ComboPopTime
 			end
@@ -255,7 +391,8 @@ script HeroCombatLogic extends Logic
 		if not isvalid(bg) then return nil end
 		bg.TransformComponent.Position = self.ComboCenter
 		bg.SpriteRendererComponent.OrderInLayer = 400
-		local v = { owner = player, bg = bg, bgRuid = "", bgAngle = 0, bgPop = 0, orbit = 0, t = 0, icons = {}, kind = {}, pop = {}, ruids = {}, advRuids = {} }
+		local v = { owner = player, bg = bg, bgRuid = "", bgAngle = 0, bgPop = 0, orbit = 0, t = 0, icons = {}, kind = {}, pop = {}, ruids = {}, advRuids = {}, supRuids = {} }
+		for r in string.gmatch(self.SuperComboIconRUIDs, "[^|]+") do table.insert(v.supRuids, r) end
 		for r in string.gmatch(self.ComboIconRUIDs, "[^|]+") do table.insert(v.ruids, r) end
 		for r in string.gmatch(self.AdvComboIconRUIDs, "[^|]+") do table.insert(v.advRuids, r) end
 		for i = 1, self.ComboIconSlots do
@@ -296,6 +433,17 @@ script HeroCombatLogic extends Logic
 	method void LoadSkills()
 		-- skills[Id] = { id, name, trigger, kind, cooldown, buffTime, mana, comboUse, comboBonus, bleed, proc = { chance, pct, hits, 연출 } }
 		self._T.skills = {}
+		-- 디버프 표: debuffDefs[Id] = { name, effect, value, duration, fx }
+		self._T.debuffDefs = {}
+		local dt = _DataService:GetTable(self.DebuffTableName)
+		if dt ~= nil then
+			for i = 1, dt:GetRowCount() do
+				self._T.debuffDefs[dt:GetCell(i, "Id")] = { name = dt:GetCell(i, "Name") or "", effect = dt:GetCell(i, "Effect") or "",
+					chance = tonumber(dt:GetCell(i, "Chance")) or 100,
+					value = tonumber(dt:GetCell(i, "Value")) or 0, duration = tonumber(dt:GetCell(i, "Duration")) or 0, fx = dt:GetCell(i, "MobFxRUID") or "",
+					maxStack = math.floor(tonumber(dt:GetCell(i, "MaxStack")) or 1) }
+			end
+		end
 		local acts = {}
 		local at = _DataService:GetTable("SkillActionTable")
 		if at ~= nil then
@@ -303,7 +451,8 @@ script HeroCombatLogic extends Logic
 				acts[at:GetCell(i, "SkillId")] = { actionFrames = at:GetCell(i, "ActionFrames") or "", actionTime = tonumber(at:GetCell(i, "ActionTime")) or 0.8,
 					casterFx = at:GetCell(i, "CasterFx") or "", fx = at:GetCell(i, "HitFx") or "", fxScale = tonumber(at:GetCell(i, "FxScale")) or 1, mobFx = at:GetCell(i, "MobFx") or "",
 					policy = at:GetCell(i, "HitPolicy") or "per_hit", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
-					hitGap = tonumber(at:GetCell(i, "HitGap")) or 0.12, hitY = tonumber(at:GetCell(i, "HitY")) or 0.45 }
+					hitGap = tonumber(at:GetCell(i, "HitGap")) or 0.12, hitY = tonumber(at:GetCell(i, "HitY")) or 0.45,
+					targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)) }
 			end
 		end
 		local js = _DataService:GetTable("JobSkillTable")
@@ -312,7 +461,7 @@ script HeroCombatLogic extends Logic
 			if js:GetCell(i, "JobId") == "Hero" then
 				local id = js:GetCell(i, "SkillId")
 				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
-				local p = acts[id] or { actionFrames = "", actionTime = 0.8, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", hitGap = 0.12, hitY = 0.45 }
+				local p = acts[id] or { actionFrames = "", actionTime = 0.8, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", hitGap = 0.12, hitY = 0.45, targets = 1 }
 				p.chance = num("Chance")
 				p.pct = num("Pct")
 				p.hits = math.max(1, math.floor(num("ProcHits")))
@@ -328,12 +477,20 @@ script HeroCombatLogic extends Logic
 		local t = self._T
 		t.carry = {}
 		t.shotList = {}
+		t.debuff = {}
+		t.qstat = {}
+		t.icons = {}
+		t.iconTarget = nil
 		if t.serials ~= nil then
 			for _, s in pairs(t.serials) do
 				if s ~= nil and s ~= 0 then _EffectService:RemoveEffect(s) end
 			end
 		end
 		t.serials = {}
+		t.comaField = nil
+		t.inragePending = false
+		self.SlotInfo = ""
+		t.noAutoBuff = false
 		t.equip = {}
 		t.ownLv = {}
 		t.cd = {}
@@ -346,8 +503,9 @@ script HeroCombatLogic extends Logic
 		t.nextSword = nil
 		t.swordSet = {}
 		t.summon = nil
-		t.lastValhalla = 0
+		t.valCharge = 0
 		t.deathfaultEcho = nil
+		t.illusionStack = 0
 		t.comboRefund = 0
 		t.summonBoost = 0
 		t.lastActionTime = 0
@@ -390,8 +548,8 @@ script HeroCombatLogic extends Logic
 				for ruid in string.gmatch(field or "", "[^|]+") do table.insert(list, ruid) end
 			end
 		end
-		for _, ruid in ipairs({ self.StunFxRUID, self.BleedFxRUID, self.ComboBgRUID, self.AdvComboBgRUID, self.RiftHitRUID }) do table.insert(list, ruid) end
-		for ruid in string.gmatch(self.ComboIconRUIDs .. "|" .. self.AdvComboIconRUIDs, "[^|]+") do table.insert(list, ruid) end
+		for _, ruid in ipairs({ self.StunFxRUID, self.BleedFxRUID, self.ComboBgRUID, self.AdvComboBgRUID, self.SuperComboBgRUID, self.RiftHitRUID }) do table.insert(list, ruid) end
+		for ruid in string.gmatch(self.ComboIconRUIDs .. "|" .. self.AdvComboIconRUIDs .. "|" .. self.SuperComboIconRUIDs, "[^|]+") do table.insert(list, ruid) end
 		if self:Equipped("H12") then
 			for _, ruid in ipairs({ self.SwordSummonedRUID, self.SwordStandRUID, self.SwordAttackRUID, self.SwordAttack2RUID, self.SwordHitRUID, self.SwordHit2RUID, self.SwordDieRUID }) do table.insert(list, ruid) end
 		end
@@ -399,11 +557,22 @@ script HeroCombatLogic extends Logic
 			local shot = self:ShotRUID(id)
 			if shot ~= "" then table.insert(list, shot) end
 		end
+		if self:Equipped("H03") then
+			for ruid in string.gmatch(self.PanicRedCasterFx .. "|" .. self.PanicRedHitFx, "[^|]+") do table.insert(list, ruid) end
+		end
+		if self:Equipped("H06") then
+			for ruid in string.gmatch(self.IncisingEnhCasterFx, "[^|]+") do table.insert(list, ruid) end
+		end
+		if self:Equipped("H07") then
+			table.insert(list, self.AuraEnhCastRUID)
+			table.insert(list, self.AuraEnhShotRUID)
+		end
 		if self:Equipped("H02") then
 			for ruid in string.gmatch(self.BrandishRecastCasterFx .. "|" .. self.BrandishRecastHitFx, "[^|]+") do table.insert(list, ruid) end
 		end
 		if self:Equipped("H04") then
 			for ruid in string.gmatch(self.ComaFinishRUIDs, "[^|]+") do table.insert(list, ruid) end
+			table.insert(list, self.ComaFieldRUID)
 		end
 		if self:Equipped("H10") then
 			for ruid in string.gmatch(self.ValhallaSlashRUIDs, "[^|]+") do table.insert(list, ruid) end
@@ -469,11 +638,13 @@ script HeroCombatLogic extends Logic
 	@ExecSpace("ServerOnly")
 	method boolean BreakAllowed(string breakId)
 		-- 돌파 카드 등장 조건: 소환검·자상 소비·다른 검술 연계 옵션은 그 조건을 갖췄을 때만.
-		local summonOpts = { H05_B5 = true, H07_B5 = true, H10_B5 = true, H14_B4 = true }
+		local summonOpts = { H05_B5 = true, H07_B5 = true }
 		if summonOpts[breakId] then return self:Learned("H12") end
-		local bleedUse = { H03_B5 = true, H06_B5 = true, H08_B5 = true, H14_B3 = true, H11_B5 = true }
-		if bleedUse[breakId] then return self:Learned("H06") or self:Has("H01", 4) or self:Has("H12", 5) end
-		if breakId == "H09_B4" then return self:Learned("H02") or self:Learned("H07") end
+		local bleedUse = { H03_B5 = true, H08_B4 = true, H14_B3 = true }
+		if bleedUse[breakId] then
+			return self:Has("H06", 2) or self:Has("H01", 4) or self:Has("H03", 5) or self:Has("H04", 5) or self:Has("H05", 4) or self:Has("H10", 4) or self:Has("H14", 4)
+		end
+		if breakId == "H09_B4" then return self:Learned("H02") or self:Learned("H07") or self:Learned("H08") or self:Has("H01", 5) end
 		return true
 	end
 
@@ -511,17 +682,28 @@ script HeroCombatLogic extends Logic
 
 	@ExecSpace("ServerOnly")
 	method void AddCombo(integer n)
-		-- 콤보 획득 (최대 12). 콤보 어택을 해금하지 않았으면 쌓이지 않는다.
+		-- 콤보 획득 (최대 ComboCap: 기본 5, 코마 돌파 3이면 10). 콤보 어택을 해금하지 않았으면 쌓이지 않는다.
 		if n <= 0 or self.ComboLv <= 0 then return end
-		self.Combo = math.min(self.ComboMax, self.Combo + n)
+		self.Combo = math.min(self:ComboCap(), self.Combo + n)
 		self:UpdateOrb()
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer ComboCap()
+		-- 지금 판의 콤보 최대치: 기본 5, 코마 돌파 3 '어드밴스드 콤보'면 10.
+		if self:Has("H13", 5) then return self.ComboSuperMax end
+		if self:Has("H04", 3) then return self.ComboMax end
+		return self.ComboBaseMax
 	end
 
 	@ExecSpace("ServerOnly")
 	method boolean RollComboGain()
 		-- 콤보 획득 판정 (콤보 어택 해금 시 ComboGainChance%).
 		if self.ComboLv <= 0 then return false end
-		return _UtilLogic:RandomDouble() * 100 < self.ComboGainChance
+		local chance = self.ComboGainChance
+		-- 인레이지 돌파 3 '투지의 격류': 지속 중 콤보 획득 확률 +50% (30% → 45%)
+		if self:On("H05") and self:Has("H05", 3) then chance = chance * (1 + self.InrageComboChancePct / 100) end
+		return _UtilLogic:RandomDouble() * 100 < chance
 	end
 
 	@ExecSpace("ServerOnly")
@@ -541,7 +723,7 @@ script HeroCombatLogic extends Logic
 			local back = math.floor(self._T.comboRefund)
 			if back > 0 then
 				self._T.comboRefund = self._T.comboRefund - back
-				self.Combo = math.min(self.ComboMax, self.Combo + back)
+				self.Combo = math.min(self:ComboCap(), self.Combo + back)
 			end
 		end
 		self:UpdateOrb()
@@ -577,23 +759,19 @@ script HeroCombatLogic extends Logic
 			if self:Has("H15", 3) then per = per + 3 end
 		end
 		local pct = self.Combo * per
-		if self:On("H05") and self:Has("H05", 4) and self.Combo >= 8 then pct = pct + 30 end
 		return pct
 	end
 
 	@ExecSpace("ServerOnly")
 	method number AllDmgPct()
 		-- 에픽 어드벤쳐: 모든 피해 증가.
-		if not self:On("H11") then return 0 end
-		local v = 30 * self:BuffPower("H11")
-		if self:Has("H11", 1) then v = v + 18 end
-		return v
+		return 0
 	end
 
 	@ExecSpace("ServerOnly")
 	method number DirectMul()
 		-- 기본 공격·직접 타격 배율 (콤보 + 모든 피해).
-		return (1 + self:ComboDirectPct() / 100) * (1 + self:AllDmgPct() / 100)
+		return (1 + self:ComboDirectPct() / 100) * (1 + self:AllDmgPct() / 100) * (1 + self:DefDownPct() / 100)
 	end
 
 	@ExecSpace("ServerOnly")
@@ -604,6 +782,8 @@ script HeroCombatLogic extends Logic
 		local mul = (1 + (self:Star(id, "StarPower") + bonusPct) / 100) * (1 + self:AllDmgPct() / 100)
 		-- 콤보는 기본 공격력 증가라 모든 타격에 적용 (direct 인자는 호환용)
 		mul = mul * (1 + self:ComboDirectPct() / 100)
+		-- 자상 방어력 감소
+		mul = mul * (1 + self:DefDownPct() / 100)
 		local rate = mgr.CritRate + self:Star(id, "StarCrit")
 		local critDmg = mgr.CritDmg + self:Star(id, "StarCrit") * 2
 		local crit = forceCrit or _UtilLogic:RandomDouble() * 100 < rate
@@ -615,8 +795,18 @@ script HeroCombatLogic extends Logic
 	method number CastCost(table sk)
 		-- 마나 비용 (돌파 감소 반영, 올림).
 		local cost = sk.mana or 0
-		local cut = { H03 = 12, H04 = 15, H07 = 9, H13 = 36, H14 = 30 }
+		local cut = { H07 = 9, H14 = 30 }
 		if cut[sk.id] ~= nil and self:Has(sk.id, 2) then cost = cut[sk.id] end
+		-- 패닉 '날렵함': 마나 10
+		if sk.id == "H03" and self:Has("H03", 4) then cost = 10 end
+		-- 레이지 업라이징 '맨손의 분노': 마나 절반
+		if sk.id == "H09" and self:Has("H09", 3) then cost = cost / 2 end
+		-- 레이징 블로우 '날렵함': 마나 20 → 12
+		if sk.id == "H08" and self:Has("H08", 5) then cost = 12 end
+		-- 인사이징 '날렵함': 마나 12 → 7
+		if sk.id == "H06" and self:Has("H06", 3) then cost = 7 end
+		-- 코마 '완전한 제압': 마나 소모 없음
+		if sk.id == "H04" and self:Has("H04", 4) then cost = 0 end
 		return math.ceil(cost)
 	end
 
@@ -624,10 +814,22 @@ script HeroCombatLogic extends Logic
 	method number Cooldown(table sk)
 		-- 쿨타임 (돌파 단축 반영).
 		local cd = sk.cooldown or 0
-		local cut = { H05 = 12, H09 = 6, H10 = 18, H11 = 21, H12 = 18, H02 = 3, H06 = 3, H08 = 3 }
+		local cut = { H02 = 3 }
+		-- 소드 일루전 '날렵함': 쿨타임 8초
+		if sk.id == "H14" and self:Has("H14", 2) then cd = 8 end
+		-- 콤보 데스폴트 돌파 2: 쿨타임 없음 (최대 콤보에서 우선 시전)
+		if sk.id == "H13" and self:Has("H13", 2) then cd = 0 end
+		-- 발할라 돌파 5 '1회 발동': 쿨타임 3초
+		if sk.id == "H10" and self:Has("H10", 5) then cd = self.ValhallaOneShotCd end
+		-- 인사이징 '날렵함': 쿨타임 3초
+		if sk.id == "H06" and self:Has("H06", 3) then cd = 3 end
 		if cut[sk.id] ~= nil and self:Has(sk.id, 2) then cd = cut[sk.id] end
 		-- 슬래시 블러스트는 1번 돌파가 쿨타임 감소
 		if sk.id == "H01" and self:Has("H01", 1) then cd = 3 end
+		-- 패닉 '날렵함': 쿨타임 4초
+		if sk.id == "H03" and self:Has("H03", 4) then cd = 4 end
+		-- 레이징 블로우 '날렵함': 쿨타임 6초
+		if sk.id == "H08" and self:Has("H08", 5) then cd = 6 end
 		return cd
 	end
 
@@ -636,8 +838,8 @@ script HeroCombatLogic extends Logic
 		-- 확률형 발동 확률 (돌파·은총 반영).
 		local mgr = self._T.mgr
 		local c = sk.proc.chance
-		local up = { H01 = 48, H02 = 40, H06 = 24, H08 = 29 }
-		local n = { H01 = 1, H02 = 2, H06 = 2, H08 = 2 }
+		local up = { H01 = 48, H02 = 40, H08 = 29 }
+		local n = { H01 = 1, H02 = 2, H08 = 2 }
 		if up[sk.id] ~= nil and self:Has(sk.id, n[sk.id]) then c = up[sk.id] end
 		return c + mgr:Bonus("ProcChance")
 	end
@@ -651,17 +853,17 @@ script HeroCombatLogic extends Logic
 		self._T.mgr = mgr
 		local now = self:Now()
 		self._T.lastBasic = now
-		-- 기본 공격(직접 공격, 콤보 소비 없음) 적중: ComboGainChance% 확률로 콤보 (인레이지 중 2·돌파 3, 제압의 보상 +1)
+		-- 기본 공격(직접 공격, 콤보 소비 없음) 적중: ComboGainChance% 확률로 콤보 (인레이지 중 2·돌파 3)
 		local gain = 1
-		if self:On("H05") then
-			gain = 2
-			if self:Has("H05", 3) then gain = 3 end
-		end
-		if self:On("H04w") then gain = gain + 1 end
 		if self:RollComboGain() then self:AddCombo(gain) end
+		-- 인레이지 돌파 4 '흉터': 지속 중 기본 공격 적중 시 25% 확률로 자상 1중첩
+		if self:On("H05") and self:Has("H05", 4) and _UtilLogic:RandomDouble() * 100 < self.InrageBleedChance then
+			local mon = mgr:HeroMonster()
+			if isvalid(mon) then self:AddBleed(1, "H05", mon) end
+		end
+		self:EpicCdCut(1)
 		local mana = self.ManaPerHit
 		if self:On("H13w") then mana = 5 end
-		if self:On("H04w") then mana = mana + 3 end
 		self:AddMana(mana)
 		local list = {}
 		local skills = self:RunSkills(mgr)
@@ -677,11 +879,38 @@ script HeroCombatLogic extends Logic
 		-- 동작(액션)이 있는 스킬은 공격 1회에 하나만: 쿨타임형 → 마나형 → 확률형 순으로 먼저 걸린 하나.
 		-- 못 나간 쿨타임·마나 스킬은 자원을 쓰지 않고 다음 공격에 다시 노린다. (동작 없는 인스팅트·균열은 항상 동반)
 		local acted = false
+		-- 콤보 데스폴트 돌파 2: 최대 콤보이고 마나가 되면 다른 동작 스킬보다 먼저 시전 (쿨타임 없음)
+		if self:Has("H13", 2) and self.Combo >= self:ComboCap() then
+			for _, sk in ipairs(skills) do
+				if sk.id == "H13" and self.Mana >= self:CastCost(sk) then
+					self.Mana = self.Mana - self:CastCost(sk)
+					self._T.cd[sk.id] = self:Cooldown(sk)
+					table.insert(list, self:MakeCast(sk))
+					acted = true
+					log("[VRF] deathfault priority cast combo=" .. tostring(self.Combo))
+					break
+				end
+			end
+		end
+		-- 코마 돌파 4 '완전한 제압': 최대 콤보에서 쿨타임이 끝났으면 다른 동작 스킬보다 먼저 시전 (마나 소모 없음)
+		if not acted and self:Has("H04", 4) and self.Combo >= self:ComboCap() and (self._T.cd.H04 or 0) <= 0 then
+			for _, sk in ipairs(skills) do
+				if sk.id == "H04" then
+					self.Mana = self.Mana - self:CastCost(sk)
+					self._T.cd[sk.id] = self:Cooldown(sk)
+					table.insert(list, self:MakeCast(sk))
+					acted = true
+					log("[VRF] coma priority cast combo=" .. tostring(self.Combo))
+					break
+				end
+			end
+		end
 		for _, sk in ipairs(skills) do
-			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 then
+			if acted then break end
+			if sk.trigger == "Cooldown" and sk.id ~= "H05" and (self._T.cd[sk.id] or 0) <= 0 and not (sk.id == "H10" and self._T.valCharge > 0) then
 				self._T.cd[sk.id] = self:Cooldown(sk)
 				table.insert(list, self:MakeCast(sk))
-				acted = self:HasAction(sk)
+				acted = self:HasAction(sk) and not (sk.id == "H10" and self:Has("H10", 5))
 				break
 			end
 		end
@@ -689,7 +918,9 @@ script HeroCombatLogic extends Logic
 		if not acted then
 			local best = nil
 			for _, sk in ipairs(skills) do
-				if sk.trigger == "Skill" and (self._T.cd[sk.id] or 0) <= 0 and self.Mana >= self:CastCost(sk) then
+				-- 콤보 데스폴트: 콤보 5 이상일 때만 시전
+				local comboOk = sk.id ~= "H13" or (not self:Has("H13", 2) and self.Combo >= (sk.comboUse or 5))
+				if sk.trigger == "Skill" and comboOk and (self._T.cd[sk.id] or 0) <= 0 and self.Mana >= self:CastCost(sk) then
 					if best == nil or self:CastCost(sk) > self:CastCost(best) then best = sk end
 				end
 			end
@@ -776,7 +1007,7 @@ script HeroCombatLogic extends Logic
 		local r = { hero = true, id = sk.id, name = sk.name, sk = sk, m = {}, dmg = 0, hits = 0, heal = 0, freeze = 0, meso = 0, crit = false,
 			hitDmg = {}, hitCrit = {}, after = {},
 			fx = p.fx or "", fxScale = p.fxScale or 1, policy = p.policy or "per_hit", hitSound = p.hitSound or "", useSound = p.useSound or "",
-			gap = (p.hitGap or 0.12) / (1 + speed / 100), hitY = p.hitY or 0.45, mobFx = p.mobFx or "",
+			gap = (p.hitGap or 0.12) / (1 + speed / 100), hitY = p.hitY or 0.45, mobFx = p.mobFx or "", targets = p.targets or 1,
 			actionFrames = self:ScaleFrames(p.actionFrames or "", speed), actionTime = (p.actionTime or 0.8) / (1 + speed / 100), casterFx = self:TagScale(p.casterFx or "", p.fxScale or 1) }
 		-- HitPolicy "random": 시전·히트 이펙트와 소리 목록이 같은 순서로 변형 묶음 (예: 콤보 인스팅트 400011074/075/076).
 		-- 시전마다 하나를 골라 그 번호의 이펙트·소리를 함께 쓴다.
@@ -793,7 +1024,7 @@ script HeroCombatLogic extends Logic
 			end
 			r.policy = "per_hit"
 		end
-		if sk.kind == "버프" or sk.kind == "소환" then
+		if sk.kind == "버프" or sk.kind == "소환" or sk.kind == "충전" then
 			r.actionFrames = p.actionFrames or ""
 			r.actionTime = p.actionTime or 0.8
 		end
@@ -847,7 +1078,7 @@ script HeroCombatLogic extends Logic
 		local sid = self._T.shotSeq
 		table.insert(self._T.shotList, { sid = sid, r = r, x = start.x, dir = dir, moved = 0, pierce = self:ShotType(r.id) == "pierce", hitSet = {} })
 		if isvalid(player.PlayerComponent) then
-			self:ShowShot(sid, r.shotRuid, start, dir, self.ShotSpeed, self.ShotRange, r.fxScale or 1, player.PlayerComponent.UserId)
+			self:ShowShot(sid, r.shotRuid, start, dir, self.ShotSpeed, self.ShotRange, r.shotScale or r.fxScale or 1, player.PlayerComponent.UserId)
 		end
 		log("[VRF] hero shot launch " .. tostring(r.id) .. " sid=" .. tostring(sid) .. " dist=" .. string.format("%.2f", len))
 	end
@@ -929,8 +1160,6 @@ script HeroCombatLogic extends Logic
 		local v = base
 		if self:Has(sk.id, breakN) then v = upgraded end
 		local extra = 0
-		if self:On("H05") and self:Has("H05", 3) then extra = extra + 25 end
-		if self:On("H11") and self:Has("H11", 4) then extra = extra + 60 end
 		return v + extra
 	end
 
@@ -941,8 +1170,9 @@ script HeroCombatLogic extends Logic
 		if n <= 0 then return 0 end
 		for i = 1, n do table.remove(self._T.bleed, 1) end
 		self.Bleed = #self._T.bleed
+		local mgr = self._T.mgr
+		if mgr ~= nil then self:UpdateBleedMark(mgr:HeroMonster()) end
 		local bonus = 0
-		if self:On("H11") and self:Has("H11", 5) then bonus = bonus + 60 end
 		local s = self:Strike(id, pctPer * n, bonus, true, false)
 		log("[VRF] hero bleed burst " .. id .. " stacks=" .. tostring(n) .. " dmg=" .. tostring(s.dmg))
 		return s.dmg
@@ -989,32 +1219,62 @@ script HeroCombatLogic extends Logic
 				r.manaGain = 4
 			end
 		elseif id == "H03" then
-			local bonus = 0
-			if self:Has(id, 1) then bonus = bonus + 60 end
-			if self:Has(id, 4) and hpLow then bonus = bonus + 100 end
-			local used = self:UseCombo(sk.comboUse or 3)
-			local cb = self:ConsumeBonus(sk, sk.comboBonus or 60, 150, 3, used)
-			local s = self:Strike(id, p.pct, bonus, true, false)
+			-- 패닉: 가진 콤보를 최대 3(돌파 '과열' 6)까지 소비, 소비한 콤보 1당 피해 +20%(과열 +30%). 1·2만 있어도 그만큼 소비
+			local maxUse = sk.comboUse or 3
+			local per = sk.comboBonus or 20
+			if self:Has(id, 3) then
+				maxUse = 6
+				per = 30
+			end
+			local n = math.min(maxUse, self.Combo)
+			local used = n > 0 and self:UseCombo(n)
+			local cb = 0
+			if used then
+				cb = n * per
+				-- 인레이지 '콤보 폭주'·에픽 '불굴의 도전자' 추가 보너스 (콤보 소비 시)
+				cb = cb + self:ConsumeBonus(sk, 0, 0, 0, true)
+			end
+			local s = self:Strike(id, p.pct, 0, true, false)
 			s.dmg = math.floor(s.dmg * (1 + cb / 100) + 0.5)
 			table.insert(r.hitDmg, s.dmg)
 			table.insert(r.hitCrit, s.crit)
-			if self:Has(id, 5) then
-				local burst = self:BleedBurst(3, 150, id)
-				if burst > 0 then table.insert(r.after, { delay = 0.25, dmg = burst, fx = self.BleedFxRUID }) end
-			end
 			r.consumed = used
+			r.comboSpent = used and n or 0
+			-- 공포의 일격: 100% 확률로 암흑 / 처형자: 체력 15% 이하 즉시 처치 / 흉터: 자상 3중첩
+			if self:Has(id, 1) then r.debuff = "Darkness" end
+			if self:Has(id, 2) then r.execute = self.PanicExecuteRatio end
+			if self:Has(id, 5) then
+				r.bleedAdd = 2
+				r.bleedSrc = id
+				-- 흉터: 붉은 패닉 이펙트 (시전·히트)
+				local sc = (p.fxScale or 1) * self.PanicRedScale
+				r.casterFx = self:TagScale(self.PanicRedCasterFx, sc)
+				r.fx = self.PanicRedHitFx
+				r.fxScale = sc
+			end
+			log("[VRF] panic combo used=" .. tostring(r.comboSpent) .. " bonus=" .. tostring(cb) .. "%")
 		elseif id == "H04" then
 			local bonus = 0
-			if self:Has(id, 1) then bonus = bonus + 60 end
+			if self:Has(id, 1) then r.comaField = true end
 			local before = self.Combo
 			local used = self:UseCombo(sk.comboUse or 2)
-			local cb = self:ConsumeBonus(sk, sk.comboBonus or 50, 140, 3, used)
+			local cb = self:ConsumeBonus(sk, sk.comboBonus or 50, sk.comboBonus or 50, 0, used)
 			local s = self:Strike(id, p.pct, bonus, true, false)
 			s.dmg = math.floor(s.dmg * (1 + cb / 100) + 0.5)
 			table.insert(r.hitDmg, s.dmg)
 			table.insert(r.hitCrit, s.crit)
 			r.stun = 2
 			r.consumed = used
+			-- 돌파 5 '흉터': 적중 시 자상 3중첩 (방어력 감소)
+			if self:Has(id, 5) then
+				r.bleedAdd = 3
+				r.bleedSrc = id
+			end
+			-- 돌파 2 '투지 회수': 소비한 콤보의 절반(내림)을 시전 후 돌려받는다
+			if used and self:Has(id, 2) then
+				local back = math.floor((sk.comboUse or 2) / 2)
+				if back > 0 then r.comboGain = (r.comboGain or 0) + back end
+			end
 			-- 코마 시전 그림: 쓰기 직전 콤보 수에 맞는 finish 단계 (콤보가 높을수록 큰 그림)
 			local stage = math.max(1, math.min(10, math.floor(before)))
 			local n = 0
@@ -1023,22 +1283,48 @@ script HeroCombatLogic extends Logic
 				if n == stage then r.casterFx = ruid end
 			end
 			log("[VRF] coma stage=" .. tostring(stage) .. " used=" .. tostring(used))
-		elseif id == "H05" or id == "H10" or id == "H11" then
+		elseif id == "H10" then
+			-- 발할라: 충전. 쿨타임은 충전을 다 쓴 뒤부터
+			local n = self.ValhallaCharges
+			if self:Has(id, 2) then n = self.ValhallaChargesUp end
+			self._T.cd.H10 = 0
+			if self:Has(id, 5) then
+				-- 돌파 5: 동작 없이 1회 충전, 피해 = 충전량 배수
+				self._T.valCharge = 1
+				self._T.valMul = n * self.ValhallaOneShotMulPct / 100
+				r.actionFrames = ""
+				r.actionTime = 0
+			else
+				self._T.valCharge = n
+				self._T.valMul = 1
+			end
+			log("[VRF] valhalla charge=" .. tostring(self._T.valCharge) .. " mul=" .. tostring(self._T.valMul))
+		elseif id == "H05" or id == "H11" then
 			r.buff = true
 		elseif id == "H06" then
 			local bonus = 0
-			if self:Has(id, 1) then bonus = bonus + 60 end
-			if self:Has(id, 5) and #self._T.bleed >= 8 then
-				local burst = self:BleedBurst(4, 120, id)
-				if burst > 0 then table.insert(r.after, { delay = 0.2, dmg = burst, fx = "" }) end
+			-- 돌파 1 '영혼 절개': 피해 +60%, 자상 1중첩당 +6%, 강화 시전 그림
+			if self:Has(id, 1) then
+				bonus = bonus + 60 + #self._T.bleed * self.IncisingBleedPct
+				r.casterFx = self:TagScale(self.IncisingEnhCasterFx, p.fxScale or 1)
 			end
 			self:AddHits(r, p.hits, p.pct, bonus, false)
-			r.bleedAdd = (sk.bleed or 3)
-			if self:Has(id, 4) then r.bleedAdd = r.bleedAdd + 1 end
-			r.bleedSrc = id
+			-- 기본: 화상 (인사이징 전용 IncisingBurn)
+			r.debuff = "IncisingBurn"
+			-- 돌파 2 '흉터': 자상 3중첩
+			if self:Has(id, 2) then
+				r.bleedAdd = self.IncisingBleedAdd
+				r.bleedSrc = id
+			end
 		elseif id == "H07" then
 			local bonus = 0
-			if self:Has(id, 1) then bonus = bonus + 60 end
+			if self:Has(id, 1) then
+				bonus = bonus + 60
+				-- 거대한 검기: 강화 시전 이펙트 + 강화 발사체 (재발동도 같은 그림)
+				r.casterFx = self:TagScale(self.AuraEnhCastRUID, (p.fxScale or 1) * self.AuraEnhCastScale)
+				r.shotRuid = self.AuraEnhShotRUID
+				r.shotScale = (p.fxScale or 1) * self.AuraEnhScale
+			end
 			self:AddHits(r, p.hits, p.pct, bonus, false)
 			if self:Has(id, 3) then table.insert(r.after, { delay = 0.6, dmg = math.floor(self:SumHits(r) * 0.6 + 0.5), fx = p.fx }) end
 			if self:Has(id, 5) then
@@ -1046,61 +1332,109 @@ script HeroCombatLogic extends Logic
 				r.summonBoost = 30
 			end
 		elseif id == "H08" then
-			local wasMax = self.Combo >= self.ComboMax
 			local hits = p.hits
-			if self:Has(id, 1) then hits = hits + 3 end
-			local bonus = 0
-			if self:Has(id, 3) and wasMax then bonus = bonus + 80 end
-			if self:Has(id, 4) then
-				if wasMax then bonus = bonus + 50 else r.comboGain = 2 end
+			-- 돌파 1 '폭풍의 검격': 6연타 + 원래 쓰던 레이징 블로우 리소스(1120017)
+			if self:Has(id, 1) then
+				hits = hits + 3
+				r.casterFx = self:TagScale(self.RagingStormCasterFx, p.fxScale or 1)
+				r.fx = self.RagingStormHitFx
+				r.hitSound = self.RagingStormHitSound
+				r.policy = "once"
 			end
-			-- 최대 콤보면 기본 타수(3)는 확정 치명타
-			self:AddHits(r, p.hits, p.pct, bonus, wasMax)
-			if hits > p.hits then self:AddHits(r, hits - p.hits, p.pct, bonus, false) end
-			if self:Has(id, 5) then
-				local burst = self:BleedBurst(3, 200, id)
-				if burst > 0 then table.insert(r.after, { delay = hits * r.gap + 0.1, dmg = burst, fx = "" }) end
+			-- 돌파 3 '광속의 검': 이 스킬 공격(동작) 속도 +50%
+			if self:Has(id, 3) then
+				local speed = self:Star(id, "StarTempo") + self.RagingSpeedPct
+				r.actionFrames = self:ScaleFrames(p.actionFrames or "", speed)
+				r.actionTime = (p.actionTime or 0.8) / (1 + speed / 100)
+				r.gap = (p.hitGap or 0.12) / (1 + speed / 100)
 			end
+			self:AddHits(r, hits, p.pct, 0, false)
+			-- 돌파 4 '자상 폭발': 마지막 타격 뒤 쌓인 자상 전부 폭발 (ApplyStrikes)
+			if self:Has(id, 4) then r.rageBurst = true end
 		elseif id == "H09" then
 			local bonus = 0
-			if self:Has(id, 1) then bonus = bonus + 60 end
-			local used = self:UseCombo(sk.comboUse or 5)
-			local cb = self:ConsumeBonus(sk, sk.comboBonus or 70, 170, 3, used)
+			-- 돌파 1 '고대의 격노': 피해 +60%, 시전 그림이 effect 대신 effect0 + effect1
+			if self:Has(id, 1) then
+				bonus = bonus + 60
+				r.casterFx = self:TagScale(self.UprisingEnhCasterFx, p.fxScale or 1)
+			end
+			-- 돌파 3: 캐릭터 동작 없이 시전 (마나 절반은 CastCost)
+			if self:Has(id, 3) then
+				r.actionFrames = ""
+				r.actionTime = 0
+			end
 			local s = self:Strike(id, p.pct, bonus, true, false)
-			s.dmg = math.floor(s.dmg * (1 + cb / 100) + 0.5)
-			table.insert(r.hitDmg, s.dmg)
-			table.insert(r.hitCrit, s.crit)
-			if self:Has(id, 5) then table.insert(r.after, { delay = 1.0, dmg = math.floor(s.dmg * 0.6 + 0.5), fx = p.fx }) end
-			r.consumed = used
+			if self:Has(id, 2) then
+				-- 돌파 2 '연쇄 분출': 같은 총 피해를 5타로 나눠 0.5초마다
+				local n = self.UprisingSplitHits
+				local each = math.max(1, math.floor(s.dmg / n + 0.5))
+				for i = 1, n do
+					table.insert(r.hitDmg, each)
+					table.insert(r.hitCrit, s.crit)
+				end
+				r.gap = self.UprisingSplitGap
+				r.policy = "per_hit"
+			else
+				table.insert(r.hitDmg, s.dmg)
+				table.insert(r.hitCrit, s.crit)
+			end
+			-- 돌파 5 '화염의 분노': 화상 (디버프 표 Burn)
+			if self:Has(id, 5) then r.debuff = "Burn" end
 		elseif id == "H12" then
 			r.summon = true
 		elseif id == "H13" then
+			-- 기본: 가진 콤보를 전부 소비 (시전 조건 콤보 5 이상)
+			local n = self.Combo
+			local used = self:UseCombo(n)
+			if not used then n = 0 end
+			-- 돌파 1: 소비한 콤보 1당 피해 +20%
 			local bonus = 0
-			if self:Has(id, 1) then bonus = bonus + 60 end
-			local used = self:UseCombo(sk.comboUse or 5)
-			local cb = self:ConsumeBonus(sk, sk.comboBonus or 70, 170, 3, used)
-			local s = self:Strike(id, p.pct, bonus, true, false)
-			s.dmg = math.floor(s.dmg * (1 + cb / 100) + 0.5)
-			table.insert(r.hitDmg, s.dmg)
-			table.insert(r.hitCrit, s.crit)
-			r.invuln = 1
-			if self:Has(id, 4) then r.comboGain = 2 end
-			if self:Has(id, 5) then self._T.deathfaultEcho = { left = 2, dmg = math.floor(s.dmg * 0.3 + 0.5) } end
+			if self:Has(id, 1) then bonus = bonus + n * self.DeathfaultComboPct end
+			-- 돌파 3: 타수 +4
+			local hits = math.max(1, p.hits or 1)
+			if self:Has(id, 3) then hits = hits + self.DeathfaultHitsUp end
+			-- 돌파 4: 시전 순간 몬스터 체력이 최대 체력의 90% 이상이면 피해 2배
+			local mgr = self._T.mgr
+			local fresh = false
+			if self:Has(id, 4) and mgr ~= nil then
+				local maxHp = tonumber(mgr.MonsterMaxHp) or 0
+				fresh = maxHp > 0 and (tonumber(mgr.MonsterHp) or 0) >= maxHp * self.DeathfaultFreshHpPct / 100
+			end
+			for h = 1, hits do
+				local st = self:Strike(id, p.pct, bonus, true, false)
+				if fresh then st.dmg = math.floor(st.dmg * self.DeathfaultFreshMul + 0.5) end
+				table.insert(r.hitDmg, st.dmg)
+				table.insert(r.hitCrit, st.crit)
+			end
+			log("[VRF] deathfault combo=" .. tostring(n) .. " bonus=" .. tostring(bonus) .. " hits=" .. tostring(hits) .. " fresh=" .. tostring(fresh))
+			-- 공간 가르기 그림만 크게 (첫 그림은 원래 크기)
+			r.casterFx = self.DeathfaultCastRUID .. "|" .. self.DeathfaultSlashRUID .. "@" .. tostring(self.DeathfaultSlashScale) .. "@" .. tostring(self.DeathfaultSlashX) .. "," .. tostring(self.DeathfaultSlashY)
+			-- 무적: 첫 타부터 마지막 타가 끝날 때까지
+			r.invuln = hits * r.gap + 0.5
 			r.consumed = used
 		elseif id == "H14" then
 			local bonus = 0
 			if self:Has(id, 1) then bonus = bonus + 60 end
-			if self:Has(id, 5) and self.Combo >= self.ComboMax then bonus = bonus + 80 end
+			-- 기본: 환영 스택당 피해 +10%, 사용하면 스택 초기화
+			local st = self._T.illusionStack or 0
+			bonus = bonus + st * self.IllusionStackPct
+			self._T.illusionStack = 0
+			log("[VRF] illusion stack=" .. tostring(st) .. " bonus=" .. tostring(bonus))
 			self:AddHits(r, p.hits, p.pct, bonus, false)
+			-- 자상 파열 (돌파 3 '상흔 붕괴': 상한 10, 중첩당 150%)
 			local maxStack = 5
 			local per = 80
 			if self:Has(id, 3) then
-				maxStack = 8
+				maxStack = 10
 				per = 150
 			end
 			local burst = self:BleedBurst(maxStack, per, id)
 			if burst > 0 then table.insert(r.after, { delay = p.hits * r.gap + 0.1, dmg = burst, fx = self.BleedFxRUID }) end
-			if self:Has(id, 4) then r.swordCommand = true end
+			-- 돌파 4 '깊은 상처': 참격 1타마다 자상 1중첩 (파열 뒤에 남아 다음 시전의 환영 스택이 됨)
+			if self:Has(id, 4) then
+				r.bleedAdd = p.hits
+				r.bleedSrc = id
+			end
 		elseif id == "H15" then
 			r.instinct = true
 		end
@@ -1120,7 +1454,11 @@ script HeroCombatLogic extends Logic
 			if self:Learned("H09") and self:Has("H09", 4) then self._T.cd["H09"] = math.max(0, (self._T.cd["H09"] or 0) - 2) end
 			log("[VRF] hero recast " .. id)
 		end
-		-- 검술 공통: 소환검 충전, 발할라 추가 검격, 피로 물든 검, 파멸의 잔흔
+		-- 발할라: 직접 공격 스킬 적중마다 충전 1회로 추가타
+		if id ~= "H10" and #r.hitDmg > 0 then self:UseValhalla(r) end
+		-- 에픽 어드벤쳐 돌파 2: 직접 공격 1타마다 쿨타임 감소
+		if #r.hitDmg > 0 then self:EpicCdCut(#r.hitDmg) end
+		-- 검술 공통: 소환검 충전, 피로 물든 검, 파멸의 잔흔
 		if sk.kind == "검술" then self:OnSwordCast(r) end
 		log("[VRF] hero cast " .. id .. " hits=" .. tostring(#r.hitDmg) .. " sum=" .. tostring(self:SumHits(r)) .. " combo=" .. tostring(self.Combo) .. " mana=" .. tostring(math.floor(self.Mana)))
 		return r
@@ -1134,6 +1472,10 @@ script HeroCombatLogic extends Logic
 			return self.RecastChance
 		elseif id == "H07" then
 			return self.RecastChance
+		elseif id == "H08" then
+			-- 레이징 블로우: 낮은 확률, 돌파 2 '연속 재발동'이면 증가
+			if self:Has("H08", 2) then return self.RagingRecastChanceUp end
+			return self.RagingRecastChance
 		elseif id == "H01" and self:Has("H01", 5) then
 			return 25
 		end
@@ -1187,33 +1529,33 @@ script HeroCombatLogic extends Logic
 	end
 
 	@ExecSpace("ServerOnly")
+	method void UseValhalla(table r)
+		-- 발할라 충전 1회로 추가타 예약. 돌파 3은 50% 확률로 충전을 쓰지 않음. 다 쓰면 쿨타임 시작.
+		if (self._T.valCharge or 0) <= 0 then return end
+		local sk = self._T.skills["H10"]
+		if sk == nil then return end
+		local hit = self:Strike("H10", sk.proc.pct * (self._T.valMul or 1), 0, true, false)
+		r.valhalla = { dmg = hit.dmg, crit = hit.crit,
+			combo = self:Has("H10", 1) and _UtilLogic:RandomDouble() * 100 < self.ValhallaComboChance,
+			bleed = self:Has("H10", 4) }
+		local refund = self:Has("H10", 3) and _UtilLogic:RandomDouble() * 100 < self.ValhallaRefundChance
+		if not refund then self._T.valCharge = self._T.valCharge - 1 end
+		if self._T.valCharge <= 0 then self._T.cd.H10 = self:Cooldown(sk) end
+		log("[VRF] valhalla use dmg=" .. tostring(hit.dmg) .. " left=" .. tostring(self._T.valCharge) .. " refund=" .. tostring(refund) .. " combo=" .. tostring(r.valhalla.combo) .. " bleed=" .. tostring(r.valhalla.bleed))
+	end
+
+	@ExecSpace("ServerOnly")
 	method void OnSwordCast(table r)
 		-- 검술 1회(스킬 사용 단위): 연계 보너스·충전·발할라·자상·잔흔.
 		local id = r.id
 		local prev = self._T.lastSword
 		self._T.lastSword = id
-		if self:Has("H06", 4) and id ~= "H06" then r.bleedAdd = (r.bleedAdd or 0) + 1 end
 		-- 소환검 충전
 		local s = self._T.summon
 		if s ~= nil then
 			local c = 1
-			if self:Has("H12", 4) then c = 2 end
 			s.charge = s.charge + c + (r.chargeGain or 0)
 			self.SwordCharge = s.charge
-		end
-		-- 발할라 추가 검격 (최소 1초 간격)
-		if self:On("H10") and self:Now() - self._T.lastValhalla >= self.ValhallaGap then
-			self._T.lastValhalla = self:Now()
-			local sk = self._T.skills["H10"]
-			local bonus = 0
-			if self:Has("H10", 3) then bonus = 80 end
-			local hit = self:Strike("H10", sk.proc.pct, bonus, true, false)
-			r.valhalla = { dmg = hit.dmg, crit = hit.crit }
-			if self:Has("H10", 1) then r.valhalla.echo = math.floor(hit.dmg * 0.6 + 0.5) end
-			if self:Has("H10", 5) and s ~= nil then
-				s.charge = s.charge + 1
-				self.SwordCharge = s.charge
-			end
 		end
 		-- 데스폴트 '파멸의 잔흔'
 		local echo = self._T.deathfaultEcho
@@ -1289,7 +1631,7 @@ script HeroCombatLogic extends Logic
 		if r.hitsOnly then return end
 		for _, a in ipairs(r.after) do
 			local info = a
-			_TimerService:SetTimerOnce(function() self:ApplyExtra(target, info.dmg, info.fx, false, r.hitSound) end, info.delay)
+			_TimerService:SetTimerOnce(function() self:ApplyExtra(target, info.dmg, info.fx, false, r.hitSound, r.targets or 1) end, info.delay)
 		end
 		-- 재발동: 이번 타수가 끝난 뒤 같은 스킬 한 번 더
 		if r.recast ~= nil then
@@ -1298,12 +1640,61 @@ script HeroCombatLogic extends Logic
 		end
 		if r.valhalla ~= nil then
 			local v = r.valhalla
-			self:PlayValhalla(target, v.dmg, v.crit, 0.05)
-			if v.echo ~= nil then self:PlayValhalla(target, v.echo, false, 0.45) end
+			self:PlayValhalla(target, v.dmg, v.crit, 0, v.combo == true, v.bleed == true)
 		end
 		-- 기절·자상은 첫 타가 실제로 들어간 뒤 (그사이 쓰러졌으면 걸지 않음)
 		if r.stun ~= nil and n > 0 and self:Alive(target) then self:ApplyStun(mgr, r, target) end
-		if (r.bleedAdd or 0) > 0 and n > 0 and self:Alive(target) then self:AddBleed(r.bleedAdd, r.bleedSrc or r.id, target) end
+		-- 범위로 맞은 줄 선 몬스터도 기절 (그동안 공격하지 않음)
+		if r.stun ~= nil and n > 0 then
+			for _, e in ipairs(r.splashHit or {}) do
+				if isvalid(e) and e ~= target then self:StunQueued(e, r.stun) end
+			end
+		end
+		if r.comaField and n > 0 then
+			_TimerService:SetTimerOnce(function() self:StartComaField(target) end, self.ComaFieldDelay)
+		end
+		-- 디버프·자상: 첫 타에 실제로 맞은 몬스터(맨 앞 + 범위 안 대기열)마다 확률로 (DebuffTable Chance)
+		if n > 0 and (r.debuff ~= nil or (r.bleedAdd or 0) > 0) then
+			local list = {}
+			if self:Alive(target) then table.insert(list, target) end
+			for _, e in ipairs(r.splashHit or {}) do
+				if isvalid(e) and e ~= target then table.insert(list, e) end
+			end
+			self:ApplyStatusTo(r, list)
+		end
+		if r.rageBurst and n > 0 then
+			local info = r
+			_TimerService:SetTimerOnce(function() self:RageBurst(info, target) end, n * (r.gap or 0.06) + 0.1)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RageBurst(table r, Entity target)
+		-- 레이징 블로우 돌파 4: 쌓인 자상을 전부 소비해 중첩마다 폭발(공격력 RagingBurstPct%, 치명 가능).
+		-- 폭발은 RagingBurstTime초 안에 나눠 터지고 위치는 조금씩 랜덤. 중간에 몬스터가 쓰러지면 남은 폭발은 다음 몬스터에게 (ApplyHit 넘김 규칙).
+		local n = #(self._T.bleed or {})
+		if n <= 0 then return end
+		local burst = { hero = true, id = "H08burst", sk = r.sk, hitDmg = {}, hitCrit = {}, after = {}, fx = self.RagingBurstFxRUID, fxScale = 1,
+			policy = "per_hit", hitSound = r.hitSound or "", mobFx = "", fxJitter = self.RagingBurstJitter }
+		for i = 1, n do
+			local s = self:Strike("H08", self.RagingBurstPct, 0, true, false)
+			table.insert(burst.hitDmg, s.dmg)
+			table.insert(burst.hitCrit, s.crit)
+		end
+		self._T.bleed = {}
+		self.Bleed = 0
+		self:UpdateBleedMark(target)
+		local gap = 0
+		if n > 1 then gap = self.RagingBurstTime / (n - 1) end
+		for h = 1, n do
+			local hit = h
+			if h == 1 then
+				self:ApplyHit(burst, target, 1)
+			else
+				_TimerService:SetTimerOnce(function() self:ApplyHit(burst, target, hit) end, (h - 1) * gap)
+			end
+		end
+		log("[VRF] raging burst stacks=" .. tostring(n))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1331,14 +1722,17 @@ script HeroCombatLogic extends Logic
 				local ruid = list[(h - 1) % #list + 1]
 				local ox = 0
 				local oy = 0
-				if r.policy == "per_hit" and h > 1 then
+				if (r.fxJitter or 0) > 0 then
+					ox = (_UtilLogic:RandomDouble() * 2 - 1) * r.fxJitter
+					oy = (_UtilLogic:RandomDouble() * 2 - 1) * r.fxJitter
+				elseif r.policy == "per_hit" and h > 1 then
 					ox = ((h - 1) % 3 - 1) * 0.1
 					oy = (math.floor((h - 1) / 3) % 2) * 0.1
 				end
 				_EffectService:PlayEffect(ruid, target, self:HitPos(target, ox, oy), 0, Vector3(r.fxScale, r.fxScale, 1), false, { FlipX = true })
 			end
 		end
-		if h == 1 and r.mobFx ~= "" and r.id ~= "H04" and r.id ~= "H06" then
+		if h == 1 and r.mobFx ~= "" and r.id ~= "H04" and r.id ~= "H06" and r.id ~= "H03" then
 			_EffectService:PlayEffectAttached(r.mobFx, target, Vector3(0, self._T.monTop, 0), 0, Vector3(1, 1, 1), false)
 		end
 		if r.policy == "per_hit" or h == 1 then self:PlaySound(r.hitSound) end
@@ -1346,29 +1740,72 @@ script HeroCombatLogic extends Logic
 		if dmg <= 0 then return end
 		local crit = r.hitCrit[h] == true
 		local pc = mgr:GetPlayerAttack()
-		if pc ~= nil then pc:ShowProcDamage(target, dmg, crit) end
+		if pc ~= nil then pc:ShowProcDamageAt(target, dmg, crit, (h - 1) * self.HitNumGap) end
+		-- 범위 스킬: 맨 앞 뒤로 줄 선 몬스터도 (최대 타격 수 - 1)마리까지 같은 피해 (앞 몬스터가 이 타격에 쓰러져도 맞음)
+		local splash = {}
+		if (r.targets or 1) > 1 then splash = mgr:SplashTargets(r.targets - 1) end
+		if h == 1 then r.splashHit = splash end
 		mgr:ApplyMonsterDamage(dmg)
 		if crit then mgr:OnPlayerCrit() end
+		for _, e in ipairs(splash) do
+			if not isvalid(e) or e.TransformComponent == nil then continue end
+			if show and r.fx ~= "" then
+				local list = {}
+				for ruid in string.gmatch(r.fx, "[^|]+") do table.insert(list, ruid) end
+				local ruid = list[(h - 1) % #list + 1]
+				local wp = e.TransformComponent.WorldPosition
+				_EffectService:PlayEffect(ruid, e, Vector3(wp.x, wp.y + self._T.monMid, wp.z), 0, Vector3(r.fxScale, r.fxScale, 1), false, { FlipX = true })
+			end
+			mgr:ApplySplashDamage(e, dmg, crit, (h - 1) * self.HitNumGap)
+		end
+		if r.execute ~= nil and h == #r.hitDmg and self:Alive(target) and mgr.MonsterHp > 0 and mgr.MonsterHp <= mgr.MonsterMaxHp * r.execute then
+			local rest = math.ceil(mgr.MonsterHp)
+			if pc ~= nil then pc:ShowProcDamage(target, rest, true) end
+			mgr:ApplyMonsterDamage(rest)
+			log("[VRF] panic execute dmg=" .. tostring(rest))
+		end
 	end
 
 	@ExecSpace("ServerOnly")
-	method void ApplyExtra(Entity target, integer dmg, string fx, boolean crit, string sound)
-		-- 추가 피해 (잔상·귀환·여진·파열 등): 원본 스킬의 피격 그림 + 숫자.
-		if not self:Alive(target) or dmg <= 0 then return end
+	method table ApplyExtra(Entity target, integer dmg, string fx, boolean crit, string sound, integer targets)
+		-- 추가 피해 (잔상·귀환·여진·파열·발할라·작은 검): 원본 스킬의 피격 그림 + 숫자.
+		-- 범위: 맨 앞 몬스터 + 줄 선 몬스터 (targets-1)마리까지 같은 피해. 실제로 맞은 몬스터 목록을 돌려준다.
+		local hit = {}
+		if not self:Alive(target) or dmg <= 0 then return hit end
 		local mgr = self._T.mgr
-		if fx ~= nil and fx ~= "" then
-			local first = string.match(fx, "^([^|]+)") or fx
-			_EffectService:PlayEffect(first, target, self:HitPos(target, 0.08, 0.06), 0, Vector3(1, 1, 1), false, { FlipX = true })
+		local list = { target }
+		if (targets or 1) > 1 then
+			for _, e in ipairs(mgr:SplashTargets(targets - 1)) do table.insert(list, e) end
 		end
+		local first = ""
+		if fx ~= nil and fx ~= "" then first = string.match(fx, "^([^|]+)") or fx end
 		self:PlaySound(sound)
 		local pc = mgr:GetPlayerAttack()
-		if pc ~= nil then pc:ShowProcDamage(target, dmg, crit) end
-		mgr:ApplyMonsterDamage(dmg)
+		for i, e in ipairs(list) do
+			if not isvalid(e) or e.TransformComponent == nil then continue end
+			if first ~= "" then
+				local pos = nil
+				if i == 1 then pos = self:HitPos(e, 0.08, 0.06)
+				else
+					local wp = e.TransformComponent.WorldPosition
+					pos = Vector3(wp.x + 0.08, wp.y + self._T.monMid + 0.06, wp.z)
+				end
+				_EffectService:PlayEffect(first, e, pos, 0, Vector3(1, 1, 1), false, { FlipX = true })
+			end
+			if i == 1 then
+				if pc ~= nil then pc:ShowProcDamage(e, dmg, crit) end
+				mgr:ApplyMonsterDamage(dmg)
+			else
+				mgr:ApplySplashDamage(e, dmg, crit, 0)
+			end
+			table.insert(hit, e)
+		end
+		return hit
 	end
 
 	@ExecSpace("ServerOnly")
-	method void PlayValhalla(Entity target, integer dmg, boolean crit, number delay)
-		-- 발할라 추가 검격: 영웅 혼령 베기 그림(1121055 summon/attack1~6 중 하나)을 몬스터 앞에 그리고 잠시 뒤 피해.
+	method void PlayValhalla(Entity target, integer dmg, boolean crit, number delay, boolean combo, boolean bleed)
+		-- 발할라 추가타: 영웅 혼령 베기 그림(1121055 summon/attack1~6 중 하나)을 몬스터 앞에 그리고 0.3초 뒤 피해 (돌파 1 콤보, 돌파 4 자상).
 		local list = {}
 		for ruid in string.gmatch(self.ValhallaSlashRUIDs, "[^|]+") do table.insert(list, ruid) end
 		_TimerService:SetTimerOnce(function()
@@ -1376,7 +1813,20 @@ script HeroCombatLogic extends Logic
 			local ruid = list[_UtilLogic:RandomIntegerRange(1, #list)]
 			local wp = target.TransformComponent.WorldPosition
 			_EffectService:PlayEffect(ruid, target, Vector3(wp.x - 0.35, wp.y, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
-			_TimerService:SetTimerOnce(function() self:ApplyExtra(target, dmg, "", crit, "d6b71bed8f0d450fb1fe81ba80a05362") end, 0.3)
+			_TimerService:SetTimerOnce(function()
+				if not self:Alive(target) then return end
+				local vt = 1
+				local vsk = self._T.skills["H10"]
+				if vsk ~= nil then vt = vsk.proc.targets or 1 end
+				local hit = self:ApplyExtra(target, dmg, "", crit, "d6b71bed8f0d450fb1fe81ba80a05362", vt)
+				if combo then self:AddCombo(1) end
+				-- 돌파 4: 맞은 몬스터마다 확률로 자상 1중첩
+				if bleed then
+					for _, e in ipairs(hit) do
+						if _UtilLogic:RandomDouble() * 100 < self.ValhallaBleedChance then self:AddBleedTo(1, "H10", e) end
+					end
+				end
+			end, 0.3)
 		end, delay)
 	end
 
@@ -1388,22 +1838,52 @@ script HeroCombatLogic extends Logic
 		local id = sk.id
 		local dur = sk.buffTime * (1 + 0.25 * self:TempoMul(id))
 		if id == "H15" then return end
+		-- 인레이지 돌파 2: 지속시간 +50%
+		if id == "H05" and self:Has(id, 2) then dur = dur * (1 + self.InrageDurBonusPct / 100) end
+		-- 에픽 어드벤쳐 돌파 4: 지속 +5초
+		if id == "H11" and self:Has(id, 4) then dur = dur + self.EpicDurUp end
 		self._T.till[id] = self:Now() + dur
 		local power = self:BuffPower(id)
 		if id == "H05" then
 			local v = 25 * power
-			if self:Has(id, 1) then v = v + 15 end
 			mgr:AddBuff("heroH05", "AtkPct", v, dur, 0)
-		elseif id == "H10" then
-			local v = 30 * power
-			if self:Has(id, 4) then v = v + 18 end
-			mgr:AddBuff("heroH10", "AtkPct", v, dur, 0)
-		elseif id == "H11" then
-			if self:Has(id, 3) then self:AddMana(15) end
-			-- 모든 피해 증가는 AllDmgPct에서 지속 여부로 계산 (표시용 빈 버프)
-			mgr:AddBuff("heroH11", "", 0, dur, 0)
+			-- 돌파 1 '광분': 지속 중 공격속도 +20%
+			if self:Has(id, 1) then mgr:AddBuff("heroH05spd", "Speed", self.InrageSpeedPct, dur, 0) end
+			-- 돌파 5 '강철 의지': 지속 중 받는 피해 -20%
+			if self:Has(id, 5) then mgr:AddBuff("heroH05def", "DmgReduce", self.InrageReducePct, dur, 0) end
+			-- 지속 동안 캐릭터에 반복 이펙트
+			self:RemoveSerial("H05aura")
 			local player = mgr:HeroPlayer()
-			if isvalid(player) then _EffectService:PlayEffectAttached("69e6caf1648f483aa70fcf5e83f55609", player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
+			if isvalid(player) then self._T.serials.H05aura = _EffectService:PlayEffectAttached(self.InrageAuraRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), true) end
+		elseif id == "H11" then
+			-- 기본: 체력 회복 + 지속 동안 보호막 (위력 별은 회복·보호막 양에 반영)
+			local maxHp = tonumber(mgr.PlayerMaxHp) or 0
+			local healPct = self.EpicHealPct
+			if self:Has(id, 3) then healPct = self.EpicHealUpPct end
+			mgr:HealPlayer(maxHp * healPct * power / 100)
+			local shieldPct = self.EpicShieldPct
+			if self:Has(id, 1) then shieldPct = self.EpicShieldUpPct end
+			shieldPct = shieldPct * power
+			self:EndEpicShield()
+			self._T.epicTick = 0
+			self._T.epicLast = 0
+			self._T.epicAtk = 0
+			if self:Has(id, 5) then
+				-- 돌파 5: 보호막 대신 공격력 (최대 체력 대비 보호막 % = 공격력 %)
+				self._T.epicAtk = shieldPct
+				mgr:AddBuff("heroH11", "AtkPct", self._T.epicAtk, dur, 0)
+			else
+				mgr:AddBuff("heroH11", "", 0, dur, 0)
+				local amount = math.floor(maxHp * shieldPct / 100 + 0.5)
+				mgr._T.shield = (mgr._T.shield or 0) + amount
+				self._T.epicShield = amount
+			end
+			local amount = self._T.epicShield
+			-- 시전 그림(동작 연출)과 함께 보호막 그림을 지속 동안 반복
+			self:RemoveSerial("H11aura")
+			local player = mgr:HeroPlayer()
+			if isvalid(player) then self._T.serials.H11aura = _EffectService:PlayEffectAttached(self.EpicAuraRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), true) end
+			log("[VRF] epic heal+shield maxHp=" .. tostring(maxHp) .. " heal%=" .. tostring(healPct) .. " shield=" .. tostring(amount) .. " atk%=" .. tostring(self._T.epicAtk) .. " dur=" .. tostring(dur) .. " hp=" .. tostring(mgr.PlayerHp))
 		end
 		local crit = self:Star(id, "StarCrit")
 		if crit > 0 then
@@ -1432,19 +1912,144 @@ script HeroCombatLogic extends Logic
 
 	@ExecSpace("ServerOnly")
 	method void ApplyStun(Component mgr, table r, Entity target)
-		-- 코마 기절: 몬스터 다음 공격 지연 + 머리 위 기절 별(지속 동안 반복). 약점·제압의 보상 돌파.
+		-- 코마 기절: 몬스터 다음 공격 지연 + 머리 위 기절 별(지속 동안 반복).
 		local sec = r.stun
-		mgr:HeroSetStun(sec)
-		self:RemoveSerial("stun")
-		if isvalid(target) then
-			self._T.serials.stun = _EffectService:PlayEffectAttached(self.StunFxRUID, target, Vector3(0, self._T.monTop + 0.05, 0), 0, Vector3(1, 1, 1), true)
-		end
-		self._T.till.stunFx = self:Now() + sec
-		if self:Has("H04", 4) then
-			mgr:HeroSetVuln(20, 4)
-		end
-		if self:Has("H04", 5) then self._T.till.H04w = self:Now() + 3 end
+		self:StunTarget(mgr, sec, target)
 		log("[VRF] hero stun " .. tostring(sec) .. "s")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void EpicCdCut(integer hits)
+		-- 에픽 어드벤쳐 돌파 2 '끝나지 않는 모험': 직접 공격 1타마다 남은 쿨타임 -0.5초.
+		if hits <= 0 or not self:Has("H11", 2) then return end
+		local cd = self._T.cd.H11 or 0
+		if cd <= 0 then return end
+		self._T.cd.H11 = math.max(0, cd - self.EpicCdPerHit * hits)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void EndEpicShield()
+		-- 에픽 어드벤쳐 보호막 중 남은 몫을 걷어낸다 (층 보호막 등 다른 보호막은 그대로).
+		local amount = self._T.epicShield or 0
+		self._T.epicShield = 0
+		local mgr = self._T.mgr
+		if amount <= 0 or mgr == nil then return end
+		local cur = mgr._T.shield or 0
+		mgr._T.shield = math.max(0, cur - math.min(cur, amount))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickEpic()
+		-- 에픽 어드벤쳐: 지속 중 1초마다 돌파 3 회복·돌파 4 보호막(돌파 5면 공격력). 끝나면 보호막 그림과 남은 보호막 제거.
+		if self:On("H11") then
+			local mgr = self._T.mgr
+			if mgr == nil then return end
+			if self:Now() - (self._T.epicLast or 0) < 1 then return end
+			self._T.epicLast = self:Now()
+			self._T.epicTick = (self._T.epicTick or 0) + 1
+			if self._T.epicTick <= 1 then return end
+			local maxHp = tonumber(mgr.PlayerMaxHp) or 0
+			if self:Has("H11", 3) then mgr:HealPlayer(maxHp * self.EpicRegenPct / 100) end
+			if self:Has("H11", 4) then
+				if self:Has("H11", 5) then
+					self._T.epicAtk = (self._T.epicAtk or 0) + self.EpicShieldRegenPct
+					mgr:AddBuff("heroH11", "AtkPct", self._T.epicAtk, (self._T.till.H11 or 0) - self:Now(), 0)
+				else
+					local add = math.floor(maxHp * self.EpicShieldRegenPct / 100 + 0.5)
+					mgr._T.shield = (mgr._T.shield or 0) + add
+					self._T.epicShield = (self._T.epicShield or 0) + add
+				end
+			end
+			log("[VRF] epic tick " .. tostring(self._T.epicTick) .. " hp=" .. tostring(mgr.PlayerHp) .. " shield=" .. tostring(mgr._T.shield or 0) .. " atk%=" .. tostring(self._T.epicAtk or 0))
+			return
+		end
+		if (self._T.serials.H11aura or 0) ~= 0 then self:RemoveSerial("H11aura") end
+		if (self._T.epicShield or 0) > 0 then
+			self:EndEpicShield()
+			log("[VRF] epic shield expired")
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickInrage()
+		-- 인레이지: 장착했고 쿨타임이 끝났으면 자동 발동, 지속이 끝나면 캐릭터 이펙트 제거.
+		if (self._T.serials.H05aura or 0) ~= 0 and not self:On("H05") then self:RemoveSerial("H05aura") end
+		if not self:Equipped("H05") or self._T.inragePending or self._T.noAutoBuff then return end
+		local mgr = self._T.mgr
+		if mgr == nil or mgr.RunState ~= "FIGHT" or (self._T.cd.H05 or 0) > 0 then return end
+		self:StartInrage()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StartInrage()
+		-- 인레이지 발동: 쿨타임 시작 → 시전 그림 재생 → 그림이 끝나면 버프.
+		local sk = self._T.skills.H05
+		local mgr = self._T.mgr
+		if sk == nil or mgr == nil then return end
+		self._T.cd.H05 = self:Cooldown(sk)
+		self._T.inragePending = true
+		local p = sk.proc
+		local cast = ""
+		if p ~= nil then cast = string.match(p.casterFx or "", "^([^|:]+)") or "" end
+		local wait = 0
+		local player = mgr:HeroPlayer()
+		if cast ~= "" and isvalid(player) then
+			_EffectService:PlayEffectAttached(cast, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+			wait = self:ClipLen(cast)
+		end
+		if p ~= nil then self:PlaySound(p.useSound or "") end
+		local r = { sk = sk, id = "H05" }
+		_TimerService:SetTimerOnce(function()
+			self._T.inragePending = false
+			if self._T.mgr == nil then return end
+			self:ApplyBuff(r)
+		end, math.max(0.05, wait))
+		log("[VRF] inrage start cast=" .. cast .. " wait=" .. string.format("%.2f", wait))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StunTarget(Component mgr, number sec, Entity target)
+		-- 기절만 걸기 (몬스터 다음 공격 지연 + 머리 위 기절 별). 이미 더 길게 남아 있으면 그대로.
+		mgr:HeroSetStun(sec)
+		self:SetIcon("stun", self.StunFxRUID, 0.05, self.IconWidth, target)
+		self._T.till.stunFx = math.max(self._T.till.stunFx or 0, self:Now() + sec)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StartComaField(Entity target)
+		-- 코마 충격파 장판: 몬스터 발밑에 ComaFieldTime초 동안 남고, 생기자마자부터 ComaFieldTick초마다 기절. 다시 쓰면 새로 깔린다.
+		if not self:Alive(target) then return end
+		self:EndComaField()
+		local wp = target.TransformComponent.WorldPosition
+		local sc = self.ComaFieldScale
+		self._T.serials.comaField = _EffectService:PlayEffect(self.ComaFieldRUID, target, Vector3(wp.x + self.ComaFieldOffsetX * sc, wp.y, wp.z), 0, Vector3(sc, sc, 1), true)
+		self._T.comaField = { target = target, endAt = self:Now() + self.ComaFieldTime, nextAt = self:Now() }
+		log("[VRF] coma field start " .. tostring(self.ComaFieldTime) .. "s")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickComaField()
+		-- 충격파 장판: 틱마다 기절, 시간이 끝나거나 몬스터가 쓰러지면 정리.
+		local cf = self._T.comaField
+		if cf == nil then return end
+		local now = self:Now()
+		if now >= cf.endAt or not self:Alive(cf.target) then
+			self:EndComaField()
+			return
+		end
+		if now >= cf.nextAt then
+			cf.nextAt = cf.nextAt + self.ComaFieldTick
+			local mgr = self._T.mgr
+			if mgr ~= nil then self:StunTarget(mgr, self.ComaFieldStun, cf.target) end
+			log("[VRF] coma field stun " .. tostring(self.ComaFieldStun) .. "s")
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void EndComaField()
+		-- 충격파 장판 제거.
+		self._T.comaField = nil
+		self:RemoveSerial("comaField")
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1455,29 +2060,423 @@ script HeroCombatLogic extends Logic
 		self._T.serials[key] = 0
 	end
 
+	-- ========== 디버프 (DebuffTable) ==========
+
+	@ExecSpace("ServerOnly")
+	method void ApplyDebuff(string id, Entity target)
+		-- 지금 몬스터에 디버프를 건다 (다시 걸면 시간 갱신). 몬스터 머리 위 그림 반복. 지속 피해는 1초 뒤 첫 틱.
+		local def = self._T.debuffDefs[id]
+		if def == nil or not isvalid(target) then return end
+		local dur = def.duration
+		if id == "IncisingBurn" and self:Has("H06", 4) then dur = self.IncisingBurnUpTime end
+		self._T.debuff[id] = self:Now() + dur
+		if def.effect == "DoT" then
+			-- 지속시간 5초면 1~5초에 5번 들어가도록 끝을 살짝 늦춘다
+			self._T.debuff[id] = self._T.debuff[id] + 0.1
+			if self._T.dotNext == nil then self._T.dotNext = {} end
+			self._T.dotNext[id] = self:Now() + 1
+		end
+		if def.fx ~= "" then self:SetIcon("debuff_" .. id, def.fx, 0, self.IconWidth, target) end
+		log("[VRF] debuff " .. id .. " " .. tostring(dur) .. "s")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickDebuffs()
+		-- 시간이 다 된 디버프와 그 그림 제거. 지속 피해(DoT) 디버프는 1초마다 공격력 Value% 피해.
+		if self._T.dotNext == nil then self._T.dotNext = {} end
+		for id, till in pairs(self._T.debuff or {}) do
+			local def = self._T.debuffDefs[id]
+			if def ~= nil and def.effect == "DoT" and self:Now() >= (self._T.dotNext[id] or 0) and self:Now() < till then
+				self._T.dotNext[id] = self:Now() + 1
+				self:DotDamage(def, id)
+			end
+			if self:Now() >= till then
+				self._T.debuff[id] = nil
+				self._T.dotNext[id] = nil
+				self:ClearIcon("debuff_" .. id)
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DotDamage(table def, string id)
+		-- 지속 피해 1회: 공격력 × Value% × (모든 피해 증가) × (자상 방어력 감소).
+		-- 인사이징 화상: 별 위력·돌파 4 '타오르는 칼날'(+100%) 반영, 돌파 5 '업화'면 몬스터 현재 체력 3% 추가 (최대 공격력 300%).
+		local mgr = self._T.mgr
+		if mgr == nil or mgr.RunState ~= "FIGHT" then return end
+		local target = mgr:HeroMonster()
+		if not self:Alive(target) then return end
+		local dmg = self:DotValue(def, id, tonumber(mgr.MonsterHp) or 0, self:DefDownPct())
+		local pc = mgr:GetPlayerAttack()
+		if pc ~= nil then pc:ShowProcDamage(target, dmg, false) end
+		mgr:ApplyMonsterDamage(dmg)
+		log("[VRF] dot " .. def.name .. " dmg=" .. tostring(dmg))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer DotValue(table def, string id, number hp, number defDown)
+		-- 지속 피해 1회 값: 공격력 × Value% × (모든 피해 증가) × (자상 방어력 감소). 인사이징 화상은 별 위력·돌파 4·5 반영.
+		local mgr = self._T.mgr
+		local pct = def.value
+		local extra = 0
+		if id == "IncisingBurn" then
+			local up = self:Star("H06", "StarPower")
+			if self:Has("H06", 4) then up = up + self.IncisingBurnUpPct end
+			pct = pct * self:LvMul("H06") * (1 + up / 100)
+			if self:Has("H06", 5) then
+				extra = math.min(hp * self.IncisingHpPct / 100, mgr.PlayerAtk * self.IncisingHpCapPct / 100)
+			end
+		end
+		return math.max(1, math.floor((mgr.PlayerAtk * pct / 100 + extra) * (1 + self:AllDmgPct() / 100) * (1 + defDown / 100) + 0.5))
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean RollStatus(string id)
+		-- 디버프 적용 확률 (DebuffTable Chance %, 없으면 100%).
+		local def = self._T.debuffDefs[id]
+		local c = 100
+		if def ~= nil then c = def.chance or 100 end
+		return _UtilLogic:RandomDouble() * 100 < c
+	end
+
+	@ExecSpace("ServerOnly")
+	method table QStat(Entity e)
+		-- 줄 서 있는 몬스터의 자상·디버프 상태 (맨 앞으로 나오면 OnMonsterSpawn에서 넘겨받음).
+		if self._T.qstat == nil then self._T.qstat = {} end
+		local s = self._T.qstat[e]
+		if s == nil then
+			s = { bleed = {}, bleedUntil = 0, debuff = {}, dotNext = {} }
+			self._T.qstat[e] = s
+		end
+		return s
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyStatusTo(table r, table list)
+		-- 스킬 디버프·자상을 맞은 몬스터마다 확률로.
+		for _, e in ipairs(list) do
+			if r.debuff ~= nil and self:RollStatus(r.debuff) then self:ApplyDebuffTo(r.debuff, e) end
+			if (r.bleedAdd or 0) > 0 and self:RollStatus("Bleed") then self:AddBleedTo(r.bleedAdd, r.bleedSrc or r.id, e) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddBleedTo(integer n, string src, Entity e)
+		-- 자상 n중첩: 맨 앞 몬스터면 기존 자상, 줄 선 몬스터면 그 몬스터 상태에 쌓는다 (소드 일루전 스택도 실제로 늘어난 만큼).
+		local mgr = self._T.mgr
+		if mgr ~= nil and e == mgr:HeroMonster() then
+			self:AddBleed(n, src, e)
+			return
+		end
+		if not isvalid(e) then return end
+		local def = self._T.debuffDefs.Bleed
+		local maxStack = self.BleedMax
+		local dur = self.BleedTime
+		if def ~= nil then
+			maxStack = def.maxStack
+			dur = def.duration
+		end
+		local s = self:QStat(e)
+		local coef = self.BleedPct * self:LvMul(src)
+		local before = #s.bleed
+		for i = 1, n do
+			table.insert(s.bleed, { coef = coef, src = src })
+			if #s.bleed > maxStack then table.remove(s.bleed, 1) end
+		end
+		local gained = #s.bleed - before
+		if self:Equipped("H14") and gained > 0 then
+			local cap = self.IllusionMaxStack
+			if self:Has("H14", 5) then cap = self.IllusionMaxStackUp end
+			self._T.illusionStack = math.min(cap, (self._T.illusionStack or 0) + gained)
+		end
+		s.bleedUntil = self:Now() + dur
+		self:QRefreshIcons(e, s)
+		log("[VRF] queued bleed stacks=" .. tostring(#s.bleed) .. " src=" .. tostring(src))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyDebuffTo(string id, Entity e)
+		-- 디버프: 맨 앞 몬스터면 기존 디버프, 줄 선 몬스터면 그 몬스터 상태에 (지속 피해는 1초 뒤 첫 틱).
+		local mgr = self._T.mgr
+		if mgr ~= nil and e == mgr:HeroMonster() then
+			self:ApplyDebuff(id, e)
+			return
+		end
+		local def = self._T.debuffDefs[id]
+		if def == nil or not isvalid(e) then return end
+		local dur = def.duration
+		if id == "IncisingBurn" and self:Has("H06", 4) then dur = self.IncisingBurnUpTime end
+		local s = self:QStat(e)
+		s.debuff[id] = self:Now() + dur
+		if def.effect == "DoT" then
+			s.debuff[id] = s.debuff[id] + 0.1
+			s.dotNext[id] = self:Now() + 1
+		end
+		self:QRefreshIcons(e, s)
+		log("[VRF] queued debuff " .. id .. " " .. tostring(dur) .. "s")
+	end
+
+	@ExecSpace("ServerOnly")
+	method number QueuedMissChance(Entity e)
+		-- 줄 선 몬스터가 암흑에 걸려 있으면 그 빗나감 확률.
+		local s = nil
+		if self._T.qstat ~= nil then s = self._T.qstat[e] end
+		if s == nil then return 0 end
+		local till = s.debuff.Darkness
+		if till == nil or self:Now() >= till then return 0 end
+		local def = self._T.debuffDefs.Darkness
+		if def == nil then return 0 end
+		return def.value
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickQueuedStatus()
+		-- 줄 선 몬스터의 자상 만료·지속 피해 틱 (피해는 대기열 체력으로). 죽은 몬스터 상태는 버린다.
+		local mgr = self._T.mgr
+		if mgr == nil or self._T.qstat == nil then return end
+		for e, s in pairs(self._T.qstat) do
+			local mc = isvalid(e) and e:GetComponent("script.TowerMonster") or nil
+			if mc == nil or mc.IsDead then
+				self._T.qstat[e] = nil
+				continue
+			end
+			if not mc.IsQueued then continue end
+			local changed = false
+			if #s.bleed > 0 and self:Now() >= s.bleedUntil then
+				s.bleed = {}
+				changed = true
+			end
+			if (s.stunFx or false) and self:Now() >= mc.StunUntil then
+				s.stunFx = false
+				changed = true
+			end
+			local defDown = 0
+			local bdef = self._T.debuffDefs.Bleed
+			if bdef ~= nil then defDown = #s.bleed * bdef.value end
+			for id, till in pairs(s.debuff) do
+				local def = self._T.debuffDefs[id]
+				if def ~= nil and def.effect == "DoT" and self:Now() >= (s.dotNext[id] or 0) and self:Now() < till then
+					s.dotNext[id] = self:Now() + 1
+					mgr:ApplySplashDamage(e, self:DotValue(def, id, mc.Hp, defDown), false, 0)
+				end
+				if self:Now() >= till then
+					s.debuff[id] = nil
+					s.dotNext[id] = nil
+					changed = true
+				end
+			end
+			if changed and isvalid(e) then self:QRefreshIcons(e, s) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StunQueued(Entity e, number sec)
+		-- 줄 선 몬스터 기절: 그동안 공격하지 않고 머리 위에 기절 별. 이미 더 길게 남아 있으면 그대로.
+		local mc = isvalid(e) and e:GetComponent("script.TowerMonster") or nil
+		if mc == nil or mc.IsDead then return end
+		mc.StunUntil = math.max(mc.StunUntil, self:Now() + sec)
+		local s = self:QStat(e)
+		s.stunFx = true
+		self:QRefreshIcons(e, s)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void QRefreshIcons(Entity e, table s)
+		-- 줄 선 몬스터 머리 위 상태 표시 (기절 → 디버프 → 자상 숫자)를 다시 그린다. 맨 앞 몬스터 표시와 같은 배치.
+		if s.serials == nil then s.serials = {} end
+		for _, serial in ipairs(s.serials) do
+			if serial ~= nil and serial ~= 0 then _EffectService:RemoveEffect(serial) end
+		end
+		s.serials = {}
+		if not isvalid(e) then return end
+		local icons = {}
+		if s.stunFx then table.insert(icons, { ruid = self.StunFxRUID, y = 0.05, w = self.IconWidth, sc = 1 }) end
+		local ids = {}
+		for id, till in pairs(s.debuff) do
+			if till > self:Now() then table.insert(ids, id) end
+		end
+		table.sort(ids)
+		for _, id in ipairs(ids) do
+			local def = self._T.debuffDefs[id]
+			if def ~= nil and def.fx ~= "" then table.insert(icons, { ruid = def.fx, y = 0, w = self.IconWidth, sc = 1 }) end
+		end
+		local n = #s.bleed
+		if n > 0 then
+			local list = {}
+			for ruid in string.gmatch(self.BleedMarkRUIDs, "[^|]+") do table.insert(list, ruid) end
+			local ruid = list[math.min(n, #list)]
+			if ruid ~= nil then table.insert(icons, { ruid = ruid, y = self.BleedMarkY, w = self.BleedIconWidth, sc = self.BleedIconScale }) end
+		end
+		local total = 0
+		for i, ic in ipairs(icons) do
+			total = total + ic.w
+			if i > 1 then total = total + self.IconGap end
+		end
+		local x = -total / 2
+		local top = self._T.monTop or 1.0
+		for _, ic in ipairs(icons) do
+			table.insert(s.serials, _EffectService:PlayEffectAttached(ic.ruid, e, Vector3(x + ic.w / 2, top + ic.y, 0), 0, Vector3(ic.sc, ic.sc, 1), true))
+			x = x + ic.w + self.IconGap
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadQStat(Entity monster, table s)
+		-- 맨 앞으로 나온 몬스터: 줄 서 있을 때 걸린 자상·디버프를 이어받는다 (머리 위 그림 포함).
+		-- 줄 서 있을 때 붙인 머리 위 표시는 지우고 맨 앞 몬스터 표시로 다시 그린다
+		for _, serial in ipairs(s.serials or {}) do
+			if serial ~= nil and serial ~= 0 then _EffectService:RemoveEffect(serial) end
+		end
+		s.serials = {}
+		if not self:Alive(monster) then return end
+		local mc = monster:GetComponent("script.TowerMonster")
+		if mc ~= nil and mc.StunUntil > self:Now() then
+			local mgr = self._T.mgr
+			if mgr ~= nil then self:StunTarget(mgr, mc.StunUntil - self:Now(), monster) end
+		end
+		if #s.bleed > 0 and self:Now() < s.bleedUntil then
+			self._T.bleed = s.bleed
+			self._T.bleedUntil = s.bleedUntil
+			self.Bleed = #s.bleed
+			self._T.bleedMarkN = 0
+			self:UpdateBleedMark(monster)
+		end
+		if self._T.dotNext == nil then self._T.dotNext = {} end
+		for id, till in pairs(s.debuff) do
+			if till > self:Now() then
+				self._T.debuff[id] = till
+				if s.dotNext[id] ~= nil then self._T.dotNext[id] = s.dotNext[id] end
+				local def = self._T.debuffDefs[id]
+				if def ~= nil and def.fx ~= "" then self:SetIcon("debuff_" .. id, def.fx, 0, self.IconWidth, monster) end
+			end
+		end
+		log("[VRF] queued status carried bleed=" .. tostring(#self._T.bleed))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ClearDebuffs()
+		-- 몬스터 교체·판 종료: 디버프 전부 제거.
+		for id, _ in pairs(self._T.debuff or {}) do self:ClearIcon("debuff_" .. id) end
+		self._T.debuff = {}
+	end
+
+	@ExecSpace("ServerOnly")
+	method number MissChance()
+		-- 몬스터 공격이 빗나갈 확률(%): 걸려 있는 MissChance 디버프(암흑 등) 합, 최대 100. TowerRunManager가 몬스터 공격 때 읽는다.
+		if not self.Active then return 0 end
+		local sum = 0
+		for id, till in pairs(self._T.debuff or {}) do
+			local def = self._T.debuffDefs[id]
+			if def ~= nil and def.effect == "MissChance" and self:Now() < till then sum = sum + def.value end
+		end
+		return math.min(100, sum)
+	end
+
 	-- ========== 자상 ==========
+
+	@ExecSpace("ServerOnly")
+	method void UpdateBleedMark(Entity target)
+		-- 자상 중첩 수 그림 ("x1"~"x20")을 몬스터 머리 위에. 중첩이 바뀔 때만 그림을 바꾼다.
+		local n = #self._T.bleed
+		if n == (self._T.bleedMarkN or 0) then return end
+		self._T.bleedMarkN = n
+		if n <= 0 then
+			self:ClearIcon("bleed")
+			return
+		end
+		local list = {}
+		for ruid in string.gmatch(self.BleedMarkRUIDs, "[^|]+") do table.insert(list, ruid) end
+		local ruid = list[math.min(n, #list)]
+		if ruid == nil then return end
+		self:SetIcon("bleed", ruid, self.BleedMarkY, self.BleedIconWidth, target)
+	end
+
+	-- ========== 머리 위 상태 표시 (가로 가운데 정렬) ==========
+
+	@ExecSpace("ServerOnly")
+	method void SetIcon(string key, string ruid, number yOff, number width, Entity target)
+		-- 상태 표시 하나를 켜거나 그림을 바꾼다. 바뀌었을 때만 전체를 다시 배치한다.
+		if self._T.icons == nil then self._T.icons = {} end
+		if isvalid(target) then self._T.iconTarget = target end
+		local cur = self._T.icons[key]
+		if cur ~= nil and cur.ruid == ruid then return end
+		self._T.icons[key] = { ruid = ruid, y = yOff, w = width }
+		self:LayoutIcons()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ClearIcon(string key)
+		-- 상태 표시 하나를 끄고, 남은 표시를 다시 가운데 정렬한다.
+		if self._T.icons == nil or self._T.icons[key] == nil then return end
+		self._T.icons[key] = nil
+		self:LayoutIcons()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LayoutIcons()
+		-- 머리 위 상태 표시를 기절 → 디버프(이름순) → 자상 순으로 가로로 놓고 전체를 몬스터 가운데에 맞춘다.
+		-- 붙인 이펙트는 위치를 옮길 수 없어 지우고 새 위치에 다시 붙인다.
+		for key, _ in pairs(self._T.serials) do
+			if string.sub(key, 1, 5) == "icon_" then self:RemoveSerial(key) end
+		end
+		local target = self._T.iconTarget
+		if not isvalid(target) then return end
+		local keys = {}
+		for key, _ in pairs(self._T.icons) do table.insert(keys, key) end
+		local function rank(k)
+			if k == "stun" then return 0 end
+			if k == "bleed" then return 2 end
+			return 1
+		end
+		table.sort(keys, function(a, b)
+			if rank(a) ~= rank(b) then return rank(a) < rank(b) end
+			return a < b
+		end)
+		local total = 0
+		for i, key in ipairs(keys) do
+			total = total + self._T.icons[key].w
+			if i > 1 then total = total + self.IconGap end
+		end
+		local x = -total / 2
+		for _, key in ipairs(keys) do
+			local ic = self._T.icons[key]
+			local cx = x + ic.w / 2
+			local sc = 1
+			if key == "bleed" then sc = self.BleedIconScale end
+			self._T.serials["icon_" .. key] = _EffectService:PlayEffectAttached(ic.ruid, target, Vector3(cx, self._T.monTop + ic.y, 0), 0, Vector3(sc, sc, 1), true)
+			x = x + ic.w + self.IconGap
+		end
+		log("[VRF] icons layout n=" .. tostring(#keys) .. " " .. table.concat(keys, ","))
+	end
 
 	@ExecSpace("ServerOnly")
 	method void AddBleed(integer n, string src, Entity target)
 		-- 자상 n중첩 (중첩별 출처·계수 보관, 전체 지속시간 갱신, 최대 10/15). 몬스터에 출혈 그림 반복.
+		local def = self._T.debuffDefs.Bleed
 		local maxStack = self.BleedMax
 		local dur = self.BleedTime
-		if self:Has("H06", 3) then
-			maxStack = 15
-			dur = 9
+		if def ~= nil then
+			maxStack = def.maxStack
+			dur = def.duration
 		end
 		local coef = self.BleedPct * self:LvMul(src)
-		if src == "H06" then coef = coef * (1 + (self:Star("H06", "StarPower") + (self:Has("H06", 1) and 60 or 0)) / 100) end
+		local before = #self._T.bleed
 		for i = 1, n do
 			table.insert(self._T.bleed, { coef = coef, src = src })
 			if #self._T.bleed > maxStack then table.remove(self._T.bleed, 1) end
 		end
+		-- 소드 일루전 환영 스택: 실제로 늘어난 자상 중첩만큼 +1 (최대 중첩에서 갱신만 된 경우는 제외)
+		local gained = #self._T.bleed - before
+		if self:Equipped("H14") and gained > 0 then
+			-- 돌파 5 '환영의 극한': 최대 40스택
+			local cap = self.IllusionMaxStack
+			if self:Has("H14", 5) then cap = self.IllusionMaxStackUp end
+			self._T.illusionStack = math.min(cap, (self._T.illusionStack or 0) + gained)
+		end
 		self._T.bleedUntil = self:Now() + dur
 		self.Bleed = #self._T.bleed
-		local s = self._T.serials.bleed
-		if (s == nil or s == 0) and isvalid(target) then
-			self._T.serials.bleed = _EffectService:PlayEffectAttached(self.BleedFxRUID, target, Vector3(0, self._T.monMid, 0), 0, Vector3(1, 1, 1), true)
-		end
+		self:UpdateBleedMark(target)
+		log("[VRF] bleed stacks=" .. tostring(#self._T.bleed) .. " src=" .. tostring(src))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1485,7 +2484,8 @@ script HeroCombatLogic extends Logic
 		-- 자상 전부 제거.
 		self._T.bleed = {}
 		self.Bleed = 0
-		self:RemoveSerial("bleed")
+		self._T.bleedMarkN = 0
+		self:ClearIcon("bleed")
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1497,20 +2497,18 @@ script HeroCombatLogic extends Logic
 			self:ClearBleed()
 			return
 		end
-		self._T.bleedTick = self._T.bleedTick - delta
-		if self._T.bleedTick > 0 then return end
-		self._T.bleedTick = self._T.bleedTick + 1
-		local sum = 0
-		for _, b in ipairs(self._T.bleed) do sum = sum + b.coef end
-		local mul = 1 + self:AllDmgPct() / 100
-		if self:On("H11") and self:Has("H11", 5) then mul = mul * 1.6 end
-		local dmg = math.max(1, math.floor(mgr.PlayerAtk * sum / 100 * mul + 0.5))
-		local target = mgr:HeroMonster()
-		if isvalid(target) then
-			local pc = mgr:GetPlayerAttack()
-			if pc ~= nil then pc:ShowProcDamage(target, dmg, false) end
-		end
-		mgr:ApplyMonsterDamage(dmg)
+		-- 자상은 지속 피해가 아니라 방어력 감소 디버프 (DefDownPct) — 여기서는 시간 만료만 처리
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DefDownPct()
+		-- 자상 방어력 감소(%): 중첩 × 중첩당 수치(디버프 표 Bleed, 기본 5%). 몬스터가 받는 모든 피해가 그만큼 늘어난다.
+		local n = #(self._T.bleed or {})
+		if n <= 0 then return 0 end
+		local per = 5
+		local def = self._T.debuffDefs ~= nil and self._T.debuffDefs.Bleed or nil
+		if def ~= nil then per = def.value end
+		return n * per
 	end
 
 	-- ========== 소환검 ==========
@@ -1533,27 +2531,49 @@ script HeroCombatLogic extends Logic
 	end
 
 	@ExecSpace("ServerOnly")
+	method table SwordFxOpts()
+		-- 소환검 그림 옵션: 좌우 뒤집기 + 캐릭터(아바타)와 같은 레이어에서 한 칸 뒤.
+		local opts = { FlipX = true }
+		local mgr = self._T.mgr
+		local player = mgr ~= nil and mgr:HeroPlayer() or nil
+		if isvalid(player) and isvalid(player.AvatarRendererComponent) then
+			opts.SortingLayer = player.AvatarRendererComponent.SortingLayer
+			opts.OrderInLayer = player.AvatarRendererComponent.OrderInLayer - 1
+		end
+		return opts
+	end
+
+	@ExecSpace("ServerOnly")
 	method void StartSummon(table r)
 		-- 소드 오브 버닝 소울: 캐릭터 뒤에 불타는 검 소환 (재발동은 시간 갱신). 등장 그림 → 대기 그림 반복.
 		local mgr = self._T.mgr
 		local dur = r.sk.buffTime
+		if self:Has("H12", 1) then dur = self.SwordDurUp end
+		-- 돌파 3: 소환할 때 콤보를 모두 소모, 콤보 1당 소환검 피해 +SwordComboPct%
+		local comboBonus = 0
+		if self:Has("H12", 3) and self.Combo > 0 then
+			local n = self.Combo
+			if self:UseCombo(n) then comboBonus = n * self.SwordComboPct end
+		end
 		local s = self._T.summon
 		if s ~= nil then
 			s.left = dur
 			s.ext = 0
+			s.comboBonus = comboBonus
 			self.SummonLeft = s.left
+			log("[VRF] hero summon refresh dur=" .. tostring(dur) .. " comboBonus=" .. tostring(comboBonus))
 			return
 		end
-		s = { left = dur, timer = 0.6, charge = 0, auto = 2, ext = 0 }
+		s = { left = dur, timer = 0.6, charge = 0, auto = 2, ext = 0, count = 0, comboBonus = comboBonus }
 		self._T.summon = s
 		self.SummonLeft = dur
 		self.SwordCharge = 0
 		local player = mgr:HeroPlayer()
 		if not isvalid(player) then return end
-		_EffectService:PlayEffectAttached(self.SwordSummonedRUID, player, self.SwordOffset, 0, Vector3(1, 1, 1), false, { FlipX = true })
+		_EffectService:PlayEffectAttached(self.SwordSummonedRUID, player, self.SwordOffset, 0, Vector3(1, 1, 1), false, self:SwordFxOpts())
 		local wait = self:ClipLen(self.SwordSummonedRUID)
 		_TimerService:SetTimerOnce(function() self:ShowSwordStand() end, math.max(0.1, wait - 0.02))
-		log("[VRF] hero summon sword dur=" .. tostring(dur))
+		log("[VRF] hero summon sword dur=" .. tostring(dur) .. " comboBonus=" .. tostring(comboBonus))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1564,9 +2584,12 @@ script HeroCombatLogic extends Logic
 		local player = mgr:HeroPlayer()
 		if not isvalid(player) then return end
 		self:RemoveSerial("sword")
-		self._T.serials.sword = _EffectService:PlayEffectAttached(self.SwordStandRUID, player, self.SwordOffset, 0, Vector3(1, 1, 1), true, { FlipX = true })
-		if self:Has("H12", 1) and (self._T.serials.twin or 0) == 0 then
-			self._T.serials.twin = _EffectService:PlayEffectAttached(self.SwordStandRUID, player, self.TwinOffset, 0, Vector3(0.75, 0.75, 1), true, { FlipX = true })
+		self._T.serials.sword = _EffectService:PlayEffectAttached(self.SwordStandRUID, player, self.SwordOffset, 0, Vector3(1, 1, 1), true, self:SwordFxOpts())
+		-- 돌파 4: 작은 검 2개
+		if self:Has("H12", 4) and self:Now() >= (self._T.miniBusyUntil or 0) - 0.05 then
+			local sc = Vector3(self.SwordMiniScale, self.SwordMiniScale, 1)
+			if (self._T.serials.mini1 or 0) == 0 then self._T.serials.mini1 = _EffectService:PlayEffectAttached(self.SwordStandRUID, player, self.MiniOffset1, 0, sc, true, self:SwordFxOpts()) end
+			if (self._T.serials.mini2 or 0) == 0 then self._T.serials.mini2 = _EffectService:PlayEffectAttached(self.SwordStandRUID, player, self.MiniOffset2, 0, sc, true, self:SwordFxOpts()) end
 		end
 	end
 
@@ -1578,10 +2601,16 @@ script HeroCombatLogic extends Logic
 		self.SummonLeft = 0
 		self.SwordCharge = 0
 		self:RemoveSerial("sword")
-		self:RemoveSerial("twin")
+		self:RemoveSerial("mini1")
+		self:RemoveSerial("mini2")
 		local player = mgr ~= nil and mgr:HeroPlayer() or nil
 		if isvalid(player) then
-			_EffectService:PlayEffectAttached(self.SwordDieRUID, player, self.SwordOffset, 0, Vector3(1, 1, 1), false, { FlipX = true })
+			_EffectService:PlayEffectAttached(self.SwordDieRUID, player, self.SwordOffset, 0, Vector3(1, 1, 1), false, self:SwordFxOpts())
+			if self:Has("H12", 4) then
+				local sc = Vector3(self.SwordMiniScale, self.SwordMiniScale, 1)
+				_EffectService:PlayEffectAttached(self.SwordDieRUID, player, self.MiniOffset1, 0, sc, false, self:SwordFxOpts())
+				_EffectService:PlayEffectAttached(self.SwordDieRUID, player, self.MiniOffset2, 0, sc, false, self:SwordFxOpts())
+			end
 			self:PlaySound(self.SwordDieSound)
 		end
 		log("[VRF] hero summon end")
@@ -1589,14 +2618,10 @@ script HeroCombatLogic extends Logic
 
 	@ExecSpace("ServerOnly")
 	method number SwordDmgPct(boolean enhanced)
-		-- 소환검 공격 피해 보너스 합 (별 위력, 돌파, 인레이지·발할라·에픽, 다음 공격 강화).
+		-- 소환검 공격 피해 보너스 합 (별 위력, 돌파 3 콤보 소모, 다음 공격 강화).
 		local v = self:Star("H12", "StarPower")
-		if not enhanced and self:Has("H12", 4) then v = v + 20 end
-		if enhanced and self:Has("H12", 3) then v = v + 40 end
-		if self:On("H05") and self:Has("H05", 5) then v = v + 20 end
-		if self:On("H10") and self:Has("H10", 5) then v = v + 20 end
-		if self:On("H11") and self:Has("H11", 5) then v = v + 60 end
-		if self:Has("H12", 5) and #self._T.bleed >= 8 then v = v + 40 end
+		local s = self._T.summon
+		if s ~= nil then v = v + (s.comboBonus or 0) end
 		v = v + (self._T.summonBoost or 0)
 		self._T.summonBoost = 0
 		return v
@@ -1627,9 +2652,27 @@ script HeroCombatLogic extends Logic
 			snd = self.SwordAttack2Sound
 		end
 		self:RemoveSerial("sword")
-		_EffectService:PlayEffectAttached(clip, player, self.SwordOffset, 0, Vector3(1, 1, 1), false, { FlipX = true })
-		self:PlaySound(snd)
+		_EffectService:PlayEffectAttached(clip, player, self.SwordOffset, 0, Vector3(1, 1, 1), false, self:SwordFxOpts())
+		-- 돌파 4: 작은 검 2개가 같은 공격을 작게 따라 한다
+		local mini = self:Has("H12", 4)
 		local len = self:ClipLen(clip)
+		if mini then
+			-- 작은 검은 원본보다 조금씩 늦게 공격 (끝날 때까지 대기 그림을 다시 켜지 않음)
+			local sc = Vector3(self.SwordMiniScale, self.SwordMiniScale, 1)
+			self._T.miniBusyUntil = self:Now() + self.MiniDelay2 + len
+			_TimerService:SetTimerOnce(function()
+				if self._T.summon == nil then return end
+				self:RemoveSerial("mini1")
+				_EffectService:PlayEffectAttached(clip, player, self.MiniOffset1, 0, sc, false, self:SwordFxOpts())
+			end, self.MiniDelay1)
+			_TimerService:SetTimerOnce(function()
+				if self._T.summon == nil then return end
+				self:RemoveSerial("mini2")
+				_EffectService:PlayEffectAttached(clip, player, self.MiniOffset2, 0, sc, false, self:SwordFxOpts())
+			end, self.MiniDelay2)
+			_TimerService:SetTimerOnce(function() self:ShowSwordStand() end, self.MiniDelay2 + math.max(0.2, len - 0.02) + 0.03)
+		end
+		self:PlaySound(snd)
 		_TimerService:SetTimerOnce(function() self:ShowSwordStand() end, math.max(0.2, len - 0.02))
 		_TimerService:SetTimerOnce(function()
 			if not self:Alive(target) then return end
@@ -1637,16 +2680,23 @@ script HeroCombatLogic extends Logic
 			self:PlaySound(self.SwordHitSound)
 			local pc = mgr:GetPlayerAttack()
 			if pc ~= nil then pc:ShowProcDamage(target, dmg, crit) end
+			local splash = mgr:SplashTargets((sk.proc.targets or 1) - 1)
 			mgr:ApplyMonsterDamage(dmg)
-			-- 쌍영검: 같은 명령에 60% 위력으로 동참
-			if self:Has("H12", 1) then
-				local twin = math.max(1, math.floor(dmg * 0.6 + 0.5))
-				_TimerService:SetTimerOnce(function() self:ApplyExtra(target, twin, hitFx, false, "") end, 0.15)
+			for _, e in ipairs(splash) do
+				if not isvalid(e) or e.TransformComponent == nil then continue end
+				local wp = e.TransformComponent.WorldPosition
+				_EffectService:PlayEffect(hitFx, e, Vector3(wp.x, wp.y + self._T.monMid, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
+				mgr:ApplySplashDamage(e, dmg, crit, 0)
 			end
-			-- 피를 먹는 검: 원본 검의 공격마다 자상 1
-			if self:Has("H12", 5) then self:AddBleed(1, "H12", target) end
+			-- 돌파 4: 작은 검 2개가 원본 피해의 30%로 따라 침
+			if mini then
+				local small = math.max(1, math.floor(dmg * self.SwordMiniPct / 100 + 0.5))
+				local mt = sk.proc.targets or 1
+				_TimerService:SetTimerOnce(function() self:ApplyExtra(target, small, hitFx, false, "", mt) end, self.MiniDelay1)
+				_TimerService:SetTimerOnce(function() self:ApplyExtra(target, small, hitFx, false, "", mt) end, self.MiniDelay2)
+			end
 		end, math.min(0.45, math.max(0.15, len * 0.45)))
-		log("[VRF] hero sword attack enhanced=" .. tostring(enhanced) .. " command=" .. tostring(command) .. " dmg=" .. tostring(dmg))
+		log("[VRF] hero sword attack enhanced=" .. tostring(enhanced) .. " command=" .. tostring(command) .. " dmg=" .. tostring(dmg) .. " bonus=" .. tostring(bonus) .. " mini=" .. tostring(mini))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1673,24 +2723,15 @@ script HeroCombatLogic extends Logic
 			self:EndSummon()
 			return
 		end
-		if self:Has("H12", 3) then
-			s.auto = s.auto - delta
-			if s.auto <= 0 then
-				s.auto = s.auto + 2
-				s.charge = s.charge + 1
-				self.SwordCharge = s.charge
-			end
-		end
 		s.timer = s.timer - delta
 		if s.timer > 0 then return end
 		local speed = self:Star("H12", "StarTempo")
-		if self:On("H05") and self:Has("H05", 5) then speed = speed + 40 end
 		s.timer = self.SummonPeriod / (1 + speed / 100)
-		local enhanced = s.charge >= self.SummonChargeNeed
-		if enhanced then
-			s.charge = s.charge - self.SummonChargeNeed
-			self.SwordCharge = s.charge
-		end
+		-- 돌파 5: 공격 간격 -30%
+		if self:Has("H12", 5) then s.timer = s.timer * (1 - self.SwordSpeedCutPct / 100) end
+		-- 기본은 일반 공격만, 돌파 2면 공격 3회마다 강화 공격
+		s.count = (s.count or 0) + 1
+		local enhanced = self:Has("H12", 2) and s.count % self.SwordEnhEvery == 0
 		self:SwordAttack(enhanced, false)
 	end
 
@@ -1703,17 +2744,18 @@ script HeroCombatLogic extends Logic
 		for id, t in pairs(self._T.cd) do self._T.cd[id] = math.max(0, t - delta) end
 		local regen = self.ManaRegen
 		local pct = 0
-		if self:On("H11") then
-			pct = pct + 50
-			if self:Has("H11", 3) then pct = pct + 100 end
-		end
 		if self:On("H15") and self:Has("H15", 5) then pct = pct + 30 end
 		self:AddMana(regen * (1 + pct / 100) * delta)
 		-- 콤보 자연 감소 없음 (콤보 어택 개편)
 		self:TickShots(delta)
+		self:TickDebuffs()
+		self:TickQueuedStatus()
 		self:TickBleed(delta)
 		self:TickSummon(delta)
-		if (self._T.serials.stun or 0) ~= 0 and self:Now() >= (self._T.till.stunFx or 0) then self:RemoveSerial("stun") end
+		self:TickComaField()
+		self:TickInrage()
+		self:TickEpic()
+		if self._T.icons ~= nil and self._T.icons.stun ~= nil and self:Now() >= (self._T.till.stunFx or 0) then self:ClearIcon("stun") end
 		self.InstinctLeft = math.max(0, (self._T.till.H15 or 0) - self:Now())
 		self._T.statusTick = (self._T.statusTick or 0) - delta
 		if self._T.statusTick <= 0 then
@@ -1726,18 +2768,38 @@ script HeroCombatLogic extends Logic
 	method void UpdateStatus()
 		-- HUD 상태 줄: 버프 남은 시간, 소환검 충전·시간, 몬스터 자상 중첩, 기절.
 		local parts = {}
-		local names = { H05 = "인레이지", H10 = "발할라", H11 = "에픽 어드벤쳐", H15 = "콤보 인스팅트" }
-		for _, id in ipairs({ "H05", "H10", "H11", "H15" }) do
+		local names = { H05 = "인레이지", H11 = "에픽 어드벤쳐", H15 = "콤보 인스팅트" }
+		for _, id in ipairs({ "H05", "H11", "H15" }) do
 			local left = (self._T.till[id] or 0) - self:Now()
 			if left > 0 then table.insert(parts, names[id] .. " " .. tostring(math.ceil(left)) .. "초") end
 		end
+		if (self._T.valCharge or 0) > 0 then table.insert(parts, "<color=#FFD36A>발할라 충전 " .. tostring(self._T.valCharge) .. "</color>") end
+		local mgr = self._T.mgr
+		if self:On("H11") and mgr ~= nil and (mgr._T.shield or 0) > 0 then table.insert(parts, "<color=#9FE3FF>보호막 " .. tostring(math.floor(mgr._T.shield)) .. "</color>") end
+		if self:On("H11") and (self._T.epicAtk or 0) > 0 then table.insert(parts, "<color=#FFB36A>공격력 +" .. tostring(math.floor(self._T.epicAtk)) .. "%</color>") end
 		local s = self._T.summon
-		if s ~= nil then table.insert(parts, "<color=#FF8A4C>버닝 소울 " .. tostring(math.ceil(s.left)) .. "초 · 충전 " .. tostring(math.min(s.charge, self.SummonChargeNeed)) .. "/" .. tostring(self.SummonChargeNeed) .. "</color>") end
-		if #self._T.bleed > 0 then table.insert(parts, "<color=#FF5A6A>자상 " .. tostring(#self._T.bleed) .. "중첩</color>") end
+		if s ~= nil then
+			local txt = "버닝 소울 " .. tostring(math.ceil(s.left)) .. "초"
+			if (s.comboBonus or 0) > 0 then txt = txt .. " · 피해 +" .. tostring(math.floor(s.comboBonus)) .. "%" end
+			table.insert(parts, "<color=#FF8A4C>" .. txt .. "</color>")
+		end
+		if (self._T.illusionStack or 0) > 0 then table.insert(parts, "<color=#FFB0C0>환영 " .. tostring(self._T.illusionStack) .. "/" .. tostring(self.IllusionMaxStack) .. "</color>") end
+		if #self._T.bleed > 0 then table.insert(parts, "<color=#FF5A6A>자상 " .. tostring(#self._T.bleed) .. "중첩 (방어력 -" .. tostring(math.floor(self:DefDownPct())) .. "%)</color>") end
 		if (self._T.till.stunFx or 0) > self:Now() then table.insert(parts, "<color=#FFE36A>기절</color>") end
+		for id, till in pairs(self._T.debuff or {}) do
+			local def = self._T.debuffDefs[id]
+			local left = till - self:Now()
+			if def ~= nil and left > 0 then table.insert(parts, "<color=#B18CFF>" .. def.name .. " " .. tostring(math.ceil(left)) .. "초</color>") end
+		end
 		local instCd = self._T.cd.H15 or 0
 		if instCd > 0 and not self:On("H15") and self:Learned("H15") then table.insert(parts, "<color=#8A8AA0>인스팅트 대기 " .. tostring(math.ceil(instCd)) .. "초</color>") end
 		self.StatusText = table.concat(parts, "   ")
+		local slots = {}
+		for _, id in ipairs(self._T.equip or {}) do
+			local sk = self._T.skills[id]
+			if sk ~= nil then table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk))) end
+		end
+		self.SlotInfo = table.concat(slots, "|")
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1772,7 +2834,18 @@ script HeroCombatLogic extends Logic
 			end
 		end
 		self:ClearBleed()
-		self:RemoveSerial("stun")
+		self:ClearDebuffs()
+		self:ClearIcon("stun")
+		self:EndComaField()
+		self._T.iconTarget = nil
+		-- 줄 서 있을 때 걸린 자상·디버프 이어받기
+		local qs = nil
+		if self._T.qstat ~= nil then qs = self._T.qstat[monster] end
+		if qs ~= nil then
+			self._T.qstat[monster] = nil
+			local m0 = monster
+			_TimerService:SetTimerOnce(function() self:LoadQStat(m0, qs) end, 0.05)
+		end
 		self._T.monTop = 1.0
 		self._T.monMid = 0.45
 		if standRUID == nil or standRUID == "" then return end
@@ -1807,12 +2880,13 @@ script HeroCombatLogic extends Logic
 		for i = 1, count do
 			mgr.PlayerAttackTimer = 99
 			self.Mana = self.ManaMax
-			self.Combo = self.ComboMax
+			self.Combo = self:ComboCap()
 			local m = mgr:HeroMonster()
 			local player = mgr:HeroPlayer()
 			if isvalid(m) and isvalid(player) and mgr.RunState == "FIGHT" then
 				self._T.cd[id] = 0
 				self._T.till[id] = 0
+				if id == "H10" then self._T.valCharge = 0 end
 				local r = self:MakeCast(sk)
 				local pc = player:GetComponent("script.TowerPlayer")
 				if pc ~= nil then pc:DoAttack(m, 5, 0, 150, { r }) end

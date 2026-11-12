@@ -12,13 +12,33 @@ script LobbyManager extends Component
 	end
 
 	@ExecSpace("Server")
-	method void RequestPlay()
-		-- 로비 '플레이' 버튼: 요청한 플레이어를 탑 맵으로 보낸다.
+	method void RequestPlay(integer stage)
+		-- 로비 층 선택 '입장': 고른 스테이지(열린 스테이지까지만)를 기록하고 탑 맵으로 보낸다.
 		local player = _UserService:GetUserEntityByUserId(senderUserId)
 		if not isvalid(player) or player.CurrentMap ~= self.Entity then return end
+		local requests = self._T.entryRequests or {}
+		self._T.entryRequests = requests
+		local now = math.floor(DateTime.UtcNow.Elapsed / 1000)
+		if (requests[senderUserId] or 0) > now then return end
 		-- 각인 변경분이 남아 있으면 탑에 들어가기 전에 저장
 		local engrave = player:GetComponent("script.PlayerEngrave")
-		if engrave ~= nil then engrave:Flush() end
+		if engrave ~= nil and engrave.Loaded then
+			-- 층 하나 = 한 판: 클리어한 층 + 1층까지 열림
+			local floors = _DataService:GetTable("FloorTable")
+			local unlocked = engrave.ClearedFloor + 1
+			if floors ~= nil then unlocked = math.min(unlocked, floors:GetRowCount()) end
+			if stage < 1 or stage > unlocked then return end
+			requests[senderUserId] = now + 10
+			if not engrave:ConsumeEntryEnergy() then
+				requests[senderUserId] = 0
+				return
+			end
+			engrave.SelectedStage = stage
+			engrave:Flush()
+			log("[VRF] play stage=" .. tostring(engrave.SelectedStage) .. " unlocked=" .. tostring(unlocked))
+		else
+			return
+		end
 		_TeleportService:TeleportToMapPosition(player, self.TowerPos, self.TowerMapName)
 		log("[VRF] play requested -> teleport to " .. self.TowerMapName)
 	end

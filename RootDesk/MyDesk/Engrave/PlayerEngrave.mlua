@@ -13,6 +13,9 @@ script PlayerEngrave extends Component
 	property boolean Loaded = false
 	@Sync
 	property integer ClearedFloor = 0
+	-- 로비 층 선택에서 고른 스테이지 (탑 입장 시 TowerRunManager가 읽음, 저장하지 않음)
+	@Sync
+	property integer SelectedStage = 1
 	@Sync
 	property integer Spent = 0
 	@Sync
@@ -109,6 +112,21 @@ script PlayerEngrave extends Component
 	property integer ComboAttackBaseCost = 20
 	property integer ComboAttackStepCost = 10
 
+	-- 입장 에너지: 서버 UTC로 충전. 충전은 마지막 차감 시각에서 계산하므로 매초 저장하지 않는다.
+	property string EnergyKey = "OrbisEnergy"
+	property integer EnergyMax = 30
+	property integer EnergyCost = 3
+	property integer EnergyInterval = 600
+	@Sync
+	property boolean EnergyLoaded = false
+	@Sync
+	property integer Energy = 0
+	@Sync
+	property integer EnergyRemaining = 0
+	property number EnergyNextAt = 0
+	property number EnergyRetryTimer = 0
+	property number EnergyTick = 0
+
 	@HideFromInspector
 	property boolean SkillDirty = false
 	@HideFromInspector
@@ -145,12 +163,22 @@ script PlayerEngrave extends Component
 		self:LoadSlots()
 		self:LoadSkillTables()
 		self:LoadSkills()
+		self:LoadEnergy()
 		log("[VRF] PlayerEngrave begin nodes=" .. tostring(#self._T.nodes) .. " cleared=" .. tostring(self.ClearedFloor) .. " spent=" .. tostring(self.Spent))
 	end
 
 	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
 		-- 불러오기에 실패했으면 잠시 뒤 다시 시도한다 (실패 상태에서는 저장하지 않음).
+		self.EnergyTick = self.EnergyTick - delta
+		if self.EnergyTick <= 0 then
+			self.EnergyTick = 1
+			if self.EnergyLoaded then self:RechargeEnergyAt(self:EnergyNow()) end
+		end
+		if not self.EnergyLoaded then
+			self.EnergyRetryTimer = self.EnergyRetryTimer - delta
+			if self.EnergyRetryTimer <= 0 then self:LoadEnergy() end
+		end
 		if not self.SkillLoaded then
 			self.SkillRetryTimer = self.SkillRetryTimer - delta
 			if self.SkillRetryTimer <= 0 then self:LoadSkills() end
@@ -195,6 +223,107 @@ script PlayerEngrave extends Component
 		if not self.Loaded or not self.Dirty then return end
 		local errorCode = ds:SetAndWait(self.StorageKey, self:Encode())
 		if errorCode ~= 0 then log_warning("[VRF] engrave final save failed code=" .. tostring(errorCode)) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number EnergyNow()
+		-- 클라이언트 기기 시간 대신 서버 UTC 초를 사용한다.
+		return math.floor(DateTime.UtcNow.Elapsed / 1000)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadEnergy()
+		-- 최초에는 30개. 기존 계정은 저장된 수량과 다음 충전 시각에서 미접속 충전도 복원한다.
+		if self._T.energyBusy then return end
+		self.EnergyRetryTimer = self.LoadRetryDelay
+		self._T.energyBusy = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.EnergyKey)
+		self._T.energyBusy = false
+		if code ~= 0 and code ~= 1000002 then
+			log_warning("[VRF] energy load failed code=" .. tostring(code))
+			return
+		end
+		local data = {}
+		if code == 0 and raw ~= nil and raw ~= "" then
+			local ok, decoded = pcall(function() return _HttpService:JSONDecode(raw) end)
+			if not ok or type(decoded) ~= "table" or type(decoded["amount"]) ~= "number" or type(decoded["next"]) ~= "number" then
+				log_warning("[VRF] energy invalid saved data; entry blocked")
+				return
+			end
+			data = decoded
+		end
+		self.Energy = math.max(0, math.min(self.EnergyMax, math.floor(data["amount"] or self.EnergyMax)))
+		self.EnergyNextAt = math.max(0, data["next"] or 0)
+		self.EnergyLoaded = true
+		self:RechargeEnergyAt(self:EnergyNow())
+		log("[VRF] energy loaded amount=" .. tostring(self.Energy) .. " remaining=" .. tostring(self.EnergyRemaining))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RechargeEnergyAt(number now)
+		-- 누락된 충전 횟수를 한 번에 반영하고 잔여 시간을 보존한다. 가득 찬 뒤의 시간은 비축하지 않는다.
+		if not self.EnergyLoaded or self._T.energyBusy then return end
+		if self.Energy >= self.EnergyMax then
+			self.Energy = self.EnergyMax
+			self.EnergyNextAt = 0
+			self.EnergyRemaining = 0
+			return
+		end
+		if self.EnergyNextAt <= 0 then self.EnergyNextAt = now + self.EnergyInterval end
+		if now >= self.EnergyNextAt then
+			local gained = math.floor((now - self.EnergyNextAt) / self.EnergyInterval) + 1
+			self.Energy = math.min(self.EnergyMax, self.Energy + gained)
+			self.EnergyNextAt = self.EnergyNextAt + gained * self.EnergyInterval
+			if self.Energy >= self.EnergyMax then self.EnergyNextAt = 0 end
+			log("[VRF] energy recharge amount=" .. tostring(self.Energy))
+		end
+		self.EnergyRemaining = self.EnergyNextAt > 0 and math.max(0, math.ceil(self.EnergyNextAt - now)) or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean ConsumeEntryEnergy()
+		-- 입장 직전 3개 차감을 저장한 뒤에만 허용한다. 저장 중 중복 요청 및 저장 실패는 입장하지 않는다.
+		if not self.EnergyLoaded then
+			self:EntryEnergyNotice("입장 에너지를 불러오는 중입니다", self.Entity.PlayerComponent.UserId)
+			return false
+		end
+		if self._T.energyBusy then return false end
+		local now = self:EnergyNow()
+		self:RechargeEnergyAt(now)
+		if self.Energy < self.EnergyCost then
+			self:EntryEnergyNotice("입장 에너지가 부족합니다 (" .. tostring(self.Energy) .. "/" .. tostring(self.EnergyCost) .. ")", self.Entity.PlayerComponent.UserId)
+			log("[VRF] energy entry denied amount=" .. tostring(self.Energy))
+			return false
+		end
+		local amount = self.Energy - self.EnergyCost
+		local nextAt = self.EnergyNextAt
+		if self.Energy >= self.EnergyMax then nextAt = now + self.EnergyInterval end
+		self._T.energyBusy = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code = ds:SetAndWait(self.EnergyKey, _HttpService:JSONEncode({ amount = amount, next = nextAt }))
+		self._T.energyBusy = false
+		if code ~= 0 then
+			self:EntryEnergyNotice("입장 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요", self.Entity.PlayerComponent.UserId)
+			log_warning("[VRF] energy entry save failed code=" .. tostring(code))
+			return false
+		end
+		self.Energy = amount
+		self.EnergyNextAt = nextAt
+		self:RechargeEnergyAt(self:EnergyNow())
+		log("[VRF] energy spent cost=" .. tostring(self.EnergyCost) .. " amount=" .. tostring(self.Energy))
+		return true
+	end
+
+	@ExecSpace("Client")
+	method void EntryEnergyNotice(string msg)
+		-- 요청한 사용자에게 로비 또는 결과창의 입장 실패 이유를 알린다.
+		local map = self.Entity.CurrentMap
+		if isvalid(map) and map.Name == self.LobbyMapName then
+			_LobbyUILogic:ShowNotice(msg)
+		else
+			_ResultPopupLogic:ShowEntryNotice(msg)
+		end
 	end
 
 	@ExecSpace("ServerOnly")

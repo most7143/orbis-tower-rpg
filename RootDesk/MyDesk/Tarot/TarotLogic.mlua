@@ -38,9 +38,17 @@ script TarotLogic extends Logic
 	property string ChoiceHeadingPath = "/ui/TarotUI/Choice/Pick/Heading"
 	-- 직업 선택 화면: 카드를 눌러 고르고 아래 버튼으로 확정한다
 	property Entity jobRoot = "accc987c-8fed-426a-9b6f-5229bfe07f7b"
-	property ButtonComponent jobConfirm = "06a56296-be77-4db6-bee4-231db4c6f1bb"
+	property ButtonComponent jobConfirm = "51c66b25-2811-4052-a050-ed990d9d1a63"
 	property string JobPath = "/ui/TarotUI/JobSelect/"
-	property number JobDimAlpha = 0.9
+	property number JobDimAlpha = 0.7
+	-- 직업선택 캐주얼 최종 리소스 (2026-11-06): 확인 버튼 4상태 (normal|hover|pressed|disabled)
+	property string JobConfirmRUIDs = "6e35d7bab986437dacfdd6439cce8f8b|8aa0cc5ea41e41c59e561b7e9c749edb|a85883f491674c1698e38075ae4c059d|47458ebbd8e64ec699443ed6ee389c5b"
+	property Color JobConfirmNormal = Color(1, 0.953, 0.843, 1)
+	property Color JobConfirmHover = Color(1, 1, 1, 1)
+	property Color JobConfirmPressed = Color(1, 0.886, 0.627, 1)
+	property Color JobConfirmDisabled = Color(0.714, 0.714, 0.745, 1)
+	property Color JobConfirmOutline = Color(0.145, 0.11, 0.212, 1)
+	property Color JobConfirmOutlineDisabled = Color(0.196, 0.196, 0.227, 1)
 	property number ChoiceDimAlpha = 0.93
 	property integer DefaultJobSlot = 2
 
@@ -77,19 +85,67 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void InitJobSelect()
-		-- 직업별 완성 카드(기본·선택)와 확인 버튼 이미지, 화면 위치(왼쪽 위 x,y / 오른쪽 아래 x,y). 카드와 확인 버튼 연결.
+		-- 직업별 카드 일반·선택 이미지 (같은 크기·위치, ImageRUID만 교체). 카드 안쪽 투명 버튼(Hit)과 확인 버튼 연결.
 		self._T.jobArt = {
-			Hero = { normal = "3a86e6efc06b43b4997b55db44685b56", selected = "c43be2da55ac4f94932b71a7cf169945", confirm = "6563d4012a484e9c9e1e40cea121aea1", rect = { 204, 177, 706, 946 }, selRect = { 198, 160, 712, 949 } },
-			Paladin = { normal = "10c551cc8ae14e1a847f1f143ee52723", selected = "ceef873b268f4f8b922a508279450a37", confirm = "bbed152a69ea4fdaa723305537bc6ba2", rect = { 703, 160, 1217, 949 }, selRect = { 703, 160, 1217, 949 } },
-			DarkKnight = { normal = "cd6b6c5599bd468a825bb9ececedb0e6", selected = "a3396bb6322b493b95bb2b79c9962eaf", confirm = "f86aeb2fae7c4f728f38aeca9640239a", rect = { 1211, 177, 1716, 946 }, selRect = { 1206, 160, 1720, 949 } },
+			Hero = { normal = "159ac990653f4666a6d7406c6bf18833", selected = "94406c894b2e4139a8126a6727c24d92" },
+			Paladin = { normal = "239bf9fbd5a94875b41072742ea18b58", selected = "11608b402edd4e098bd71a14febf9741" },
+			DarkKnight = { normal = "f54c8074d9b54953b7ae3b70fb655fa4", selected = "f40e1c24dcef49d4bbc448d6b230341f" },
 		}
 		self._T.jobSlot = self.DefaultJobSlot
 		for i = 1, 3 do
 			local slot = i
 			local card = self:GetJobCard(i)
-			if isvalid(card) then self:Bind(card.ButtonComponent, function() self:SelectJob(slot) end) end
+			local hit = isvalid(card) and card:GetChildByName("Hit") or nil
+			if isvalid(hit) then self:Bind(hit.ButtonComponent, function() self:SelectJob(slot) end) end
 		end
 		self:Bind(self.jobConfirm, function() self:OnJobConfirm() end)
+		-- 확인 버튼 상태 (기본·호버·눌림·비활성): 이미지와 글자색. 눌림은 위치 이동 없음
+		self._T.confirmState = { hover = false, pressed = false, disabled = false }
+		if isvalid(self.jobConfirm) then
+			local e = self.jobConfirm.Entity
+			local st = self._T.confirmState
+			local function on(evt, fn)
+				local h = e:ConnectEvent(evt, fn)
+				table.insert(self._T.hoverHandlers, { entity = e, evt = evt, h = h })
+			end
+			on(UITouchEnterEvent, function() st.hover = true self:ApplyConfirmState() end)
+			on(UITouchExitEvent, function() st.hover = false st.pressed = false self:ApplyConfirmState() end)
+			on(UITouchDownEvent, function() st.pressed = true self:ApplyConfirmState() end)
+			on(UITouchUpEvent, function() st.pressed = false self:ApplyConfirmState() end)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyConfirmState()
+		-- 확인 버튼: 상태별 이미지(4상태)와 글자색·외곽색.
+		if not isvalid(self.jobConfirm) then return end
+		local st = self._T.confirmState or {}
+		local list = {}
+		for r in string.gmatch(self.JobConfirmRUIDs, "[^|]+") do table.insert(list, r) end
+		local k = 1
+		local color = self.JobConfirmNormal
+		local outline = self.JobConfirmOutline
+		if st.disabled then
+			k = 4
+			color = self.JobConfirmDisabled
+			outline = self.JobConfirmOutlineDisabled
+		elseif st.pressed then
+			k = 3
+			color = self.JobConfirmPressed
+		elseif st.hover then
+			k = 2
+			color = self.JobConfirmHover
+		end
+		local root = self.jobConfirm.Entity.Parent
+		if isvalid(root) and list[k] ~= nil then
+			root.SpriteGUIRendererComponent.ImageRUID = DataRef(list[k])
+			local label = root:GetChildByName("Label")
+			if isvalid(label) then
+				label.TextGUIRendererComponent.FontColor = color
+				label.TextGUIRendererComponent.OutlineColor = outline
+			end
+		end
+		self.jobConfirm.Enable = not st.disabled
 	end
 
 	@ExecSpace("ClientOnly")
@@ -100,39 +156,48 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SetJobCard(integer slot, table art, boolean selected)
-		-- 카드 이미지와 위치·크기를 상태에 맞춘다 (기본과 선택 이미지의 크기·위치가 다르다).
+		-- 카드 이미지만 일반/선택으로 바꾼다 (캔버스 크기·위치·배율은 그대로).
 		local card = self:GetJobCard(slot)
 		if not isvalid(card) then return end
 		local ruid = art.normal
-		local rect = art.rect
-		if selected then
-			ruid = art.selected
-			rect = art.selRect
-		end
+		if selected then ruid = art.selected end
 		card.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
-		card.UITransformComponent.RectSize = Vector2(rect[3] - rect[1], rect[4] - rect[2])
-		card.UITransformComponent.anchoredPosition = Vector2((rect[1] + rect[3]) / 2 - 960, 540 - (rect[2] + rect[4]) / 2)
 	end
 
 	@ExecSpace("ClientOnly")
 	method void FillJobs(Component mgr)
-		-- 직업 카드 3장을 채우고 기본 카드를 고른다 (이미지가 없는 칸은 숨김).
+		-- 직업 카드 3장을 채우고(글자는 직업 표: 계열·이름·무기·특성) 기본 카드를 고른다. 기본은 히어로.
 		for i = 1, 3 do
 			local card = self:GetJobCard(i)
-			if isvalid(card) then card:SetEnable(self._T.jobArt[mgr.ChoiceIds[tostring(i)] or ""] ~= nil) end
-		end
-		-- 기본 선택: 지정 칸이 잠겨 있으면 첫 고를 수 있는 칸
-		local slot = self.DefaultJobSlot
-		if not self:IsJobPickable(mgr, slot) then
-			for i = 1, 3 do
-				if self:IsJobPickable(mgr, i) then
-					slot = i
-					break
+			local id = mgr.ChoiceIds[tostring(i)] or ""
+			if isvalid(card) then
+				card:SetEnable(self._T.jobArt[id] ~= nil)
+				local j = self._T.jobById[id]
+				if j ~= nil then
+					local function set(name, text)
+						local e = card:GetChildByName(name)
+						if isvalid(e) then e.TextGUIRendererComponent.Text = text end
+					end
+					set("Class", j.familyName or "")
+					set("Name", j.name or "")
+					set("Weapon", j.weapon or "")
+					set("Traits", j.keyword or "")
 				end
 			end
 		end
+		-- 기본 선택: 히어로 칸, 없거나 잠겨 있으면 첫 고를 수 있는 칸
+		local slot = 0
+		for i = 1, 3 do
+			if (mgr.ChoiceIds[tostring(i)] or "") == "Hero" and self:IsJobPickable(mgr, i) then slot = i end
+		end
+		if slot == 0 then
+			for i = 1, 3 do
+				if slot == 0 and self:IsJobPickable(mgr, i) then slot = i end
+			end
+		end
+		if slot == 0 then slot = self.DefaultJobSlot end
 		self:SelectJob(slot)
-		log("[VRF] job select filled seq=" .. tostring(mgr.ChoiceSeq))
+		log("[VRF] job select filled seq=" .. tostring(mgr.ChoiceSeq) .. " default=" .. tostring(slot))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -145,25 +210,35 @@ script TarotLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SelectJob(integer slot)
-		-- 카드 선택: 고른 카드만 선택 이미지로 바꿔 맨 위로 올리고 확인 버튼을 바꾼다 (확정은 확인 버튼).
+		-- 카드 선택: 고른 카드만 선택 이미지, 나머지는 일반 이미지. 확인 버튼 문구는 "<직업> 선택" (확정은 확인 버튼).
 		local mgr = self:GetManager()
 		if mgr == nil then return end
-		local picked = self._T.jobArt[mgr.ChoiceIds[tostring(slot)] or ""]
+		local id = mgr.ChoiceIds[tostring(slot)] or ""
+		local picked = self._T.jobArt[id]
 		if picked == nil or not self:IsJobPickable(mgr, slot) then return end
 		self._T.jobSlot = slot
 		for i = 1, 3 do
 			local art = self._T.jobArt[mgr.ChoiceIds[tostring(i)] or ""]
 			if art ~= nil then
 				self:SetJobCard(i, art, i == slot)
-				-- 고를 수 없는 직업은 어둡게
+				-- 아직 열리지 않은 직업만 어둡게 (고르지 않은 카드는 어둡게 하지 않음)
 				local c = 1
 				if not self:IsJobPickable(mgr, i) then c = 0.35 end
 				self:GetJobCard(i).SpriteGUIRendererComponent.Color = Color(c, c, c, 1)
 			end
 		end
+		-- 선택 카드의 금빛 강조 여백이 옆 카드에 가리지 않게 맨 위로
 		_UILogic:SetSiblingIndex(self:GetJobCard(slot).UITransformComponent, 2)
-		if isvalid(self.jobConfirm) then self.jobConfirm.Entity.SpriteGUIRendererComponent.ImageRUID = DataRef(picked.confirm) end
-		log("[VRF] job selected slot=" .. tostring(slot))
+		if isvalid(self.jobConfirm) then
+			local label = self.jobConfirm.Entity.Parent:GetChildByName("Label")
+			local j = self._T.jobById[id]
+			if isvalid(label) and j ~= nil then label.TextGUIRendererComponent.Text = j.name .. " 선택" end
+		end
+		if self._T.confirmState ~= nil then
+			self._T.confirmState.disabled = false
+			self:ApplyConfirmState()
+		end
+		log("[VRF] job selected slot=" .. tostring(slot) .. " id=" .. id)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -192,8 +267,12 @@ script TarotLogic extends Logic
 		self.clickHandlers = {}
 		for _, rec in ipairs(self._T.hoverHandlers or {}) do
 			if isvalid(rec.entity) then
-				rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
-				rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+				if rec.evt ~= nil then
+					rec.entity:DisconnectEvent(rec.evt, rec.h)
+				else
+					rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
+					rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+				end
 			end
 		end
 		self._T.hoverHandlers = {}
