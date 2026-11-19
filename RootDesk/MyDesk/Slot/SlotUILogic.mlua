@@ -15,8 +15,9 @@ script SlotUILogic extends Logic
 	property Vector2 FxSuccessOffset = Vector2(-24, -51)
 	property number FxFailScale = 0.7
 	property number BusyTimeout = 2
-	property Color SelectedTextColor = Color(0.847, 0.733, 0.475, 1)
-	property Color NormalTextColor = Color(0.588, 0.588, 0.573, 1)
+	property Color SelectedTextColor = Color(0.12, 0.34, 0.52, 1)
+	property Color NormalTextColor = Color(0.14, 0.17, 0.21, 1)
+	property Color SlotSilhouetteColor = Color(0.25, 0.29, 0.34, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -55,25 +56,13 @@ script SlotUILogic extends Logic
 			end)
 		end
 		self:Bind(self:Get("/Upgrade"), function() self:Upgrade() end)
-		local goldText = self.SelectedTextColor
-		local grayText = self.NormalTextColor
-		for i = 1, self.MaxScrolls do
-			_UIButtonLogic:SetSkin(self:Get("/Qty" .. tostring(i)), {
-				normal = "a1c5e3c4eb604a4f92d52c3178d0fdc7", hover = "241c8e2a9c4443179f69a1fab0e5fbd0", pressed = "1dea82f853b4457e930649dfdbbb1389", disabled = "0663be3c05f14dd7ac2f687b0e407134",
-				selected = "86a5d23325424db296710694953e9c8f", selectedHover = "41eb53898a2a4c51932f12b18746b3d5", selectedPressed = "0b8fc2cb5ac24838bc7d1d3ffb6ba536",
-				textNormal = grayText, textHover = Color(0.75, 0.75, 0.73, 1), textSelected = goldText, textDisabled = Color(0.46, 0.46, 0.45, 1),
-			})
+				for i = 1, self.MaxScrolls do
+			_GrowthUILogic:StyleButton(self:Get("/Qty" .. tostring(i)))
 		end
 		for tier = 1, 3 do
-			_UIButtonLogic:SetSkin(self:Get("/Card" .. tostring(tier)), {
-				normal = "b98a964cddde44bc91cc608e648320d4", hover = "39cde8030aef40c68b7e8afc4e62aa15", pressed = "39cde8030aef40c68b7e8afc4e62aa15", disabled = "9f3b7d70600c434dbf531456a34f4865",
-				selected = "71e3f450afe64feb8e864b21924d3be5", selectedHover = "26f6423680b54a17a08f2e0b9a5fadb5", selectedPressed = "26f6423680b54a17a08f2e0b9a5fadb5",
-			})
+			_GrowthUILogic:StyleButton(self:Get("/Card" .. tostring(tier)))
 		end
-		_UIButtonLogic:SetSkin(self:Get("/Upgrade"), {
-			normal = "359ea90151c042ad89f3eccf3ed758b6", hover = "69b856b1b9c24e89845934f43ff84cf2", disabled = "4058bc4ce0dc4ca09f560a08631ee64d",
-			textNormal = Color(0.812, 0.812, 0.8, 1), textHover = Color(0.9, 0.9, 0.88, 1), textDisabled = Color(0.463, 0.463, 0.451, 1),
-		})
+		_GrowthUILogic:StyleButton(self:Get("/Upgrade"))
 		for i = 1, 2 do
 			local fx = self:Get("/Fx" .. tostring(i))
 			local key = i
@@ -82,6 +71,7 @@ script SlotUILogic extends Logic
 				table.insert(self.clickHandlers, { entity = fx, eventHandler = h, isFx = true })
 			end
 		end
+		log("[VRF] SlotUILogic silhouette icons=6 lightSlots=true")
 		log("[VRF] SlotUILogic begin slots=" .. tostring(#self._T.slots) .. " miles=" .. tostring(#self._T.miles))
 	end
 
@@ -105,6 +95,7 @@ script SlotUILogic extends Logic
 		-- 버튼 클릭 연결 + 해제 기록.
 		if not isvalid(entity) then return end
 		local h = entity:ConnectEvent(ButtonClickEvent, function(e)
+			if not entity.EnabledInHierarchy or not entity.ButtonComponent.Enable then return end
 			_UISoundLogic:PlayClick()
 			fn()
 		end)
@@ -221,18 +212,24 @@ script SlotUILogic extends Logic
 		local bonus = eng.SlotBonus[slot] or 0
 		local name = self._T.slotName[slot] or ""
 		for _, id in ipairs(self._T.slots) do
+			_UIButtonLogic:SetSelected(self:Get("/Slot_" .. id), id == slot)
+			local slotIcon = self:Get("/Slot_" .. id .. "/Icon")
+			if isvalid(slotIcon) then slotIcon.SpriteGUIRendererComponent.Color = self.SlotSilhouetteColor end
 			local sel = self:Get("/Slot_" .. id .. "/Selected")
 			if isvalid(sel) then sel:SetEnable(id == slot) end
 		end
 		local icon = self:Get("/Preview/Icon")
-		if isvalid(icon) then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(self._T.slotIcon[slot]) end
+		if isvalid(icon) then
+			icon.SpriteGUIRendererComponent.ImageRUID = DataRef(self._T.slotIcon[slot])
+			icon.SpriteGUIRendererComponent.Color = self.SlotSilhouetteColor
+		end
 		-- 현재 상태 → 다음 단계
 		local statName = self._T.statName[slot] or ""
 		local info = name .. " 슬롯  +" .. tostring(lv) .. "\n\n"
 		if lv >= self.MaxLevel then
 			info = info .. "장비 " .. statName .. "  +" .. self:Num(self.StatStep * lv) .. "%\n최대 단계입니다"
 		else
-			info = info .. "장비 " .. statName .. "  +" .. self:Num(self.StatStep * lv) .. "%  →  +" .. self:Num(self.StatStep * (lv + 1)) .. "%\n"
+			info = info .. "장비 " .. statName .. "  +" .. self:Num(self.StatStep * lv) .. "%  →  <color=#347F24>+" .. self:Num(self.StatStep * (lv + 1)) .. "%</color>\n"
 			info = info .. "누적 추가 확률  +" .. self:Num(bonus) .. "%\n"
 			for _, m in ipairs(self._T.miles) do
 				if m.slot == slot and m.level > lv then
@@ -268,9 +265,9 @@ script SlotUILogic extends Logic
 		if scroll ~= nil then power = scroll.power end
 		local rate = math.min(100, base * power * self._T.count + bonus)
 		local msg = ""
-		local haveColor = "#CFCFCC"
-		if have < self._T.count then haveColor = "#C97A6A" end
-		self:SetText("/Have", "보유   <color=" .. haveColor .. ">" .. tostring(have) .. "장</color>      /      필요   <color=#CFCFCC>" .. tostring(self._T.count) .. "장</color>")
+		local haveColor = "#293442"
+		if have < self._T.count then haveColor = "#B54538" end
+		self:SetText("/Have", "보유   <color=" .. haveColor .. ">" .. tostring(have) .. "장</color>      /      필요   <color=#293442>" .. tostring(self._T.count) .. "장</color>")
 		if lv >= self.MaxLevel then
 			self:SetText("/Rate", "최대 단계")
 			self:SetText("/RateDetail", "")

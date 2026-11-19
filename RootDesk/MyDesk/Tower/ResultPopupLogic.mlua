@@ -1,40 +1,66 @@
 @Logic
 script ResultPopupLogic extends Logic
 
-	-- ResultPopup.ui 바인딩 (UIBuilder injectBindings로 주입)
+	-- 결과 화면 (ResultPopup Root/Result2): 누적 별·신규 별, 전투 시간·남은 체력, 별 미션 결과, 전투 보상, 구간 보상 직접 수령, 지역 선택으로·다시 도전.
+	-- 별 판정·저장·보상 지급은 서버(TowerRunManager·PlayerEngrave)가 하고, 여기서는 표시와 요청만 한다.
 	property Entity popupRoot = "77c3b0ad-3691-4ce2-80f2-b1794fa3dd26"
-	property TextGUIRendererComponent bodyText = "baad52fb-9c19-4e54-a8e2-60d2793641b9"
-	property TextGUIRendererComponent titleText = "1376cec9-498d-4380-973f-20b09914d9f5"
-	property ButtonComponent btnRetry = "0d85da3a-b2c2-43dd-94aa-37303323e945"
-	property ButtonComponent btnLobby = "8ff0ec59-5e5c-4a88-9ae3-e75870cc3624"
-	property TextGUIRendererComponent entryInfoText = "f1e4edb6-0052-4d70-a26b-bf3505e7b714"
+	property string Base = "/ui/ResultPopup/Root/Result2"
+	property string OldPanel = "/ui/ResultPopup/Root/Panel"
+	property integer SectionSize = 10
+	property string SectionThresholds = "10|20|30"
+	property string StarFilled = "eb887abdd8834b78a419c3735cf43463"
+	property string StarEmpty = "1388fa0aaf29410dbd0cf148eed14d9d"
+	property string StarNew = "9367768f9ece4d88a133cf9145710988"
+	property string ChestClaimed = "88bbe8bb3d9e4116868796ba3b2e34d8"
+	property string ChestLocked = "1cc85aefbfdb4f07b2b9d4da3e3a4fd2"
+	property string ChestReward = "7269636979ec41ebaf1828601e572c30"
+	property string TileNormal = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string TileDisabled = "d262f8e8502e4b7b88f381a9b7a4e4fb"
+	property string IconBook = "d0bb7509b8a54712ac2647d7ede2ad5f"
+	property string IconFeather = "804a3c5f7abe4ad48f6e428e112da0a5"
+	property string IconScroll = "d7d18132057f491181288c2b6038d32c"
 
 	@HideFromInspector
-	property table clickHandlers = {}
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string sub)
+		-- 결과 화면 안 엔티티.
+		return _EntityService:GetEntityByPath(self.Base .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnClick(string sub, any fn)
+		-- 버튼 클릭 연결 (클릭음 포함).
+		local e = self:E(sub)
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(ButtonClickEvent, function() _UISoundLogic:PlayClick() fn() end)
+		table.insert(self.handlers, { e = e, h = h })
+	end
 
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
-		-- 결과 팝업 버튼 연결. 처음엔 숨긴다.
-		self.clickHandlers = {}
-		if isvalid(self.btnRetry) then
-			local h = self.btnRetry.Entity:ConnectEvent(ButtonClickEvent, function() _UISoundLogic:PlayClick() self:OnRetry() end)
-			table.insert(self.clickHandlers, { entity = self.btnRetry.Entity, eventHandler = h })
-		end
-		if isvalid(self.btnLobby) then
-			local h = self.btnLobby.Entity:ConnectEvent(ButtonClickEvent, function() _UISoundLogic:PlayClick() self:OnLobby() end)
-			table.insert(self.clickHandlers, { entity = self.btnLobby.Entity, eventHandler = h })
+		-- 버튼 연결. 처음엔 숨긴다.
+		self.handlers = {}
+		self:OnClick("resultBack", function() self:OnBackToSelect() end)
+		self:OnClick("retry", function() self:OnRetry() end)
+		for i = 0, 2 do
+			local tier = i + 1
+			self:OnClick("resultChestTile" .. tostring(i), function() self:Claim(tier) end)
 		end
 		if isvalid(self.popupRoot) then self.popupRoot:SetEnable(false) end
-		log("[VRF] ResultPopupLogic begin")
+		local old = _EntityService:GetEntityByPath(self.OldPanel)
+		if isvalid(old) then old:SetEnable(false) end
+		log("[VRF] ResultPopupLogic begin handlers=" .. tostring(#self.handlers))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void OnEndPlay()
 		-- 버튼 이벤트 해제.
-		for _, rec in ipairs(self.clickHandlers) do
-			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.e) then r.e:DisconnectEvent(ButtonClickEvent, r.h) end
 		end
-		self.clickHandlers = {}
+		self.handlers = {}
 	end
 
 	@ExecSpace("ClientOnly")
@@ -46,77 +72,309 @@ script ResultPopupLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnRetry()
-		-- 다시 도전 요청.
+	method Component Engrave()
+		-- 로컬 플레이어 저장 정보.
 		local player = _UserService.LocalPlayer
-		local eng = isvalid(player) and player:GetComponent("script.PlayerEngrave") or nil
-		if eng == nil or not eng.EnergyLoaded then self:ShowEntryNotice("입장 에너지를 불러오는 중입니다") return end
-		if eng.Energy < eng.EnergyCost then self:ShowEntryNotice("입장 에너지가 부족합니다") return end
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string sub, string text, Color color)
+		-- 글자 바꾸기 (색 nil이면 그대로).
+		local e = self:E(sub)
+		if not isvalid(e) then return end
+		local t = e.TextGUIRendererComponent
+		if t.Text ~= text then t.Text = text end
+		if color ~= nil then t.FontColor = color end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetImage(string sub, string ruid)
+		-- 그림 바꾸기 (빈 값이면 숨김).
+		local e = self:E(sub)
+		if not isvalid(e) then return end
+		if ruid == "" then
+			if e.Enable then e:SetEnable(false) end
+			return
+		end
+		if not e.Enable then e:SetEnable(true) end
+		if e.SpriteGUIRendererComponent.ImageRUID.DataId ~= ruid then e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(string sub, boolean on)
+		-- 켜고 끄기.
+		local e = self:E(sub)
+		if isvalid(e) and e.Enable ~= on then e:SetEnable(on) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer StarCount(integer bits)
+		-- 비트 안 별 개수.
+		local n = 0
+		if bits & 1 ~= 0 then n = n + 1 end
+		if bits & 2 ~= 0 then n = n + 1 end
+		if bits & 4 ~= 0 then n = n + 1 end
+		return n
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer Threshold(integer tier)
+		-- 구간 상자 기준 별.
+		local i = 0
+		for v in string.gmatch(self.SectionThresholds, "[^|]+") do
+			i = i + 1
+			if i == tier then return math.floor(tonumber(v) or 0) end
+		end
+		return 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FloorName(integer floor)
+		-- 층(지역) 이름.
+		local ft = _DataService:GetTable("FloorTable")
+		if ft ~= nil and floor >= 1 and floor <= ft:GetRowCount() then return ft:GetCell(floor, "FloorName") or "" end
+		return tostring(floor) .. "층"
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Fill(Component mgr)
+		-- 결과 한 번 채우기 (보이기 시작할 때).
+		local floor = mgr.ResultFloor
+		local prev = mgr.ResultStarsPrev
+		local now = mgr.ResultStarsNow
+		local gained = now & (~prev)
+		local clear = mgr.IsStageClear
+		self._T.floor = floor
+		self._T.gained = gained
+		self:SetText("resultTitle", self:FloorName(floor) .. (clear and " 클리어!" or " 도전 실패"), nil)
+		-- 큰 별: 누적 달성, 이번에 새로 얻은 별은 반짝이는 그림
+		for j = 0, 2 do
+			local b = 1 << j
+			local ruid = self.StarEmpty
+			if gained & b ~= 0 then ruid = self.StarNew elseif now & b ~= 0 then ruid = self.StarFilled end
+			self:SetImage("largeStar" .. tostring(j), ruid)
+		end
+		local newCount = self:StarCount(gained)
+		self:Show("newStarBadge", newCount > 0)
+		self:SetText("newStarBadge/newStarCount", "신규 별 +" .. tostring(newCount), nil)
+		local t = math.floor(mgr.ResultTime)
+		self:SetText("combatTimePill/combatTime", string.format("전투 시간  %02d:%02d", math.floor(t / 60), t % 60), nil)
+		self:SetText("remainingHpPill/remainingHp", "남은 체력  " .. tostring(mgr.ResultHpPct) .. "%", nil)
+		-- 미션 결과: 기존 달성 / 새로 달성 / 미달성
+		local names = { "스테이지 클리어", "제한 시간 내 클리어", "체력 50% 이상으로 클리어" }
+		for j = 0, 2 do
+			local b = 1 << j
+			local state = "미달성"
+			local color = Color(0.42, 0.46, 0.51, 1)
+			if gained & b ~= 0 then
+				state = "새로 달성"
+				color = Color(0.20, 0.48, 0.12, 1)
+			elseif prev & b ~= 0 then
+				state = "기존 달성"
+			end
+			local p = "resultMissions/resultMission"
+			self:SetText(p .. "Text" .. tostring(j), names[j + 1], nil)
+			self:SetText(p .. "State" .. tostring(j), state, color)
+			self:SetImage(p .. "Star" .. tostring(j), now & b ~= 0 and self.StarFilled or self.StarEmpty)
+		end
+		-- 전투 보상: 실제로 받은 것만
+		self:SetText("battleRewardsPlaque/battleRewardsTitle", "전투 보상", nil)
+		local items = {}
+		if mgr.RunBooks > 0 then table.insert(items, { icon = self.IconBook, name = "스킬북", n = mgr.RunBooks }) end
+		if mgr.RunFeathers > 0 then table.insert(items, { icon = self.IconFeather, name = "깃털", n = mgr.RunFeathers }) end
+		if mgr.RunScrolls > 0 then table.insert(items, { icon = self.IconScroll, name = "주문서", n = mgr.RunScrolls }) end
+		for k = 0, 7 do
+			local it = items[k + 1]
+			local p = "LootView/Loot" .. tostring(k)
+			self:Show(p, it ~= nil)
+			if it ~= nil then
+				self:SetImage(p .. "/Loot" .. tostring(k) .. "Icon", it.icon)
+				self:SetText(p .. "/Loot" .. tostring(k) .. "Count", "x" .. tostring(it.n), nil)
+				self:SetText(p .. "/Loot" .. tostring(k) .. "Name", it.name, nil)
+			end
+		end
+		self._T.lootCount = #items
+		self:FillSection()
+		self:SetText("resultBack/resultBackText", "지역 선택으로", nil)
+		self:SetText("retry/retryText", "다시 도전", nil)
+		self._T.accountBar = nil
+		self._T.revealT = 0
+		log("[VRF] result fill floor=" .. tostring(floor) .. " clear=" .. tostring(clear) .. " prev=" .. tostring(prev) .. " now=" .. tostring(now) .. " loot=" .. tostring(#items))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillSection()
+		-- 구간 보상: 누적 별(이번 판 전 → 지금), 게이지, 상자 3개 상태.
+		local eng = self:Engrave()
+		local floor = self._T.floor or 1
+		local section = math.floor((floor - 1) / self.SectionSize) + 1
+		local total = 0
+		local claimed = 0
+		if eng ~= nil then
+			for f, b in string.gmatch(eng.StarData, "(%d+):(%d+)") do
+				local fl = math.floor(tonumber(f))
+				if math.floor((fl - 1) / self.SectionSize) + 1 == section then total = total + self:StarCount(math.floor(tonumber(b))) end
+			end
+			for s, b in string.gmatch(eng.SectionData, "(%d+):(%d+)") do
+				if math.floor(tonumber(s)) == section then claimed = math.floor(tonumber(b)) end
+			end
+		end
+		local before = total - self:StarCount(self._T.gained or 0)
+		local maxStars = self:Threshold(3)
+		self:SetText("resultSectionPlaque/resultSectionTitle", "구간별 보상", nil)
+		if (self._T.msgTime or 0) <= 0 then
+			if before ~= total then
+				self:SetText("resultSectionCount", "누적 별  " .. tostring(before) .. " → " .. tostring(total) .. " / " .. tostring(maxStars), nil)
+			else
+				self:SetText("resultSectionCount", "누적 별  " .. tostring(total) .. " / " .. tostring(maxStars), nil)
+			end
+		end
+		local fill = self:E("resultSectionGauge/resultSectionFill")
+		if isvalid(fill) then fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, total / math.max(1, maxStars))) end
+		for i = 0, 2 do
+			local need = self:Threshold(i + 1)
+			local got = (claimed & (1 << i)) ~= 0
+			local ready = not got and total >= need
+			local p = "resultChestTile" .. tostring(i)
+			local tile = self:E(p)
+			if isvalid(tile) then
+				tile.ButtonComponent.Enable = ready and not self._T.claiming
+				tile.SpriteGUIRendererComponent.ImageRUID = DataRef(ready and self.TileNormal or self.TileDisabled)
+			end
+			self:SetImage(p .. "/resultChestIcon" .. tostring(i), got and self.ChestClaimed or (ready and self.ChestReward or self.ChestLocked))
+			self:SetText(p .. "/resultThreshold" .. tostring(i), tostring(need), nil)
+			self:Show(p .. "/Ready" .. tostring(i), ready)
+			self:Show(p .. "/ClaimBody" .. tostring(i), ready)
+			local label = ready and "보상 받기" or (got and "수령 완료" or "잠김")
+			self:SetText(p .. "/resultClaimLabel" .. tostring(i), label, ready and Color(0.282, 0.157, 0.075, 1) or Color(0.42, 0.46, 0.51, 1))
+		end
+		self._T.section = section
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Claim(integer tier)
+		-- 상자 수령 요청 (서버 판정·지급, 응답 전 중복 요청 막음).
+		if self._T.claiming then return end
+		local eng = self:Engrave()
+		if eng == nil or self._T.section == nil then return end
+		self._T.claiming = true
+		self._T.claimSeq = eng.ClaimSeq
+		self._T.claimTimeout = 5
+		eng:RequestClaimSection(self._T.section, tier)
+		self:FillSection()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Message(string msg)
+		-- 구간 보상 줄에 잠깐 안내.
+		self:SetText("resultSectionCount", msg, nil)
+		self._T.msgTime = 2.5
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnRetry()
+		-- 다시 도전 (에너지 3, 서버가 차감).
+		local eng = self:Engrave()
+		if eng == nil or not eng.EnergyLoaded then self:Message("입장 에너지를 불러오는 중입니다") return end
+		if eng.Energy < eng.EnergyCost then self:Message("입장 에너지가 부족합니다") return end
 		local mgr = self:GetManager()
-		if mgr ~= nil then mgr:RequestRetry() end
+		if mgr ~= nil and mgr.ResultAccountSaved then mgr:RequestRetry() end
 		log("[VRF] retry clicked")
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnLobby()
-		-- 로비로 이동 요청.
+	method void OnBackToSelect()
+		-- 지역 선택으로: 로비로 돌아간 뒤 방금 지역을 고른 채 지역 선택 화면을 연다.
 		local mgr = self:GetManager()
-		if mgr ~= nil then _ScreenFadeLogic:FadeOut(function() mgr:RequestLobby() end) end
-		log("[VRF] lobby clicked")
-	end
-
-	@ExecSpace("ClientOnly")
-	method void ShowEntryNotice(string msg)
-		-- 결과창에서 재도전 거절 사유를 잠시 표시한다.
-		self._T.entryNotice = msg
-		self._T.entryNoticeTime = 4
+		if mgr == nil then return end
+		if _RegionSelectLogic ~= nil then _RegionSelectLogic.PendingOpenFloor = math.max(1, self._T.floor or mgr.ResultFloor) end
+		_ScreenFadeLogic:FadeOut(function() mgr:RequestLobby() end)
+		log("[VRF] back to region select floor=" .. tostring(self._T.floor))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
-		-- 판 상태가 RESULT일 때만 팝업을 띄우고 결과를 채운다.
+		-- 판 상태가 RESULT일 때만 결과 화면을 띄운다. 등장 연출·수령 응답·에너지 표시.
 		if not isvalid(self.popupRoot) then return end
 		local mgr = self:GetManager()
 		local show = mgr ~= nil and mgr.RunState == "RESULT"
-		if show then
-			local player = _UserService.LocalPlayer
-			local eng = isvalid(player) and player:GetComponent("script.PlayerEngrave") or nil
-			local info = "입장 에너지 불러오는 중"
-			if eng ~= nil and eng.EnergyLoaded then info = "재도전 " .. tostring(eng.EnergyCost) .. "개 · 보유 " .. tostring(eng.Energy) .. "/" .. tostring(eng.EnergyMax) end
-			if (self._T.entryNoticeTime or 0) > 0 then
-				self._T.entryNoticeTime = self._T.entryNoticeTime - delta
-				info = self._T.entryNotice
-			end
-			if isvalid(self.entryInfoText) then self.entryInfoText.Text = info end
-		end
 		if self.popupRoot.Enable ~= show then
 			self.popupRoot:SetEnable(show)
-			if show then log("[VRF] result popup shown floor=" .. tostring(mgr.Floor)) end
+			local old = _EntityService:GetEntityByPath(self.OldPanel)
+			if isvalid(old) then old:SetEnable(false) end
+			local root = _EntityService:GetEntityByPath(self.Base)
+			if isvalid(root) then root:SetEnable(show) end
+			if show then
+				self._T.claiming = false
+				self:Fill(mgr)
+				log("[VRF] result screen shown floor=" .. tostring(mgr.ResultFloor))
+			end
 		end
-		if show and isvalid(self.bodyText) and mgr.IsStageClear then
-			-- 스테이지 클리어: 스테이지·층 범위·클리어 보상
-			local single = mgr.StageStartFloor == mgr.StageEndFloor
-			if isvalid(self.titleText) then self.titleText.Text = single and (tostring(mgr.StageEndFloor) .. "층 클리어") or "스테이지 클리어" end
-			local head = "스테이지 " .. tostring(mgr.StageNo) .. " (" .. tostring(mgr.StageStartFloor) .. "~" .. tostring(mgr.StageEndFloor) .. "층)\n"
-			if single then head = "15스테이지 돌파 · Lv." .. tostring(mgr.Level) .. "\n" end
-			self.bodyText.Text = head
-				.. "스킬북 +" .. tostring(mgr.RunBooks) .. "\n"
-				.. "여신의 깃털 +" .. tostring(mgr.RunFeathers) .. "\n"
-				.. "강화 주문서 +" .. tostring(mgr.RunScrolls) .. "\n"
-				.. (single and "다음 층이 열렸습니다" or "다음 스테이지가 열렸습니다")
-			return
+		if not show then return end
+		-- 다시 도전 비용
+		local eng = self:Engrave()
+		local cost = eng ~= nil and eng.EnergyCost or 3
+        local accountLine = "계정 경험치 저장 재시도 중"
+        if mgr.ResultAccountSaved and eng ~= nil then
+            accountLine = "계정 EXP +" .. tostring(mgr.ResultAccountExp) .. "   Lv." .. tostring(mgr.ResultAccountBeforeLevel)
+            if mgr.ResultAccountAfterLevel > mgr.ResultAccountBeforeLevel then accountLine = accountLine .. " → " .. tostring(mgr.ResultAccountAfterLevel) end
+            if eng.AccountLevel >= 100 then accountLine = accountLine .. "  MAX" end
+        end
+        self:SetText("AccountExp/Value",accountLine,nil)
+        if eng ~= nil and mgr.ResultAccountSaved then
+            local gainedLevels = mgr.ResultAccountAfterLevel - mgr.ResultAccountBeforeLevel
+            local effectLine=eng.AccountLevel>=100 and "최고 레벨 달성" or (tostring(eng.AccountExp) .. " / " .. tostring(eng.AccountNeed) .. " EXP")
+            if gainedLevels==1 then effectLine=_AccountRules:RewardText(mgr.ResultAccountAfterLevel)
+            elseif gainedLevels>1 then
+                local count=0
+                for lv=mgr.ResultAccountBeforeLevel+1,mgr.ResultAccountAfterLevel do count=count+#_AccountRules:Rewards(lv) end
+                effectLine="레벨 +" .. tostring(gainedLevels) .. " · 효과 " .. tostring(count) .. "개 획득"
+            end
+            self:SetText("AccountExp/Effect",effectLine,nil)
+            local target = eng.AccountLevel >= 100 and 1 or eng.AccountExp / math.max(1,eng.AccountNeed)
+            if self._T.accountBar == nil then self._T.accountBar = gainedLevels > 0 and 0 or mgr.ResultAccountBeforeExp / math.max(1,mgr.ResultAccountBeforeNeed) end
+            self._T.accountBar = self._T.accountBar + (target - self._T.accountBar) * math.min(1,delta*5)
+            local af = self:E("AccountExp/Bar/Fill")
+            if isvalid(af) then af.UITransformComponent.RectSize = Vector2(math.max(1,460*self._T.accountBar),14) end
+        end
+        local retry = self:E("retry")
+        if isvalid(retry) then retry.ButtonComponent.Enable = mgr.ResultAccountSaved and eng ~= nil and eng.EnergyLoaded and eng.Energy >= cost end
+        local back = self:E("resultBack")
+        if isvalid(back) then back.ButtonComponent.Enable = mgr.ResultAccountSaved end
+		self:SetText("retry/retryCost", "에너지 " .. tostring(cost), nil)
+		-- 등장: 큰 별이 차례로 커지며 나타남, 새 별은 더 크게 튀어나옴
+		if self._T.revealT ~= nil then
+			self._T.revealT = self._T.revealT + delta
+			local t = self._T.revealT
+			for j = 0, 2 do
+				local e = self:E("largeStar" .. tostring(j))
+				if isvalid(e) then
+					local u = math.max(0, math.min(1, (t - 0.15 - j * 0.18) / 0.3))
+					local isNew = ((self._T.gained or 0) & (1 << j)) ~= 0
+					local over = isNew and 0.35 or 0.12
+					local sc = u <= 0 and 0 or (u < 0.7 and (u / 0.7) * (1 + over) or (1 + over) - over * ((u - 0.7) / 0.3))
+					e.UITransformComponent.UIScale = Vector3(sc, sc, 1)
+				end
+			end
+			if t > 1.2 then self._T.revealT = nil end
 		end
-		if show and isvalid(self.titleText) then self.titleText.Text = "도전 종료" end
-		if show and isvalid(self.bodyText) then
-			local best = "최고 기록 " .. tostring(mgr.BestFloor) .. "층"
-			if mgr.IsNewBest then best = best .. " (신기록!)" end
-			local body = tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지에서 실패\n"
-				.. "레벨   Lv." .. tostring(mgr.Level) .. "\n"
-				.. "획득 메소   " .. tostring(mgr.RunMeso) .. "\n"
-				.. "여신의 깃털   +" .. tostring(mgr.RunFeathers) .. "\n"
-				.. "강화 주문서   +" .. tostring(mgr.RunScrolls) .. "\n"
-				.. "스킬북   +" .. tostring(mgr.RunBooks) .. "\n" .. best
-			self.bodyText.Text = body
+		if self._T.claiming then
+			self._T.claimTimeout = (self._T.claimTimeout or 0) - delta
+			if eng ~= nil and eng.ClaimSeq ~= self._T.claimSeq then
+				self._T.claiming = false
+				self:Message(eng.ClaimMsg)
+				self:FillSection()
+			elseif self._T.claimTimeout <= 0 then
+				self._T.claiming = false
+				self:Message("응답이 없습니다. 다시 시도해 주세요")
+				self:FillSection()
+			end
+		end
+		if (self._T.msgTime or 0) > 0 then
+			self._T.msgTime = self._T.msgTime - delta
+			if self._T.msgTime <= 0 then self:FillSection() end
 		end
 	end
 

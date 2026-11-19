@@ -1,0 +1,1172 @@
+@Component
+script BishopCombat extends Component
+
+	-- 비숍 전투 (케어 직업). 2인 편성에서 전투 캐릭터에 붙어 TowerRunManager가 HeroCombat과 같은 방식으로 부른다.
+	-- 스킬 15종(B01~B15) + 고유 패시브 홀리 워터(성수). 회복·버프는 파티(메인+동료) 대상.
+	-- 판정은 서버, HUD용 수치만 동기화. 돌파는 아직 없다 (별 강화만).
+	property string JobId = "Bishop"
+	-- 장착 스킬 (아웃게임 연결 전 임시: 시작 지급 1~5번)
+	property string StartEquip = "B01,B02,B03,B04,B05"
+	property string DebuffTableName = "DebuffTable"
+	-- 마나 (히어로와 같은 규칙)
+	property number ManaStart = 30
+	property number ManaRegen = 5
+	property number ManaPerHit = 2
+	-- 성수 (홀리 워터): 직접 공격 타수마다 확률로 1개, 최대 HolyBaseMax. 1개당 기본 공격력 +HolyAtkPerStack%.
+	property integer HolyBaseMax = 5
+	property number HolyGainChance = 30
+	property number HolyAtkPerStack = 1
+	-- 아웃게임 성수 패시브 레벨 (성장창 스킬탭에서 스킬북으로 올림)
+	@Sync
+	property integer HolyLv = 1
+	-- 지금 성수 최대치 (HUD 표시용)
+	@Sync
+	property integer HolyMaxNow = 5
+	-- 넘침: 가득 찬 상태에서 또 얻으면 빛 구체 (가장 다친 파티원 체력 HolyOrbHealLine% 미만이면 HolyOrbHealPct% 회복, 아니면 공격력 HolyOrbDmgPct% 피해)
+	property number HolyOrbHealLine = 80
+	property number HolyOrbHealPct = 3
+	property number HolyOrbDmgPct = 60
+	-- 정화: 성수를 쓸 때 1개당 파티 전원 최대 체력 HolyCleansePct% 회복
+	property number HolyCleansePct = 1.5
+	-- 홀리 애로우 재발동 확률(%), 샤이닝 레이 기절(초)
+	property number HolyArrowRecast = 30
+	property number ShiningStun = 1.5
+	-- 홀리 매직쉘: 위기 기준(체력 %), 막는 횟수, 회복(%)
+	property number ShellHpLine = 50
+	property integer ShellBlocks = 3
+	property number ShellHealPct = 10
+	-- 트라이엄프 페더: 충전 수, 추가타 지연(초)
+	property integer FeatherCharges = 5
+	property number FeatherDelay = 0.3
+	-- 엔젤레이: 맞을 때마다 가장 다친 파티원 회복(%), 재발동 확률(%)
+	property number AngelRayHealPct = 2
+	property number AngelRayRecast = 15
+	-- 바하뮤트: 공격 간격(초), 소환 위치(캐릭터 기준)
+	property number BahamutInterval = 3
+	property Vector3 BahamutOffset = Vector3(-0.7, 1.0, 0)
+	property string BahamutStandRUID = "c097193e365b47068d0b76f36090d5eb"
+	property string BahamutAttackRUID = "9672c9a176af4302a5e8040b9d1c9218"
+	-- 인피니티: 증가 간격(초), 최대 단계
+	property number InfinityStep = 2
+	property integer InfinityMaxStacks = 5
+	-- 헤븐즈 도어: 쓰러짐 무시 지속(초)
+	property number HeavensWardTime = 30
+	-- 어드밴스드 블레스: 받는 피해 감소(%)
+	property number BlessReducePct = 10
+	-- 프레이: 파티 회복량 증가(%)
+	property number PrayHealPct = 50
+	-- 엔젤 오브 제미니: 두 번째 천사 지연(초)
+	property number GeminiSecondDelay = 0.7
+	-- 피스메이커: 몬스터 받는 피해 증가(%·초), 맞을 때마다 파티 회복(%)
+	property number PeaceVulnPct = 10
+	property number PeaceVulnTime = 4
+	property number PeaceHealPct = 1
+	property number HitNumGap = 0.18
+	property number SoundVolume = 0.7
+	-- 연출 리소스 (메이플 스킬 팩)
+	property string ShellRepeatRUID = "ec0acf34d59043f695f43c55222a7b0e"
+	property string HealAffectedRUID = "ab42514ac987474289817c576332f67a"
+	property string OrbHitRUID = "341a2fd02d0343cfa64da45970aa7cf2"
+
+	-- HUD 표시용
+	@Sync
+	property boolean Active = false
+	@Sync
+	property number Mana = 0
+	@Sync
+	property number ManaMax = 100
+	@Sync
+	property integer HolyWater = 0
+	@Sync
+	property integer FeatherLeft = 0
+	@Sync
+	property number SummonLeft = 0
+	@Sync
+	property string StatusText = ""
+	@Sync
+	property string SlotInfo = ""
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 비숍 스킬표(JobSkillTable JobId=Bishop + SkillActionTable)를 읽고 상태를 비운다.
+		self:LoadSkills()
+		self:ClearState()
+		log("[VRF] BishopCombat begin skills=" .. tostring(self._T.skillCount or 0))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSkills()
+		-- skills[Id] = { id, name, trigger, cooldown, buffTime, mana, comboUse, comboBonus, pct, hits, 연출 }
+		self._T.skills = {}
+		self._T.skillCount = 0
+		local acts = {}
+		local at = _DataService:GetTable("SkillActionTable")
+		if at ~= nil then
+			for i = 1, at:GetRowCount() do
+				acts[at:GetCell(i, "SkillId")] = { actionFrames = at:GetCell(i, "ActionFrames") or "", actionTime = tonumber(at:GetCell(i, "ActionTime")) or 0.6,
+					casterFx = at:GetCell(i, "CasterFx") or "", fx = at:GetCell(i, "HitFx") or "", fxScale = tonumber(at:GetCell(i, "FxScale")) or 1, mobFx = at:GetCell(i, "MobFx") or "",
+					policy = at:GetCell(i, "HitPolicy") or "per_hit", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
+					gap = tonumber(at:GetCell(i, "HitGap")) or 0.12, targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)) }
+			end
+		end
+		local js = _DataService:GetTable("JobSkillTable")
+		if js == nil then return end
+		for i = 1, js:GetRowCount() do
+			if js:GetCell(i, "JobId") == self.JobId then
+				local id = js:GetCell(i, "SkillId")
+				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
+				local a = acts[id] or { actionFrames = "", actionTime = 0.6, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", gap = 0.12, targets = 1 }
+				self._T.skills[id] = { id = id, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Skill", cooldown = num("Cooldown"), buffTime = num("BuffTime"),
+					mana = num("Mana"), comboUse = math.floor(num("ComboUse")), comboBonus = num("ComboBonus"), pct = num("Pct"), hits = math.max(1, math.floor(num("ProcHits"))), a = a }
+				self._T.skillCount = self._T.skillCount + 1
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ClearState()
+		-- 판 상태 비우기.
+		local t = self._T
+		t.equip = {}
+		t.ownLv = {}
+		t.cd = {}
+		t.lastActionTime = 0
+		if t.summon ~= nil and (t.summon.serial or 0) ~= 0 then _EffectService:RemoveEffect(t.summon.serial) end
+		t.summon = nil
+		t.till = {}
+		t.infinity = nil
+		t.mgr = nil
+		self.SummonLeft = 0
+		self.Active = false
+		self.Mana = 0
+		self.HolyWater = 0
+		self.FeatherLeft = 0
+		self.StatusText = ""
+		self.SlotInfo = ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BeginRun(Component mgr)
+		-- 판 시작: 성장창에서 장착한 비숍 스킬 5종(아웃게임 레벨 포함)을 레벨업 카드 후보로 정한다. 입장 직후에는 아무 스킬도 없다 (Lv.0).
+		-- 저장 정보가 없으면 (불러오기 전·테스트) 시작 지급 StartEquip을 Lv.1로 쓴다.
+		self:ClearState()
+		self._T.mgr = mgr
+		local eng = mgr:GetEngrave()
+		local data = nil
+		if eng ~= nil then data = eng:SkillRunDataFor("Bishop") end
+		if data == nil or not data.loaded or #data.equip == 0 then
+			data = { equip = {}, lv = {}, holyLv = 1 }
+			for id in string.gmatch(self.StartEquip, "[^,]+") do
+				table.insert(data.equip, id)
+				data.lv[id] = 1
+			end
+		end
+		self.HolyLv = data.holyLv or 1
+		for _, id in ipairs(data.equip) do
+			if self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.ownLv[id] = data.lv[id] or 1
+				mgr.SkillLv[id] = 0
+			end
+		end
+		log("[VRF] bishop run equip=" .. table.concat(self._T.equip, ",") .. " holyLv=" .. tostring(self.HolyLv))
+		self.Active = true
+		self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
+		self.Mana = self.ManaStart
+		local list = {}
+		for _, id in ipairs(self._T.equip) do
+			local a = self._T.skills[id].a
+			for _, field in ipairs({ a.casterFx, a.fx, a.mobFx, a.useSound, a.hitSound }) do
+				for ruid in string.gmatch(field or "", "[^|]+") do table.insert(list, ruid) end
+			end
+		end
+		for _, ruid in ipairs({ self.ShellRepeatRUID, self.HealAffectedRUID, self.OrbHitRUID }) do table.insert(list, ruid) end
+		local tp = self.Entity:GetComponent("script.TowerPlayer")
+		if tp ~= nil and tp:Uid() ~= "" then self:PreloadFx(table.concat(list, "|"), tp:Uid()) end
+		log("[VRF] bishop run equip=" .. table.concat(self._T.equip, ","))
+	end
+
+	@ExecSpace("Client")
+	method void PreloadFx(string ruids)
+		-- 클라이언트: 비숍 스킬 이펙트·사운드 미리 불러오기.
+		local list = {}
+		for ruid in string.gmatch(ruids, "[^|]+") do table.insert(list, ruid) end
+		if #list == 0 then return end
+		_ResourceService:PreloadAsync(list, function(result) log("[VRF] bishop fx preloaded n=" .. tostring(#list)) end)
+	end
+
+	@ExecSpace("Client")
+	method void PlaySfx(string ruid, number volume)
+		-- 클라이언트: 효과음 (동료는 플레이어가 아니라 주인 클라이언트에서 재생).
+		if ruid == nil or ruid == "" then return end
+		_SoundService:PlaySound(ruid, volume)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugLearn(string ids)
+		-- 검증용: 장착 목록을 ids로 바꾸고 모두 이번 판 Lv.1로 배운 상태로.
+		local mgr = self._T.mgr
+		if mgr == nil then return end
+		self._T.equip = {}
+		for id in string.gmatch(ids, "[^,]+") do
+			if self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.ownLv[id] = 1
+				mgr.SkillLv[id] = 1
+			end
+		end
+		self.Mana = self.ManaMax
+		log("[VRF] bishop debug learn " .. ids)
+	end
+
+	-- ========== 기본 정보 ==========
+
+	@ExecSpace("ServerOnly")
+	method number Now()
+		-- 서버 시간(초).
+		return _UtilLogic.ElapsedSeconds
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Equipped(string id)
+		-- 이번 판에 장착한 스킬인지.
+		for _, e in ipairs(self._T.equip or {}) do
+			if e == id then return true end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Learned(string id)
+		-- 이번 판 레벨업으로 배운 스킬인지 (장착 + Lv.1 이상).
+		local mgr = self._T.mgr
+		if mgr == nil or not self:Equipped(id) then return false end
+		return (mgr.SkillLv[id] or 0) > 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean BreakAllowed(string breakId)
+		-- 돌파 카드 등장 조건: 신성 낙인을 쓰는 돌파는 낙인을 거는 수단이 있을 때만.
+		if breakId == "B13_B3" or breakId == "B14_B5" then
+			return self:Learned("B14") or self:Has("B01", 4) or self:Has("B03", 5) or self:Has("B05", 4)
+		end
+		if breakId == "B10_B5" then return self:Learned("B02") or self:Learned("B06") or self:Has("B01", 5) end
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Has(string id, integer n)
+		-- 돌파 id_Bn을 이번 판에 얻었는지.
+		local mgr = self._T.mgr
+		if mgr == nil then return false end
+		return mgr:HeroBreak(id, id .. "_B" .. tostring(n))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer HolyMax()
+		-- 성수 최대치: 기본 5, 샤이닝 레이 돌파 3 '어드밴스드 성수' 10, 디바인 퍼니시먼트 돌파 5 15.
+		if self:Has("B15", 5) then return 15 end
+		if self:Has("B03", 3) then return 10 end
+		return self.HolyBaseMax
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ManaCost(table sk)
+		-- 마나 비용 (돌파 반영).
+		local cost = sk.mana or 0
+		if sk.id == "B03" and self:Has("B03", 4) and self.HolyWater >= self:HolyMax() then cost = 0 end
+		if sk.id == "B06" and self:Has("B06", 5) then cost = 12 end
+		if sk.id == "B07" and self:Has("B07", 4) then cost = 10 end
+		if sk.id == "B10" and self:Has("B10", 3) then cost = cost / 2 end
+		if sk.id == "B13" and self:Has("B13", 2) then cost = 30 end
+		if sk.id == "B14" and self:Has("B14", 3) then cost = 7 end
+		return math.ceil(cost)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MarkTarget(Entity target)
+		-- 신성 낙인: 4초 동안 몬스터가 받는 피해 증가 (피스메이커 돌파 2면 +20%).
+		local mgr = self._T.mgr
+		if mgr == nil then return end
+		local pct = self.PeaceVulnPct
+		if self:Has("B14", 2) then pct = pct * 2 end
+		mgr:HeroSetVuln(pct, self.PeaceVulnTime)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnShellBroken()
+		-- 홀리 매직쉘이 다 깨졌을 때 (돌파 5 '깨진 축복': 성수가 가득 참).
+		if not self:Has("B04", 5) then return end
+		self.HolyWater = self:HolyMax()
+		log("[VRF] bishop shell broken -> holy full")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnRecast()
+		-- 비숍 스킬이 재발동할 때 (헤븐즈 도어 돌파 5: 쿨타임 2초 감소).
+		if self:Has("B10", 5) then self._T.cd.B10 = math.max(0, (self._T.cd.B10 or 0) - 2) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RunSkills(Component mgr)
+		-- 이번 판에 배운 비숍 스킬 (장착 순서).
+		local list = {}
+		for _, id in ipairs(self._T.equip or {}) do
+			local sk = self._T.skills[id]
+			if sk ~= nil and self:Learned(id) then table.insert(list, sk) end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method number LvMul(string id)
+		-- 아웃게임 스킬 레벨 배율: Lv.1 1배 → Lv.11 3배.
+		return 1 + ((self._T.ownLv[id] or 1) - 1) * 0.2
+	end
+
+	@ExecSpace("ServerOnly")
+	method number Star(string id, string key)
+		-- 별 강화 합계 (StarPower %, StarTempo %, StarCrit %p).
+		local mgr = self._T.mgr
+		if mgr == nil then return 0 end
+		return mgr:HeroStarVal(id, key)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddMana(number n)
+		-- 마나 증감 (0 ~ 최대).
+		self.Mana = math.max(0, math.min(self.ManaMax, self.Mana + n))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string OwnerUid()
+		-- 이 캐릭터의 클라이언트 통신 대상 UserId.
+		local tp = self.Entity:GetComponent("script.TowerPlayer")
+		if tp == nil then return "" end
+		return tp:Uid()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Sfx(string ruid)
+		-- 효과음 재생 (주인 클라이언트).
+		if ruid == nil or ruid == "" then return end
+		local uid = self:OwnerUid()
+		if uid ~= "" then self:PlaySfx(ruid, self.SoundVolume, uid) end
+	end
+
+	-- ========== 매니저가 부르는 공통 인터페이스 ==========
+
+	@ExecSpace("ServerOnly")
+	method number MissChance()
+		-- 몬스터 빗나감 확률은 몬스터 상태 담당(메인 히어로)이 판단한다.
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method number QueuedMissChance(Entity e)
+		-- 줄 선 몬스터 빗나감 확률도 담당이 판단.
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean IsInvuln()
+		-- 디바인 퍼니시먼트 시전 중 무적.
+		return self:Now() < ((self._T.till or {}).inv or 0)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number HolyAtkPct()
+		-- 성수 1개당 기본 공격력 증가 합계(%).
+		-- 성수 패시브 레벨마다 1개당 +0.2%p (Lv.1 1% → Lv.11 3%).
+		return self.HolyWater * (self.HolyAtkPerStack + (self.HolyLv - 1) * 0.2)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DirectMul()
+		-- 기본 공격 피해 배율: 성수 공격력.
+		return 1 + self:HolyAtkPct() / 100
+	end
+
+	@ExecSpace("ServerOnly")
+	method number LastActionTime()
+		-- 이번 공격에 나간 스킬 동작 시간 (다음 기본 공격이 끊지 않게).
+		return self._T.lastActionTime or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PauseClock(number delta)
+		-- 카드 선택·몬스터 교체 중: 비숍은 따로 멈출 시계가 없다.
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnMonsterSpawn(Component mgr, Entity monster, string standRUID)
+		-- 새 몬스터: 몬스터 상태 정리는 담당(메인 히어로)이 한다.
+		self._T.mgr = mgr
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component StatusOwner()
+		-- 몬스터 상태(자상·기절 표시)를 들고 있는 메인 히어로.
+		local mgr = self._T.mgr
+		if mgr == nil then return nil end
+		local h = mgr:MainHero()
+		if h == self then return nil end
+		return h
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DefDownPct()
+		-- 공유 자상으로 몬스터가 받는 피해 증가(%).
+		local o = self:StatusOwner()
+		if o == nil then return 0 end
+		return o:DefDownPct()
+	end
+
+	-- ========== 성수 (홀리 워터) ==========
+
+	@ExecSpace("ServerOnly")
+	method void GainHoly(integer n, Entity target)
+		-- 성수 n개 획득. 가득 찬 뒤 얻은 몫은 빛 구체로 바뀐다 (넘침).
+		for i = 1, n do
+			if self.HolyWater < self:HolyMax() then
+				self.HolyWater = self.HolyWater + 1
+			else
+				self:HolyOrb(target)
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RollHolyHits(integer hits, Entity target)
+		-- 직접 공격 타수마다 HolyGainChance%로 성수 1개.
+		local chance = self.HolyGainChance
+		-- 인피니티 돌파 3 '성수 순환': 지속 중 45%
+		if self._T.infinity ~= nil and self:Has("B09", 3) then chance = 45 end
+		for h = 1, hits do
+			if _UtilLogic:RandomDouble() * 100 < chance then self:GainHoly(1, target) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HolyOrb(Entity target)
+		-- 넘침 빛 구체: 가장 다친 파티원이 기준 미만이면 회복, 아니면 앞 몬스터에게 피해.
+		local mgr = self._T.mgr
+		if mgr == nil then return end
+		local low = mgr:LowestAlly()
+		if isvalid(low) and mgr:ActorHp(low) < mgr:ActorMaxHp(low) * self.HolyOrbHealLine / 100 then
+			self:HealTo(low, self.HolyOrbHealPct)
+			log("[VRF] bishop holy orb heal")
+			return
+		end
+		local mon = mgr:HeroMonster()
+		if not isvalid(mon) or mgr.RunState ~= "FIGHT" then return end
+		local s = self:Strike("", self.HolyOrbDmgPct, 0)
+		self:DealTo(mon, s.dmg, s.crit, self.OrbHitRUID, 1, 0)
+		log("[VRF] bishop holy orb dmg=" .. tostring(s.dmg))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer UseHoly(integer want)
+		-- 성수를 최대 want개 쓰고 쓴 개수를 돌려준다. 정화: 1개당 파티 전원 HolyCleansePct% 회복.
+		local n = math.min(want, self.HolyWater)
+		if n <= 0 then return 0 end
+		self.HolyWater = self.HolyWater - n
+		local mgr = self._T.mgr
+		if mgr ~= nil then
+			for _, e in ipairs(mgr:Actors()) do
+				if not mgr:IsDown(e) then self:HealTo(e, self.HolyCleansePct * n) end
+			end
+		end
+		log("[VRF] bishop holy use n=" .. tostring(n))
+		return n
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HealTo(Entity e, number pct)
+		-- 파티원 회복: 최대 체력 pct% (회복 이펙트).
+		local mgr = self._T.mgr
+		if mgr == nil or not isvalid(e) or mgr:IsDown(e) then return end
+		mgr:HealActor(e, mgr:ActorMaxHp(e) * pct / 100)
+		_EffectService:PlayEffectAttached(self.HealAffectedRUID, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+	end
+
+	-- ========== 스킬 시전 ==========
+
+	@ExecSpace("ServerOnly")
+	method table Strike(string id, number pct, number bonusPct)
+		-- 한 타 피해: 공격력 × 계수 × 레벨 × (1+별 위력+보너스) × (1+성수 공격력) × (1+공유 자상) → 치명타. { dmg, crit }
+		local mgr = self._T.mgr
+		local lv = 1
+		if id ~= "" then lv = self:LvMul(id) end
+		local base = mgr:PlayerHitDamage() * pct / 100 * lv
+		local starPow = 0
+		local starCrit = 0
+		if id ~= "" then
+			starPow = self:Star(id, "StarPower")
+			starCrit = self:Star(id, "StarCrit")
+		end
+		local mul = (1 + (starPow + bonusPct) / 100) * (1 + self:HolyAtkPct() / 100) * (1 + self:DefDownPct() / 100)
+		local crit = _UtilLogic:RandomDouble() * 100 < mgr.CritRate + starCrit
+		if crit then mul = mul * (mgr.CritDmg + starCrit * 2) / 100 end
+		return { dmg = math.max(1, math.floor(base * mul + 0.5)), crit = crit }
+	end
+
+	@ExecSpace("ServerOnly")
+	method table MakeCast(table sk)
+		-- 시전 1회 결과를 미리 계산 (TowerPlayer가 공격 동작과 함께 넘겨주고, 타격 순간 ApplyCast로 돌아온다).
+		local a = sk.a
+		local r = { hero = true, id = sk.id, sk = sk, hitDmg = {}, hitCrit = {}, fx = a.fx, fxScale = a.fxScale, mobFx = a.mobFx, policy = a.policy,
+			hitSound = a.hitSound, useSound = a.useSound, gap = a.gap, targets = a.targets,
+			actionFrames = a.actionFrames, actionTime = a.actionTime * (1 - math.min(0.5, self:Star(sk.id, "StarTempo") / 100)), casterFx = a.casterFx }
+		if sk.id == "B05" then
+			r.feather = true
+			return r
+		end
+		-- 헤븐즈 도어 돌파 3 '맨손의 기적': 캐릭터 동작 없이
+		if sk.id == "B10" and self:Has("B10", 3) then r.actionFrames = "" end
+		if sk.id == "B08" or sk.id == "B11" then
+			r.buffSkill = true
+			return r
+		end
+		local bonus = 0
+		local hits = sk.hits
+		if sk.id == "B07" then
+			-- 빅뱅: 성수를 최대 3개(돌파 3: 6개) 쓰고 1개당 피해 +20%(돌파 3: +25%)
+			local maxUse = sk.comboUse
+			local per = sk.comboBonus
+			if self:Has("B07", 3) then
+				maxUse = 6
+				per = 25
+			end
+			local n = math.min(maxUse, self.HolyWater)
+			if n > 0 then
+				r.holyUse = n
+				bonus = bonus + per * n
+			end
+			if self:Has("B07", 2) then r.execute = 0.15 end
+			if self:Has("B07", 5) then r.targets = 4 end
+		end
+		if sk.id == "B15" then
+			-- 디바인 퍼니시먼트: 성수 전부 사용, 시전 중 무적
+			r.holyUse = self.HolyWater
+			if self:Has("B15", 1) then bonus = bonus + 20 * self.HolyWater end
+			if self:Has("B15", 3) then hits = 10 end
+			r.invuln = (r.actionTime or 1) + hits * (a.gap or 0.15) + 0.3
+			if self:Has("B15", 4) then r.sanctuary = r.invuln end
+		end
+		if sk.id == "B10" then
+			r.ward = self.HeavensWardTime
+			if self:Has("B10", 1) then bonus = bonus + 60 end
+			if self:Has("B10", 4) then r.resurrect = true end
+		end
+		if sk.id == "B14" then
+			r.vuln = true
+			r.partyHeal = self.PeaceHealPct
+			if self:Has("B14", 4) then r.partyHeal = self.PeaceHealPct * 2 end
+			if self:Has("B14", 1) then bonus = bonus + 60 end
+			if self:Has("B14", 5) then r.judgment = true end
+		end
+		if sk.id == "B06" then
+			r.lowHeal = self.AngelRayHealPct
+			if self:Has("B06", 3) then r.lowHeal = self.AngelRayHealPct * 2 end
+			if self:Has("B06", 1) then hits = 4 end
+			local rc = self.AngelRayRecast
+			if self:Has("B06", 2) then rc = 35 end
+			if _UtilLogic:RandomDouble() * 100 < rc then r.recast = true end
+		end
+		if sk.id == "B01" then
+			r.holyGain = 1
+			if self:Has("B01", 3) then r.holyGain = 3 end
+			if self:Has("B01", 2) then r.echo = 60 end
+			if self:Has("B01", 4) then r.mark = true end
+			if self:Has("B01", 5) and _UtilLogic:RandomDouble() * 100 < 25 then r.recast = true end
+		end
+		if sk.id == "B02" then
+			if self:Has("B02", 1) then hits = 3 end
+			local rc = self.HolyArrowRecast
+			if self:Has("B02", 4) then rc = 55 end
+			if _UtilLogic:RandomDouble() * 100 < rc then r.recast = true end
+			if self:Has("B02", 3) then r.aim = true end
+			if self:Has("B02", 5) then
+				r.holyGain = 2
+				r.manaGain = 4
+			end
+		end
+		if sk.id == "B13" then
+			if self:Has("B13", 4) then r.bleedPerHit = true end
+			if self:Has("B13", 5) then r.angelShield = true end
+		end
+		if sk.id == "B03" then
+			-- 샤이닝 레이: 성수 2를 쓰면 피해 +50% (정화 회복은 타격 순간)
+			if self.HolyWater >= sk.comboUse and sk.comboUse > 0 then
+				r.holyUse = sk.comboUse
+				bonus = bonus + sk.comboBonus
+			end
+			r.stun = self.ShiningStun
+			if self:Has("B03", 1) then r.dark = true end
+			if self:Has("B03", 2) and (r.holyUse or 0) > 0 then r.holyRefund = math.floor(r.holyUse / 2) end
+			if self:Has("B03", 5) then r.mark = true end
+		end
+		local volleys = 1
+		if sk.id == "B13" then
+			volleys = 2
+			if self:Has("B13", 1) then volleys = 3 end
+		end
+		r.delays = {}
+		for v = 1, volleys do
+			for h = 1, hits do
+				local s = self:Strike(sk.id, sk.pct, bonus)
+				-- 빅뱅 돌파 1 '붕괴하는 별': 체력 50% 이하 대상에게 2배
+				if sk.id == "B07" and self:Has("B07", 1) and self._T.mgr ~= nil and self._T.mgr.MonsterHp <= self._T.mgr.MonsterMaxHp * 0.5 then s.dmg = s.dmg * 2 end
+				table.insert(r.hitDmg, s.dmg)
+				table.insert(r.hitCrit, s.crit)
+				table.insert(r.delays, (v - 1) * (self.GeminiSecondDelay + (hits - 1) * (a.gap or 0.12)) + (h - 1) * (a.gap or 0.12))
+			end
+		end
+		if sk.id == "B13" then
+			local s = self:Strike(sk.id, sk.comboBonus, 0)
+			r.finisher = s
+			r.finisherDelay = (volleys - 1) * (self.GeminiSecondDelay + (hits - 1) * (a.gap or 0.12)) + hits * (a.gap or 0.12) + 0.2
+		end
+		log("[VRF] bishop cast " .. sk.id .. " hits=" .. tostring(#r.hitDmg) .. " dmg1=" .. tostring(r.hitDmg[1] or 0) .. " holy=" .. tostring(self.HolyWater) .. " mana=" .. tostring(math.floor(self.Mana)))
+		return r
+	end
+
+	@ExecSpace("ServerOnly")
+	method number Cooldown(table sk)
+		-- 쿨타임 (돌파 반영. 별 '속도·지속 강화'는 동작 속도라 쿨타임에는 영향 없음).
+		local cd = sk.cooldown or 0
+		local cut = { B01 = { 1, 3 }, B02 = { 2, 3 }, B04 = { 4, 15 }, B06 = { 5, 6 }, B07 = { 4, 4 }, B10 = { 2, 18 }, B13 = { 2, 8 }, B14 = { 3, 3 }, B15 = { 2, 0 } }
+		local c = cut[sk.id]
+		if c ~= nil and self:Has(sk.id, c[1]) then cd = c[2] end
+		return cd
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollCasts(Component mgr)
+		-- 기본 공격 1회(명중): 마나·성수 획득 후 함께 시전할 비숍 스킬을 정한다. 동작 있는 스킬은 1개: 쿨타임형 → 마나형(비용 큰 것).
+		self._T.mgr = mgr
+		self:AddMana(self.ManaPerHit)
+		local mon = mgr:HeroMonster()
+		self:RollHolyHits(1, mon)
+		local list = {}
+		-- 트라이엄프 페더: 깃털이 남아 있으면 이번 직접 공격에 추가타
+		if self.FeatherLeft > 0 and self:Learned("B05") then
+			self.FeatherLeft = self.FeatherLeft - 1
+			local sk = self._T.skills.B05
+			local pct = sk.pct
+			-- 돌파 5 '승리의 현신': 충전 1회, 피해가 원래 충전 수만큼 배가
+			if self:Has("B05", 5) then pct = pct * self.FeatherCharges end
+			local s = self:Strike("B05", pct, 0)
+			local fr = { hero = true, id = "B05hit", sk = sk, hitDmg = { s.dmg }, hitCrit = { s.crit }, fx = sk.a.fx, fxScale = sk.a.fxScale, mobFx = "", policy = "once",
+				hitSound = "", useSound = "", gap = 0.1, targets = 1, actionFrames = "", actionTime = 0, casterFx = "", delay = self.FeatherDelay }
+			-- 돌파 3 '돌아오는 깃털': 50% 확률로 충전을 쓰지 않음
+			if self:Has("B05", 3) and _UtilLogic:RandomDouble() < 0.5 then self.FeatherLeft = self.FeatherLeft + 1 end
+			if self:Has("B05", 1) then fr.featherHoly = true end
+			if self:Has("B05", 4) then fr.mark = true end
+			table.insert(list, fr)
+		end
+		local skills = self:RunSkills(mgr)
+		-- 프레이(Instinct): 기본 공격이 맞으면 확률로 발동 (동작 없음)
+		local pray = self._T.skills.B12
+		local prayChance = 10
+		if self:Has("B12", 1) then prayChance = 16 end
+		if pray ~= nil and self:Learned("B12") and (self._T.cd.B12 or 0) <= 0 and not self:On("B12") and _UtilLogic:RandomDouble() * 100 < prayChance then
+			self._T.cd.B12 = self:Cooldown(pray)
+			self:StartPray(mgr, pray)
+		end
+		-- 프레이 지속 중: 기본 공격에 기도의 빛
+		if self:On("B12") and pray ~= nil then
+			local lightPct = pray.pct
+			if self:Has("B12", 4) then
+				lightPct = 100
+				self:AddMana(1)
+			end
+			local s = self:Strike("B12", lightPct, 0)
+			table.insert(list, { hero = true, id = "B12light", sk = pray, hitDmg = { s.dmg }, hitCrit = { s.crit }, fx = pray.a.fx, fxScale = 1, mobFx = "", policy = "once",
+				hitSound = "", useSound = "", gap = 0.1, targets = 1, actionFrames = "", actionTime = 0, casterFx = "", delay = 0.15 })
+		end
+		local acted = false
+		-- 최우선 시전: 성수가 가득일 때 샤이닝 레이 돌파 4 '완전한 계시' / 디바인 퍼니시먼트 돌파 2 '완전한 심판'
+		if self.HolyWater >= self:HolyMax() then
+			for _, pid in ipairs({ "B15", "B03" }) do
+				local sk = self._T.skills[pid]
+				local ok = (pid == "B15" and self:Has("B15", 2)) or (pid == "B03" and self:Has("B03", 4))
+				if ok and sk ~= nil and self:Learned(pid) and (self._T.cd[pid] or 0) <= 0 and self.Mana >= self:ManaCost(sk) then
+					self.Mana = self.Mana - self:ManaCost(sk)
+					self._T.cd[pid] = self:Cooldown(sk)
+					table.insert(list, self:MakeCast(sk))
+					acted = true
+					log("[VRF] bishop priority cast " .. pid)
+					break
+				end
+			end
+		end
+		for _, sk in ipairs(skills) do
+			if acted then break end
+			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 and not (sk.id == "B05" and self.FeatherLeft > 0) then
+				self._T.cd[sk.id] = self:Cooldown(sk)
+				table.insert(list, self:MakeCast(sk))
+				acted = true
+				break
+			end
+		end
+		if not acted then
+			local best = nil
+			for _, sk in ipairs(skills) do
+				local holyOk = sk.id ~= "B15" or self.HolyWater >= sk.comboUse
+				if sk.trigger == "Skill" and holyOk and (self._T.cd[sk.id] or 0) <= 0 and self.Mana >= self:ManaCost(sk) then
+					if best == nil or self:ManaCost(sk) > self:ManaCost(best) then best = sk end
+				end
+			end
+			if best ~= nil then
+				self.Mana = self.Mana - self:ManaCost(best)
+				self._T.cd[best.id] = self:Cooldown(best)
+				table.insert(list, self:MakeCast(best))
+			end
+		end
+		self._T.lastActionTime = 0
+		for _, r in ipairs(list) do
+			if (r.actionFrames or "") ~= "" and (r.actionTime or 0) > self._T.lastActionTime then self._T.lastActionTime = r.actionTime end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyCast(Component mgr, table r, Entity target)
+		-- 시전 결과 적용 (TowerPlayer의 타격 순간). 지연 추가타는 잠시 뒤.
+		self._T.mgr = mgr
+		if (r.delay or 0) > 0 then
+			local info = r
+			local d = r.delay
+			info.delay = 0
+			_TimerService:SetTimerOnce(function() self:ApplyCast(mgr, info, target) end, d)
+			return
+		end
+		if r.feather then
+			self.FeatherLeft = self.FeatherCharges
+			if self:Has("B05", 2) then self.FeatherLeft = 8 end
+			if self:Has("B05", 5) then self.FeatherLeft = 1 end
+			log("[VRF] bishop feather charged " .. tostring(self.FeatherLeft))
+			return
+		end
+		if r.buffSkill then
+			self:ApplyBuffSkill(mgr, r)
+			return
+		end
+		if (r.holyUse or 0) > 0 then self:UseHoly(r.holyUse) end
+		if (r.holyRefund or 0) > 0 then self:GainHoly(r.holyRefund, target) end
+		if (r.manaGain or 0) > 0 then self:AddMana(r.manaGain) end
+		if (r.invuln or 0) > 0 then self:SetTill("inv", self:Now() + r.invuln) end
+		if (r.sanctuary or 0) > 0 then mgr:AddBuff("bishopB15sanct", "DmgReduce", 50, r.sanctuary, 0) end
+		if r.resurrect then mgr:ReviveDownedPct(50) end
+		if r.mark then self:MarkTarget(target) end
+		if r.dark then
+			local o = self:StatusOwner()
+			if o ~= nil then o:ApplyDebuff("Darkness", target) end
+		end
+		if r.featherHoly and _UtilLogic:RandomDouble() < 0.4 then self:GainHoly(1, target) end
+		if r.isRecast then
+			self:OnRecast()
+			if r.id == "B06" and self:Has("B06", 4) then self:GainHoly(1, target) end
+		end
+		if r.aim then
+			local st = math.min(5, (self._T.aimStacks or 0) + #r.hitDmg)
+			if not self:On("aim") then st = math.min(5, #r.hitDmg) end
+			self._T.aimStacks = st
+			self:SetTill("aim", self:Now() + 8)
+			mgr:AddBuff("bishopAim", "AtkPct", st * 2, 8, 0)
+		end
+		if (r.echo or 0) > 0 and #r.hitDmg > 0 then
+			local dmg = math.floor(r.hitDmg[1] * r.echo / 100 + 0.5)
+			local fx = r.fx
+			local tg = r.targets or 1
+			_TimerService:SetTimerOnce(function()
+				local mon = mgr:HeroMonster()
+				if mgr.RunState == "FIGHT" and isvalid(mon) then self:DealTo(mon, dmg, false, fx, tg, 0.5) end
+			end, 0.35)
+		end
+		if (r.ward or 0) > 0 then
+			mgr:SetDeathWard(r.ward)
+			for _, e in ipairs(mgr:Actors()) do
+				if not mgr:IsDown(e) and (r.sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(r.sk.a.mobFx, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
+			end
+		end
+		if r.vuln then mgr:HeroSetVuln(self.PeaceVulnPct, self.PeaceVulnTime) end
+		local n = #r.hitDmg
+		for h = 1, n do
+			local hit = h
+			local d = (r.delays or {})[h]
+			if d == nil then d = (h - 1) * (r.gap or 0.12) end
+			if d <= 0 then
+				self:ApplyHit(r, target, hit)
+			else
+				_TimerService:SetTimerOnce(function() self:ApplyHit(r, target, hit) end, d)
+			end
+		end
+		if r.finisher ~= nil then
+			local fin = r.finisher
+			local fx = r.fx
+			local shield = r.angelShield
+			_TimerService:SetTimerOnce(function()
+				-- 돌파 5 '수호 천사': 천사가 사라질 때 가장 다친 파티원에게 보호막 15%
+				if shield then
+					local low = mgr:LowestAlly()
+					if isvalid(low) then mgr:AddShield(low, mgr:ActorMaxHp(low) * 0.15) end
+				end
+				if mgr.RunState ~= "FIGHT" or not isvalid(target) or target ~= mgr:HeroMonster() then return end
+				local d = fin.dmg
+				-- 돌파 3 '낙인 파열': 신성 낙인이 걸린 몬스터에게 2배
+				if self:Has("B13", 3) and mgr:IsVuln() then d = d * 2 end
+				self:DealTo(target, d, fin.crit, fx, 1, 0.6)
+				log("[VRF] bishop gemini finisher dmg=" .. tostring(fin.dmg))
+			end, r.finisherDelay or 1)
+		end
+		if (r.holyGain or 0) > 0 then self:GainHoly(r.holyGain, target) end
+		if r.id ~= "B05hit" then self:RollHolyHits(n, target) end
+		if r.stun ~= nil and n > 0 then
+			local o = self:StatusOwner()
+			if o ~= nil then o:StunTarget(mgr, r.stun, target) else mgr:HeroSetStun(r.stun) end
+		end
+		if r.recast then
+			local sk = r.sk
+			_TimerService:SetTimerOnce(function()
+				if mgr.RunState ~= "FIGHT" then return end
+				local again = self:MakeCast(sk)
+				again.recast = false
+				again.isRecast = true
+				again.actionFrames = ""
+				local mon = mgr:HeroMonster()
+				if isvalid(mon) then self:ApplyCast(mgr, again, mon) end
+				log("[VRF] bishop recast " .. sk.id)
+			end, n * (r.gap or 0.12) + 0.2)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyHit(table r, Entity target, integer h)
+		-- 타격 h: 피격 이펙트·소리·숫자·피해. 대상이 이미 쓰러졌으면 지금 싸우는 몬스터에게.
+		local mgr = self._T.mgr
+		if mgr == nil or mgr.RunState ~= "FIGHT" then return end
+		if not isvalid(target) or target ~= mgr:HeroMonster() then
+			target = mgr:HeroMonster()
+			if not isvalid(target) then return end
+		end
+		local dmg = r.hitDmg[h] or 0
+		local fx = ""
+		if r.policy == "per_hit" or h == 1 then
+			fx = r.fx or ""
+			self:Sfx(r.hitSound)
+		end
+		if h == 1 and (r.mobFx or "") ~= "" then
+			_EffectService:PlayEffectAttached(r.mobFx, target, Vector3(0, 0.5, 0), 0, Vector3(1, 1, 1), false)
+		end
+		self:DealTo(target, dmg, r.hitCrit[h] == true, fx, r.targets or 1, ((h - 1) % 4) * self.HitNumGap)
+		-- 제미니 돌파 4 '흉터': 천사 공격마다 자상 1중첩 (메인 히어로가 든 공유 자상)
+		if r.bleedPerHit then
+			local o = self:StatusOwner()
+			if o ~= nil and isvalid(target) then o:AddBleed(1, "B13", target) end
+		end
+		-- 빅뱅 돌파 2 '처형자': 마지막 타 뒤 체력 15% 이하면 즉시 처치 (엘리트 제외)
+		if (r.execute or 0) > 0 and h == #r.hitDmg and isvalid(target) and target == mgr:HeroMonster() and not mgr.MonsterElite and mgr.MonsterHp > 0 and mgr.MonsterHp <= mgr.MonsterMaxHp * r.execute then
+			local rest = math.ceil(mgr.MonsterHp)
+			self:DealTo(target, rest, true, "", 1, 0.8)
+			log("[VRF] bishop execute dmg=" .. tostring(rest))
+		end
+		-- 피스메이커 돌파 5 '심판의 날': 낙인 걸린 몬스터를 처치하면 주변에 빛기둥 200%
+		if r.judgment and mgr:IsVuln() then
+			local tm = isvalid(target) and target:GetComponent("script.TowerMonster") or nil
+			if tm ~= nil and tm.IsDead then
+				local nxt = mgr:SplashTargets(3)
+				local s = self:Strike("B14", 200, 0)
+				for _, e in ipairs(nxt) do
+					if isvalid(e) then mgr:ApplySplashDamage(e, s.dmg, s.crit, 0) end
+				end
+				log("[VRF] bishop judgment pillar n=" .. tostring(#nxt))
+			end
+		end
+		-- 엔젤레이: 가장 다친 파티원 회복 / 피스메이커: 파티 전원 회복
+		if (r.lowHeal or 0) > 0 then
+			local low = mgr:LowestAlly()
+			if isvalid(low) then self:HealTo(low, r.lowHeal) end
+		end
+		if (r.partyHeal or 0) > 0 then
+			for _, e in ipairs(mgr:Actors()) do
+				if not mgr:IsDown(e) then mgr:HealActor(e, mgr:ActorMaxHp(e) * r.partyHeal / 100) end
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DealTo(Entity target, integer dmg, boolean crit, string fx, integer targets, number yOff)
+		-- 맨 앞 몬스터 + 줄 선 몬스터 (targets-1)마리에게 같은 피해. 이펙트·숫자 표시.
+		local mgr = self._T.mgr
+		if dmg <= 0 or not isvalid(target) then return end
+		local first = ""
+		if fx ~= nil and fx ~= "" then first = string.match(fx, "^([^|]+)") or fx end
+		local tp = self.Entity:GetComponent("script.TowerPlayer")
+		local uid = self:OwnerUid()
+		local list = { target }
+		if targets > 1 then
+			for _, e in ipairs(mgr:SplashTargets(targets - 1)) do table.insert(list, e) end
+		end
+		for i, e in ipairs(list) do
+			if not isvalid(e) or e.TransformComponent == nil then continue end
+			if first ~= "" then
+				local wp = e.TransformComponent.WorldPosition
+				_EffectService:PlayEffect(first, e, Vector3(wp.x, wp.y + 0.45 * e.TransformComponent.Scale.y, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
+			end
+			if i == 1 then
+				if tp ~= nil and uid ~= "" then tp:ShowProcDamageAt(e, dmg, crit, yOff, uid) end
+				mgr:ApplyMonsterDamage(dmg)
+				if crit then mgr:OnPlayerCrit() end
+			else
+				mgr:ApplySplashDamage(e, dmg, crit, yOff)
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetTill(string key, number value)
+		-- 지속 효과 끝나는 시각 저장 (표를 고친 뒤 다시 넣어 변경이 남게).
+		local t = self._T.till or {}
+		t[key] = value
+		self._T.till = t
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean On(string key)
+		-- 지속 효과가 켜져 있는지 (till 기준).
+		return self:Now() < ((self._T.till or {})[key] or 0)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number BuffPower(string id)
+		-- 버프 위력 (별 '위력 강화' 반영).
+		return 1 + self:Star(id, "StarPower") / 100
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyBuffSkill(Component mgr, table r)
+		-- 바하뮤트 소환 / 어드밴스드 블레스 (파티 공격력·받는 피해 감소).
+		local sk = r.sk
+		if sk.id == "B08" then
+			local old = self._T.summon
+			if old ~= nil and (old.serial or 0) ~= 0 then _EffectService:RemoveEffect(old.serial) end
+			local serial = _EffectService:PlayEffectAttached(self.BahamutStandRUID, self.Entity, self.BahamutOffset, 0, Vector3(1, 1, 1), true, { FlipX = true })
+			local dur = sk.buffTime
+			if self:Has("B08", 1) then dur = 30 end
+			self._T.summon = { left = dur, next = 0.5, serial = serial, count = 0 }
+			self.SummonLeft = dur
+			-- 돌파 3 '수호룡': 소환 중 파티 받는 피해 -10%
+			if self:Has("B08", 3) then mgr:AddBuff("bishopB08def", "DmgReduce", 10, dur, 0) end
+			self:Sfx(sk.a.useSound)
+			log("[VRF] bishop bahamut summoned " .. tostring(sk.buffTime) .. "s")
+		elseif sk.id == "B11" then
+			local power = self:BuffPower(sk.id)
+			local dur = sk.buffTime
+			if self:Has("B11", 2) then dur = 22 end
+			local atk = sk.pct
+			if self:Has("B11", 1) then atk = 24 end
+			local red = self.BlessReducePct
+			if self:Has("B11", 3) then red = 20 end
+			mgr:AddBuff("bishopB11", "AtkPct", atk * power, dur, 0)
+			mgr:AddBuff("bishopB11def", "DmgReduce", red * power, dur, 0)
+			-- 돌파 5 '홀리 심볼': 지속 중 처치 경험치 +30%
+			if self:Has("B11", 5) then mgr:AddBuff("bishopB11exp", "ExpPct", 30, dur, 0) end
+			self:SetTill("B11", self:Now() + dur)
+			for _, e in ipairs(mgr:Actors()) do
+				if not mgr:IsDown(e) and (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
+			end
+			self:Sfx(sk.a.useSound)
+			log("[VRF] bishop bless atk+" .. tostring(atk * power) .. " reduce=" .. tostring(red * power) .. " dur=" .. tostring(dur))
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StartPray(Component mgr, table sk)
+		-- 프레이: 지속 동안 파티 회복량 증가 + 기본 공격에 기도의 빛.
+		local dur = sk.buffTime
+		if self:Has("B12", 2) then dur = 15 end
+		self:SetTill("B12", self:Now() + dur)
+		-- 돌파 3 '넘치는 은총': 파티 전원 보호막 15% / 돌파 5 '디스펠': 3초 동안 피해 2회 막기
+		for _, e in ipairs(mgr:Actors()) do
+			if not mgr:IsDown(e) then
+				if self:Has("B12", 3) then mgr:AddShield(e, mgr:ActorMaxHp(e) * 0.15) end
+				if self:Has("B12", 5) then mgr:AddBlock(e, 2, 3, "") end
+			end
+		end
+		mgr:AddBuff("bishopB12", "HealRecv", self.PrayHealPct * self:BuffPower(sk.id), dur, 0)
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		for _, e in ipairs(mgr:Actors()) do
+			if not mgr:IsDown(e) and (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
+		end
+		self:Sfx(sk.a.useSound)
+		log("[VRF] bishop pray on dur=" .. tostring(dur))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickInfinity(Component mgr, number delta)
+		-- 인피니티(Auto): 재사용이 끝나면 자동 발동, 지속 중 InfinityStep초마다 파티 공격력 증가 (최대 InfinityMaxStacks단계).
+		local sk = self._T.skills.B09
+		if sk == nil or not self:Learned("B09") then return end
+		local inf = self._T.infinity
+		if inf == nil then
+			if (self._T.cd.B09 or 0) > 0 or mgr.RunState ~= "FIGHT" then return end
+			self._T.cd.B09 = self:Cooldown(sk)
+			local dur = sk.buffTime
+			if self:Has("B09", 2) then dur = dur * 1.5 end
+			inf = { left = dur, stacks = 0, next = 0, heal = 1 }
+			if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+			log("[VRF] bishop infinity on")
+		end
+		inf.left = inf.left - delta
+		inf.next = inf.next - delta
+		-- 돌파 4 '무한 회복': 지속 중 1초마다 파티 1% 회복
+		if self:Has("B09", 4) then
+			inf.heal = inf.heal - delta
+			if inf.heal <= 0 then
+				inf.heal = 1
+				for _, e in ipairs(mgr:Actors()) do
+					if not mgr:IsDown(e) then mgr:HealActor(e, mgr:ActorMaxHp(e) * 0.01) end
+				end
+			end
+		end
+		if inf.left <= 0 then
+			self._T.infinity = nil
+			-- 돌파 5 '무한의 끝': 쌓인 피해 증가%의 10배 계수로 주변 폭발
+			local mon = mgr:HeroMonster()
+			if self:Has("B09", 5) and inf.stacks > 0 and mgr.RunState == "FIGHT" and isvalid(mon) then
+				local s = self:Strike("B09", sk.pct * inf.stacks * 10, 0)
+				self:DealTo(mon, s.dmg, s.crit, self.OrbHitRUID, 4, 0.4)
+				log("[VRF] bishop infinity end burst dmg=" .. tostring(s.dmg))
+			end
+			return
+		end
+		local maxStacks = self.InfinityMaxStacks
+		if self:Has("B09", 1) then maxStacks = 8 end
+		if inf.next <= 0 and inf.stacks < maxStacks then
+			inf.next = self.InfinityStep
+			inf.stacks = inf.stacks + 1
+			mgr:AddBuff("bishopB09", "AtkPct", sk.pct * inf.stacks * self:BuffPower(sk.id), inf.left, 0)
+			log("[VRF] bishop infinity stack=" .. tostring(inf.stacks))
+		end
+		self._T.infinity = inf
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickSummon(Component mgr, number delta)
+		-- 바하뮤트: BahamutInterval초마다 앞 몬스터(+줄 선 몬스터)를 공격, 시간이 다 되면 사라진다.
+		local s = self._T.summon
+		if s == nil then return end
+		s.left = s.left - delta
+		self.SummonLeft = math.max(0, s.left)
+		if s.left <= 0 then
+			if (s.serial or 0) ~= 0 then _EffectService:RemoveEffect(s.serial) end
+			self._T.summon = nil
+			return
+		end
+		s.next = s.next - delta
+		local mon = mgr:HeroMonster()
+		if s.next <= 0 and mgr.RunState == "FIGHT" and isvalid(mon) then
+			s.next = self.BahamutInterval
+			if self:Has("B08", 5) then s.next = self.BahamutInterval * 0.7 end
+			s.count = (s.count or 0) + 1
+			local sk = self._T.skills.B08
+			local pct = sk.pct
+			-- 돌파 2 '신룡의 숨결': 3회마다 1.5배
+			if self:Has("B08", 2) and s.count % 3 == 0 then pct = pct * 1.5 end
+			local hit = self:Strike("B08", pct, 0)
+			-- 돌파 4 '쌍룡': 작은 용 2마리가 원본 피해의 30%로 함께
+			if self:Has("B08", 4) then
+				local small = math.max(1, math.floor(hit.dmg * 0.3 + 0.5))
+				local m0 = mon
+				local fx = sk.a.fx
+				_TimerService:SetTimerOnce(function() if isvalid(m0) and m0 == mgr:HeroMonster() then self:DealTo(m0, small, false, fx, 1, 0.4) end end, 0.2)
+				_TimerService:SetTimerOnce(function() if isvalid(m0) and m0 == mgr:HeroMonster() then self:DealTo(m0, small, false, fx, 1, 0.6) end end, 0.35)
+			end
+			_EffectService:PlayEffectAttached(self.BahamutAttackRUID, self.Entity, self.BahamutOffset, 0, Vector3(1, 1, 1), false, { FlipX = true })
+			self:Sfx(sk.a.hitSound)
+			self:DealTo(mon, hit.dmg, hit.crit, sk.a.fx, sk.a.targets, 0)
+		end
+		self._T.summon = s
+	end
+
+	-- ========== 매 프레임 ==========
+
+	@ExecSpace("ServerOnly")
+	method void Tick(Component mgr, number delta)
+		-- 전투 중: 쿨타임, 마나 회복, 홀리 매직쉘 위기 감시, HUD 표시.
+		self._T.mgr = mgr
+		for id, t in pairs(self._T.cd) do self._T.cd[id] = math.max(0, t - delta) end
+		self:AddMana(self.ManaRegen * delta)
+		-- 블레스 돌파 4 '마나 축복': 지속 중 파티 마나 회복 +50%
+		if self:On("B11") and self:Has("B11", 4) then
+			for _, h in ipairs(mgr:Heroes()) do h:AddMana(self.ManaRegen * 0.5 * delta) end
+		end
+		self:TickShell(mgr)
+		self:TickInfinity(mgr, delta)
+		self:TickSummon(mgr, delta)
+		self._T.statusTick = (self._T.statusTick or 0) - delta
+		if self._T.statusTick <= 0 then
+			self._T.statusTick = 0.2
+			self:UpdateStatus()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickShell(Component mgr)
+		-- 홀리 매직쉘(Guard): 쓰러지지 않은 파티원 중 체력 비율이 ShellHpLine% 미만인 쪽이 생기면 자동 발동.
+		if not self:Learned("B04") or (self._T.cd.B04 or 0) > 0 or mgr.RunState ~= "FIGHT" then return end
+		local low = mgr:LowestAlly()
+		if not isvalid(low) then return end
+		if mgr:ActorHp(low) >= mgr:ActorMaxHp(low) * self.ShellHpLine / 100 then return end
+		local sk = self._T.skills.B04
+		self._T.cd.B04 = self:Cooldown(sk)
+		local blocks = self.ShellBlocks
+		if self:Has("B04", 1) then blocks = 5 end
+		local dur = sk.buffTime
+		if self:Has("B04", 2) then dur = 15 end
+		-- 돌파 3 '모두의 방패': 위기의 1명이 아니라 파티 전원
+		local list = { low }
+		if self:Has("B04", 3) then
+			list = {}
+			for _, e in ipairs(mgr:Actors()) do
+				if not mgr:IsDown(e) then table.insert(list, e) end
+			end
+		end
+		for _, e in ipairs(list) do
+			mgr:AddBlockFor(e, blocks, dur, self.ShellRepeatRUID, self)
+			self:HealTo(e, self.ShellHealPct)
+		end
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		if (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, low, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
+		self:Sfx(sk.a.useSound)
+		log("[VRF] bishop magic shell -> " .. low.Name .. " hp=" .. tostring(mgr:ActorHp(low)))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateStatus()
+		-- HUD용 상태 줄·스킬 칸 (id:남은 쿨:최대 쿨:레벨).
+		local parts = {}
+		if self.HolyWater > 0 then table.insert(parts, "<color=#BFE8FF>성수 " .. tostring(self.HolyWater) .. "/" .. tostring(self:HolyMax()) .. "</color>") end
+		if self.FeatherLeft > 0 then table.insert(parts, "<color=#FFE9A8>깃털 " .. tostring(self.FeatherLeft) .. "</color>") end
+		if self._T.summon ~= nil then table.insert(parts, "<color=#9FD8FF>바하뮤트 " .. tostring(math.ceil(self._T.summon.left)) .. "초</color>") end
+		if self._T.infinity ~= nil then table.insert(parts, "<color=#C9A8FF>인피니티 " .. tostring(self._T.infinity.stacks) .. "단계</color>") end
+		if self:On("B11") then table.insert(parts, "<color=#FFD9A8>블레스</color>") end
+		if self:On("B12") then table.insert(parts, "<color=#FFF2B0>프레이</color>") end
+		self.StatusText = table.concat(parts, "   ")
+		local mgr = self._T.mgr
+		local slots = {}
+		for _, id in ipairs(self._T.equip or {}) do
+			local sk = self._T.skills[id]
+			if sk ~= nil and self:Learned(id) then
+				table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":" .. tostring(mgr ~= nil and (mgr.SkillLv[id] or 0) or 0))
+			end
+		end
+		self.SlotInfo = table.concat(slots, "|")
+		local hm = self:HolyMax()
+		if self.HolyMaxNow ~= hm then self.HolyMaxNow = hm end
+	end
+
+end

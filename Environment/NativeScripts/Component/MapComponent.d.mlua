@@ -26,8 +26,9 @@ script MapComponent extends Component
 	---@sealed
 	readonly property boolean IsDynamicMap = false
 
+	---@description "Sets whether the instance map will be used."
 	---@sealed
-	property boolean InstanceMap = false
+	property boolean IsInstanceMap = false
 
 	---@description "The bottom-left value of the map area."
 	---@sealed

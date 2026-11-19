@@ -7,6 +7,11 @@ script NameTagComponent extends Component
 	@Sync
 	property boolean Bold = false
 
+	---@description "Sets the font."
+	---@sealed
+	@Sync
+	property string Font = "Default"
+
 	---@description "Changes the text color."
 	---@sealed
 	@Sync

@@ -1,0 +1,127 @@
+{
+  "screens": 11,
+  "buttonAudit": {
+    "themed": 559,
+    "failures": 0
+  },
+  "runtimeErrors": 0,
+  "buildErrors": 0,
+  "buildWarnings": [
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "ApplyMenuState",
+          "methodLineNum": 24,
+          "codeBlockFileId": "codeblock://6387f456-c130-4559-b64e-d186f80a7151"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "OnBeginPlay",
+          "methodLineNum": 41,
+          "codeBlockFileId": "codeblock://7cb55220-f387-4738-b371-53698b50dd08"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "LoadTables",
+          "methodLineNum": 35,
+          "codeBlockFileId": "codeblock://c7c256d6-1ae1-4aef-8ee6-c85f0925923b"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "LoadTables",
+          "methodLineNum": 39,
+          "codeBlockFileId": "codeblock://eeb96ad1-7e17-4770-961e-7a8f81da29a0"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "OnBeginPlay",
+          "methodLineNum": 6,
+          "codeBlockFileId": "codeblock://23c5f0be-6680-49b1-b7ff-05d55eb34e83"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "ShotRUID",
+          "methodLineNum": 3,
+          "codeBlockFileId": "codeblock://ba5b7a5f-8d11-4ef2-99cb-f34d472445d4"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "PlayRecast",
+          "methodLineNum": 13,
+          "codeBlockFileId": "codeblock://ba5b7a5f-8d11-4ef2-99cb-f34d472445d4"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "ShotType",
+          "methodLineNum": 3,
+          "codeBlockFileId": "codeblock://ba5b7a5f-8d11-4ef2-99cb-f34d472445d4"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "UpdateSkillSlots",
+          "methodLineNum": 13,
+          "codeBlockFileId": "codeblock://2949d3e6-8465-4deb-bb83-441af2313387"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "PlayAttackMotion",
+          "methodLineNum": 9,
+          "codeBlockFileId": "codeblock://b3eed287-f760-4712-a92a-50e535797082"
+        }
+      ]
+    },
+    {
+      "code": "LWA-1111",
+      "location": [
+        {
+          "methodName": "PlayAttackMotion",
+          "methodLineNum": 11,
+          "codeBlockFileId": "codeblock://b3eed287-f760-4712-a92a-50e535797082"
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    "[VRF] bulk panels account=4 region=scroll gacha=chest main=4 tower=false",
+    "[VRF] bulk ingame previews complete hud=true panels=4 cards=3 deal=true result=true",
+    "[VRF] bulk state audit themed=559 failures=0 selectedAndDisabled=true",
+    "[VRF] bulk account X size=(64.000, 64.000) image=63cc491b18bd41ab961880e152b57e4d"
+  ]
+}

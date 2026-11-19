@@ -1,0 +1,21 @@
+---@sealed
+@Misc
+script MacroTestUserInfo
+
+	---@sealed
+	property string Extra
+
+	---@sealed
+	property int32 SubType
+
+	---@sealed
+	property int32 Type
+
+	---@sealed
+	property string UserId
+
+	constructor MacroTestUserInfo() end
+
+	constructor MacroTestUserInfo(string userId, int32 type, int32 subType, string extra) end
+
+end

@@ -13,13 +13,13 @@ script SymbolUILogic extends Logic
 	property string PermTableName = "SymbolPermTable"
 	property string FloorTableName = "FloorTable"
 	property string MonsterTableName = "MonsterTable"
-	property string CardRUID = "b98a964cddde44bc91cc608e648320d4"
-	property string CardLockedRUID = "9f3b7d70600c434dbf531456a34f4865"
+	property string CardRUID = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string CardLockedRUID = "d262f8e8502e4b7b88f381a9b7a4e4fb"
 	property string OutlineRUID = "5ee1af3484dd4876859334a278bfa7db"
-	property Color MainTextColor = Color(0.91, 0.91, 0.89, 1)
-	property Color SubTextColor = Color(0.59, 0.59, 0.57, 1)
-	property Color LockedTextColor = Color(0.45, 0.45, 0.45, 1)
-	property Color GoldTextColor = Color(0.847, 0.733, 0.475, 1)
+	property Color MainTextColor = Color(0.14, 0.17, 0.21, 1)
+	property Color SubTextColor = Color(0.36, 0.40, 0.46, 1)
+	property Color LockedTextColor = Color(0.36, 0.40, 0.46, 1)
+	property Color GoldTextColor = Color(0.20, 0.48, 0.12, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -62,12 +62,11 @@ script SymbolUILogic extends Logic
 			end
 		end
 		self.clickHandlers = {}
-		self:Bind(self.btnClose, function() self:Close() end)
+		self:Bind(self.btnClose, function() self:Close() _GrowthUILogic:Close() end)
 		self:Bind(self:Get("Prev").ButtonComponent, function() self:Turn(-1) end)
 		self:Bind(self:Get("Next").ButtonComponent, function() self:Turn(1) end)
-		local skin = { normal = "75f3c6dbf2434bcaa0e4b2d430575e2d", hover = "6ba383acf31a4c5bb105720d50c0ccd4", disabled = "f2cf3f5019aa4da995e72294dacb3e64" }
-		_UIButtonLogic:SetSkin(self:Get("Prev"), skin)
-		_UIButtonLogic:SetSkin(self:Get("Next"), skin)
+		_GrowthUILogic:StyleButton(self:Get("Prev"))
+		_GrowthUILogic:StyleButton(self:Get("Next"))
 		for i = 1, self.PageSize do
 			local idx = i
 			local cell = _EntityService:GetEntityByPath(self.CellPath .. tostring(i))
@@ -84,7 +83,7 @@ script SymbolUILogic extends Logic
 	method void Bind(ButtonComponent button, any fn)
 		-- 버튼 클릭 연결 + 해제 기록.
 		if not isvalid(button) then return end
-		local h = button.Entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, function(e) if not button.Entity.EnabledInHierarchy or not button.Enable then return end _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
 	end
 
@@ -245,7 +244,13 @@ script SymbolUILogic extends Logic
 		local owned = tier > 0
 		local bg = self.CardLockedRUID
 		if owned then bg = self.CardRUID end
-		cell.SpriteGUIRendererComponent.ImageRUID = DataRef(bg)
+		local rec = _UIButtonLogic:GetRec(cell)
+		if rec ~= nil and rec.skin ~= nil then
+			if rec.skin.normal ~= bg then rec.skin.normal = bg _UIButtonLogic:ApplySprite(rec) end
+			_UIButtonLogic:SetSelected(cell, floor == self._T.selected)
+		else
+			cell.SpriteGUIRendererComponent.ImageRUID = DataRef(bg)
+		end
 		local icon = _EntityService:GetEntityByPath(path .. "/Icon")
 		if isvalid(icon) then
 			local t = self._T.tiers[tier]

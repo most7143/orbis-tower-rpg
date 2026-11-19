@@ -11,7 +11,7 @@ script Tweener
 	---@sealed
 	readonly property int32 CurrentLoopCount
 
-	---@description "Sets the play delay from the tween's total play time."
+	---@description "Sets the wait time before tween playback begins. The value is in seconds."
 	---@sealed
 	property float Delay = 0
 
@@ -55,7 +55,7 @@ script Tweener
 	---@sealed
 	method void Restart() end
 
-	---@description "Resumes tween. If Tween hasn't started, it will operate the same as Start()."
+	---@description "Resumes tween. If Tween hasn't started, it will operate the same as Play()."
 	---@sealed
 	method void Resume() end
 
@@ -95,6 +95,14 @@ script Tweener
 	---@description "Sets the callback function to be called after tween is completed."
 	---@sealed
 	method void SetOnEndCallback(func callback) end
+
+	---@description "Sets the callback function to be called when the tween starts playing. It is called only once, even if the tween repeats."
+	---@sealed
+	method void SetOnStartCallback(func callback) end
+
+	---@description "Sets the callback function to be called each time the tween completes a playback."
+	---@sealed
+	method void SetOnStepCompleteCallback(func callback) end
 
 	---@description "Stops tween."
 	---@sealed

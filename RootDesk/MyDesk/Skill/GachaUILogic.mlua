@@ -26,16 +26,16 @@ script GachaUILogic extends Logic
 	property string FifthBorderClipRUID = "0e465d7a71a84f319810189dfc5a6c84"
 	property string HyperUnlockClipRUID = "d5c8a49dc3884d12beac57dd300c90df"
 	property string FifthUnlockClipRUID = "8724a8bdc8194881b6168bc664a210be"
-	property string SlotNormalRUID = "10ffed199f9f4fb885a31293d87ff6b8"
-	property string SlotPendingRUID = "1ac90204875d4943aab325c655756239"
+	property string SlotNormalRUID = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string SlotPendingRUID = "bea05f1ee4ea484eb10471a620c69046"
 	-- 연출 시간(초): 상자 8프레임 합, 주문서 1장 18 × 40ms, 10장 27 × 40ms, 10회 결과 칸 사이 간격
 	property number ChestTime = 0.42
 	property number ScrollTime = 0.72
 	property number BurstTime = 1.08
 	property number RevealInterval = 0.15
-	property Color MainTextColor = Color(0.91, 0.91, 0.89, 1)
-	property Color SubTextColor = Color(0.59, 0.59, 0.57, 1)
-	property Color NewColor = Color(1, 0.84, 0.36, 1)
+	property Color MainTextColor = Color(0.14, 0.17, 0.21, 1)
+	property Color SubTextColor = Color(0.36, 0.40, 0.46, 1)
+	property Color NewColor = Color(0.20, 0.48, 0.12, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -56,7 +56,9 @@ script GachaUILogic extends Logic
 		if gs ~= nil then
 			for i = 1, gs:GetRowCount() do
 				local g = { name = gs:GetCell(i, "Name"), rate = tonumber(gs:GetCell(i, "GachaRate")) or 0, color = Color.FromHexCode(gs:GetCell(i, "ColorHex")) }
-				self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = g
+				local c=g.color
+			g.color=Color(c.r*0.64,c.g*0.64,c.b*0.64,1)
+			self._T.grades[tonumber(gs:GetCell(i, "Grade")) or i] = g
 				table.insert(rates, g.name .. " " .. tostring(g.rate) .. "%")
 			end
 		end

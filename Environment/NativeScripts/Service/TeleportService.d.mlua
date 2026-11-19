@@ -96,13 +96,13 @@ script TeleportService extends Service
 	@ExecSpace("Server")
 	method void UnReserveTeleport(Entity targetEntity, Entity messageOwnerEntity = nil) end
 
-	---@description "Warps a creator with world creation permissions or a cooperation group member to a world instance and returns the success status. Warp is only available to released worlds that are public. Script executions are suspended during the performance. This function only acts in release environments. Returns false when executed from Maker. Entry is possible even if there is no room in a world instance and an entry will not be reflected on the player list. The userId is the Id of the user that will be warped, and the destinationWorldInstanceId is the destination world's instance Id. Data delivered with warpData can be viewed from the GetWarpRecord function. "
+	---@description "Warps a creator with world creation permissions or a cooperation group member to a world instance and returns the success status. Warp is only available to released worlds that are public. Script executions are suspended during the performance. This function only acts in release environments. "
 	---@sealed
 	@ReleaseOnly
 	@ExecSpace("ServerOnly")
 	method boolean WarpAdminToWorldInstanceAndWait(string userId, string destinationWorldInstanceId, string warpData) end
 
-	---@description "Warps a creator with world creation permissions or a cooperation group member to a world instance. Warp is only available to released worlds that are public. This function only acts in release environments. Returns false when executed from Maker. This work is executed asynchronously, and when the work is complete, it calls the function that was delivered to callbackFunction as well as the success status. Entry is possible even if there is no room in a world instance and an entry will not be reflected on the player list. The userId is the Id of the user that will be warped, and the destinationWorldInstanceId is the destination world's instance Id. Data delivered with warpData can be viewed from the GetWarpRecord function."
+	---@description "Warps a creator with world creation permissions or a cooperation group member to a world instance. Warp is only available to released worlds that are public. This function only acts in release environments. "
 	---@sealed
 	@ReleaseOnly
 	@ExecSpace("ServerOnly")

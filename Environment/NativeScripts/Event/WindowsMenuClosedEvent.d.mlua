@@ -1,0 +1,8 @@
+---@sealed
+---@description "This event occurs when the window menu is closed in the Windows environment. Only the Windows environment is supported."
+@Event
+script WindowsMenuClosedEvent extends EventType
+
+	constructor WindowsMenuClosedEvent() end
+
+end

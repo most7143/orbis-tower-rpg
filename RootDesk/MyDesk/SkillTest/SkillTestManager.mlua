@@ -254,7 +254,7 @@ script SkillTestManager extends Component
 		self:EquipForJob(jobId)
 		self.PlaySeq = self.PlaySeq + 1
 		local list = self._T.skills[jobId] or {}
-		if jobId == "Hero" and _HeroCombatLogic._T.skills ~= nil and _HeroCombatLogic._T.skills[skillId] ~= nil then
+		if jobId == "Hero" and self:HC() ~= nil and self:HC()._T.skills ~= nil and self:HC()._T.skills[skillId] ~= nil then
 			self:PlayHeroSkill(skillId)
 			return
 		end
@@ -327,9 +327,9 @@ script SkillTestManager extends Component
 		if (sk.gap or 0) > 0 then gap = sk.gap end
 		-- 발사체 스킬 (오라 블레이드): 몸 중심에서 몬스터 쪽으로 발사체를 날리고, 닿는 순간부터 타격
 		local travel = 0
-		local shot = _HeroCombatLogic:ShotRUID(sk.id or "")
+		local shot = self:HC() ~= nil and self:HC():ShotRUID(sk.id or "") or ""
 		if shot ~= "" and hits > 0 then
-			local hc = _HeroCombatLogic
+			local hc = self:HC()
 			local pp = player.TransformComponent.WorldPosition
 			local mp = monster.TransformComponent.WorldPosition
 			local start = Vector3(pp.x + hc.ShotOrigin.x, pp.y + hc.ShotOrigin.y, pp.z)
@@ -422,7 +422,7 @@ script SkillTestManager extends Component
 	@ExecSpace("ServerOnly")
 	method void SetupHero()
 		-- 히어로 전투 로직을 테스트용으로 준비: 모든 히어로 스킬을 배운 상태, 이 컴포넌트를 전투 매니저로.
-		local hc = _HeroCombatLogic
+		local hc = self:HC()
 		hc:ClearState()
 		hc._T.mgr = self
 		-- 스킬 테스트에서는 인레이지가 저절로 발동하지 않게 (버튼으로만)
@@ -443,7 +443,7 @@ script SkillTestManager extends Component
 	method void PlayHeroSkill(string skillId)
 		-- 히어로 스킬 하나를 실제 전투와 같은 계산·연출로: 시전 동작 → 타격 순간(동작의 음수→양수 전환)에 적용.
 		-- 시전마다 콤보·마나 가득, 쿨타임 무시. 켠 돌파가 그대로 반영된다.
-		local hc = _HeroCombatLogic
+		local hc = self:HC()
 		if not self._T.heroReady then self:SetupHero() end
 		hc._T.mgr = self
 		local player = self._T.player
@@ -494,7 +494,7 @@ script SkillTestManager extends Component
 	@ExecSpace("ServerOnly")
 	method void ValhallaDemoHit(integer n)
 		-- 발할라 테스트: 일반 공격 1회 + 남은 충전으로 추가타. 충전이 다 떨어진 뒤 한 번 더 치고 끝 (최대 15회).
-		local hc = _HeroCombatLogic
+		local hc = self:HC()
 		local player = self._T.player
 		local monster = self._T.monster
 		if not isvalid(player) or not isvalid(monster) then return end
@@ -536,6 +536,47 @@ script SkillTestManager extends Component
 		self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + heal)
 		local pc = self:GetPlayerAttack()
 		if pc ~= nil then pc:ShowHeal(heal) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component HC()
+		-- 플레이어에 붙은 히어로 전투 컴포넌트 (히어로 전투가 캐릭터별 컴포넌트로 바뀜).
+		local player = self._T.player
+		if not isvalid(player) then return nil end
+		local hc = player:GetComponent("script.HeroCombat")
+		self._T.hc = hc
+		self._T.hcEntity = player
+		return hc
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorMaxHp(Entity e)
+		-- 히어로 전투용 캐릭터 최대 체력 (테스트는 플레이어 하나).
+		return self.PlayerMaxHp
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorHp(Entity e)
+		-- 히어로 전투용 캐릭터 현재 체력.
+		return self.PlayerHp
+	end
+
+	@ExecSpace("ServerOnly")
+	method void HealActor(Entity e, number amount)
+		-- 히어로 전투용 캐릭터 회복.
+		self:HealPlayer(amount)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ShieldOf(Entity e)
+		-- 히어로 전투용 보호막.
+		return self._T.shield or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddShield(Entity e, number amount)
+		-- 히어로 전투용 보호막 더하기.
+		self._T.shield = math.max(0, (self._T.shield or 0) + amount)
 	end
 
 	@ExecSpace("ServerOnly")
@@ -655,11 +696,12 @@ script SkillTestManager extends Component
 			player = nil
 		end
 		if self._T.heroReady then
-			if isvalid(player) then
-				_HeroCombatLogic:Tick(self, delta)
+			local hc = self:HC()
+			if isvalid(player) and hc ~= nil then
+				hc:Tick(self, delta)
 			else
 				self._T.heroReady = false
-				_HeroCombatLogic:ClearState()
+				if self._T.hc ~= nil and isvalid(self._T.hcEntity) then self._T.hc:ClearState() end
 			end
 		end
 		if not isvalid(player) then

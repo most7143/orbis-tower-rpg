@@ -11,6 +11,56 @@ script UIButtonLogic extends Logic
 	property Color TextSelectedColor = Color(1, 0.83, 0.42, 1)
 	property Color TextDisabledColor = Color(0.45, 0.48, 0.56, 1)
 
+
+	@ExecSpace("ClientOnly")
+	method string ThemeRole(Entity entity)
+		-- 공통 스킨으로 저장한 버튼만 인식한다. 특수 입력 영역은 변환하지 않는다.
+		local id = entity.SpriteGUIRendererComponent.ImageRUID.DataId
+		if id == "65d8340b880940b5b2d2d3342dad63aa" then return "button" end
+		if id == "a88cfe62e8e64c39bf14d682a77ef4a0" then return "card" end
+		if id == "e9221d5678bf46c5b6064979253726ea" then return "tab" end
+		if id == "ffd05f5bf0274527b1e5cb977f2c49fe" then return "action" end
+		if id == "63cc491b18bd41ab961880e152b57e4d" then return "close" end
+		if id == "8739b8a9b7e84759abd297cae38822dc" then return "primary" end
+		return ""
+	end
+
+	@ExecSpace("ClientOnly")
+	method table ThemeSkin(string role)
+		-- 파랑은 선택/탐색, 초록은 실행. 모든 버튼에 별도 누름/비활성 이미지를 제공한다.
+		local families = {
+			button = { normal = "65d8340b880940b5b2d2d3342dad63aa", hover = "292e7807ec754ea19ff3c28ec4b10311", pressed = "7e3db0c2c7944ba29d49c35222ad98b3", disabled = "b5179a32f5c54fabbd757a0d8a2fbe18", selected = "8739b8a9b7e84759abd297cae38822dc", selectedHover = "7680060fe5824db88ccbec16b68ff83c", selectedPressed = "dd5c7090249c4601b00410cead0c846b" },
+			card = { normal = "a88cfe62e8e64c39bf14d682a77ef4a0", hover = "e9f1678141ff4a57bf17d5cf52e0a27b", pressed = "1ee26fe6cab54961b986f0c552838954", disabled = "d262f8e8502e4b7b88f381a9b7a4e4fb", selected = "1e130afe90a842028aed70edadbfb9f1", selectedHover = "9c050999cae047ffb4181315d7f321af", selectedPressed = "0049a1c1e17e4ac29de951a509838cd4" },
+			tab = { normal = "e9221d5678bf46c5b6064979253726ea", hover = "29be37ae67dc461998acafce9dae2615", pressed = "7aa605bd606749379769b929a0c0c0aa", disabled = "5932ca2f0dc3412093f3b466bea7422c", selected = "58f939c5579d4006b2c858cf9b26e98f", selectedHover = "38b365b46cf7478b80387deaa67746b1", selectedPressed = "a3558fcc8e6747b59ed74fbe27c4e54a" },
+			action = { normal = "ffd05f5bf0274527b1e5cb977f2c49fe", hover = "2a218c009982464f9c6f581e763ea6aa", pressed = "3127fb2d53b14c6a94e8d0c7e309ac92", disabled = "db304db9f8de48278c56d7b13071f0d5", selected = "ffd05f5bf0274527b1e5cb977f2c49fe", selectedHover = "ffd05f5bf0274527b1e5cb977f2c49fe", selectedPressed = "ffd05f5bf0274527b1e5cb977f2c49fe" },
+			close = { normal = "63cc491b18bd41ab961880e152b57e4d", hover = "234a3cef58ae4954a5ff024688ca66fd", pressed = "6b79d55bd6d44f18b5ab84ffbe16da72", disabled = "0473791f50d642249eb0fb7f4738e791", selected = "63cc491b18bd41ab961880e152b57e4d", selectedHover = "63cc491b18bd41ab961880e152b57e4d", selectedPressed = "63cc491b18bd41ab961880e152b57e4d" }
+		}
+		local skin = families[role] or families.button
+		if role == "primary" then
+			skin = { normal = "8739b8a9b7e84759abd297cae38822dc", hover = "7680060fe5824db88ccbec16b68ff83c", pressed = "dd5c7090249c4601b00410cead0c846b", disabled = "b5179a32f5c54fabbd757a0d8a2fbe18", selected = "8739b8a9b7e84759abd297cae38822dc", selectedHover = "7680060fe5824db88ccbec16b68ff83c", selectedPressed = "dd5c7090249c4601b00410cead0c846b" }
+		end
+		skin.textNormal = Color(0.14, 0.17, 0.21, 1)
+		skin.textHover = Color(0.10, 0.25, 0.38, 1)
+		skin.textSelected = Color(1, 1, 1, 1)
+		skin.textDisabled = Color(0.42, 0.46, 0.51, 1)
+		if role == "card" then skin.textSelected = Color(0.12, 0.34, 0.52, 1) end
+		if role == "primary" or role == "action" or role == "close" or role == "tab" then
+			skin.textNormal = Color(1, 1, 1, 1)
+			skin.textHover = Color(1, 1, 1, 1)
+		end
+		return skin
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UseTheme(Entity entity, string role)
+		-- 기존 화면의 런타임 전용 스킨도 공통 규칙에 맞춰 연결한다.
+		if not isvalid(entity) then return end
+		local rec = self:GetRec(entity)
+		if rec == nil then return end
+		rec.themeRole = role
+		self:SetSkin(entity, self:ThemeSkin(role))
+	end
+
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
 		-- UI 전체를 훑어 SpriteSwap 글자 버튼에 호버 연출을 연결한다.
@@ -18,7 +68,7 @@ script UIButtonLogic extends Logic
 		self:Scan(_EntityService:GetEntityByPath("/ui"))
 		local n = 0
 		for _, rec in pairs(self._T.recs) do n = n + 1 end
-		log("[VRF] UIButtonLogic begin buttons=" .. tostring(n))
+		log("[VRF] UIButtonLogic common theme ready buttons=" .. tostring(n))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -31,22 +81,35 @@ script UIButtonLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method table GetRec(Entity entity)
-		-- 버튼 기록 (처음 보면 호버 이벤트 연결). 글자 버튼이 아니면 nil.
+		-- 원본 상태 이미지를 기록하고 글자·이미지 버튼의 호버 이벤트를 연결한다.
+		if not isvalid(entity) then return nil end
 		if self._T.recs == nil then self._T.recs = {} end
 		local rec = self._T.recs[entity.Id]
 		if rec ~= nil then return rec end
 		local button = entity.ButtonComponent
-		if not isvalid(button) or button.Transition ~= TransitionType.SpriteSwap or not isvalid(entity.TextGUIRendererComponent) then return nil end
-		rec = { entity = entity, hover = false, selected = false, disabled = false }
+		local sprite = entity.SpriteGUIRendererComponent
+		if not isvalid(button) or not isvalid(sprite) or button.Transition ~= TransitionType.SpriteSwap then return nil end
+		local images = button.ImageRUIDs
+		local function id(ref, fallback)
+			if ref == nil or ref.DataId == nil or ref.DataId == "" then return fallback end
+			return ref.DataId
+		end
+		rec = { entity = entity, hover = false, selected = false, disabled = not button.Enable,
+			baseNormal = id(sprite.ImageRUID, self.NormalRUID), baseHover = id(images.HighlightedSprite, self.HoverRUID),
+			basePressed = id(images.PressedSprite, self.HoverRUID), baseDisabled = id(images.DisabledSprite, self.DisabledRUID),
+			baseSelected = id(images.SelectedSprite, self.HoverRUID) }
 		self._T.recs[entity.Id] = rec
-		-- 클릭 뒤 엔진의 선택 상태가 남으면 다른 곳을 누를 때까지 이미지가 안 바뀌므로 끈다
+		local role = self:ThemeRole(entity)
+		if role ~= "" then rec.themeRole = role rec.skin = self:ThemeSkin(role) end
 		button.Selectable = false
-		entity:ConnectEvent(UITouchEnterEvent, function(e)
+		rec.enter = entity:ConnectEvent(UITouchEnterEvent, function(e)
+			if rec.disabled then return end
 			rec.hover = true
 			self._T.hoverRec = rec
 			self:ApplyText(rec)
 		end)
-		entity:ConnectEvent(UITouchExitEvent, function(e) self:ClearHover(rec) end)
+		rec.exit = entity:ConnectEvent(UITouchExitEvent, function(e) self:ClearHover(rec) end)
+		if rec.themeRole ~= nil then self:ApplyText(rec) end
 		return rec
 	end
 
@@ -61,6 +124,7 @@ script UIButtonLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void ApplyText(table rec)
 		-- 상태에 맞는 글자색 (비활성 > 선택 > 호버 > 기본).
+		if not isvalid(rec.entity.TextGUIRendererComponent) then return end
 		local skin = rec.skin or {}
 		local color = skin.textNormal or self.TextNormalColor
 		if rec.disabled then
@@ -75,32 +139,37 @@ script UIButtonLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void ApplySprite(table rec)
-		-- 비활성은 전환을 끄고 비활성 이미지 고정, 선택은 호버 이미지를 기본으로 쓴다.
+		-- 원래 .ui의 상태 이미지를 기본값으로 보존한다. 비활성은 입력도 차단한다.
 		local skin = rec.skin or {}
-		local ruid = skin.normal or self.NormalRUID
-		local transition = TransitionType.SpriteSwap
-		if rec.disabled then
-			ruid = skin.disabled or self.DisabledRUID
-			transition = TransitionType.None
-		elseif rec.selected then
-			ruid = skin.selected or skin.hover or self.HoverRUID
+		local normal = skin.normal or rec.baseNormal
+		local hover = skin.hover or rec.baseHover
+		local pressed = skin.pressed or rec.basePressed
+		local disabled = skin.disabled or rec.baseDisabled
+		local selected = skin.selected or rec.baseSelected
+		if normal == nil or normal == "" then normal = self.NormalRUID end
+		if hover == nil or hover == "" then hover = normal end
+		if pressed == nil or pressed == "" then pressed = hover end
+		if disabled == nil or disabled == "" then disabled = self.DisabledRUID end
+		if selected == nil or selected == "" then selected = hover end
+		local button = rec.entity.ButtonComponent
+		local set = button.ImageRUIDs:Clone()
+		local ruid = normal
+		if rec.selected then
+			ruid = selected
+			set.HighlightedSprite = DataRef(skin.selectedHover or selected)
+			set.PressedSprite = DataRef(skin.selectedPressed or selected)
+		else
+			set.HighlightedSprite = DataRef(hover)
+			set.PressedSprite = DataRef(pressed)
 		end
-		-- 선택 상태 전용 호버·누름 이미지가 있으면 버튼 전환 이미지도 함께 바꾼다
-		if skin.selected ~= nil then
-			local set = rec.entity.ButtonComponent.ImageRUIDs:Clone()
-			if rec.selected then
-				set.HighlightedSprite = DataRef(skin.selectedHover or skin.selected)
-				set.PressedSprite = DataRef(skin.selectedPressed or skin.selected)
-			else
-				set.HighlightedSprite = DataRef(skin.hover)
-				set.PressedSprite = DataRef(skin.pressed)
-			end
-			rec.entity.ButtonComponent.ImageRUIDs = set
-		end
-		-- 전환을 한 번 껐다 켜서, 마우스가 버튼 위에 있어도 바뀐 이미지가 바로 보이게 한다
-		rec.entity.ButtonComponent.Transition = TransitionType.None
+		set.SelectedSprite = DataRef(selected)
+		set.DisabledSprite = DataRef(disabled)
+		if rec.disabled then ruid = disabled end
+		button.Transition = TransitionType.None
+		button.ImageRUIDs = set
+		button.Enable = not rec.disabled
 		rec.entity.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
-		rec.entity.ButtonComponent.Transition = transition
+		if not rec.disabled then button.Transition = TransitionType.SpriteSwap end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -109,6 +178,7 @@ script UIButtonLogic extends Logic
 		if not isvalid(entity) then return end
 		local rec = self:GetRec(entity)
 		if rec == nil then return end
+		if rec.themeRole ~= nil then skin = self:ThemeSkin(rec.themeRole) end
 		rec.skin = skin
 		self:ApplySprite(rec)
 		self:ApplyText(rec)
@@ -116,11 +186,13 @@ script UIButtonLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SetDisabled(Entity entity, boolean disabled)
-		-- 살 수 없음 등 누를 수 없는 상태 표시 (클릭 차단은 각 로직이 한다).
+		-- 비활성 이미지와 네이티브 버튼 입력 가능 여부를 함께 갱신한다.
 		if not isvalid(entity) then return end
 		local rec = self:GetRec(entity)
-		if rec == nil or rec.disabled == disabled then return end
+		if rec == nil then return end
+		if rec.disabled == disabled and entity.ButtonComponent.Enable == (not disabled) then return end
 		rec.disabled = disabled
+		if disabled then self:ClearHover(rec) end
 		self:ApplySprite(rec)
 		self:ApplyText(rec)
 	end
@@ -134,6 +206,19 @@ script UIButtonLogic extends Logic
 		rec.selected = selected
 		self:ApplySprite(rec)
 		self:ApplyText(rec)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 화면 버튼에 연결한 호버 이벤트를 해제한다.
+		for _, rec in pairs(self._T.recs or {}) do
+			if isvalid(rec.entity) then
+				rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
+				rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+			end
+		end
+		self._T.recs = {}
+		self._T.hoverRec = nil
 	end
 
 	@ExecSpace("ClientOnly")

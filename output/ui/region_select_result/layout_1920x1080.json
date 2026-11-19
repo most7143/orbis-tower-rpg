@@ -1,0 +1,2228 @@
+{
+  "referenceResolution": [
+    1920,
+    1080
+  ],
+  "rectConvention": "top-left x/y in reference pixels; anchoredPosition=[x+w/2-960,540-y-h/2] for root-centered anchors",
+  "runtimeFilesOnlyAtRoot": true,
+  "stage": [
+    {
+      "id": "listPanel",
+      "type": "image",
+      "file": "panel_region_list_640x744.png",
+      "rect": [
+        104,
+        112,
+        640,
+        744
+      ]
+    },
+    {
+      "id": "detailPanel",
+      "type": "image",
+      "file": "panel_region_detail_1056x744.png",
+      "rect": [
+        760,
+        112,
+        1056,
+        744
+      ]
+    },
+    {
+      "id": "sectionRewards",
+      "type": "image",
+      "file": "panel_section_rewards_1216x152.png",
+      "rect": [
+        84,
+        888,
+        1216,
+        152
+      ]
+    },
+    {
+      "id": "back",
+      "type": "image",
+      "file": "button_secondary_normal_448x128.png",
+      "rect": [
+        32,
+        16,
+        256,
+        80
+      ],
+      "buttonFamily": "secondary"
+    },
+    {
+      "id": "backIcon",
+      "type": "image",
+      "file": "icon_back_arrow_48x48.png",
+      "rect": [
+        48,
+        32,
+        48,
+        48
+      ]
+    },
+    {
+      "id": "backLabel",
+      "type": "engine_text",
+      "text": "메인으로",
+      "rect": [
+        106,
+        30,
+        156,
+        48
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 30,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "title",
+      "type": "engine_text",
+      "text": "오르비스탑 탐험",
+      "rect": [
+        480,
+        12,
+        960,
+        80
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 56,
+      "color": "#FFF3D7",
+      "align": "center"
+    },
+    {
+      "id": "energyPill",
+      "type": "image",
+      "file": "pill_energy_blue_288x64.png",
+      "rect": [
+        1504,
+        16,
+        288,
+        64
+      ]
+    },
+    {
+      "id": "energyIcon",
+      "type": "image",
+      "file": "icon_energy_48x64.png",
+      "rect": [
+        1508,
+        16,
+        40,
+        54
+      ]
+    },
+    {
+      "id": "energy",
+      "type": "engine_text",
+      "text": "24 / 30",
+      "rect": [
+        1552,
+        22,
+        208,
+        48
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 36,
+      "color": "#FFFFFF",
+      "align": "center"
+    },
+    {
+      "id": "energyTimer",
+      "type": "engine_text",
+      "text": "다음 충전 08:42",
+      "rect": [
+        1504,
+        82,
+        288,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#C5C3D2",
+      "align": "center"
+    },
+    {
+      "id": "regionPlaque",
+      "type": "image",
+      "file": "plaque_title_gold_320x80.png",
+      "rect": [
+        264,
+        84,
+        320,
+        80
+      ]
+    },
+    {
+      "id": "regionPlaqueLabel",
+      "type": "engine_text",
+      "text": "지역 선택",
+      "rect": [
+        280,
+        100,
+        288,
+        48
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 38,
+      "color": "#482813",
+      "align": "center",
+      "outline": false
+    },
+    {
+      "id": "prev",
+      "type": "image",
+      "file": "button_arrow_normal_96x96.png",
+      "rect": [
+        160,
+        172,
+        96,
+        96
+      ],
+      "buttonFamily": "arrow"
+    },
+    {
+      "id": "prevIcon",
+      "type": "image",
+      "file": "icon_chevron_left_32x40.png",
+      "rect": [
+        192,
+        200,
+        32,
+        40
+      ]
+    },
+    {
+      "id": "next",
+      "type": "image",
+      "file": "button_arrow_normal_96x96.png",
+      "rect": [
+        592,
+        172,
+        96,
+        96
+      ],
+      "buttonFamily": "arrow"
+    },
+    {
+      "id": "nextIcon",
+      "type": "image",
+      "file": "icon_chevron_right_32x40.png",
+      "rect": [
+        624,
+        200,
+        32,
+        40
+      ]
+    },
+    {
+      "id": "regionFilter",
+      "type": "image",
+      "file": "pill_dark_288x64.png",
+      "rect": [
+        280,
+        188,
+        288,
+        64
+      ]
+    },
+    {
+      "id": "regionFilterText",
+      "type": "engine_text",
+      "text": "전체 지역",
+      "rect": [
+        288,
+        198,
+        272,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 30,
+      "color": "#FFF3D7",
+      "align": "center"
+    },
+    {
+      "id": "region0",
+      "type": "image",
+      "file": "button_region_row_normal_544x80.png",
+      "rect": [
+        136,
+        284,
+        544,
+        80
+      ],
+      "buttonFamily": "region_row",
+      "exampleOnly": true
+    },
+    {
+      "id": "regionName0",
+      "type": "engine_text",
+      "text": "엑스텀프의 골짜기",
+      "rect": [
+        156,
+        302,
+        322,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "regionStar0_0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        492,
+        308,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar0_1",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        528,
+        308,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar0_2",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        564,
+        308,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStatus0",
+      "type": "image",
+      "file": "icon_check_complete_40x40.png",
+      "rect": [
+        632,
+        304,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "region1",
+      "type": "image",
+      "file": "button_region_row_normal_544x80.png",
+      "rect": [
+        136,
+        372,
+        544,
+        80
+      ],
+      "buttonFamily": "region_row",
+      "exampleOnly": true
+    },
+    {
+      "id": "regionName1",
+      "type": "engine_text",
+      "text": "고스텀프의 소굴",
+      "rect": [
+        156,
+        390,
+        322,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "regionStar1_0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        492,
+        396,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar1_1",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        528,
+        396,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar1_2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        564,
+        396,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStatus1",
+      "type": "image",
+      "file": "icon_check_complete_40x40.png",
+      "rect": [
+        632,
+        392,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "region2",
+      "type": "image",
+      "file": "button_region_row_normal_544x80.png",
+      "rect": [
+        136,
+        460,
+        544,
+        80
+      ],
+      "buttonFamily": "region_row",
+      "exampleOnly": true
+    },
+    {
+      "id": "regionName2",
+      "type": "engine_text",
+      "text": "파란버섯의 정원",
+      "rect": [
+        156,
+        478,
+        322,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "regionStar2_0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        492,
+        484,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar2_1",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        528,
+        484,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar2_2",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        564,
+        484,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStatus2",
+      "type": "image",
+      "file": "icon_check_complete_40x40.png",
+      "rect": [
+        632,
+        480,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "region3",
+      "type": "image",
+      "file": "button_region_row_selected_544x80.png",
+      "rect": [
+        136,
+        548,
+        544,
+        80
+      ],
+      "buttonFamily": "region_row",
+      "exampleOnly": true
+    },
+    {
+      "id": "regionName3",
+      "type": "engine_text",
+      "text": "스티지의 늪",
+      "rect": [
+        156,
+        566,
+        322,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "regionStar3_0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        492,
+        572,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar3_1",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        528,
+        572,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar3_2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        564,
+        572,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStatus3",
+      "type": "image",
+      "file": "icon_check_selected_40x40.png",
+      "rect": [
+        632,
+        568,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "region4",
+      "type": "image",
+      "file": "button_region_row_normal_544x80.png",
+      "rect": [
+        136,
+        636,
+        544,
+        80
+      ],
+      "buttonFamily": "region_row",
+      "exampleOnly": true
+    },
+    {
+      "id": "regionName4",
+      "type": "engine_text",
+      "text": "흰모래 토끼의 폐허",
+      "rect": [
+        156,
+        654,
+        322,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "regionStar4_0",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        492,
+        660,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar4_1",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        528,
+        660,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStar4_2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        564,
+        660,
+        32,
+        32
+      ]
+    },
+    {
+      "id": "regionStatus4",
+      "type": "image",
+      "file": "icon_lock_closed_64x64.png",
+      "rect": [
+        632,
+        656,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "scrollTrack",
+      "type": "image",
+      "file": "scrollbar_track_16x432.png",
+      "rect": [
+        704,
+        284,
+        16,
+        432
+      ]
+    },
+    {
+      "id": "scrollThumb",
+      "type": "image",
+      "file": "button_scrollbar_thumb_normal_16x80.png",
+      "rect": [
+        704,
+        284,
+        16,
+        80
+      ],
+      "buttonFamily": "scrollbar_thumb"
+    },
+    {
+      "id": "currentRegion",
+      "type": "image",
+      "file": "button_secondary_normal_448x128.png",
+      "rect": [
+        224,
+        744,
+        384,
+        88
+      ],
+      "buttonFamily": "secondary"
+    },
+    {
+      "id": "currentRegionText",
+      "type": "engine_text",
+      "text": "현재 도전 지역으로",
+      "rect": [
+        240,
+        762,
+        352,
+        48
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "center"
+    },
+    {
+      "id": "panoramaFrame",
+      "type": "image",
+      "file": "panel_panorama_frame_992x240.png",
+      "rect": [
+        792,
+        144,
+        992,
+        240
+      ]
+    },
+    {
+      "id": "panorama",
+      "type": "runtime_region_background",
+      "rect": [
+        802,
+        154,
+        972,
+        220
+      ],
+      "maskFile": "mask_panorama_972x220.png",
+      "sourceData": "FloorTable.BgRUID",
+      "exampleRUID": "d0afbc64ad494b99b7509a6a93b9bcaa",
+      "exampleOnly": true
+    },
+    {
+      "id": "regionDetailName",
+      "type": "engine_text",
+      "text": "스티지의 늪",
+      "rect": [
+        824,
+        316,
+        560,
+        52
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 42,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "detailStar0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        1280,
+        326,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "detailStar1",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        1324,
+        326,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "detailStar2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        1368,
+        326,
+        40,
+        40
+      ]
+    },
+    {
+      "id": "monsterLabel",
+      "type": "engine_text",
+      "text": "등장 몬스터",
+      "rect": [
+        800,
+        426,
+        224,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "monsterSlot",
+      "type": "image",
+      "file": "slot_monster_128x96.png",
+      "rect": [
+        1032,
+        404,
+        128,
+        96
+      ]
+    },
+    {
+      "id": "monsterIcon",
+      "type": "image",
+      "file": "icon_monster_stirge_96x96.png",
+      "rect": [
+        1048,
+        404,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "monsterName",
+      "type": "engine_text",
+      "text": "스티지",
+      "rect": [
+        1176,
+        428,
+        200,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "missionLabel",
+      "type": "engine_text",
+      "text": "별 미션",
+      "rect": [
+        800,
+        524,
+        160,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "missionTable",
+      "type": "image",
+      "file": "panel_mission_table_800x168.png",
+      "rect": [
+        964,
+        508,
+        800,
+        168
+      ]
+    },
+    {
+      "id": "missionStar0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        984,
+        518,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "missionText0",
+      "type": "engine_text",
+      "text": "스테이지 클리어",
+      "rect": [
+        1032,
+        520,
+        472,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "missionState0",
+      "type": "engine_text",
+      "text": "달성",
+      "rect": [
+        1480,
+        520,
+        260,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#A4EBAF",
+      "align": "right"
+    },
+    {
+      "id": "missionDivider0",
+      "type": "image",
+      "file": "divider_horizontal_512x4.png",
+      "rect": [
+        976,
+        561,
+        776,
+        3
+      ]
+    },
+    {
+      "id": "missionStar1",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        984,
+        574,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "missionText1",
+      "type": "engine_text",
+      "text": "제한 시간 내 클리어",
+      "rect": [
+        1032,
+        576,
+        472,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "missionState1",
+      "type": "engine_text",
+      "text": "기준 시간 미정",
+      "rect": [
+        1480,
+        576,
+        260,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#B7AFCA",
+      "align": "right"
+    },
+    {
+      "id": "missionDivider1",
+      "type": "image",
+      "file": "divider_horizontal_512x4.png",
+      "rect": [
+        976,
+        617,
+        776,
+        3
+      ]
+    },
+    {
+      "id": "missionStar2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        984,
+        630,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "missionText2",
+      "type": "engine_text",
+      "text": "체력 50% 이상으로 클리어",
+      "rect": [
+        1032,
+        632,
+        472,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "missionState2",
+      "type": "engine_text",
+      "text": "미달성",
+      "rect": [
+        1480,
+        632,
+        260,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#B7AFCA",
+      "align": "right"
+    },
+    {
+      "id": "rewardDivider",
+      "type": "image",
+      "file": "divider_horizontal_512x4.png",
+      "rect": [
+        800,
+        704,
+        976,
+        4
+      ]
+    },
+    {
+      "id": "clearRewardsTitle",
+      "type": "engine_text",
+      "text": "클리어 보상",
+      "rect": [
+        800,
+        722,
+        224,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "possibleRewardsTitle",
+      "type": "engine_text",
+      "text": "획득 가능 아이템",
+      "rect": [
+        1292,
+        722,
+        320,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "rewardExample",
+      "type": "engine_text",
+      "text": "보상 예시",
+      "rect": [
+        1292,
+        762,
+        176,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#9F94B2",
+      "align": "left"
+    },
+    {
+      "id": "book",
+      "type": "image",
+      "file": "icon_item_skill_book_64x64.png",
+      "rect": [
+        1024,
+        764,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "feather",
+      "type": "image",
+      "file": "icon_item_feather_64x64.png",
+      "rect": [
+        1120,
+        764,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "scroll",
+      "type": "image",
+      "file": "icon_item_scroll_weapon_tier02_64x64.png",
+      "rect": [
+        1512,
+        764,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "extraFeather",
+      "type": "image",
+      "file": "icon_item_feather_64x64.png",
+      "rect": [
+        1616,
+        764,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "sectionTitle",
+      "type": "engine_text",
+      "text": "구간별 보상",
+      "rect": [
+        120,
+        922,
+        272,
+        48
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 34,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "sectionCountPill",
+      "type": "image",
+      "file": "pill_dark_288x64.png",
+      "rect": [
+        396,
+        910,
+        192,
+        52
+      ]
+    },
+    {
+      "id": "sectionCount",
+      "type": "engine_text",
+      "text": "19 / 30",
+      "rect": [
+        404,
+        918,
+        176,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 30,
+      "color": "#FFE39B",
+      "align": "center"
+    },
+    {
+      "id": "sectionHint",
+      "type": "engine_text",
+      "text": "상자를 눌러 보상 확인",
+      "rect": [
+        360,
+        978,
+        272,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 21,
+      "color": "#C6B7CF",
+      "align": "center"
+    },
+    {
+      "id": "sectionGauge",
+      "type": "image",
+      "file": "gauge_stars_track_512x32.png",
+      "rect": [
+        656,
+        1000,
+        592,
+        28
+      ]
+    },
+    {
+      "id": "sectionGaugeFill",
+      "type": "image",
+      "file": "gauge_stars_fill_512x24.png",
+      "rect": [
+        660,
+        1004,
+        370,
+        20
+      ],
+      "fillAmount": 0.6333333333333333,
+      "fullRect": [
+        660,
+        1004,
+        584,
+        20
+      ]
+    },
+    {
+      "id": "sectionChestButton0",
+      "type": "image",
+      "file": "button_milestone_compact_normal_128x112.png",
+      "rect": [
+        688,
+        904,
+        128,
+        112
+      ],
+      "buttonFamily": "milestone_compact"
+    },
+    {
+      "id": "sectionChestIcon0",
+      "type": "image",
+      "file": "icon_chest_claimed_64x64.png",
+      "rect": [
+        720,
+        912,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "sectionChestThreshold0",
+      "type": "engine_text",
+      "text": "10",
+      "rect": [
+        704,
+        982,
+        96,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFF0B5",
+      "align": "center"
+    },
+    {
+      "id": "sectionChestStatus0",
+      "type": "image",
+      "file": "icon_check_complete_40x40.png",
+      "rect": [
+        774,
+        934,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "sectionChestButton1",
+      "type": "image",
+      "file": "button_milestone_compact_disabled_128x112.png",
+      "rect": [
+        880,
+        904,
+        128,
+        112
+      ],
+      "buttonFamily": "milestone_compact"
+    },
+    {
+      "id": "sectionChestIcon1",
+      "type": "image",
+      "file": "icon_chest_locked_64x64.png",
+      "rect": [
+        912,
+        912,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "sectionChestThreshold1",
+      "type": "engine_text",
+      "text": "20",
+      "rect": [
+        896,
+        982,
+        96,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFF0B5",
+      "align": "center"
+    },
+    {
+      "id": "sectionChestStatus1",
+      "type": "image",
+      "file": "icon_lock_closed_64x64.png",
+      "rect": [
+        966,
+        934,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "sectionChestButton2",
+      "type": "image",
+      "file": "button_milestone_compact_disabled_128x112.png",
+      "rect": [
+        1072,
+        904,
+        128,
+        112
+      ],
+      "buttonFamily": "milestone_compact"
+    },
+    {
+      "id": "sectionChestIcon2",
+      "type": "image",
+      "file": "icon_chest_locked_64x64.png",
+      "rect": [
+        1104,
+        912,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "sectionChestThreshold2",
+      "type": "engine_text",
+      "text": "30",
+      "rect": [
+        1088,
+        982,
+        96,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFF0B5",
+      "align": "center"
+    },
+    {
+      "id": "sectionChestStatus2",
+      "type": "image",
+      "file": "icon_lock_closed_64x64.png",
+      "rect": [
+        1158,
+        934,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "enter",
+      "type": "image",
+      "file": "button_primary_normal_512x160.png",
+      "rect": [
+        1320,
+        876,
+        512,
+        160
+      ],
+      "buttonFamily": "primary"
+    },
+    {
+      "id": "enterText",
+      "type": "engine_text",
+      "text": "입장",
+      "rect": [
+        1392,
+        908,
+        368,
+        68
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 54,
+      "color": "#FFF4D7",
+      "align": "center"
+    },
+    {
+      "id": "enterEnergyIcon",
+      "type": "image",
+      "file": "icon_energy_48x64.png",
+      "rect": [
+        1460,
+        968,
+        22,
+        30
+      ]
+    },
+    {
+      "id": "enterCost",
+      "type": "engine_text",
+      "text": "에너지 3",
+      "rect": [
+        1490,
+        966,
+        196,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 26,
+      "color": "#FFF3D7",
+      "align": "left"
+    }
+  ],
+  "result": [
+    {
+      "id": "resultPanel",
+      "type": "image",
+      "file": "panel_result_main_1280x1032.png",
+      "rect": [
+        320,
+        24,
+        1280,
+        1032
+      ]
+    },
+    {
+      "id": "resultTitle",
+      "type": "engine_text",
+      "text": "스티지의 늪 클리어!",
+      "rect": [
+        400,
+        40,
+        1120,
+        88
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 64,
+      "color": "#FFE5A6",
+      "align": "center",
+      "outlineColor": "#432912",
+      "outlineWidth": 0.15
+    },
+    {
+      "id": "largeStar0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        736,
+        144,
+        128,
+        128
+      ]
+    },
+    {
+      "id": "largeStar1",
+      "type": "image",
+      "file": "icon_star_new_192x192.png",
+      "rect": [
+        864,
+        112,
+        192,
+        192
+      ]
+    },
+    {
+      "id": "largeStar2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        1056,
+        144,
+        128,
+        128
+      ]
+    },
+    {
+      "id": "newStarBadge",
+      "type": "image",
+      "file": "badge_new_star_gold_224x56.png",
+      "rect": [
+        848,
+        298,
+        224,
+        56
+      ]
+    },
+    {
+      "id": "newStarCount",
+      "type": "engine_text",
+      "text": "신규 별 +1",
+      "rect": [
+        856,
+        306,
+        208,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#482813",
+      "align": "center",
+      "outline": false
+    },
+    {
+      "id": "combatTimePill",
+      "type": "image",
+      "file": "pill_stat_352x48.png",
+      "rect": [
+        560,
+        366,
+        352,
+        48
+      ]
+    },
+    {
+      "id": "combatTime",
+      "type": "engine_text",
+      "text": "전투 시간 02:18",
+      "rect": [
+        568,
+        372,
+        336,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 27,
+      "color": "#FFF0CC",
+      "align": "center"
+    },
+    {
+      "id": "remainingHpPill",
+      "type": "image",
+      "file": "pill_stat_352x48.png",
+      "rect": [
+        1008,
+        366,
+        352,
+        48
+      ]
+    },
+    {
+      "id": "remainingHp",
+      "type": "engine_text",
+      "text": "남은 체력 38%",
+      "rect": [
+        1016,
+        372,
+        336,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 27,
+      "color": "#FFF0CC",
+      "align": "center"
+    },
+    {
+      "id": "resultMissions",
+      "type": "image",
+      "file": "panel_result_mission_table_1184x152.png",
+      "rect": [
+        368,
+        432,
+        1184,
+        152
+      ]
+    },
+    {
+      "id": "resultMissionStar0",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        400,
+        442,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "resultMissionText0",
+      "type": "engine_text",
+      "text": "스테이지 클리어",
+      "rect": [
+        456,
+        444,
+        760,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "resultMissionState0",
+      "type": "engine_text",
+      "text": "기존 달성",
+      "rect": [
+        1240,
+        444,
+        264,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#BCB4C9",
+      "align": "right"
+    },
+    {
+      "id": "resultMissionStar1",
+      "type": "image",
+      "file": "icon_star_filled_128x128.png",
+      "rect": [
+        400,
+        490,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "resultMissionText1",
+      "type": "engine_text",
+      "text": "제한 시간 내 클리어",
+      "rect": [
+        456,
+        492,
+        760,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "resultMissionState1",
+      "type": "engine_text",
+      "text": "새로 달성",
+      "rect": [
+        1240,
+        492,
+        264,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#FFDD80",
+      "align": "right"
+    },
+    {
+      "id": "resultMissionStar2",
+      "type": "image",
+      "file": "icon_star_empty_128x128.png",
+      "rect": [
+        400,
+        538,
+        36,
+        36
+      ]
+    },
+    {
+      "id": "resultMissionText2",
+      "type": "engine_text",
+      "text": "체력 50% 이상으로 클리어",
+      "rect": [
+        456,
+        540,
+        760,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFF3D7",
+      "align": "left"
+    },
+    {
+      "id": "resultMissionState2",
+      "type": "engine_text",
+      "text": "미달성",
+      "rect": [
+        1240,
+        540,
+        264,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 25,
+      "color": "#BCB4C9",
+      "align": "right"
+    },
+    {
+      "id": "battleRewardsPanel",
+      "type": "image",
+      "file": "panel_result_battle_rewards_1216x160.png",
+      "rect": [
+        352,
+        612,
+        1216,
+        160
+      ]
+    },
+    {
+      "id": "battleRewardsPlaque",
+      "type": "image",
+      "file": "plaque_section_gold_256x48.png",
+      "rect": [
+        832,
+        588,
+        256,
+        48
+      ]
+    },
+    {
+      "id": "battleRewardsTitle",
+      "type": "engine_text",
+      "text": "전투 보상",
+      "rect": [
+        848,
+        596,
+        224,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#482813",
+      "align": "center",
+      "outline": false
+    },
+    {
+      "id": "lootSlot0",
+      "type": "image",
+      "file": "slot_item_96x96.png",
+      "rect": [
+        416,
+        644,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "lootIcon0",
+      "type": "image",
+      "file": "icon_item_skill_book_64x64.png",
+      "rect": [
+        432,
+        660,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "lootName0",
+      "type": "engine_text",
+      "text": "스킬북",
+      "rect": [
+        404,
+        742,
+        120,
+        28
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#FFF1D6",
+      "align": "center"
+    },
+    {
+      "id": "lootSlot1",
+      "type": "image",
+      "file": "slot_item_96x96.png",
+      "rect": [
+        576,
+        644,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "lootIcon1",
+      "type": "image",
+      "file": "icon_item_feather_64x64.png",
+      "rect": [
+        592,
+        660,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "lootName1",
+      "type": "engine_text",
+      "text": "깃털",
+      "rect": [
+        564,
+        742,
+        120,
+        28
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#FFF1D6",
+      "align": "center"
+    },
+    {
+      "id": "lootSlot2",
+      "type": "image",
+      "file": "slot_item_96x96.png",
+      "rect": [
+        736,
+        644,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "lootIcon2",
+      "type": "image",
+      "file": "icon_item_scroll_weapon_tier02_64x64.png",
+      "rect": [
+        752,
+        660,
+        64,
+        64
+      ]
+    },
+    {
+      "id": "lootName2",
+      "type": "engine_text",
+      "text": "주문서",
+      "rect": [
+        724,
+        742,
+        120,
+        28
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#FFF1D6",
+      "align": "center"
+    },
+    {
+      "id": "lootSlot3",
+      "type": "image",
+      "file": "slot_item_96x96.png",
+      "rect": [
+        896,
+        644,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "lootSlot4",
+      "type": "image",
+      "file": "slot_item_96x96.png",
+      "rect": [
+        1056,
+        644,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "lootSlot5",
+      "type": "image",
+      "file": "slot_item_96x96.png",
+      "rect": [
+        1216,
+        644,
+        96,
+        96
+      ]
+    },
+    {
+      "id": "lootExample",
+      "type": "engine_text",
+      "text": "보상 예시",
+      "rect": [
+        1384,
+        674,
+        128,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#A99AB7",
+      "align": "center"
+    },
+    {
+      "id": "lootNextIcon",
+      "type": "image",
+      "file": "icon_chevron_right_32x40.png",
+      "rect": [
+        1512,
+        666,
+        32,
+        40
+      ]
+    },
+    {
+      "id": "resultSectionPanel",
+      "type": "image",
+      "file": "panel_result_milestones_1216x136.png",
+      "rect": [
+        352,
+        800,
+        1216,
+        136
+      ]
+    },
+    {
+      "id": "resultSectionPlaque",
+      "type": "image",
+      "file": "plaque_section_gold_256x48.png",
+      "rect": [
+        832,
+        776,
+        256,
+        48
+      ]
+    },
+    {
+      "id": "resultSectionTitle",
+      "type": "engine_text",
+      "text": "구간별 보상",
+      "rect": [
+        848,
+        784,
+        224,
+        36
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#482813",
+      "align": "center",
+      "outline": false
+    },
+    {
+      "id": "resultSectionCount",
+      "type": "engine_text",
+      "text": "누적 별 19 → 20 / 30",
+      "rect": [
+        392,
+        830,
+        408,
+        44
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 28,
+      "color": "#FFE8A4",
+      "align": "left"
+    },
+    {
+      "id": "resultSectionGauge",
+      "type": "image",
+      "file": "gauge_stars_track_512x32.png",
+      "rect": [
+        392,
+        890,
+        368,
+        24
+      ]
+    },
+    {
+      "id": "resultSectionFill",
+      "type": "image",
+      "file": "gauge_stars_fill_512x24.png",
+      "rect": [
+        395,
+        893,
+        241,
+        18
+      ],
+      "fillAmount": 0.6666666666666666,
+      "fullRect": [
+        395,
+        893,
+        362,
+        18
+      ]
+    },
+    {
+      "id": "resultChestTile0",
+      "type": "image",
+      "file": "button_milestone_normal_176x128.png",
+      "rect": [
+        824,
+        820,
+        176,
+        104
+      ],
+      "buttonFamily": "milestone"
+    },
+    {
+      "id": "resultChestIcon0",
+      "type": "image",
+      "file": "icon_chest_claimed_64x64.png",
+      "rect": [
+        882,
+        824,
+        60,
+        48
+      ]
+    },
+    {
+      "id": "resultThreshold0",
+      "type": "engine_text",
+      "text": "10",
+      "rect": [
+        952,
+        832,
+        44,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#FFE39B",
+      "align": "center"
+    },
+    {
+      "id": "resultClaimLabel0",
+      "type": "engine_text",
+      "text": "수령 완료",
+      "rect": [
+        836,
+        888,
+        152,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#C5B9CF",
+      "align": "center",
+      "outline": true
+    },
+    {
+      "id": "resultChestTile1",
+      "type": "image",
+      "file": "button_milestone_normal_176x128.png",
+      "rect": [
+        1040,
+        820,
+        176,
+        104
+      ],
+      "buttonFamily": "milestone"
+    },
+    {
+      "id": "resultChestReady",
+      "type": "image",
+      "file": "overlay_reward_ready_176x128.png",
+      "rect": [
+        1040,
+        820,
+        176,
+        104
+      ]
+    },
+    {
+      "id": "resultChestIcon1",
+      "type": "image",
+      "file": "icon_chest_reward_64x64.png",
+      "rect": [
+        1098,
+        824,
+        60,
+        48
+      ]
+    },
+    {
+      "id": "resultThreshold1",
+      "type": "engine_text",
+      "text": "20",
+      "rect": [
+        1168,
+        832,
+        44,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#FFE39B",
+      "align": "center"
+    },
+    {
+      "id": "claimBody",
+      "type": "image",
+      "file": "button_claim_normal_176x64.png",
+      "rect": [
+        1056,
+        888,
+        144,
+        32
+      ],
+      "buttonFamily": "claim"
+    },
+    {
+      "id": "resultClaimLabel1",
+      "type": "engine_text",
+      "text": "보상 받기",
+      "rect": [
+        1052,
+        888,
+        152,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#482813",
+      "align": "center",
+      "outline": false
+    },
+    {
+      "id": "resultChestTile2",
+      "type": "image",
+      "file": "button_milestone_disabled_176x128.png",
+      "rect": [
+        1256,
+        820,
+        176,
+        104
+      ],
+      "buttonFamily": "milestone"
+    },
+    {
+      "id": "resultChestIcon2",
+      "type": "image",
+      "file": "icon_chest_locked_64x64.png",
+      "rect": [
+        1314,
+        824,
+        60,
+        48
+      ]
+    },
+    {
+      "id": "resultThreshold2",
+      "type": "engine_text",
+      "text": "30",
+      "rect": [
+        1384,
+        832,
+        44,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 23,
+      "color": "#FFE39B",
+      "align": "center"
+    },
+    {
+      "id": "resultClaimLabel2",
+      "type": "engine_text",
+      "text": "잠김",
+      "rect": [
+        1268,
+        888,
+        152,
+        32
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#C5B9CF",
+      "align": "center",
+      "outline": true
+    },
+    {
+      "id": "resultBack",
+      "type": "image",
+      "file": "button_secondary_normal_448x128.png",
+      "rect": [
+        448,
+        944,
+        480,
+        112
+      ],
+      "buttonFamily": "secondary"
+    },
+    {
+      "id": "resultBackText",
+      "type": "engine_text",
+      "text": "지역 선택으로",
+      "rect": [
+        472,
+        970,
+        432,
+        56
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 40,
+      "color": "#FFF3D7",
+      "align": "center"
+    },
+    {
+      "id": "retry",
+      "type": "image",
+      "file": "button_primary_normal_512x160.png",
+      "rect": [
+        992,
+        944,
+        480,
+        112
+      ],
+      "buttonFamily": "primary"
+    },
+    {
+      "id": "retryText",
+      "type": "engine_text",
+      "text": "다시 도전",
+      "rect": [
+        1016,
+        972,
+        432,
+        40
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 36,
+      "color": "#FFF3D7",
+      "align": "center"
+    },
+    {
+      "id": "retryCostIcon",
+      "type": "image",
+      "file": "icon_energy_48x64.png",
+      "rect": [
+        1116,
+        1004,
+        18,
+        24
+      ]
+    },
+    {
+      "id": "retryCost",
+      "type": "engine_text",
+      "text": "에너지 3",
+      "rect": [
+        1142,
+        1006,
+        192,
+        28
+      ],
+      "font": "Maple",
+      "fontStyle": "Bold",
+      "fontSize": 22,
+      "color": "#FFF3D7",
+      "align": "left"
+    }
+  ]
+}

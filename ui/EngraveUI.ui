@@ -7,7 +7,7 @@
   "Usage": 0,
   "UsePublish": 1,
   "UseService": 0,
-  "CoreVersion": "26.10.0.0",
+  "CoreVersion": "26.11.0.0",
   "StudioVersion": "0.1.0.0",
   "DynamicLoading": 0,
   "ContentProto": {
@@ -705,30 +705,30 @@
             {
               "@type": "MOD.Core.UITransformComponent",
               "ActivePlatform": 255,
-              "AlignmentOption": 0,
+              "AlignmentOption": 5,
               "AnchorsMax": {
-                "x": 0.5,
-                "y": 0.5
+                "x": 1.0,
+                "y": 1.0
               },
               "AnchorsMin": {
-                "x": 0.5,
-                "y": 0.5
+                "x": 1.0,
+                "y": 1.0
               },
               "MobileOnly": false,
               "OffsetMax": {
-                "x": 576.8,
-                "y": 354.0
+                "x": -20.0,
+                "y": -20.0
               },
               "OffsetMin": {
-                "x": 423.2,
-                "y": 290.0
+                "x": -84.0,
+                "y": -84.0
               },
               "Pivot": {
-                "x": 0.5,
-                "y": 0.5
+                "x": 1.0,
+                "y": 1.0
               },
               "RectSize": {
-                "x": 153.6,
+                "x": 64.0,
                 "y": 64.0
               },
               "UIMode": 1,
@@ -739,8 +739,8 @@
               },
               "UIVersion": 2,
               "anchoredPosition": {
-                "x": 500.0,
-                "y": 322.0
+                "x": -20.0,
+                "y": -20.0
               },
               "Rotation": {
                 "x": 0.0,
@@ -748,8 +748,8 @@
                 "z": 0.0
               },
               "Position": {
-                "x": 500.0,
-                "y": 322.0,
+                "x": 940.0,
+                "y": 520.0,
                 "z": 0.0
               },
               "QuaternionRotation": {
@@ -772,7 +772,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                "DataId": "63cc491b18bd41ab961880e152b57e4d"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -786,7 +786,7 @@
               "OrderInLayer": 0,
               "OverrideSorting": false,
               "PlayRate": 1.0,
-              "PreserveSprite": 1,
+              "PreserveSprite": 0,
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
@@ -865,21 +865,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "e38cdce235d54681b4906e24f01ac8dd"
+                  "DataId": "234a3cef58ae4954a5ff024688ca66fd"
                 },
                 "PressedSprite": {
-                  "DataId": "54979bc4c3d24e8ab93cfc80149f5e27"
+                  "DataId": "6b79d55bd6d44f18b5ab84ffbe16da72"
                 },
                 "SelectedSprite": {
-                  "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                  "DataId": "63cc491b18bd41ab961880e152b57e4d"
                 },
                 "DisabledSprite": {
-                  "DataId": "b51f729cc53349f3b5e93e81b24fc550"
+                  "DataId": "0473791f50d642249eb0fb7f4738e791"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -887,13 +888,14 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.84,
-                "g": 0.88,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },
@@ -921,7 +923,7 @@
               },
               "SizeFit": false,
               "SortingLayer": "UI",
-              "Text": "닫기",
+              "Text": "",
               "Underlay": false,
               "UseConstraintX": false,
               "UseConstraintY": false,
@@ -1026,14 +1028,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 34.0,
@@ -1221,14 +1224,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -1419,7 +1423,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "7d9b5d59a9b64746be70fd86216b81b6"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -1470,7 +1474,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -1567,14 +1571,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -1762,14 +1767,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 30.0,
@@ -1957,14 +1963,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -2155,7 +2162,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "75f3c6dbf2434bcaa0e4b2d430575e2d"
+                "DataId": "65d8340b880940b5b2d2d3342dad63aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -2206,7 +2213,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -2248,21 +2255,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "6ba383acf31a4c5bb105720d50c0ccd4"
+                  "DataId": "292e7807ec754ea19ff3c28ec4b10311"
                 },
                 "PressedSprite": {
-                  "DataId": "a79e3b3c39dd46d4bcf92f29ecf88733"
+                  "DataId": "7e3db0c2c7944ba29d49c35222ad98b3"
                 },
                 "SelectedSprite": {
-                  "DataId": "75f3c6dbf2434bcaa0e4b2d430575e2d"
+                  "DataId": "8739b8a9b7e84759abd297cae38822dc"
                 },
                 "DisabledSprite": {
-                  "DataId": "f2cf3f5019aa4da995e72294dacb3e64"
+                  "DataId": "b5179a32f5c54fabbd757a0d8a2fbe18"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -2270,14 +2278,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.8392157,
-                "g": 0.8784314,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -2412,7 +2421,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "3ab564e197a545a09e27c4c7d864bc8e"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -2463,7 +2472,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -2560,14 +2569,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.8509804,
-                "g": 0.5411765,
-                "b": 0.482352942,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 26.0,
@@ -2755,14 +2765,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -2953,7 +2964,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "ca5762c367a64fc4b91da5990b7e7d9e"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -3004,7 +3015,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -3101,14 +3112,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.498039216,
-                "g": 0.6901961,
-                "b": 0.8627451,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 26.0,
@@ -3296,14 +3308,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -3494,7 +3507,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a56cf9f4d00b4ce58f0df0b196743d12"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -3545,7 +3558,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -3642,14 +3655,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.7882353,
-                "g": 0.6431373,
-                "b": 0.41568628,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 26.0,
@@ -3837,14 +3851,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -6844,7 +6859,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -6895,7 +6910,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -6936,21 +6951,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -7395,7 +7420,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -7446,7 +7471,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -7487,21 +7512,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -7946,7 +7981,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -7997,7 +8032,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -8038,21 +8073,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -8497,7 +8542,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -8548,7 +8593,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -8589,21 +8634,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -9048,7 +9103,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -9099,7 +9154,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -9140,21 +9195,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -9599,7 +9664,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -9650,7 +9715,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -9691,21 +9756,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -10150,7 +10225,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -10201,7 +10276,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -10242,21 +10317,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -10701,7 +10786,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -10752,7 +10837,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -10793,21 +10878,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -11252,7 +11347,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -11303,7 +11398,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -11344,21 +11439,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -11803,7 +11908,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -11854,7 +11959,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -11895,21 +12000,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -12354,7 +12469,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -12405,7 +12520,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -12446,21 +12561,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -12905,7 +13030,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -12956,7 +13081,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -12997,21 +13122,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -13456,7 +13591,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -13507,7 +13642,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -13548,21 +13683,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -14007,7 +14152,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -14058,7 +14203,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -14099,21 +14244,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -14558,7 +14713,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -14609,7 +14764,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -14650,21 +14805,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -15109,7 +15274,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -15160,7 +15325,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -15201,21 +15366,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -15660,7 +15835,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -15711,7 +15886,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -15752,21 +15927,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -16211,7 +16396,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -16262,7 +16447,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -16303,21 +16488,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -16762,7 +16957,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -16813,7 +17008,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -16854,21 +17049,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -17313,7 +17518,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -17364,7 +17569,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -17405,21 +17610,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -17864,7 +18079,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -17915,7 +18130,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -17956,21 +18171,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -18415,7 +18640,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -18466,7 +18691,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -18507,21 +18732,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -18966,7 +19201,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -19017,7 +19252,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -19058,21 +19293,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -19517,7 +19762,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "63125803f4b54a53800f9a0b51b6e6f3"
+                "DataId": "e90525dfa21048ab85f6ce106568cafe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -19568,7 +19813,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -19609,21 +19854,31 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "44dfb2104e824c85bd9d0e4eba6827e5"
+                },
+                "PressedSprite": {
+                  "DataId": "02b8859c01824a5c9295b43abd035d4c"
+                },
+                "SelectedSprite": {
+                  "DataId": "2fb9188d63824034982c468fec963cb1"
+                },
+                "DisabledSprite": {
+                  "DataId": "cc28857170484a48b02d81289e52ca30"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
@@ -20068,7 +20323,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "787773ec73744145a0951af5c6d3e9b2"
+                "DataId": "f6850016d5a94cfba07d55858733d8f1"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -20119,7 +20374,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -20219,7 +20474,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b06371157189437db40ab9468f0f4869"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -20270,7 +20525,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -20367,14 +20622,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -20565,7 +20821,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "be0f53c717a841f59aa40f513a936755"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -20616,7 +20872,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -20864,14 +21120,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.8509804,
-                "g": 0.5411765,
-                "b": 0.482352942,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -21059,14 +21316,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 30.0,
@@ -21254,14 +21512,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -21452,7 +21711,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "71ce153f5ab04cd396bd267b9a130aa7"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -21503,7 +21762,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -21600,14 +21859,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -21795,14 +22055,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -21990,14 +22251,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -22188,7 +22450,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "e9519bb6eb0044ae95f675285bb1da67"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -22239,7 +22501,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -22336,14 +22598,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -22534,7 +22797,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "e9519bb6eb0044ae95f675285bb1da67"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -22585,7 +22848,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -22682,14 +22945,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -22880,7 +23144,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "e9519bb6eb0044ae95f675285bb1da67"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -22931,7 +23195,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -23028,14 +23292,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -23223,14 +23488,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 0.5411765,
-                "b": 0.5411765,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -23418,14 +23684,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5568628,
-                "g": 0.5764706,
-                "b": 0.6392157,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -23613,14 +23880,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -23811,7 +24079,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "7f1b9240935446d9906adb0047f25c5e"
+                "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -23862,7 +24130,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -23904,21 +24172,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "064f6c4c0a5f4862959e20baa23d05fa"
+                  "DataId": "2a218c009982464f9c6f581e763ea6aa"
                 },
                 "PressedSprite": {
-                  "DataId": "97442c8a4ede4976889964166f16eaac"
+                  "DataId": "3127fb2d53b14c6a94e8d0c7e309ac92"
                 },
                 "SelectedSprite": {
-                  "DataId": "7f1b9240935446d9906adb0047f25c5e"
+                  "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
                 },
                 "DisabledSprite": {
-                  "DataId": "c2296d740a904494b34ea024d0429f06"
+                  "DataId": "db304db9f8de48278c56d7b13071f0d5"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -23926,13 +24195,14 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.8392157,
-                "g": 0.8784314,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },

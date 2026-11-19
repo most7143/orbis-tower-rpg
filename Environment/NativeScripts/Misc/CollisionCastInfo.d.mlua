@@ -1,0 +1,26 @@
+---@sealed
+---@description "Indicates the collision information obtained from BoxCast or CircleCast."
+@Misc
+script CollisionCastInfo
+
+	---@description "The distance moved until the collision."
+	---@sealed
+	readonly property float Distance
+
+	---@description "The ratio of the distance moved until the collision to distance. Uses a value between 0 and 1."
+	---@sealed
+	readonly property float Fraction
+
+	---@description "The component that collided."
+	---@sealed
+	readonly property Component HitComponent
+
+	---@description "The normal vector of the collided surface. If they already overlapped at the start position, it is the direction that separates the two colliders."
+	---@sealed
+	readonly property Vector2 HitNormal
+
+	---@description "The world coordinates of the collision point. If surfaces touch each other, the middle section of the two overlapping surfaces becomes the collision point."
+	---@sealed
+	readonly property Vector2 HitPoint
+
+end

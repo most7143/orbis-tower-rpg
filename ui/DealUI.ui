@@ -7,7 +7,7 @@
   "Usage": 0,
   "UsePublish": 1,
   "UseService": 0,
-  "CoreVersion": "26.10.0.0",
+  "CoreVersion": "26.11.0.0",
   "StudioVersion": "0.1.0.0",
   "DynamicLoading": 0,
   "ContentProto": {
@@ -211,7 +211,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "2860136c06ab075439721c027de365af"
+                "DataId": "ad1157dddb334c91b1b58c1073e060e1"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -229,10 +229,10 @@
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
-                "r": 0.101960786,
-                "g": 0.101960786,
-                "b": 0.101960786,
-                "a": 0.0
+                "r": 1.0,
+                "g": 1.0,
+                "b": 1.0,
+                "a": 1.0
               },
               "DropShadow": false,
               "DropShadowAngle": 120.0,
@@ -510,14 +510,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.7607843,
-                "b": 0.3529412,
+                "r": 1.0,
+                "g": 1.0,
+                "b": 1.0,
                 "a": 1.0
               },
               "FontSize": 32.0,
@@ -546,6 +547,12 @@
               "SortingLayer": "UI",
               "Text": "보스 처치! 거래를 제안합니다",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -705,14 +712,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9019608,
-                "g": 0.9019608,
-                "b": 0.9019608,
+                "r": 1.0,
+                "g": 1.0,
+                "b": 1.0,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -741,6 +749,12 @@
               "SortingLayer": "UI",
               "Text": "하나를 골라 이번 판에만 적용됩니다",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -903,7 +917,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "98f27273363b4f089b980d1538e6b432"
+                "DataId": "951c44d6b73c4d46929c47a479cfb4aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -921,8 +935,8 @@
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
-                "r": 0.7882353,
-                "g": 0.8627451,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },
@@ -1202,14 +1216,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.7490196,
-                "g": 0.8901961,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 26.0,
@@ -1238,6 +1253,12 @@
               "SortingLayer": "UI",
               "Text": "천사의 거래",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -1397,14 +1418,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -1433,6 +1455,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -1592,14 +1620,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9019608,
-                "g": 0.9019608,
-                "b": 0.9019608,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -1628,6 +1657,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 256,
@@ -1787,14 +1822,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 0.8509804,
-                "b": 0.4,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -1823,6 +1859,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -1985,7 +2027,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -2036,7 +2078,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -2078,21 +2120,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "e38cdce235d54681b4906e24f01ac8dd"
+                  "DataId": "2a218c009982464f9c6f581e763ea6aa"
                 },
                 "PressedSprite": {
-                  "DataId": "54979bc4c3d24e8ab93cfc80149f5e27"
+                  "DataId": "3127fb2d53b14c6a94e8d0c7e309ac92"
                 },
                 "SelectedSprite": {
-                  "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                  "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
                 },
                 "DisabledSprite": {
-                  "DataId": "b51f729cc53349f3b5e93e81b24fc550"
+                  "DataId": "db304db9f8de48278c56d7b13071f0d5"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -2100,13 +2143,14 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.84,
-                "g": 0.88,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },
@@ -2136,6 +2180,12 @@
               "SortingLayer": "UI",
               "Text": "획득",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -2242,7 +2292,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "98f27273363b4f089b980d1538e6b432"
+                "DataId": "951c44d6b73c4d46929c47a479cfb4aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -2261,8 +2311,8 @@
               "StartFrameIndex": 0,
               "Color": {
                 "r": 1.0,
-                "g": 0.721568644,
-                "b": 0.721568644,
+                "g": 1.0,
+                "b": 1.0,
                 "a": 1.0
               },
               "DropShadow": false,
@@ -2541,14 +2591,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 0.6039216,
-                "b": 0.6039216,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 26.0,
@@ -2577,6 +2628,12 @@
               "SortingLayer": "UI",
               "Text": "악마의 거래",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -2736,14 +2793,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -2772,6 +2830,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -2931,14 +2995,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9019608,
-                "g": 0.9019608,
-                "b": 0.9019608,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -2967,6 +3032,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 256,
@@ -3126,14 +3197,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 0.8509804,
-                "b": 0.4,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -3162,6 +3234,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -3324,7 +3402,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -3375,7 +3453,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -3417,21 +3495,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "e38cdce235d54681b4906e24f01ac8dd"
+                  "DataId": "2a218c009982464f9c6f581e763ea6aa"
                 },
                 "PressedSprite": {
-                  "DataId": "54979bc4c3d24e8ab93cfc80149f5e27"
+                  "DataId": "3127fb2d53b14c6a94e8d0c7e309ac92"
                 },
                 "SelectedSprite": {
-                  "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                  "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
                 },
                 "DisabledSprite": {
-                  "DataId": "b51f729cc53349f3b5e93e81b24fc550"
+                  "DataId": "db304db9f8de48278c56d7b13071f0d5"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -3439,13 +3518,14 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.84,
-                "g": 0.88,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },
@@ -3475,6 +3555,12 @@
               "SortingLayer": "UI",
               "Text": "획득",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -3581,7 +3667,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "98f27273363b4f089b980d1538e6b432"
+                "DataId": "951c44d6b73c4d46929c47a479cfb4aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -3600,8 +3686,8 @@
               "StartFrameIndex": 0,
               "Color": {
                 "r": 1.0,
-                "g": 0.8862745,
-                "b": 0.6901961,
+                "g": 1.0,
+                "b": 1.0,
                 "a": 1.0
               },
               "DropShadow": false,
@@ -3880,14 +3966,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 0.8784314,
-                "b": 0.627451,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 26.0,
@@ -3916,6 +4003,12 @@
               "SortingLayer": "UI",
               "Text": "상인과 거래",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -4075,14 +4168,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -4111,6 +4205,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -4270,14 +4370,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9019608,
-                "g": 0.9019608,
-                "b": 0.9019608,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -4306,6 +4407,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 256,
@@ -4465,14 +4572,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 1.0,
-                "g": 0.8509804,
-                "b": 0.4,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -4501,6 +4609,12 @@
               "SortingLayer": "UI",
               "Text": "",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -4663,7 +4777,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -4714,7 +4828,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -4756,21 +4870,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "e38cdce235d54681b4906e24f01ac8dd"
+                  "DataId": "2a218c009982464f9c6f581e763ea6aa"
                 },
                 "PressedSprite": {
-                  "DataId": "54979bc4c3d24e8ab93cfc80149f5e27"
+                  "DataId": "3127fb2d53b14c6a94e8d0c7e309ac92"
                 },
                 "SelectedSprite": {
-                  "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                  "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
                 },
                 "DisabledSprite": {
-                  "DataId": "b51f729cc53349f3b5e93e81b24fc550"
+                  "DataId": "db304db9f8de48278c56d7b13071f0d5"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -4778,13 +4893,14 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.84,
-                "g": 0.88,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },
@@ -4814,6 +4930,12 @@
               "SortingLayer": "UI",
               "Text": "획득",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,
@@ -4920,7 +5042,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                "DataId": "65d8340b880940b5b2d2d3342dad63aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -4971,7 +5093,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -5013,21 +5135,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "e38cdce235d54681b4906e24f01ac8dd"
+                  "DataId": "292e7807ec754ea19ff3c28ec4b10311"
                 },
                 "PressedSprite": {
-                  "DataId": "54979bc4c3d24e8ab93cfc80149f5e27"
+                  "DataId": "7e3db0c2c7944ba29d49c35222ad98b3"
                 },
                 "SelectedSprite": {
-                  "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                  "DataId": "8739b8a9b7e84759abd297cae38822dc"
                 },
                 "DisabledSprite": {
-                  "DataId": "b51f729cc53349f3b5e93e81b24fc550"
+                  "DataId": "b5179a32f5c54fabbd757a0d8a2fbe18"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -5035,14 +5158,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.84,
-                "g": 0.88,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -5071,6 +5195,12 @@
               "SortingLayer": "UI",
               "Text": "아무것도 고르지 않기",
               "Underlay": false,
+              "UnderlayColor": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.65
+              },
               "UseConstraintX": false,
               "UseConstraintY": false,
               "VerticalAlignment": 512,

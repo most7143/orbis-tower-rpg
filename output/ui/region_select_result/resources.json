@@ -1,0 +1,1329 @@
+{
+  "version": "2026-11-13",
+  "resourceRoot": ".",
+  "count": 82,
+  "referenceResolution": [
+    1920,
+    1080
+  ],
+  "alphaMode": "straight RGBA",
+  "runtimeRUIDsNotAssigned": true,
+  "assets": [
+    {
+      "file": "panel_region_list_640x744.png",
+      "width": 640,
+      "height": 744,
+      "role": "panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "sha256": "0812a533fe6c108c78d26d7d04fc90e430e3da256b95d621e0b0b5963db04759",
+      "bytes": 124685,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_region_detail_1056x744.png",
+      "width": 1056,
+      "height": 744,
+      "role": "panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "sha256": "a59beb3fff48643640964fedfb684e480191528481c43eb476370104a36d66bc",
+      "bytes": 159959,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_section_rewards_1216x152.png",
+      "width": 1216,
+      "height": 152,
+      "role": "panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "sha256": "26815eaf7eaa90fd543c2f71560204def50f945fa4f989faf553d063407e3d7b",
+      "bytes": 86563,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_result_main_1280x1032.png",
+      "width": 1280,
+      "height": 1032,
+      "role": "panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "sha256": "a708faebc3c831ea27f76a143f4e24c825185eb0a0f76c339ef4d6bf5e337553",
+      "bytes": 224565,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_result_battle_rewards_1216x160.png",
+      "width": 1216,
+      "height": 160,
+      "role": "inner_panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        24,
+        24,
+        24,
+        24
+      ],
+      "sha256": "fcdce04e819f7fe8cacea772ec8f472f6be0dfd585814e105b39cbcf789adf9d",
+      "bytes": 6757,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_result_milestones_1216x136.png",
+      "width": 1216,
+      "height": 136,
+      "role": "inner_panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        24,
+        24,
+        24,
+        24
+      ],
+      "sha256": "ca5a7b074b60b9d285611c19c2f511ba922c8bdbf4d679698f10648f93f6de6a",
+      "bytes": 6104,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_mission_table_800x168.png",
+      "width": 800,
+      "height": 168,
+      "role": "inner_panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        24,
+        24,
+        24,
+        24
+      ],
+      "sha256": "5ef047f8c495959765756918f43a4d3d34249944573f08ba314f1a9c24b136cc",
+      "bytes": 5682,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_result_mission_table_1184x152.png",
+      "width": 1184,
+      "height": 152,
+      "role": "inner_panel",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Simple",
+      "sliceBorder": [
+        24,
+        24,
+        24,
+        24
+      ],
+      "sha256": "f60bba123e66eff5532b61739d9666b643dcac5a05f4b438aa199424e76e1692",
+      "bytes": 6564,
+      "runtimeRUID": null
+    },
+    {
+      "file": "panel_panorama_frame_992x240.png",
+      "width": 992,
+      "height": 240,
+      "role": "panorama_frame",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "contentInset": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "render": "Simple",
+      "sha256": "358515bd6ee54cf3f10649a099e7d2bf6a31bbeca55a839e425f727f6db12dfa",
+      "bytes": 8209,
+      "runtimeRUID": null
+    },
+    {
+      "file": "plaque_title_gold_320x80.png",
+      "width": 320,
+      "height": 80,
+      "role": "title_plaque",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "0c53aa2bd106571b13d073cda4d989af8933545fc396d69326e62e8b2ddecb3f",
+      "bytes": 4864,
+      "runtimeRUID": null
+    },
+    {
+      "file": "plaque_section_gold_256x48.png",
+      "width": 256,
+      "height": 48,
+      "role": "section_plaque",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "4f0a21f10b9a8ac0c68131e2abfc75521233b53b4648ff7b6d554c4dcef6fb9a",
+      "bytes": 1307,
+      "runtimeRUID": null
+    },
+    {
+      "file": "pill_dark_288x64.png",
+      "width": 288,
+      "height": 64,
+      "role": "pill",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "75bf69822c510075bda52d4a3615701fd06ac4259e886ffbec24bf3fbaffde03",
+      "bytes": 2261,
+      "runtimeRUID": null
+    },
+    {
+      "file": "pill_stat_352x48.png",
+      "width": 352,
+      "height": 48,
+      "role": "pill",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "a613d38db35439bbb553fc80ed21d42904b1a38afbc53207396c45b8fb84a0b7",
+      "bytes": 1796,
+      "runtimeRUID": null
+    },
+    {
+      "file": "badge_new_star_gold_224x56.png",
+      "width": 224,
+      "height": 56,
+      "role": "badge",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "36498f84d86696a7389b4ff8399fe56540161f6cc50edea6e952fff7bbd8f9dd",
+      "bytes": 1840,
+      "runtimeRUID": null
+    },
+    {
+      "file": "slot_item_96x96.png",
+      "width": 96,
+      "height": 96,
+      "role": "item_slot",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "69cd219e15fdf71fcda040a2b134d9ea38c1389e159cadb6327936412bb4d996",
+      "bytes": 1411,
+      "runtimeRUID": null
+    },
+    {
+      "file": "slot_monster_128x96.png",
+      "width": 128,
+      "height": 96,
+      "role": "monster_slot",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "ed7b0b2a972ad273c6e3865bf7b5f4639c4c779d89d52da155bf21f06a42fde8",
+      "bytes": 1492,
+      "runtimeRUID": null
+    },
+    {
+      "file": "divider_horizontal_512x4.png",
+      "width": 512,
+      "height": 4,
+      "role": "divider",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "f9d76e3b1cad108ed1997a122dc86a693e7e03ab790d79bcda2ddd7251ba2212",
+      "bytes": 584,
+      "runtimeRUID": null
+    },
+    {
+      "file": "divider_vertical_4x96.png",
+      "width": 4,
+      "height": 96,
+      "role": "divider",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "bcbf657c1b654a409c43ca249312abbc92e1c210e7b613648349614a345021ad",
+      "bytes": 126,
+      "runtimeRUID": null
+    },
+    {
+      "file": "gauge_stars_track_512x32.png",
+      "width": 512,
+      "height": 32,
+      "role": "gauge_track",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "fillInset": [
+        4,
+        4,
+        4,
+        4
+      ],
+      "sha256": "ddcb588dddbd87f1ff1f9e473d74454c36ed62b3093f974a08bf1211de63b5fa",
+      "bytes": 1344,
+      "runtimeRUID": null
+    },
+    {
+      "file": "overlay_dim_1x1.png",
+      "width": 1,
+      "height": 1,
+      "role": "overlay",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "fa18ec4c926115e12340e60a34fb0c7b3f71d40201ca3e63dba4a1419234b6eb",
+      "bytes": 91,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_primary_normal_512x160.png",
+      "width": 512,
+      "height": 160,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "primary",
+      "state": "normal",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_play_normal_512x160.png",
+      "sha256": "720a7074484570cd0bc65d0f9640d52283cabe1a6672fd4d3fee6849f35cf2f0",
+      "bytes": 48820,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_primary_highlight_512x160.png",
+      "width": 512,
+      "height": 160,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "primary",
+      "state": "highlight",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_play_normal_512x160.png",
+      "sha256": "6ad1c6fe22ab79c293e9b4ed7aa7689bd28883412d1f9e6f49dd4a4d46e7024b",
+      "bytes": 41830,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_primary_pressed_512x160.png",
+      "width": 512,
+      "height": 160,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "primary",
+      "state": "pressed",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_play_normal_512x160.png",
+      "sha256": "6e5fee3a0e9fd3b571b6443283759870583eb7a21b85037b3617212f3016fb0a",
+      "bytes": 43536,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_primary_disabled_512x160.png",
+      "width": 512,
+      "height": 160,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "primary",
+      "state": "disabled",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_play_normal_512x160.png",
+      "sha256": "c97a5941ffe55035b78594e73b79dd6da0a1dda3922b27fd8594484f495a98e3",
+      "bytes": 29936,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_secondary_normal_448x128.png",
+      "width": 448,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "secondary",
+      "state": "normal",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_secondary_normal_288x104.png",
+      "sha256": "865b89c3875f349da80b43136d84956d64e8ce3b9621215a00e575bf11f926f0",
+      "bytes": 53769,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_secondary_highlight_448x128.png",
+      "width": 448,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "secondary",
+      "state": "highlight",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_secondary_normal_288x104.png",
+      "sha256": "723cdb0b81747eaa01a3bb5b4c33c3d05f8525cb67ef107ae4c78930c165cb09",
+      "bytes": 50372,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_secondary_pressed_448x128.png",
+      "width": 448,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "secondary",
+      "state": "pressed",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_secondary_normal_288x104.png",
+      "sha256": "cd22d23594b4ccd846d86bb44019066913609b8a396d2cc760ced851ff63cddd",
+      "bytes": 46693,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_secondary_disabled_448x128.png",
+      "width": 448,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "secondary",
+      "state": "disabled",
+      "render": "Simple",
+      "reuseSource": "메인화면/main_menu_button_secondary_normal_288x104.png",
+      "sha256": "fc2e24c5a21ab880f9c5df0ecd050664697f51469b366e22fa05ed8ed9f45c37",
+      "bytes": 29555,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_arrow_normal_96x96.png",
+      "width": 96,
+      "height": 96,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "arrow",
+      "state": "normal",
+      "render": "Simple",
+      "sha256": "dcb56e40ad596c50b077297832da5719c36f0dc2f6157572f42d36d1e3c7b763",
+      "bytes": 12816,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_arrow_highlight_96x96.png",
+      "width": 96,
+      "height": 96,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "arrow",
+      "state": "highlight",
+      "render": "Simple",
+      "sha256": "9838fd2b0b7dca22331b777c7521c7e4c41f884043ff03d76e9a51cb67fd7878",
+      "bytes": 12159,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_arrow_pressed_96x96.png",
+      "width": 96,
+      "height": 96,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "arrow",
+      "state": "pressed",
+      "render": "Simple",
+      "sha256": "02846d9333df6ed9d956db80b6c2f45878d8477a8514ce5765745225bdc126a9",
+      "bytes": 11323,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_arrow_disabled_96x96.png",
+      "width": 96,
+      "height": 96,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "arrow",
+      "state": "disabled",
+      "render": "Simple",
+      "sha256": "a7fbeb722b11a7fecc65ac603662bc208a0ad890e75a02a74603abc85e11aaab",
+      "bytes": 7839,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_claim_normal_176x64.png",
+      "width": 176,
+      "height": 64,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "claim",
+      "state": "normal",
+      "render": "Simple",
+      "sha256": "273c02a2fdf97daba58bb55c98a457c3626ca9e1f92dc4107e569a552f52b46c",
+      "bytes": 3319,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_claim_highlight_176x64.png",
+      "width": 176,
+      "height": 64,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "claim",
+      "state": "highlight",
+      "render": "Simple",
+      "sha256": "ac852ebc1415af7040d72c36f79a5d9221ab74006af404759698dc9d566015f9",
+      "bytes": 2736,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_claim_pressed_176x64.png",
+      "width": 176,
+      "height": 64,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "claim",
+      "state": "pressed",
+      "render": "Simple",
+      "sha256": "bd93c6b5fd5f16119f3daeb94ecab3fcc42f61fa4bfd4a7c01284b3451013de3",
+      "bytes": 3265,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_claim_disabled_176x64.png",
+      "width": 176,
+      "height": 64,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "claim",
+      "state": "disabled",
+      "render": "Simple",
+      "sha256": "3a77bed89944bc17d6226ea9bdc47852dff4684f1cfca37feb8ca12bf8e88f2d",
+      "bytes": 2905,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_normal_176x128.png",
+      "width": 176,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone",
+      "state": "normal",
+      "render": "Simple",
+      "sha256": "d99482fe823321aff77af16bedcd93a0400470ea6b32c1f97c3667daa1a273fc",
+      "bytes": 3159,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_highlight_176x128.png",
+      "width": 176,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone",
+      "state": "highlight",
+      "render": "Simple",
+      "sha256": "97cb6177012bee9813169c47b83412cb217d5113222a5024ed412d9ec84b96d6",
+      "bytes": 3176,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_pressed_176x128.png",
+      "width": 176,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone",
+      "state": "pressed",
+      "render": "Simple",
+      "sha256": "071b6f18f00b449881c7797cdcb50e065adf2320b350217375a2dc6fb9ee00de",
+      "bytes": 3141,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_disabled_176x128.png",
+      "width": 176,
+      "height": 128,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone",
+      "state": "disabled",
+      "render": "Simple",
+      "sha256": "26167160b6de2701f81eb5c5cc273c24b9581f39c575dcc2b3141f5953cc9b15",
+      "bytes": 2844,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_normal_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "normal",
+      "render": "Simple",
+      "persistentSelectionSupported": true,
+      "sha256": "ab33b74661460eea941065019b50b93671a56b717e432f12987a26ed94013159",
+      "bytes": 2453,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_highlight_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "highlight",
+      "render": "Simple",
+      "persistentSelectionSupported": true,
+      "sha256": "618108c932e1d3c2ce01555bced6da74ce5303fc301a3e9bee4e703791fe5589",
+      "bytes": 2463,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_pressed_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "pressed",
+      "render": "Simple",
+      "persistentSelectionSupported": true,
+      "sha256": "ab12ad55feca68c78b27cba95587aad58c94949d3a457f250e540fd4b6c374e3",
+      "bytes": 2420,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_disabled_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "disabled",
+      "render": "Simple",
+      "persistentSelectionSupported": true,
+      "sha256": "6c206f0154714d3748780ae1329850f33d0689d48d17232dc77f738e6e0ffa25",
+      "bytes": 2247,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_selected_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "selected",
+      "render": "Simple",
+      "sha256": "f875206130f4301db45d2b3ec751dddc49b4552d870d0d89e5ce3a9237775919",
+      "bytes": 2760,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_selected_highlight_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "selected_highlight",
+      "render": "Simple",
+      "sha256": "98607a1750d69f47214422dda1340d56c9cdf8ac4fabfaac77c7ab347f7df1e9",
+      "bytes": 2616,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_region_row_selected_pressed_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "region_row",
+      "state": "selected_pressed",
+      "render": "Simple",
+      "sha256": "a9faffb2012cc9bbd83b78957fb9fa0566757a5f9ea9ebfef46a00aed8a88b2b",
+      "bytes": 2740,
+      "runtimeRUID": null
+    },
+    {
+      "file": "overlay_region_selected_544x80.png",
+      "width": 544,
+      "height": 80,
+      "role": "selection_overlay",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "3a1b93b7baf45c0b204a494244af1f41296f934181ae97640631d4476a884918",
+      "bytes": 2058,
+      "runtimeRUID": null
+    },
+    {
+      "file": "overlay_reward_ready_176x128.png",
+      "width": 176,
+      "height": 128,
+      "role": "claim_ready_overlay",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "f9fdfb05848cdf3f500d92bc6e34a892bbe0ebd24b1e072e9697916e1db21fda",
+      "bytes": 2054,
+      "runtimeRUID": null
+    },
+    {
+      "file": "scrollbar_track_16x432.png",
+      "width": 16,
+      "height": 432,
+      "role": "scrollbar_track",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "dc337792a5ba0f8773bb8981ac1ae6912e4a60ccf031e8e610f14c97bbb88e6d",
+      "bytes": 644,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_scrollbar_thumb_normal_16x80.png",
+      "width": 16,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "scrollbar_thumb",
+      "state": "normal",
+      "render": "Simple",
+      "sha256": "4eaf8c2ccb3636da6e992121e50f463903ec1d7781349dbca0227cc6a10a15be",
+      "bytes": 1039,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_scrollbar_thumb_highlight_16x80.png",
+      "width": 16,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "scrollbar_thumb",
+      "state": "highlight",
+      "render": "Simple",
+      "sha256": "7682bdfd538138a1ed1e63543ab7d21ccdc71a387a2793a52aa4383212db3ca8",
+      "bytes": 867,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_scrollbar_thumb_pressed_16x80.png",
+      "width": 16,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "scrollbar_thumb",
+      "state": "pressed",
+      "render": "Simple",
+      "sha256": "624f65b52e39797a4bcd903a887530d6df18f1306fa2602b71e92bdccc1cea3a",
+      "bytes": 991,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_scrollbar_thumb_disabled_16x80.png",
+      "width": 16,
+      "height": 80,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "scrollbar_thumb",
+      "state": "disabled",
+      "render": "Simple",
+      "sha256": "4a63e68c4a90762b3ad149dfa3f1112dbf8043da8c6c2b55150f4d8b98e091b9",
+      "bytes": 863,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_monster_stirge_96x96.png",
+      "width": 96,
+      "height": 96,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "25152ef859744489b7e34a993b3a3c6d",
+      "sourceKind": "existing_msw_resource",
+      "resample": "nearest",
+      "sha256": "fadfc99e40153a4078e63d58c37543b562eee853f5c889b4a037d713a0f4adb1",
+      "bytes": 1209,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_item_skill_book_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "00c119f6f437479d9b0f95edfb29e870",
+      "sourceKind": "existing_msw_resource",
+      "resample": "nearest",
+      "sha256": "cd3979b3ebbe8f761796d6fcf300a7177a8ef44d1993a190ed773ac0e46f1323",
+      "bytes": 843,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_item_feather_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "8a668406667d48e89c0b29755bd3ebed",
+      "sourceKind": "existing_msw_resource",
+      "resample": "nearest",
+      "sha256": "248a613fb0a910583495acec5d11a9e38d09ddd2b8b457248ea5cd84ecce366b",
+      "bytes": 594,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_item_scroll_weapon_tier02_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "583f9e860ca446febffdb2032877cf1c",
+      "sourceKind": "existing_project_asset",
+      "resample": "nearest",
+      "sha256": "94b6afd2815586bc7defe72df71d2b3ac6cf118d9b5cfc444245cc58596f5be8",
+      "bytes": 902,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_chest_reward_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "20724aa0526d4f6cba6a9695a07e1126",
+      "sourceKind": "existing_msw_resource",
+      "resample": "nearest",
+      "sha256": "5bc1a291ffb0908e0579cd8571da3a9db55c8c9b455fdb0b7e0b4b74dbd8a2cc",
+      "bytes": 884,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_chest_claimed_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "20724aa0526d4f6cba6a9695a07e1126",
+      "visualState": "claimed",
+      "sha256": "6081b2fca2f00f7f426f17b63c9cf39ca802fee7c23be18f8824a354832aca17",
+      "bytes": 918,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_chest_locked_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceRUID": "20724aa0526d4f6cba6a9695a07e1126",
+      "visualState": "locked",
+      "sha256": "5808a2f4495e535cf62992b6ca014c2c2e044da8dcaa4a29d414ab9e64ecc4a1",
+      "bytes": 924,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_star_filled_128x128.png",
+      "width": 128,
+      "height": 128,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceKind": "approved_preview_extraction",
+      "recommendedDisplaySizes": [
+        32,
+        40,
+        128
+      ],
+      "sha256": "9b0dcf0aa6987b166563b32479ed7dc195731f13c5392c99c8623e6efe393d61",
+      "bytes": 13427,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_star_empty_128x128.png",
+      "width": 128,
+      "height": 128,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sourceKind": "approved_preview_extraction",
+      "recommendedDisplaySizes": [
+        32,
+        40,
+        128
+      ],
+      "sha256": "62a95dbcacbe4e3e4fb266c9561a038bce9ba654a893925753d1db107f3c563a",
+      "bytes": 3500,
+      "runtimeRUID": null
+    },
+    {
+      "file": "overlay_star_new_glow_192x192.png",
+      "width": 192,
+      "height": 192,
+      "role": "effect_overlay",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "animation": "optional engine alpha pulse, no rotation",
+      "sha256": "29d361773ec63a3f1e7c8ff90a5297c7b8edcee5e013cf25db9aee256fd1f56a",
+      "bytes": 10095,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_star_new_192x192.png",
+      "width": 192,
+      "height": 192,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "visualState": "newly_earned",
+      "sha256": "155dca3dd6ca9869f59a8cc7199b61ed03e6fcf61d067a81074a1ba995a5ff16",
+      "bytes": 21941,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_lock_closed_64x64.png",
+      "width": 64,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "reuseSource": "Grace/Icons/grace_lock_closed_silver_48x56.png",
+      "sha256": "aaa46d164ce14d5a69a9b38b5b06114117e634baef049eacda53bbdd86291ae1",
+      "bytes": 958,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_check_complete_40x40.png",
+      "width": 40,
+      "height": 40,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "9a27bf56e9672d4b870e7b68d3b204d5a4fa96af854f00682affad134f64b8e3",
+      "bytes": 1179,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_check_selected_40x40.png",
+      "width": 40,
+      "height": 40,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "visualState": "selected",
+      "sha256": "1bc508611f45cae352f2ee87fbfe852d1569f1b138bd73749efc9759b64243a7",
+      "bytes": 1164,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_energy_48x64.png",
+      "width": 48,
+      "height": 64,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "92998892232317afb761196dd21c64c60c505e6322f8fb5952cd381038678ced",
+      "bytes": 1964,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_chevron_left_32x40.png",
+      "width": 32,
+      "height": 40,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "14d200cce0f4bc2ed075247b68dd32d1198a99ab2fcb9242b569ff9029578016",
+      "bytes": 762,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_chevron_right_32x40.png",
+      "width": 32,
+      "height": 40,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "5cb190ab5e1bd9cd8b52c0194c58a946659a0e7ac081b032c9220937165984e0",
+      "bytes": 758,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_back_arrow_48x48.png",
+      "width": 48,
+      "height": 48,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "d1031bddb0a2bf1298745950a61d1b8501a24be52a8926b1b1e4808bec04e1d0",
+      "bytes": 700,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_maple_40x40.png",
+      "width": 40,
+      "height": 40,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "43633b7e4d99b7197e5026aeb54ed09c437fbcab59e351600f684cdbcc60542d",
+      "bytes": 1440,
+      "runtimeRUID": null
+    },
+    {
+      "file": "icon_sparkle_48x48.png",
+      "width": 48,
+      "height": 48,
+      "role": "icon",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "8abdba479255033bfedbfe2aee263f2e38902860b09f56ee70e63f66449abd21",
+      "bytes": 807,
+      "runtimeRUID": null
+    },
+    {
+      "file": "decoration_header_line_640x8.png",
+      "width": 640,
+      "height": 8,
+      "role": "decoration",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "30bde52eced909a83f50197d03975c34a7b3a9fae512f64b53b53d0e854b4136",
+      "bytes": 1886,
+      "runtimeRUID": null
+    },
+    {
+      "file": "pill_energy_blue_288x64.png",
+      "width": 288,
+      "height": 64,
+      "role": "pill",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "acaef907f9142129dea5c7649dd8b88944d7f62de5926ba043478102487e06ed",
+      "bytes": 2427,
+      "runtimeRUID": null
+    },
+    {
+      "file": "mask_panorama_972x220.png",
+      "width": 972,
+      "height": 220,
+      "role": "mask",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "sha256": "1bbb9cc6a2495caf4e4300dfc59c2b5bb8047047f289ee7eed8dcca85faf536b",
+      "bytes": 1786,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_compact_normal_128x112.png",
+      "width": 128,
+      "height": 112,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone_compact",
+      "state": "normal",
+      "render": "Simple",
+      "hitArea": [
+        0,
+        0,
+        128,
+        112
+      ],
+      "contentIsSeparateChild": true,
+      "sha256": "9decd03fba815a308ead263ad63a900d2416c7b7952fa4df7c87a7f8e42c75ea",
+      "bytes": 1611,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_compact_highlight_128x112.png",
+      "width": 128,
+      "height": 112,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone_compact",
+      "state": "highlight",
+      "render": "Simple",
+      "hitArea": [
+        0,
+        0,
+        128,
+        112
+      ],
+      "contentIsSeparateChild": true,
+      "sha256": "a12d86cb64aca1893f4a5f5d240dd8f6730b8fe021d781d691121ba6b22694fc",
+      "bytes": 1562,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_compact_pressed_128x112.png",
+      "width": 128,
+      "height": 112,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone_compact",
+      "state": "pressed",
+      "render": "Simple",
+      "hitArea": [
+        0,
+        0,
+        128,
+        112
+      ],
+      "contentIsSeparateChild": true,
+      "sha256": "2afce98e033e817e50d8579e66ec42c2b98a90ba23dbe80ca6e9974944e3fafa",
+      "bytes": 1571,
+      "runtimeRUID": null
+    },
+    {
+      "file": "button_milestone_compact_disabled_128x112.png",
+      "width": 128,
+      "height": 112,
+      "role": "button",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "family": "milestone_compact",
+      "state": "disabled",
+      "render": "Simple",
+      "hitArea": [
+        0,
+        0,
+        128,
+        112
+      ],
+      "contentIsSeparateChild": true,
+      "sha256": "172b92a3c23c4c8f13ab3e6b3b429ce99e4a2a5a3bd5aea2ac53f981e9a93897",
+      "bytes": 1548,
+      "runtimeRUID": null
+    },
+    {
+      "file": "gauge_stars_fill_512x24.png",
+      "width": 512,
+      "height": 24,
+      "role": "gauge_fill",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "render": "Filled Horizontal",
+      "sha256": "f85c4f7c887eb4f715b06f60234f345f984492f573e7b4dab463004850ee9e74",
+      "bytes": 887,
+      "runtimeRUID": null
+    }
+  ]
+}

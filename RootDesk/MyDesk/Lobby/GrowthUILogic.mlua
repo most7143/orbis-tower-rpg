@@ -5,7 +5,7 @@ script GrowthUILogic extends Logic
 	property string RootPath = "/ui/GrowthUI/Root"
 	property string LobbyMapName = "Lobby"
 	property integer TabCount = 5
-	property Color TabTextColor = Color(0.84, 0.88, 1, 1)
+	property Color TabTextColor = Color(0.90, 0.93, 0.96, 1)
 	property Color TabSelectedColor = Color(1, 1, 1, 1)
 
 	@HideFromInspector
@@ -15,7 +15,7 @@ script GrowthUILogic extends Logic
 	method void OnBeginPlay()
 		-- 탭·닫기 버튼 연결. 처음에는 닫힌 상태.
 		self.clickHandlers = {}
-		self._T.frames = { "383bde064a6849b5bbb6ed1d5dbfc446", "8fced207c79943128d91f663e3da173d", "37863da139f34bf48e2b094f05dd35c7", "2ab3e37e42c54a19ad4eddf9c82b96a5", "fc7465e100894a1b975fbd0d68d712fe" }
+		self:ApplyButtonSkins()
 		self._T.tab = 0
 		self._T.open = false
 		for i = 1, self.TabCount do
@@ -26,11 +26,66 @@ script GrowthUILogic extends Logic
 		log("[VRF] GrowthUILogic begin tabs=" .. tostring(self.TabCount))
 	end
 
+
+@ExecSpace("ClientOnly")
+	method void StyleButton(Entity entity)
+		-- 버튼 역할별 상태 이미지. 글자는 이미지에 굽지 않고 별도 색을 지정한다.
+		if not isvalid(entity) then return end
+		local path = entity.Path
+		local name = entity.Name
+		local role = "button"
+		if name == "Close" or name == "BtnClose" then role = "close"
+		elseif string.match(path, "/GrowthUI/Root/Tab%d+$") ~= nil then role = "tab"
+		elseif name == "Upgrade" or name == "BtnUpgrade" or name == "BtnSynth" or name == "Roll" then role = "action"
+		elseif string.find(path, "/Slot_", 1, true) ~= nil or string.find(path, "/Tree/", 1, true) ~= nil or string.find(path, "/Equip/", 1, true) ~= nil then role = "slot"
+		elseif string.match(name, "^Card%d+$") ~= nil or string.match(name, "^Card_%d+$") ~= nil or string.match(name, "^Cell_%d+$") ~= nil or string.match(name, "^Row_%d+$") ~= nil or string.match(name, "^Item_%d+$") ~= nil then role = "card" end
+		if role == "slot" and string.find(path, "/Tree/", 1, true) == nil then role = "equipment" end
+		local families = {
+			equipment = { normal = "a88cfe62e8e64c39bf14d682a77ef4a0", hover = "e9f1678141ff4a57bf17d5cf52e0a27b", pressed = "1ee26fe6cab54961b986f0c552838954", disabled = "d262f8e8502e4b7b88f381a9b7a4e4fb", selected = "1e130afe90a842028aed70edadbfb9f1", selectedHover = "9c050999cae047ffb4181315d7f321af", selectedPressed = "0049a1c1e17e4ac29de951a509838cd4" },
+			button = { normal = "65d8340b880940b5b2d2d3342dad63aa", hover = "292e7807ec754ea19ff3c28ec4b10311", pressed = "7e3db0c2c7944ba29d49c35222ad98b3", disabled = "b5179a32f5c54fabbd757a0d8a2fbe18", selected = "8739b8a9b7e84759abd297cae38822dc", selectedHover = "7680060fe5824db88ccbec16b68ff83c", selectedPressed = "dd5c7090249c4601b00410cead0c846b" },
+			card = { normal = "a88cfe62e8e64c39bf14d682a77ef4a0", hover = "e9f1678141ff4a57bf17d5cf52e0a27b", pressed = "1ee26fe6cab54961b986f0c552838954", disabled = "d262f8e8502e4b7b88f381a9b7a4e4fb", selected = "1e130afe90a842028aed70edadbfb9f1", selectedHover = "9c050999cae047ffb4181315d7f321af", selectedPressed = "0049a1c1e17e4ac29de951a509838cd4" },
+			slot = { normal = "e90525dfa21048ab85f6ce106568cafe", hover = "44dfb2104e824c85bd9d0e4eba6827e5", pressed = "02b8859c01824a5c9295b43abd035d4c", disabled = "cc28857170484a48b02d81289e52ca30", selected = "2fb9188d63824034982c468fec963cb1", selectedHover = "2222f4ce5a234993b5f3175ef54dce7e", selectedPressed = "c3b4802cf836471db33f9c60c075774b" },
+			tab = { normal = "e9221d5678bf46c5b6064979253726ea", hover = "29be37ae67dc461998acafce9dae2615", pressed = "7aa605bd606749379769b929a0c0c0aa", disabled = "5932ca2f0dc3412093f3b466bea7422c", selected = "58f939c5579d4006b2c858cf9b26e98f", selectedHover = "38b365b46cf7478b80387deaa67746b1", selectedPressed = "a3558fcc8e6747b59ed74fbe27c4e54a" },
+			action = { normal = "ffd05f5bf0274527b1e5cb977f2c49fe", hover = "2a218c009982464f9c6f581e763ea6aa", pressed = "3127fb2d53b14c6a94e8d0c7e309ac92", disabled = "db304db9f8de48278c56d7b13071f0d5", selected = "ffd05f5bf0274527b1e5cb977f2c49fe", selectedHover = "ffd05f5bf0274527b1e5cb977f2c49fe", selectedPressed = "ffd05f5bf0274527b1e5cb977f2c49fe" },
+			close = { normal = "63cc491b18bd41ab961880e152b57e4d", hover = "234a3cef58ae4954a5ff024688ca66fd", pressed = "6b79d55bd6d44f18b5ab84ffbe16da72", disabled = "0473791f50d642249eb0fb7f4738e791", selected = "63cc491b18bd41ab961880e152b57e4d", selectedHover = "63cc491b18bd41ab961880e152b57e4d", selectedPressed = "63cc491b18bd41ab961880e152b57e4d" }
+		}
+		local skin = families[role]
+		skin.textNormal = Color(0.14, 0.17, 0.21, 1)
+		skin.textHover = Color(0.10, 0.25, 0.38, 1)
+		skin.textSelected = Color(1, 1, 1, 1)
+		skin.textDisabled = Color(0.42, 0.46, 0.51, 1)
+		if role == "card" or role == "equipment" then skin.textSelected = Color(0.12, 0.34, 0.52, 1) end
+		if role == "tab" or role == "slot" or role == "action" or role == "close" then
+			skin.textNormal = Color(1, 1, 1, 1)
+			skin.textHover = Color(1, 1, 1, 1)
+		end
+		_UIButtonLogic:SetSkin(entity, skin)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyButtonSkins()
+		-- 성장창에만 확정 테마를 적용한다. 다른 화면의 색상은 유지한다.
+		local n = 0
+		local function visit(entity)
+			if not isvalid(entity) then return end
+			local button = entity.ButtonComponent
+			if isvalid(button) and entity.Name ~= "Dim" and entity.Name ~= "Catch" then
+				self:StyleButton(entity)
+				n = n + 1
+			end
+			for _, child in ipairs(entity.Children) do visit(child) end
+		end
+		for _, name in ipairs({ "GrowthUI", "EngraveUI", "SymbolUI", "GraceUI", "SkillUI" }) do
+			visit(_EntityService:GetEntityByPath("/ui/" .. name))
+		end
+		log("[VRF] growth neutral theme ready buttons=" .. tostring(n))
+	end
+
 	@ExecSpace("ClientOnly")
 	method void Bind(Entity entity, any fn)
 		-- 버튼 클릭 연결 + 해제 기록.
 		if not isvalid(entity) then return end
-		local h = entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e) if not entity.EnabledInHierarchy or not entity.ButtonComponent.Enable then return end _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
 	end
 
@@ -45,7 +100,7 @@ script GrowthUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Open()
-		-- 로비 [성장] 버튼: 첫 탭부터 연다.
+		-- 로비 [성장] 버튼: 첫 탭부터 연다. 스킨은 초기화 때 준비하여 즉시 연다.
 		local root = _EntityService:GetEntityByPath(self.RootPath)
 		if not isvalid(root) then return end
 		root:SetEnable(true)
@@ -76,16 +131,14 @@ script GrowthUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SelectTab(integer index)
-		-- 탭 전환: 프레임 이미지·탭 글자·내용을 바꾼다. 기존 화면의 어두운 배경은 쓰지 않는다.
+		-- 탭 전환: 고정 프레임과 선택 상태 이미지를 사용한다. 배치는 유지한다.
 		if self._T.tab == index then return end
 		self:CloseContent()
 		self._T.tab = index
-		local frame = _EntityService:GetEntityByPath(self.RootPath .. "/Frame")
-		if isvalid(frame) then frame.SpriteGUIRendererComponent.ImageRUID = DataRef(self._T.frames[index]) end
 		for i = 1, self.TabCount do
 			local tab = _EntityService:GetEntityByPath(self.RootPath .. "/Tab" .. tostring(i))
 			if isvalid(tab) then
-				if i == index then tab.TextGUIRendererComponent.FontColor = self.TabSelectedColor else tab.TextGUIRendererComponent.FontColor = self.TabTextColor end
+				_UIButtonLogic:SetSelected(tab, i == index)
 			end
 		end
 		local empty = _EntityService:GetEntityByPath(self.RootPath .. "/Empty")

@@ -1,19 +1,25 @@
 ---@sealed
+---@description "Indicates the image information to apply according to the button's state. Used when ButtonComponent's Transition is set to SpriteSwap."
 @Misc
 script TransitionRUIDSet
 
+	---@description "The image to apply when the button is in a disabled state."
 	---@sealed
 	property DataRef DisabledSprite
 
+	---@description "The image to apply when the button is in a highlighted state. It is applied when the pointer is over the button."
 	---@sealed
 	property DataRef HighlightedSprite
 
+	---@description "The image to apply when the button is pressed."
 	---@sealed
 	property DataRef PressedSprite
 
+	---@description "The image to apply when the button is selected."
 	---@sealed
 	property DataRef SelectedSprite
 
+	---@description "Generates a copy."
 	---@sealed
 	method TransitionRUIDSet Clone() end
 

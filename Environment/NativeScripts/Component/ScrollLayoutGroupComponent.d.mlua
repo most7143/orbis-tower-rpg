@@ -26,8 +26,9 @@ script ScrollLayoutGroupComponent extends Component
 	---@sealed
 	property Vector2 GridSpacing
 
+	---@description "The orientation of the horizontal scrollbar."
 	---@sealed
-	property HorizontalScrollBarDirection HorizontalDirection = HorizontalScrollBarDirection.LeftToRight
+	property HorizontalScrollBarDirection HorizontalScrollBarDirection = HorizontalScrollBarDirection.LeftToRight
 
 	---@description "Does not perform automatic substitution when the Map Layer's name is specified in SortingLayer."
 	---@sealed
@@ -52,26 +53,33 @@ script ScrollLayoutGroupComponent extends Component
 	---@sealed
 	property boolean ReverseArrangement
 
+	---@description "The background color of the scrollbar."
 	---@sealed
-	property Color BackgroundColor = Color(1.000, 1.000, 1.000, 0.400)
+	property Color ScrollBarBackgroundColor = Color(1.000, 1.000, 1.000, 0.400)
 
+	---@description "The background image of the scrollbar."
 	---@sealed
-	property DataRef BackgroundImageRUID
+	property DataRef ScrollBarBgImageRUID
 
+	---@description "The handle color of the scrollbar."
 	---@sealed
-	property Color HandleColor = Color(0.500, 0.500, 0.500, 1.000)
+	property Color ScrollBarHandleColor = Color(0.500, 0.500, 0.500, 1.000)
 
+	---@description "The handle image of the scrollbar."
 	---@sealed
-	property DataRef HandleImageRUID
+	property DataRef ScrollBarHandleImageRUID
 
+	---@description "Sets the action method when the scroll bar leaves the boundary."
 	---@sealed
-	property ScrollBarMovementType MovementType = ScrollBarMovementType.Elastic
+	property ScrollBarMovementType ScrollBarMovementType = ScrollBarMovementType.Elastic
 
+	---@description "The thickness of the scrollbar area."
 	---@sealed
-	property float Thickness = 20
+	property float ScrollBarThickness = 20
 
+	---@description "Sets whether to display the scrollbar automatically."
 	---@sealed
-	property ScrollBarVisibility Visible = ScrollBarVisibility.AlwaysShow
+	property ScrollBarVisibility ScrollBarVisible = ScrollBarVisibility.AlwaysShow
 
 	---@description "When two or more entities overlap, the priority is determined according to the Sorting Layer."
 	---@sealed
@@ -98,8 +106,9 @@ script ScrollLayoutGroupComponent extends Component
 	---@sealed
 	property boolean UseScroll = true
 
+	---@description "The orientation of the vertical scrollbar."
 	---@sealed
-	property VerticalScrollBarDirection VerticalDirection = VerticalScrollBarDirection.BottomToTop
+	property VerticalScrollBarDirection VerticalScrollBarDirection = VerticalScrollBarDirection.BottomToTop
 
 	---@description "Returns the normalized position of the scroll bar."
 	---@sealed

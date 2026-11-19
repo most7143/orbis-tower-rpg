@@ -1,0 +1,14 @@
+---@sealed
+@Event
+script UserAnalysisEvent extends EventType
+
+	---@sealed
+	property int32 AnalysisType
+
+	---@sealed
+	property table Result
+
+	---@sealed
+	property string UserId
+
+end

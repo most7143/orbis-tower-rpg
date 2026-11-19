@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-11-13",
+  "runtimePNGCount": 82,
+  "buttonFamilies": 8,
+  "buttonStateImages": 35,
+  "uniqueManifest": true,
+  "allPNGDimensionsAndAlphaChecked": true,
+  "buttonStateAlphaChecks": [
+    {
+      "family": "primary",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "secondary",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "arrow",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "claim",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "milestone",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "region_row",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "scrollbar_thumb",
+      "states": 4,
+      "alphaIdentical": true
+    },
+    {
+      "family": "milestone_compact",
+      "states": 4,
+      "alphaIdentical": true
+    }
+  ],
+  "layoutBoundsAndReferencesChecked": true,
+  "visualReview": [
+    "panel corner cleanup",
+    "primary/secondary/arrow/claim edge continuity",
+    "gold star highlight pixel restoration",
+    "separate MSW pixel icons",
+    "no-text assembly and engine-text mockups"
+  ],
+  "textPolicy": "Runtime PNGs have no UI labels; book/scroll internal original artwork retained.",
+  "nativeAPIFieldsCheckedLocally": true,
+  "makerRuntimeTested": false,
+  "serverRewardLogicTested": false,
+  "problems": [],
+  "pass": true
+}

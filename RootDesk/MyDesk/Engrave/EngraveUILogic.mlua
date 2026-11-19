@@ -17,13 +17,13 @@ script EngraveUILogic extends Logic
 	property string Gauge3RUID = "47e277f9813e4051a684f0c5223595ee"
 	property string LinkLockedRUID = "ec3c953864424b5aa44f78395ec29786"
 	property string LinkDoneRUID = "261d00bc4a0d4d11bb546c7e71d8d66a"
-	property string StepOffRUID = "e9519bb6eb0044ae95f675285bb1da67"
-	property string StepOnRUID = "f32c4e80330143dd891207c6b60020aa"
+	property string StepOffRUID = "bea05f1ee4ea484eb10471a620c69046"
+	property string StepOnRUID = "1e130afe90a842028aed70edadbfb9f1"
 	property Color BranchAtkColor = Color(0.85, 0.54, 0.48, 1)
 	property Color BranchDefColor = Color(0.5, 0.69, 0.86, 1)
 	property Color BranchUtilColor = Color(0.79, 0.64, 0.42, 1)
-	property Color StepOnColor = Color(0.95, 0.8, 0.55, 1)
-	property Color StepOffColor = Color(0.56, 0.58, 0.64, 1)
+	property Color StepOnColor = Color(0.12, 0.34, 0.52, 1)
+	property Color StepOffColor = Color(0.36, 0.40, 0.46, 1)
 	property Color LockedIconColor = Color(0.35, 0.35, 0.38, 1)
 
 	@HideFromInspector
@@ -36,9 +36,9 @@ script EngraveUILogic extends Logic
 		self.clickHandlers = {}
 		self:Bind(self:Get("BtnReset"), function() self:OnReset() end)
 		self:Bind(self:Get("BtnUpgrade"), function() self:OnUpgrade() end)
-		self:Bind(self.btnClose.Entity, function() self:Close() end)
-		_UIButtonLogic:SetSkin(self:Get("BtnReset"), { normal = "75f3c6dbf2434bcaa0e4b2d430575e2d", hover = "6ba383acf31a4c5bb105720d50c0ccd4", disabled = "f2cf3f5019aa4da995e72294dacb3e64" })
-		_UIButtonLogic:SetSkin(self:Get("BtnUpgrade"), { normal = "7f1b9240935446d9906adb0047f25c5e", hover = "064f6c4c0a5f4862959e20baa23d05fa", disabled = "c2296d740a904494b34ea024d0429f06" })
+		self:Bind(self.btnClose.Entity, function() self:Close() _GrowthUILogic:Close() end)
+		_GrowthUILogic:StyleButton(self:Get("BtnReset"))
+		_GrowthUILogic:StyleButton(self:Get("BtnUpgrade"))
 		for _, n in ipairs(self._T.nodes) do
 			local id = n.id
 			n.btn = _EntityService:GetEntityByPath(self.TreePath .. id)
@@ -59,7 +59,7 @@ script EngraveUILogic extends Logic
 	method void Bind(Entity entity, any fn)
 		-- 버튼 클릭 연결 + 해제 기록.
 		if not isvalid(entity) then return end
-		local h = entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e) if not entity.EnabledInHierarchy or not entity.ButtonComponent.Enable then return end _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
 	end
 
@@ -268,9 +268,9 @@ script EngraveUILogic extends Logic
 		if lv >= n.max then
 			effect = self:EffectText(n, lv)
 		elseif lv > 0 then
-			effect = self:EffectText(n, lv) .. "\n다음 단계: " .. self:EffectText(n, lv + 1)
+			effect = self:EffectText(n, lv) .. "\n<color=#347F24>다음 단계: " .. self:EffectText(n, lv + 1) .. "</color>"
 		else
-			effect = "다음 단계: " .. self:EffectText(n, 1)
+			effect = "<color=#347F24>다음 단계: " .. self:EffectText(n, 1) .. "</color>"
 		end
 		self:SetText("Effect", effect)
 		for i = 1, 3 do

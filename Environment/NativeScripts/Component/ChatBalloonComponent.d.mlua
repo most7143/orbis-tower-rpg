@@ -26,6 +26,11 @@ script ChatBalloonComponent extends Component
 	@Sync
 	property boolean ChatModeEnabled = true
 
+	---@description "Sets the font."
+	---@sealed
+	@Sync
+	property string Font = "Default"
+
 	---@description "Sets the text color of the chat balloon."
 	---@sealed
 	@Sync

@@ -4,7 +4,7 @@ MonsterHpPerLevel,10,몬스터 체력 레벨당 증가
 MonsterAtkBase,5,몬스터 공격력 기본
 MonsterAtkPerLevel,1,몬스터 공격력 레벨당 증가
 MonsterAttackInterval,1.6,몬스터 공격 간격(초)
-StagesPerFloor,15,층당 스테이지 수 (3구간 × 5)
+StagesPerFloor,20,층당 웨이브 수 (4구간 × 5)
 LastStageStatMul,2.5,층 마지막 스테이지(강화 몬스터) 능력치 배율
 EliteRewardMul,3,강화 몬스터 보상 배율
 MonsterCritDmg,150,몬스터 크리티컬 데미지(%)
@@ -55,20 +55,25 @@ StageBookPerStage,2,스테이지 클리어 스킬북 스테이지당 증가
 StageFeatherBase,3,스테이지 클리어 여신의 깃털 기본 (임시 보상)
 StageFeatherPerStage,1,스테이지 클리어 깃털 스테이지당 증가
 FloorsPerStage,1,로비에서 고르는 단위 (1 = 층 하나가 한 판)
-SectionsPerFloor,3,층당 구간 수 (구간 마지막 스테이지는 강화 몬스터)
-WaveSizeBase,3,일반 스테이지 웨이브 몬스터 수 (1구간)
-WaveSizePerSection,1,구간마다 웨이브 몬스터 수 증가
-MeleeGap,0.22,근거리 몬스터끼리 간격 (맨 앞 자리부터, 살짝 겹침)
+SectionsPerFloor,4,층당 구간 수 (구간 마지막 웨이브에 엘리트 1마리)
+WaveSizeBase,10,웨이브 몬스터 수 (강화 웨이브는 일반 9 + 엘리트 1)
+WaveSizePerSection,0,구간마다 웨이브 몬스터 수 증가
+MeleeGap,0.22,근거리 몬스터끼리 간격 (맨 앞 자리부터
 SpawnSpacing,0.9,몰려올 때 앞 몬스터와의 출발 간격
 SpawnSpacingRand,0.5,출발 간격 무작위 추가 (0~값)
 WalkSpeedRand,15,몬스터마다 걷는 속도 흔들림 (±%)
 SlotJitter,0.08,도착 자리 무작위 흔들림 (±)
 RangedOffset,1.0,원거리 몬스터 자리: 근거리 자리보다 뒤 (1 = 100px)
 RangedGap,0.22,원거리 몬스터끼리 간격
-RangedRatio,0.34,웨이브 중 원거리 비율 (뒤쪽부터, 첫 마리는 근거리)
+RangedRatio,0.34,웨이브 중 원거리 비율 (뒤쪽부터
 SplashReach,2.4,범위 스킬이 닿는 거리 (맨 앞 자리 기준)
 SpawnOffsetX,6.0,몬스터가 걸어 나오는 위치 (맨 앞 자리 기준 오른쪽 거리)
-MonsterWalkSpeed,3.0,몬스터 걷는 속도 (초당)
+MonsterWalkSpeed,1.5,몬스터 걷는 속도 (초당)
 QueueShowMax,5,맨 앞 말고 화면에 함께 나오는 최대 몬스터 수
 StageLevelUp,1,스테이지 클리어마다 레벨업 + 카드 (0이면 경험치 레벨업)
 EliteExtraPicks,1,강화 몬스터 스테이지 클리어 시 추가 카드 수
+StarTimeLimit,600,별 미션 제한 시간(초): 직업 선택부터 층 클리어까지 (임시값)
+StarHpRatio,0.5,별 미션 남은 체력 기준 (비율)
+EliteScale,1.2,엘리트 몬스터 크기 배율
+WaveGroups,3|3|4,웨이브 몬스터를 나눠 내보내는 묶음 (앞에서부터 차례로)
+WaveGroupInterval,6,묶음 사이 간격(초). 나온 묶음을 다 잡으면 다음 묶음이 바로 나옴

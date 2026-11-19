@@ -1,0 +1,87 @@
+{
+  "engine": {
+    "Transition": "SpriteSwap",
+    "TransitionEnum": 2,
+    "normal": "SpriteGUIRendererComponent.ImageRUID",
+    "highlight": "ButtonComponent.ImageRUIDs.HighlightedSprite",
+    "pressed": "ButtonComponent.ImageRUIDs.PressedSprite",
+    "disabled": "ButtonComponent.ImageRUIDs.DisabledSprite",
+    "selected": "ButtonComponent.ImageRUIDs.SelectedSprite"
+  },
+  "ordinaryButtons": {
+    "Selectable": false,
+    "Color": "#FFFFFFFF",
+    "avoidAdditionalColorTint": true
+  },
+  "families": {
+    "primary": {
+      "normal": "button_primary_normal_512x160.png",
+      "highlight": "button_primary_highlight_512x160.png",
+      "pressed": "button_primary_pressed_512x160.png",
+      "disabled": "button_primary_disabled_512x160.png"
+    },
+    "secondary": {
+      "normal": "button_secondary_normal_448x128.png",
+      "highlight": "button_secondary_highlight_448x128.png",
+      "pressed": "button_secondary_pressed_448x128.png",
+      "disabled": "button_secondary_disabled_448x128.png"
+    },
+    "arrow": {
+      "normal": "button_arrow_normal_96x96.png",
+      "highlight": "button_arrow_highlight_96x96.png",
+      "pressed": "button_arrow_pressed_96x96.png",
+      "disabled": "button_arrow_disabled_96x96.png"
+    },
+    "claim": {
+      "normal": "button_claim_normal_176x64.png",
+      "highlight": "button_claim_highlight_176x64.png",
+      "pressed": "button_claim_pressed_176x64.png",
+      "disabled": "button_claim_disabled_176x64.png"
+    },
+    "milestone": {
+      "normal": "button_milestone_normal_176x128.png",
+      "highlight": "button_milestone_highlight_176x128.png",
+      "pressed": "button_milestone_pressed_176x128.png",
+      "disabled": "button_milestone_disabled_176x128.png"
+    },
+    "region_row": {
+      "normal": "button_region_row_normal_544x80.png",
+      "highlight": "button_region_row_highlight_544x80.png",
+      "pressed": "button_region_row_pressed_544x80.png",
+      "disabled": "button_region_row_disabled_544x80.png",
+      "selected": "button_region_row_selected_544x80.png",
+      "selected_highlight": "button_region_row_selected_highlight_544x80.png",
+      "selected_pressed": "button_region_row_selected_pressed_544x80.png"
+    },
+    "scrollbar_thumb": {
+      "normal": "button_scrollbar_thumb_normal_16x80.png",
+      "highlight": "button_scrollbar_thumb_highlight_16x80.png",
+      "pressed": "button_scrollbar_thumb_pressed_16x80.png",
+      "disabled": "button_scrollbar_thumb_disabled_16x80.png"
+    },
+    "milestone_compact": {
+      "normal": "button_milestone_compact_normal_128x112.png",
+      "highlight": "button_milestone_compact_highlight_128x112.png",
+      "pressed": "button_milestone_compact_pressed_128x112.png",
+      "disabled": "button_milestone_compact_disabled_128x112.png"
+    }
+  },
+  "rowLogicalSelection": {
+    "manualController": true,
+    "Transition": "None",
+    "Selectable": false,
+    "reason": "Logical selected region is separate from native focus/hover.",
+    "map": {
+      "false:normal": "normal",
+      "false:highlight": "highlight",
+      "false:pressed": "pressed",
+      "false:disabled": "disabled",
+      "true:normal": "selected",
+      "true:highlight": "selected_highlight",
+      "true:pressed": "selected_pressed",
+      "true:disabled": "disabled"
+    },
+    "overlayFallback": "overlay_region_selected_544x80.png",
+    "doNotStackSelectedSpriteAndOverlay": true
+  }
+}

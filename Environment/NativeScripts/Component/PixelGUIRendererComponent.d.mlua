@@ -30,6 +30,21 @@ script PixelGUIRendererComponent extends Component
 	---@sealed
 	property int32 Width = 16
 
+	---@description "Draws a width × height rectangle with the entered position as its bottom-left corner and fills it with the entered color."
+	---@sealed
+	@ExecSpace("ClientOnly")
+	method void DrawBox(int32 x, int32 y, int32 width, int32 height, Color color) end
+
+	---@description "Fills a circle of the given radius centered at the entered position with the entered color."
+	---@sealed
+	@ExecSpace("ClientOnly")
+	method void DrawCircle(int32 centerX, int32 centerY, float radius, Color color) end
+
+	---@description "Draws a line connecting the start and end points with the entered color and thickness."
+	---@sealed
+	@ExecSpace("ClientOnly")
+	method void DrawLine(int32 startX, int32 startY, int32 endX, int32 endY, int32 thickness, Color color) end
+
 	---@description "Changes the color of the entire sprite."
 	---@sealed
 	@ExecSpace("ClientOnly")

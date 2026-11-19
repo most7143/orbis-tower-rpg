@@ -1,0 +1,8 @@
+---@sealed
+---@description "This event occurs when the window menu is opened in the Windows environment. Only the Windows environment is supported."
+@Event
+script WindowsMenuOpenedEvent extends EventType
+
+	constructor WindowsMenuOpenedEvent() end
+
+end

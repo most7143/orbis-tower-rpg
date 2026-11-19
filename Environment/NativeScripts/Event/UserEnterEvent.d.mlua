@@ -3,6 +3,10 @@
 @Event
 script UserEnterEvent extends EventType
 
+	---@description "How the user entered: Normal, Warp, MatchMaking, or Migrate. Always Normal in Maker play."
+	---@sealed
+	property UserEnterType EnterType
+
 	---@description "This player's profile code."
 	---@sealed
 	property string ProfileCode
@@ -13,6 +17,6 @@ script UserEnterEvent extends EventType
 
 	constructor UserEnterEvent(IUser user) end
 
-	constructor UserEnterEvent(string userId = nil, string profileCode = nil) end
+	constructor UserEnterEvent(string userId = nil, string profileCode = nil, UserEnterType enterType = UserEnterType.Normal) end
 
 end

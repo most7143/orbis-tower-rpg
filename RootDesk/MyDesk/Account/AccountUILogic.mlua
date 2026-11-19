@@ -1,0 +1,441 @@
+@Logic
+script AccountUILogic extends Logic
+    property string TitleTagModel = "accounttitletag"
+    property integer CosmeticSlots = 24
+    property string Base = "/ui/AccountUI/Root"
+    property string ButtonNormal = "65d8340b880940b5b2d2d3342dad63aa"
+    property string ButtonHover = "292e7807ec754ea19ff3c28ec4b10311"
+    property string ButtonPressed = "7e3db0c2c7944ba29d49c35222ad98b3"
+    property string ButtonDisabled = "b5179a32f5c54fabbd757a0d8a2fbe18"
+    property string ButtonSelected = "8739b8a9b7e84759abd297cae38822dc"
+    property string ButtonSelectedHover = "7680060fe5824db88ccbec16b68ff83c"
+    property string ButtonSelectedPressed = "dd5c7090249c4601b00410cead0c846b"
+    property string ProfileHero = "82db26feff774009b156ecd9580d4098"
+    property string ProfilePaladin = "81bad6541017455b8f55aa3e67d9c427"
+    property string ProfileDarkKnight = "bc638c6102b84cd5b9a67c7db26e6c79"
+    property string FrameGold = "80e4d77600414effbde40b9363edf45d"
+    property string FrameBlue = "e3ea382d885742b3936ecc5d07f1e739"
+    property string FramePurple = "005d9afdfbcb4a2e9aa8954d06feefc2"
+    property string SpecialMark = "3030ac775286498590cc014951763a59"
+    property string MajorMark = "8ebcf78597d14a46b0132338aadcd3bb"
+
+    @ExecSpace("ClientOnly")
+    method Entity E(string sub)
+        -- 계정창 하위 엔티티를 조회한다.
+        return _EntityService:GetEntityByPath(self.Base .. "/" .. sub)
+    end
+
+    @ExecSpace("ClientOnly")
+    method Component Account()
+        -- 로컬 플레이어의 서버 동기화된 계정 정보를 반환한다.
+        local p = _UserService.LocalPlayer
+        if not isvalid(p) then return nil end
+        return p:GetComponent("script.PlayerEngrave")
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Text(string sub, string value)
+        -- 런타임 텍스트는 이미지와 분리한다.
+        local e = self:E(sub)
+        if isvalid(e) and e.TextGUIRendererComponent.Text ~= value then e.TextGUIRendererComponent.Text = value end
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Image(Entity e, string ruid)
+        -- 무문자 스프라이트를 명시적으로 흰색 틴트로 표시한다.
+        if not isvalid(e) or ruid == "" then return end
+        local sp = e.SpriteGUIRendererComponent
+        if sp.ImageRUID.DataId ~= ruid then sp.ImageRUID = DataRef(ruid) end
+        sp.Color = Color(1,1,1,1)
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Listen(Entity e, any evt, any fn)
+        -- 연결과 해제를 같은 소유자에서 관리한다.
+        if not isvalid(e) then return end
+        local h = e:ConnectEvent(evt, fn)
+        table.insert(self._T.handlers, {e=e,evt=evt,h=h})
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Button(Entity e, any fn)
+        -- 기본/호버/눌림/비활성/선택의 실제 이미지를 각각 연결한다.
+        if not isvalid(e) then return end
+        local rec = {e=e,hover=false,pressed=false,selected=false,disabled=false,grid=string.find(e.Path,"/Appearance/Grid/",1,true)~=nil}
+        self._T.buttons[e.Id] = rec
+        self:Listen(e, UITouchEnterEvent, function() rec.hover=true self:PaintButton(rec) end)
+        self:Listen(e, UITouchExitEvent, function() rec.hover=false rec.pressed=false self:PaintButton(rec) end)
+        self:Listen(e, UITouchDownEvent, function() rec.pressed=true self:PaintButton(rec) end)
+        self:Listen(e, UITouchUpEvent, function() rec.pressed=false self:PaintButton(rec) end)
+        self:Listen(e, ButtonClickEvent, function()
+            if rec.disabled or not rec.e.EnabledInHierarchy then return end
+            _UISoundLogic:PlayClick()
+            fn()
+        end)
+        self:PaintButton(rec)
+    end
+
+@ExecSpace("ClientOnly")
+    method void PaintButton(table rec)
+        -- 계정 외형 격자의 투명 배경은 유지하고 공통 색/상태만 적용한다.
+        local isClose=rec.e.Name=="Close"
+        local action=rec.e.Name=="Apply"
+        local normal=self.ButtonNormal
+        local hover=self.ButtonHover
+        local pressed=self.ButtonPressed
+        local disabled=self.ButtonDisabled
+        if isClose then
+            normal="63cc491b18bd41ab961880e152b57e4d" hover="234a3cef58ae4954a5ff024688ca66fd" pressed="6b79d55bd6d44f18b5ab84ffbe16da72" disabled="0473791f50d642249eb0fb7f4738e791"
+        elseif action then
+            normal="ffd05f5bf0274527b1e5cb977f2c49fe" hover="2a218c009982464f9c6f581e763ea6aa" pressed="3127fb2d53b14c6a94e8d0c7e309ac92" disabled="db304db9f8de48278c56d7b13071f0d5"
+        end
+        local ruid=normal
+        if rec.disabled then ruid=disabled
+        elseif rec.selected and rec.pressed then ruid=self.ButtonSelectedPressed
+        elseif rec.selected and rec.hover then ruid=self.ButtonSelectedHover
+        elseif rec.pressed then ruid=pressed
+        elseif rec.hover then ruid=hover
+        elseif rec.selected then ruid=self.ButtonSelected end
+        if rec.grid then
+            rec.e.SpriteGUIRendererComponent.Color=Color(1,1,1,0)
+            local border=rec.e:GetChildByName("Selection")
+            if isvalid(border) then
+                border:SetEnable(not rec.disabled and (rec.selected or rec.hover or rec.pressed))
+                local color=rec.pressed and Color(0.12,0.43,0.69,1) or Color(0.15,0.56,0.88,1)
+                for _,part in ipairs({"Top","Bottom","Left","Right"}) do border:GetChildByName(part).SpriteGUIRendererComponent.Color=color end
+            end
+        elseif rec.e==self._T.chip then
+            rec.e.SpriteGUIRendererComponent.Color=Color(0,0,0,0)
+            local alpha=rec.disabled and 0.34 or (rec.pressed and 0.82 or (rec.hover and 0.72 or 0.62))
+            for _,part in ipairs({"Name","Level"}) do
+                local child=rec.e:GetChildByName(part)
+                if isvalid(child) then child.SpriteGUIRendererComponent.Color=Color(0,0,0,alpha) end
+            end
+        else self:Image(rec.e,ruid) end
+        rec.e.ButtonComponent.Enable=not rec.disabled
+        local tx=rec.e.TextGUIRendererComponent
+        if isvalid(tx) then
+            local light=rec.selected or isClose or action
+            tx.FontColor=rec.disabled and Color(0.42,0.46,0.51,1) or (light and Color(1,1,1,1) or Color(0.14,0.17,0.21,1))
+        end
+    end
+
+    @ExecSpace("ClientOnly")
+    method void ButtonState(Entity e, boolean selected, boolean disabled)
+        -- 표시와 실제 클릭 가능 상태를 함께 갱신한다.
+        if not isvalid(e) then return end
+        local r = self._T.buttons[e.Id]
+        if r == nil then return end
+        r.selected=selected r.disabled=disabled
+        self:PaintButton(r)
+    end
+
+    @ExecSpace("ClientOnly")
+    method void OnBeginPlay()
+        -- 네 메뉴와 재사용 격자 슬롯을 한 번만 연결한다.
+        self._T.handlers={} self._T.buttons={} self._T.worldTags={}
+        self._T.tab=1 self._T.open=false self._T.bindTick=0
+        self._T.chip=_EntityService:GetEntityByPath("/ui/LobbyUI/Root/AccountChip")
+        self:Button(self._T.chip,function() self:Open() end)
+        self:Button(self:E("Window/Close"),function() self:Close() end)
+        for i=1,4 do
+            local index=i
+            self:Button(self:E("Window/LeftPanel/MenuArea/Tab" .. tostring(i)),function() self:Tab(index) end)
+        end
+        for i=1,self.CosmeticSlots do
+            local index=i
+            self:Button(self:E("Window/Right/Appearance/Grid/Item" .. tostring(i)),function() self:Choose(index) end)
+        end
+        self:Button(self:E("Window/Right/Appearance/Footer/Apply"),function() self:Apply() end)
+        self:E("Window"):SetEnable(false)
+        _EntityService:GetEntityByPath(self.Base):SetEnable(false)
+        log("[VRF] AccountUILogic begin tabs=4 grid=3x3")
+    end
+
+    @ExecSpace("ClientOnly")
+    method void OnEndPlay()
+        -- 이벤트와 클라이언트 전용 칭호 엔티티를 정리한다.
+        for _,h in ipairs(self._T.handlers or {}) do if isvalid(h.e) then h.e:DisconnectEvent(h.evt,h.h) end end
+        for _,v in pairs(self._T.worldTags or {}) do if isvalid(v.tag) then _EntityService:Destroy(v.tag) end end
+        self._T.handlers={} self._T.buttons={} self._T.worldTags={}
+    end
+
+    @ExecSpace("ClientOnly")
+    method string Portrait(string id)
+        -- 초상 카탈로그의 스프라이트를 반환한다.
+        if id == "paladin" then return self.ProfilePaladin end
+        if id == "darkknight" then return self.ProfileDarkKnight end
+        return self.ProfileHero
+    end
+
+    @ExecSpace("ClientOnly")
+    method string Frame(string id)
+        -- 프레임은 초상과 분리되어 교체된다.
+        if id == "blue" then return self.FrameBlue end
+        if id == "purple" then return self.FramePurple end
+        return self.FrameGold
+    end
+
+    @ExecSpace("ClientOnly")
+    method void SquareFrame(Entity e, string id)
+        -- 초상과 미리보기는 같은 사각 테두리 규격을 공유한다.
+        if not isvalid(e) then return end
+        e.SpriteGUIRendererComponent.Color=Color(1,1,1,0)
+        local color=Color(0.89,0.76,0.46,1)
+        if id=="blue" then color=Color(0.35,0.70,0.96,1)
+        elseif id=="purple" then color=Color(0.72,0.46,0.94,1)
+        elseif id=="silver" then color=Color(0.80,0.85,0.92,1)
+        elseif id=="green" then color=Color(0.35,0.84,0.54,1)
+        elseif id=="rose" then color=Color(1,0.55,0.73,1)
+        elseif id=="orange" then color=Color(1,0.62,0.25,1)
+        elseif id=="red" then color=Color(0.98,0.29,0.36,1)
+        elseif id=="prism" then color=Color(0.65,0.93,1,1) end
+        for _, name in ipairs({"Top","Bottom","Left","Right"}) do
+            local side=e:GetChildByName(name)
+            if isvalid(side) then
+                local tone=color
+                if id=="prism" then
+                    if name=="Top" then tone=Color(1,0.65,0.85,1)
+                    elseif name=="Right" then tone=Color(0.65,0.9,1,1)
+                    elseif name=="Bottom" then tone=Color(0.7,1,0.7,1)
+                    else tone=Color(1,0.9,0.5,1) end
+                end
+                side:SetEnable(true) side.SpriteGUIRendererComponent.Color=tone
+            end
+        end
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Open()
+        -- 계정 정보 탭을 기본으로 연다.
+        local e = self:Account()
+        if e == nil or not e.AccountLoaded then _LobbyUILogic:ShowNotice("계정 정보를 불러오는 중입니다") return end
+        self._T.open=true
+        local r = _EntityService:GetEntityByPath(self.Base)
+        r:SetEnable(true)
+        self:E("Window"):SetEnable(true)
+        self._T.reveal=0
+        self:Tab(1)
+        log("[VRF] account open")
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Close()
+        -- 미적용 미리보기를 버리고 장착 상태로 돌아간다.
+        self._T.open=false self._T.wheelTarget=nil self._T.preview=nil self._T.pending=false
+        local r = _EntityService:GetEntityByPath(self.Base)
+        if isvalid(r) then r:SetEnable(false) end
+        self:Refresh()
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Tab(integer index)
+        -- 프로필/프레임/칭호/레벨 효과만 사용한다. 경험치는 왼쪽 고정 영역이다.
+        self._T.tab=math.max(1,math.min(4,index))
+        self._T.preview=nil self._T.pending=false self._T.fade=0
+        self:E("Window/Right/Appearance"):SetEnable(self._T.tab<=3)
+        self:E("Window/Right/Effects"):SetEnable(self._T.tab==4)
+        self:Text("Window/Right/Heading",({"프로필","프레임","칭호","레벨별 효과"})[self._T.tab])
+        self:Text("Window/Status","")
+        for i=1,4 do self:ButtonState(self:E("Window/LeftPanel/MenuArea/Tab" .. tostring(i)),i==self._T.tab,false) end
+        self:E("Window/Right/Appearance/Grid").ScrollLayoutGroupComponent:SetScrollNormalizedPosition(UITransformAxis.Vertical,0)
+        self:Refresh()
+        log("[VRF] account grid tab=" .. tostring(self._T.tab))
+    end
+
+    @ExecSpace("ClientOnly")
+    method string Kind()
+        return ({"profile","frame","title"})[self._T.tab] or "profile"
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Choose(integer index)
+        local item=_AccountRules:Cosmetics(self:Kind())[index]
+        if item==nil then return end
+        self._T.preview=item self._T.pending=false
+        self:Refresh()
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Apply()
+        -- 선택 항목의 소유권·해금은 서버에서 다시 검증한다.
+        local e=self:Account()
+        local item=self._T.preview
+        if e==nil or item==nil or item.level>e.AccountLevel or self._T.pending then return end
+        self._T.pending=true self._T.pendingSeq=e.AccountSeq self._T.pendingTime=8
+        e:RequestAccountCosmetic(self:Kind(),item.id)
+        self:Refresh()
+    end
+
+    @ExecSpace("ClientOnly")
+    method void Refresh()
+        -- 왼쪽은 실제 장착 상태를 유지하고 오른쪽에서만 변경 예정 외형을 미리 본다.
+        local e=self:Account()
+        if e==nil then return end
+        local name=_UserService.LocalPlayer.PlayerComponent.Nickname
+        if name=="" then name="모험가" end
+        if isvalid(self._T.chip) then
+            self:Image(self._T.chip:GetChildByName("Portrait"),self:Portrait(e.AccountProfile))
+            self:SquareFrame(self._T.chip:GetChildByName("Frame"),e.AccountFrame)
+            self._T.chip:GetChildByName("Name").TextGUIRendererComponent.Text=name
+            self._T.chip:GetChildByName("Level").TextGUIRendererComponent.Text="레벨 " .. tostring(e.AccountLevel)
+        end
+        local left="Window/LeftPanel/ProfileArea/"
+        self:Image(self:E(left.."Portrait"),self:Portrait(e.AccountProfile))
+        self:SquareFrame(self:E(left.."Frame"),e.AccountFrame)
+        self:Text(left.."Name",name)
+        self:Text(left.."Level",e.AccountLoaded and ("레벨 "..tostring(e.AccountLevel)) or "불러오는 중")
+        local title=_AccountRules:Cosmetic("title",e.AccountTitle)
+        self:Text(left.."Title",title~=nil and title.id~="none" and title.name or "")
+        self:Text(left.."Exp",e.AccountLevel>=100 and "MAX" or (tostring(e.AccountExp).." / "..tostring(e.AccountNeed).." EXP"))
+        local ratio=e.AccountLevel>=100 and 1 or e.AccountExp/math.max(1,e.AccountNeed)
+        self:E(left.."ExpBar/Fill").UITransformComponent.RectSize=Vector2(math.max(1,354*ratio),10)
+        if self._T.tab<=3 then
+            local kind=self:Kind()
+            local items=_AccountRules:Cosmetics(kind)
+            local owned=kind=="profile" and e.AccountProfile or (kind=="frame" and e.AccountFrame or e.AccountTitle)
+            local selected=self._T.preview or _AccountRules:Cosmetic(kind,owned) or items[1]
+            for i=1,self.CosmeticSlots do
+                local row=self:E("Window/Right/Appearance/Grid/Item"..tostring(i))
+                local item=items[i]
+                row:SetEnable(item~=nil)
+                if item~=nil then
+                    local unlocked=item.level<=e.AccountLevel
+                    self:ButtonState(row,selected~=nil and item.id==selected.id,false)
+                    row:GetChildByName("Label").TextGUIRendererComponent.Text=item.name
+                    row:GetChildByName("Label").TextGUIRendererComponent.FontColor=unlocked and Color(0.14,0.17,0.21,1) or Color(0.48,0.52,0.58,1)
+                    local icon=row:GetChildByName("Icon")
+                    local border=row:GetChildByName("Frame")
+                    local tag=row:GetChildByName("Tag")
+                    icon:SetEnable(kind=="profile") border:SetEnable(kind~="title") tag:SetEnable(kind=="title" and item.id~="none")
+                    if kind=="profile" then self:Image(icon,self:Portrait(item.id)) end
+                    if kind~="title" then
+                        self:SquareFrame(border,kind=="frame" and item.id or e.AccountFrame)
+                        if kind=="frame" then border.SpriteGUIRendererComponent.Color=Color(0,0,0,1) end
+                    end
+                    if kind=="title" and item.id~="none" then self:Image(tag,"thumbnail://"..item.ruid) end
+                    if kind=="profile" then icon.SpriteGUIRendererComponent.Color=unlocked and Color(1,1,1,1) or Color(0.4,0.4,0.4,1) end
+                    if kind=="title" then tag.SpriteGUIRendererComponent.Color=unlocked and Color(1,1,1,1) or Color(0.4,0.4,0.4,1) end
+                end
+            end
+            local base="Window/Right/Appearance/"
+            local avatar=self:E(base.."Preview/Avatar")
+            local border=self:E(base.."Preview/Frame")
+            local tag=self:E(base.."Preview/Tag")
+            avatar:SetEnable(kind=="profile") border:SetEnable(kind~="title") tag:SetEnable(kind=="title" and selected~=nil and selected.id~="none")
+            if selected~=nil then
+                if kind~="title" then
+                    self:Image(avatar,self:Portrait(kind=="profile" and selected.id or e.AccountProfile))
+                    self:SquareFrame(border,kind=="frame" and selected.id or e.AccountFrame)
+                    if kind=="frame" then border.SpriteGUIRendererComponent.Color=Color(0,0,0,1) end
+                elseif selected.id~="none" then self:Image(tag,"thumbnail://"..selected.ruid) end
+                self:Text(base.."Preview/State",self._T.preview~=nil and "선택한 외형 미리보기" or "현재 장착한 외형")
+                self:Text(base.."Footer/Name",selected.name)
+                local condition=selected.level<=1 and "획득 조건 · 기본 제공" or ("획득 조건 · 레벨 "..tostring(selected.level))
+                if self._T.pending then condition="저장 중입니다" end
+                self:Text(base.."Footer/Condition",condition)
+            end
+            local allowed=e.AccountLoaded and selected~=nil and selected.id~=owned and selected.level<=e.AccountLevel and not self._T.pending
+            self:ButtonState(self:E(base.."Footer/Apply"),false,not allowed)
+        end
+        if self._T.effectsLevel~=e.AccountLevel then
+            self._T.effectsLevel=e.AccountLevel
+            for i=1,100 do
+                local row=self:E("Window/Right/Effects/Row"..tostring(i))
+                local locked=i>e.AccountLevel
+                row.SpriteGUIRendererComponent.Color=locked and Color(0.86,0.89,0.93,1) or Color(1,1,1,1)
+                row:GetChildByName("Label").TextGUIRendererComponent.FontColor=locked and Color(0.48,0.52,0.58,1) or Color(0.14,0.17,0.21,1)
+            end
+        end
+    end
+
+    @ExecSpace("ClientOnly")
+    method void OnUpdate(number delta)
+        -- 프로필 진입 버튼·서버 응답·짧은 페이드 및 휠 보간을 갱신한다.
+        local p=_UserService.LocalPlayer
+        local inLobby=isvalid(p) and isvalid(p.CurrentMap) and p.CurrentMap.Name=="Lobby"
+        if self._T.open and not inLobby then self:Close() end
+        local region=_EntityService:GetEntityByPath("/ui/LobbyUI/Root/RegionSelect")
+        local stage=_EntityService:GetEntityByPath("/ui/LobbyUI/Root/StageSelect")
+        if isvalid(self._T.chip) then self._T.chip:SetEnable(inLobby and not (isvalid(region) and region.Enable) and not (isvalid(stage) and stage.Enable)) end
+        if self._T.bindTick<=0 then
+            self._T.bindTick=0.25
+            self:RefreshWorldTitles()
+            local e=self:Account()
+            if e~=nil then
+                if self._T.pending then
+                    self._T.pendingTime=self._T.pendingTime-0.25
+                    if e.AccountSeq~=self._T.pendingSeq or self._T.pendingTime<=0 then
+                        self._T.pending=false
+                        self:Refresh()
+                        self:Text("Window/Status",e.AccountSeq~=self._T.pendingSeq and e.AccountMsg or "응답 대기 시간이 지났습니다")
+                    end
+                end
+                if self._T.lastSeq~=e.AccountSeq or self._T.lastExp~=e.AccountExp or self._T.pending then
+                    self._T.lastSeq=e.AccountSeq self._T.lastExp=e.AccountExp self:Refresh()
+                end
+            end
+        else self._T.bindTick=self._T.bindTick-delta end
+        self:FollowWorldTitles()
+        if not self._T.open then return end
+        if self._T.reveal~=nil then
+            local t=math.min(1,self._T.reveal+delta/0.22)
+            self._T.reveal=t
+            self:E("Window").CanvasGroupComponent.GroupAlpha=t
+            self:E("Window").UITransformComponent.anchoredPosition=Vector2(0,-18*(1-t)^3)
+            if t>=1 then self._T.reveal=nil end
+        end
+        if self._T.fade~=nil then
+            local t=math.min(1,self._T.fade+delta/0.18)
+            self._T.fade=t
+            local content=self._T.tab==4 and "Effects" or "Appearance"
+            self:E("Window/Right/" .. content).CanvasGroupComponent.GroupAlpha=t
+            if t>=1 then self._T.fade=nil end
+        end
+
+    end
+
+    @ExecSpace("ClientOnly")
+    method void RefreshWorldTitles()
+        -- 각 클라이언트가 현재 맵 플레이어의 동기화된 칭호를 네이티브 NameTag로 표현한다.
+        local localPlayer=_UserService.LocalPlayer
+        if not isvalid(localPlayer) or not isvalid(localPlayer.CurrentMap) then return end
+        local seen={}
+        for uid,p in pairs(_UserService.UserEntities) do
+            if isvalid(p) and p.CurrentMap==localPlayer.CurrentMap then
+                local eng=p:GetComponent("script.PlayerEngrave")
+                local item=eng~=nil and eng.AccountLoaded and _AccountRules:Cosmetic("title",eng.AccountTitle) or nil
+                if item~=nil and item.id~="none" then
+                    seen[uid]=true
+                    local rec=self._T.worldTags[uid]
+                    if rec==nil or not isvalid(rec.tag) or rec.tag.CurrentMap~=p.CurrentMap then
+                        if rec~=nil and isvalid(rec.tag) then _EntityService:Destroy(rec.tag) end
+                        local pos=p.TransformComponent.WorldPosition
+                        local tag=_SpawnService:SpawnByModelId(self.TitleTagModel,"AccountTitle_"..uid,Vector3(pos.x,pos.y+1.55,0),p.CurrentMap)
+                        if isvalid(tag) then rec={tag=tag,p=p,id=""} self._T.worldTags[uid]=rec end
+                    end
+                    if rec~=nil and isvalid(rec.tag) and rec.id~=item.id then
+                        rec.tag.NameTagComponent.Name=item.name
+                        rec.tag.NameTagComponent.NameTagRUID=DataRef(item.ruid)
+                        rec.tag.NameTagComponent.FontColor=Color(1,0.95,0.78,1)
+                        rec.id=item.id
+                        log("[VRF] account native title="..item.id.." resource="..item.ruid)
+                    end
+                end
+            end
+        end
+        for uid,rec in pairs(self._T.worldTags) do
+            if not seen[uid] then if isvalid(rec.tag) then _EntityService:Destroy(rec.tag) end self._T.worldTags[uid]=nil end
+        end
+    end
+
+    @ExecSpace("ClientOnly")
+    method void FollowWorldTitles()
+        for _,rec in pairs(self._T.worldTags or {}) do
+            if isvalid(rec.tag) and isvalid(rec.p) then
+                local pos=rec.p.TransformComponent.WorldPosition
+                rec.tag.TransformComponent.Position=Vector3(pos.x,pos.y+1.55,0)
+            end
+        end
+    end
+end

@@ -1,6 +1,30 @@
 @Component
 script PlayerEngrave extends Component
 
+    -- 계정 레벨·꾸미기: 누적 EXP에서 레벨/보너스를 재산출한다.
+    property string AccountKey = "OrbisAccountV1"
+    @Sync
+    property boolean AccountLoaded = false
+    @Sync
+    property integer AccountTotal = 0
+    @Sync
+    property integer AccountLevel = 1
+    @Sync
+    property integer AccountExp = 0
+    @Sync
+    property integer AccountNeed = 62
+    @Sync
+    property string AccountProfile = "hero"
+    @Sync
+    property string AccountFrame = "gold"
+    @Sync
+    property string AccountTitle = "none"
+    @Sync
+    property integer AccountSeq = 0
+    @Sync
+    property string AccountMsg = ""
+    property number AccountRetryTimer = 10
+
 	-- 각인: 아웃게임 영구 성장. 클리어한 최고 층 수 = 총 포인트 (절대 줄지 않음)
 	property string StorageKey = "OrbisEngrave"
 	-- 각인 이전 저장 데이터(최고 도달 층). 처음 한 번만 읽어 클리어 층으로 옮긴다.
@@ -94,7 +118,7 @@ script PlayerEngrave extends Component
 	-- 스킬 Id → 레벨업·합성 재료로 모은 개수
 	@Sync
 	property SyncTable<string, integer> SkillCnt
-	-- 장착 칸 "1"~"5" → 스킬 Id (빈 칸은 "")
+	-- 장착 칸 → 스킬 Id (빈 칸은 ""). 히어로는 "1"~"5", 다른 직업은 "Bishop:1"~"Bishop:5"
 	@Sync
 	property SyncTable<string, string> SkillEquip
 	-- 마지막 뽑기·합성 결과 "Id:신규(1/0),..."
@@ -111,8 +135,40 @@ script PlayerEngrave extends Component
 	-- 레벨업 스킬북 비용 = 기본 + 현재 레벨 × 증가 (Lv.0→1 해금 20권, 이후 30·40…)
 	property integer ComboAttackBaseCost = 20
 	property integer ComboAttackStepCost = 10
+	-- 비숍 고유 패시브 '성수' 레벨 (1부터). 성수 1개당 공격력 보너스가 오른다. 스킬북으로 올린다.
+	@Sync
+	property integer HolyWaterLv = 1
+	property integer HolyWaterMaxLv = 11
+	property integer HolyWaterBaseCost = 20
+	property integer HolyWaterStepCost = 10
 
 	-- 입장 에너지: 서버 UTC로 충전. 충전은 마지막 차감 시각에서 계산하므로 매초 저장하지 않는다.
+	-- 별 미션 (층마다 3개: 1=클리어, 2=제한 시간 안 클리어, 4=체력 50% 이상 클리어, 영구 누적)
+	-- 구간 보상 (SectionSize층마다 별 합계가 기준을 넘으면 상자 직접 수령, 서버가 판정·지급·저장)
+	property string StarKey = "OrbisStar"
+	property integer SectionSize = 10
+	property string SectionThresholds = "10|20|30"
+	property string SectionBooks = "20|40|80"
+	property string SectionFeathers = "5|10|20"
+	@Sync
+	property boolean StarLoaded = false
+	-- "층:비트,층:비트" (클라이언트 표시용)
+	@Sync
+	property string StarData = ""
+	-- "구간:수령비트,..." (1·2·4 = 첫째·둘째·셋째 상자)
+	@Sync
+	property string SectionData = ""
+	@Sync
+	property integer StarSeq = 0
+	@Sync
+	property string ClaimMsg = ""
+	@Sync
+	property integer ClaimSeq = 0
+	@HideFromInspector
+	property boolean StarDirty = false
+	@HideFromInspector
+	property number StarRetryTimer = 0
+
 	property string EnergyKey = "OrbisEnergy"
 	property integer EnergyMax = 30
 	property integer EnergyCost = 3
@@ -164,12 +220,18 @@ script PlayerEngrave extends Component
 		self:LoadSkillTables()
 		self:LoadSkills()
 		self:LoadEnergy()
+		self:LoadStars()
+		self:LoadAccount()
 		log("[VRF] PlayerEngrave begin nodes=" .. tostring(#self._T.nodes) .. " cleared=" .. tostring(self.ClearedFloor) .. " spent=" .. tostring(self.Spent))
 	end
 
 	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
 		-- 불러오기에 실패했으면 잠시 뒤 다시 시도한다 (실패 상태에서는 저장하지 않음).
+        if not self.AccountLoaded then
+            self.AccountRetryTimer = self.AccountRetryTimer - delta
+            if self.AccountRetryTimer <= 0 then self:LoadAccount() end
+        end
 		self.EnergyTick = self.EnergyTick - delta
 		if self.EnergyTick <= 0 then
 			self.EnergyTick = 1
@@ -191,6 +253,10 @@ script PlayerEngrave extends Component
 			self.GraceRetryTimer = self.GraceRetryTimer - delta
 			if self.GraceRetryTimer <= 0 then self:LoadGrace() end
 		end
+		if not self.StarLoaded then
+			self.StarRetryTimer = self.StarRetryTimer - delta
+			if self.StarRetryTimer <= 0 then self:LoadStars() end
+		end
 		if not self.SymbolLoaded then
 			self.SymbolRetryTimer = self.SymbolRetryTimer - delta
 			if self.SymbolRetryTimer <= 0 then self:LoadSymbols() end
@@ -203,6 +269,9 @@ script PlayerEngrave extends Component
 	@ExecSpace("ServerOnly")
 	method void OnEndPlay()
 		-- 플레이어가 나갈 때 저장되지 않은 변경을 마지막으로 저장한다.
+        if self._T.accountPending ~= nil then
+            if not self:CommitAccount(self._T.accountPending) then log_warning("[VRF] account final settlement save failed") end
+        end
 		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
 		if self.GraceLoaded and self.GraceDirty then
 			local code = ds:SetAndWait(self.GraceKey, self:EncodeGrace())
@@ -215,6 +284,10 @@ script PlayerEngrave extends Component
 		if self.SlotLoaded and self.SlotDirty then
 			local code = ds:SetAndWait(self.SlotKey, self:EncodeSlots())
 			if code ~= 0 then log_warning("[VRF] slot final save failed code=" .. tostring(code)) end
+		end
+		if self.StarLoaded and self.StarDirty then
+			local code = ds:SetAndWait(self.StarKey, self:EncodeStars())
+			if code ~= 0 then log_warning("[VRF] star final save failed code=" .. tostring(code)) end
 		end
 		if self.SymbolLoaded and self.SymbolDirty then
 			local code = ds:SetAndWait(self.SymbolKey, self:EncodeSymbols())
@@ -284,6 +357,10 @@ script PlayerEngrave extends Component
 	@ExecSpace("ServerOnly")
 	method boolean ConsumeEntryEnergy()
 		-- 입장 직전 3개 차감을 저장한 뒤에만 허용한다. 저장 중 중복 요청 및 저장 실패는 입장하지 않는다.
+        if not self.AccountLoaded then
+            self:EntryEnergyNotice("계정 정보를 불러오는 중입니다", self.Entity.PlayerComponent.UserId)
+            return false
+        end
 		if not self.EnergyLoaded then
 			self:EntryEnergyNotice("입장 에너지를 불러오는 중입니다", self.Entity.PlayerComponent.UserId)
 			return false
@@ -1016,15 +1093,25 @@ script PlayerEngrave extends Component
 		self._T.skills = {}
 		self._T.skillById = {}
 		self._T.gradeSkills = {}
+		self._T.jobGradeSkills = {}
+		self._T.jobs = {}
 		self._T.grades = {}
 		local ds = _DataService:GetTable(self.SkillTableName)
 		if ds ~= nil then
 			for i = 1, ds:GetRowCount() do
-				local sk = { id = ds:GetCell(i, "SkillId"), order = tonumber(ds:GetCell(i, "Order")) or i, grade = tonumber(ds:GetCell(i, "Grade")) or 1 }
+				local job = ds:GetCell(i, "JobId")
+				if job == nil or job == "" then job = "Hero" end
+				local sk = { id = ds:GetCell(i, "SkillId"), order = tonumber(ds:GetCell(i, "Order")) or i, grade = tonumber(ds:GetCell(i, "Grade")) or 1, job = job }
 				table.insert(self._T.skills, sk)
 				self._T.skillById[sk.id] = sk
 				if self._T.gradeSkills[sk.grade] == nil then self._T.gradeSkills[sk.grade] = {} end
 				table.insert(self._T.gradeSkills[sk.grade], sk.id)
+				if self._T.jobGradeSkills[job] == nil then
+					self._T.jobGradeSkills[job] = {}
+					table.insert(self._T.jobs, job)
+				end
+				if self._T.jobGradeSkills[job][sk.grade] == nil then self._T.jobGradeSkills[job][sk.grade] = {} end
+				table.insert(self._T.jobGradeSkills[job][sk.grade], sk.id)
 			end
 		end
 		local gs = _DataService:GetTable(self.SkillGradeTableName)
@@ -1058,40 +1145,49 @@ script PlayerEngrave extends Component
 			return
 		end
 		local maxLv = self._T.skillCfg.SkillMaxLv
-		if t == nil then
-			t = { b = 0, o = {}, c = {}, e = {} }
-			for _, sk in ipairs(self._T.skills) do
-				if sk.order <= self.SkillStartCount then
-					t.o[sk.id] = 1
-					t.e[tostring(sk.order)] = sk.id
-				end
-			end
-		end
+		if t == nil then t = { b = 0, o = {}, c = {}, e = {} } end
 		local own = t["o"] or {}
 		local cnt = t["c"] or {}
 		local equip = t["e"] or {}
 		self.SkillBooks = math.max(0, math.floor(t["b"] or 0))
 		self.ComboAttackLv = math.max(0, math.min(self.ComboAttackMaxLv, math.floor(t["p"] or 0)))
+		self.HolyWaterLv = math.max(1, math.min(self.HolyWaterMaxLv, math.floor(t["hw"] or 1)))
 		for _, sk in ipairs(self._T.skills) do
 			self.SkillOwnLv[sk.id] = math.max(0, math.min(maxLv, math.floor(own[sk.id] or 0)))
 			self.SkillCnt[sk.id] = math.max(0, math.floor(cnt[sk.id] or 0))
 		end
-		local used = {}
-		for i = 1, self.SkillEquipSlots do
-			local id = equip[tostring(i)] or ""
-			if (self.SkillOwnLv[id] or 0) <= 0 or used[id] then id = "" end
-			if id ~= "" then used[id] = true end
-			self.SkillEquip[tostring(i)] = id
-		end
-		-- 장착 칸은 항상 5칸 모두 채운다 (빈 칸은 장착하지 않은 보유 스킬을 표 순서대로)
-		for i = 1, self.SkillEquipSlots do
-			local key = tostring(i)
-			if self.SkillEquip[key] == "" then
+		-- 직업마다: 그 직업 스킬이 하나도 없으면 (처음·새 직업 추가) 표 순서 1~5를 지급
+		for _, job in ipairs(self._T.jobs) do
+			local any = false
+			for _, sk in ipairs(self._T.skills) do
+				if sk.job == job and self.SkillOwnLv[sk.id] > 0 then any = true break end
+			end
+			if not any then
 				for _, sk in ipairs(self._T.skills) do
-					if (self.SkillOwnLv[sk.id] or 0) > 0 and not used[sk.id] then
-						self.SkillEquip[key] = sk.id
-						used[sk.id] = true
-						break
+					if sk.job == job and sk.order <= self.SkillStartCount then self.SkillOwnLv[sk.id] = 1 end
+				end
+			end
+		end
+		for _, job in ipairs(self._T.jobs) do
+			local used = {}
+			for i = 1, self.SkillEquipSlots do
+				local key = self:EquipKey(job, i)
+				local id = equip[key] or ""
+				local sk = self._T.skillById[id]
+				if sk == nil or sk.job ~= job or (self.SkillOwnLv[id] or 0) <= 0 or used[id] then id = "" end
+				if id ~= "" then used[id] = true end
+				self.SkillEquip[key] = id
+			end
+			-- 장착 칸은 항상 5칸 모두 채운다 (빈 칸은 장착하지 않은 그 직업 보유 스킬을 표 순서대로)
+			for i = 1, self.SkillEquipSlots do
+				local key = self:EquipKey(job, i)
+				if self.SkillEquip[key] == "" then
+					for _, sk in ipairs(self._T.skills) do
+						if sk.job == job and (self.SkillOwnLv[sk.id] or 0) > 0 and not used[sk.id] then
+							self.SkillEquip[key] = sk.id
+							used[sk.id] = true
+							break
+						end
 					end
 				end
 			end
@@ -1100,11 +1196,18 @@ script PlayerEngrave extends Component
 		log("[VRF] skills loaded " .. self:EncodeSkills())
 	end
 
+	method string EquipKey(string job, integer slot)
+		-- 장착 칸 키: 히어로는 "1"~"5" (예전 저장과 호환), 다른 직업은 "직업:칸".
+		if job == "Hero" then return tostring(slot) end
+		return job .. ":" .. tostring(slot)
+	end
+
 	@ExecSpace("ServerOnly")
 	method string EncodeSkills()
 		-- 저장 문자열 (0·빈 값은 생략).
 		local data = { b = self.SkillBooks }
 		if self.ComboAttackLv > 0 then data["p"] = self.ComboAttackLv end
+		if self.HolyWaterLv > 1 then data["hw"] = self.HolyWaterLv end
 		local own = {}
 		local cnt = {}
 		local equip = {}
@@ -1118,11 +1221,14 @@ script PlayerEngrave extends Component
 				data["c"] = cnt
 			end
 		end
-		for i = 1, self.SkillEquipSlots do
-			local id = self.SkillEquip[tostring(i)] or ""
-			if id ~= "" then
-				equip[tostring(i)] = id
-				data["e"] = equip
+		for _, job in ipairs(self._T.jobs) do
+			for i = 1, self.SkillEquipSlots do
+				local key = self:EquipKey(job, i)
+				local id = self.SkillEquip[key] or ""
+				if id ~= "" then
+					equip[key] = id
+					data["e"] = equip
+				end
 			end
 		end
 		return _HttpService:JSONEncode(data)
@@ -1270,6 +1376,28 @@ script PlayerEngrave extends Component
 		log("[VRF] combo attack lv=" .. tostring(self.ComboAttackLv) .. " books=" .. tostring(self.SkillBooks))
 	end
 
+	@ExecSpace("ServerOnly")
+	method integer HolyWaterCost()
+		-- 성수 다음 레벨 스킬북 비용.
+		return self.HolyWaterBaseCost + (self.HolyWaterLv - 1) * self.HolyWaterStepCost
+	end
+
+	@ExecSpace("Server")
+	method void RequestHolyWaterUpgrade()
+		-- 비숍 고유 패시브 성수 레벨업. 스킬북 소모.
+		if not self:CanEditSkill(senderUserId) then return end
+		if self.HolyWaterLv >= self.HolyWaterMaxLv then return end
+		local cost = self:HolyWaterCost()
+		if self.SkillBooks < cost then return end
+		self.SkillBooks = self.SkillBooks - cost
+		self.HolyWaterLv = self.HolyWaterLv + 1
+		self.SkillResult = "HolyWater:0"
+		self.SkillMsg = "passive"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] holy water lv=" .. tostring(self.HolyWaterLv) .. " books=" .. tostring(self.SkillBooks))
+	end
+
 	@ExecSpace("Server")
 	method void RequestSkillSynth(string id)
 		-- 합성: 같은 스킬 재료 3개로 등급표 확률에 따라 한 등급 위 스킬, 실패하면 같은 등급 스킬 하나.
@@ -1278,12 +1406,15 @@ script PlayerEngrave extends Component
 		local need = self._T.skillCfg.SkillSynthCount
 		if sk == nil or (self.SkillCnt[id] or 0) < need then return end
 		local info = self._T.grades[sk.grade]
-		if info == nil or info.synth <= 0 or #(self._T.gradeSkills[sk.grade + 1] or {}) == 0 then return end
+		local jg = self._T.jobGradeSkills[sk.job] or {}
+		if info == nil or info.synth <= 0 or #(jg[sk.grade + 1] or {}) == 0 then return end
 		self.SkillCnt[id] = self.SkillCnt[id] - need
 		local ok = _UtilLogic:RandomDouble() * 100 < info.synth
 		local grade = sk.grade
 		if ok then grade = grade + 1 end
-		local got = self:RandomSkillOfGrade(grade)
+		local pool = jg[grade] or {}
+		local got = id
+		if #pool > 0 then got = pool[_UtilLogic:RandomIntegerRange(1, #pool)] end
 		local flag = "0"
 		if self:GainSkill(got) then flag = "1" end
 		self.SkillResult = got .. ":" .. flag
@@ -1299,11 +1430,12 @@ script PlayerEngrave extends Component
 		-- 장착 칸 교체 (해제는 없다). 다른 칸에 있던 같은 스킬은 자리를 바꾼다.
 		if not self:CanEditSkill(senderUserId) then return end
 		if slot < 1 or slot > self.SkillEquipSlots then return end
-		local key = tostring(slot)
-		if id == "" or (self.SkillOwnLv[id] or 0) <= 0 then return end
+		local sk = self._T.skillById[id]
+		if sk == nil or (self.SkillOwnLv[id] or 0) <= 0 then return end
+		local key = self:EquipKey(sk.job, slot)
 		local prev = self.SkillEquip[key] or ""
 		for i = 1, self.SkillEquipSlots do
-			local k = tostring(i)
+			local k = self:EquipKey(sk.job, i)
 			if k ~= key and self.SkillEquip[k] == id then self.SkillEquip[k] = prev end
 		end
 		self.SkillEquip[key] = id
@@ -1315,12 +1447,20 @@ script PlayerEngrave extends Component
 
 	@ExecSpace("ServerOnly")
 	method table SkillRunData()
-		-- 판 시작 시 쓸 장착 스킬과 레벨 { equip = {Id...}, lv = {Id: 레벨} }.
-		local data = { equip = {}, lv = {}, comboLv = 0 }
+		-- 히어로 판 시작 데이터 (예전 호출 호환).
+		return self:SkillRunDataFor("Hero")
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SkillRunDataFor(string job)
+		-- 판 시작 시 쓸 그 직업의 장착 스킬과 레벨 { equip = {Id...}, lv = {Id: 레벨}, comboLv, holyLv }.
+		local data = { equip = {}, lv = {}, comboLv = 0, holyLv = 1, loaded = false }
 		if not self.SkillLoaded then return data end
+		data.loaded = true
 		data.comboLv = self.ComboAttackLv
+		data.holyLv = self.HolyWaterLv
 		for i = 1, self.SkillEquipSlots do
-			local id = self.SkillEquip[tostring(i)] or ""
+			local id = self.SkillEquip[self:EquipKey(job, i)] or ""
 			if id ~= "" then
 				table.insert(data.equip, id)
 				data.lv[id] = self.SkillOwnLv[id] or 1
@@ -1384,5 +1524,266 @@ script PlayerEngrave extends Component
 		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
 		self:Flush()
 	end
+
+
+	@ExecSpace("ServerOnly")
+	method void LoadStars()
+		-- 별·구간 수령 기록을 불러온다. 저장 형식 {"s":{"층":비트},"c":{"구간":비트}}.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.StarKey)
+		self._T.stars = {}
+		self._T.claims = {}
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			local t = _HttpService:JSONDecode(raw)
+			if t ~= nil then
+				for k, v in pairs(t["s"] or {}) do self._T.stars[math.floor(tonumber(k) or 0)] = math.floor(v) end
+				for k, v in pairs(t["c"] or {}) do self._T.claims[math.floor(tonumber(k) or 0)] = math.floor(v) end
+			end
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] star load failed code=" .. tostring(errorCode))
+			self.StarRetryTimer = self.LoadRetryDelay
+			return
+		end
+		-- 별 기능 이전에 깬 층은 '클리어' 별 1개를 채워 준다 (한 번만, 저장)
+		local migrated = 0
+		for f = 1, self.ClearedFloor do
+			if (self._T.stars[f] or 0) & 1 == 0 then
+				self._T.stars[f] = (self._T.stars[f] or 0) | 1
+				migrated = migrated + 1
+			end
+		end
+		self.StarLoaded = true
+		self:SyncStars()
+		if migrated > 0 then
+			self:SaveStars()
+			log("[VRF] stars migrated cleared floors=" .. tostring(migrated))
+		end
+		log("[VRF] stars loaded floors=" .. tostring(self:CountKeys(self._T.stars)) .. " claims=" .. tostring(self:CountKeys(self._T.claims)))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer CountKeys(table t)
+		-- 표의 항목 수.
+		local n = 0
+		for _ in pairs(t or {}) do n = n + 1 end
+		return n
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeStars()
+		-- 별·수령 기록 저장 문자열 (빈 표는 JSONEncode가 못 다뤄 0 항목으로 채운다).
+		local s = {}
+		local c = {}
+		for k, v in pairs(self._T.stars or {}) do if v > 0 then s[tostring(k)] = v end end
+		for k, v in pairs(self._T.claims or {}) do if v > 0 then c[tostring(k)] = v end end
+		if self:CountKeys(s) == 0 then s["0"] = 0 end
+		if self:CountKeys(c) == 0 then c["0"] = 0 end
+		return _HttpService:JSONEncode({ s = s, c = c })
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncStars()
+		-- 클라이언트 표시용 문자열 갱신.
+		local a = {}
+		for k, v in pairs(self._T.stars or {}) do if k > 0 and v > 0 then table.insert(a, tostring(k) .. ":" .. tostring(v)) end end
+		local b = {}
+		for k, v in pairs(self._T.claims or {}) do if k > 0 and v > 0 then table.insert(b, tostring(k) .. ":" .. tostring(v)) end end
+		self.StarData = table.concat(a, ",")
+		self.SectionData = table.concat(b, ",")
+		self.StarSeq = self.StarSeq + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveStars()
+		-- 별·수령 기록 저장 (비동기). 실패하면 Dirty를 남겨 나갈 때 다시 저장.
+		if not self.StarLoaded then return end
+		self.StarDirty = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.StarKey, self:EncodeStars(), function(errorCode, key)
+			if errorCode == 0 then
+				self.StarDirty = false
+			else
+				log_warning("[VRF] star save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer GetStars(integer floor)
+		-- 층의 별 비트 (1·2·4).
+		return (self._T.stars or {})[floor] or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer RecordStars(integer floor, integer bits)
+		-- 이번 판에서 달성한 별을 누적하고 새로 얻은 비트를 돌려준다 (기존 별은 사라지지 않음).
+		if not self.StarLoaded or floor <= 0 then return 0 end
+		local prev = self:GetStars(floor)
+		local now = prev | bits
+		local gained = now & (~prev)
+		if gained ~= 0 then
+			self._T.stars[floor] = now
+			self:SyncStars()
+			self:SaveStars()
+		end
+		log("[VRF] stars floor=" .. tostring(floor) .. " prev=" .. tostring(prev) .. " now=" .. tostring(now) .. " gained=" .. tostring(gained))
+		return gained
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer SectionStars(integer section)
+		-- 구간(SectionSize층 묶음)의 별 합계.
+		local total = 0
+		local first = (section - 1) * self.SectionSize + 1
+		for f = first, first + self.SectionSize - 1 do
+			local b = self:GetStars(f)
+			if b & 1 ~= 0 then total = total + 1 end
+			if b & 2 ~= 0 then total = total + 1 end
+			if b & 4 ~= 0 then total = total + 1 end
+		end
+		return total
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer ListValue(string list, integer idx)
+		-- "10|20|30" 형식에서 idx번째 정수.
+		local i = 0
+		for v in string.gmatch(list, "[^|]+") do
+			i = i + 1
+			if i == idx then return math.floor(tonumber(v) or 0) end
+		end
+		return 0
+	end
+
+	@ExecSpace("Server")
+	method void RequestClaimSection(integer section, integer tier)
+		-- 구간 상자 수령: 본인·로드 완료·별 기준 달성·미수령일 때만 지급하고 바로 저장한다 (중복 수령 차단).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		local function reply(msg)
+			self.ClaimMsg = msg
+			self.ClaimSeq = self.ClaimSeq + 1
+			log("[VRF] section claim " .. tostring(section) .. "-" .. tostring(tier) .. ": " .. msg)
+		end
+		if not self.StarLoaded or not self.SkillLoaded or not self.GraceLoaded then reply("보상 정보를 불러오는 중입니다") return end
+		if section < 1 or tier < 1 or tier > 3 then reply("잘못된 요청입니다") return end
+		local need = self:ListValue(self.SectionThresholds, tier)
+		if self:SectionStars(section) < need then reply("별이 부족합니다") return end
+		local bit = 1 << (tier - 1)
+		local claimed = (self._T.claims or {})[section] or 0
+		if claimed & bit ~= 0 then reply("이미 받은 보상입니다") return end
+		self._T.claims[section] = claimed | bit
+		local books = self:ListValue(self.SectionBooks, tier)
+		local feathers = self:ListValue(self.SectionFeathers, tier)
+		if books > 0 then self:AddSkillBooks(books) end
+		if feathers > 0 then self:AddFeathers(feathers) end
+		self:SyncStars()
+		self:SaveStars()
+		self:FlushSkills()
+		self:FlushGrace()
+		reply("보상 획득! 스킬북 +" .. tostring(books) .. " · 여신의 깃털 +" .. tostring(feathers))
+	end
+
+
+    @ExecSpace("ServerOnly")
+    method void LoadAccount()
+        -- 로드 실패는 Lv1 신규 계정으로 덮어쓰지 않는다.
+        if self._T.accountBusy then return end
+        self.AccountRetryTimer = 10
+        self._T.accountBusy = true
+        local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+        local code, raw = ds:GetAndWait(self.AccountKey)
+        self._T.accountBusy = false
+        if code ~= 0 and code ~= 1000002 then log_warning("[VRF] account load failed=" .. tostring(code)) return end
+        local data = { version=1, total=0, profile="hero", frame="gold", title="none", last="" }
+        if code == 0 and raw ~= nil and raw ~= "" then
+            local ok, decoded = pcall(function() return _HttpService:JSONDecode(raw) end)
+            if not ok or type(decoded) ~= "table" or type(decoded.total) ~= "number" then log_warning("[VRF] account invalid save") return end
+            data.total = math.max(0, math.min(_AccountRules.TotalRequired, math.floor(decoded.total)))
+            data.profile = decoded.profile or "hero"
+            data.frame = decoded.frame or "gold"
+            data.title = decoded.title or "none"
+            data.last = decoded.last or ""
+        end
+        local progress = _AccountRules:Progress(data.total)
+        for _, kind in ipairs({"profile", "frame", "title"}) do
+            local item = _AccountRules:Cosmetic(kind, data[kind])
+            if item == nil or item.level > progress.level then
+                if kind == "profile" then data[kind] = "hero" elseif kind == "frame" then data[kind] = "gold" else data[kind] = "none" end
+            end
+        end
+        self._T.accountDoc = data
+        self.AccountLoaded = true
+        self:SyncAccount()
+        log("[VRF] account loaded lv=" .. tostring(self.AccountLevel) .. " total=" .. tostring(self.AccountTotal))
+    end
+
+    @ExecSpace("ServerOnly")
+    method void SyncAccount()
+        -- 서버 문서를 동기화 필드에 투영한다.
+        local d = self._T.accountDoc
+        local p = _AccountRules:Progress(d.total)
+        self.AccountTotal = d.total
+        self.AccountLevel = p.level
+        self.AccountExp = p.exp
+        self.AccountNeed = p.need
+        self.AccountProfile = d.profile
+        self.AccountFrame = d.frame
+        self.AccountTitle = d.title
+        self.AccountSeq = self.AccountSeq + 1
+    end
+
+    @ExecSpace("ServerOnly")
+    method boolean CommitAccount(table data)
+        -- 이벤트 단위 저장 성공 뒤에만 메모리와 화면에 반영한다. 실패 시 기존 값을 유지한다.
+        if not self.AccountLoaded or self._T.accountBusy then return false end
+        self._T.accountBusy = true
+        local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+        local code = ds:SetAndWait(self.AccountKey, _HttpService:JSONEncode(data))
+        self._T.accountBusy = false
+        if code ~= 0 then log_warning("[VRF] account save failed=" .. tostring(code)) return false end
+        self._T.accountDoc = data
+        self:SyncAccount()
+        return true
+    end
+
+    @ExecSpace("ServerOnly")
+    method boolean AwardAccount(string runId, integer amount)
+        -- 판 고유 ID로 반복 정산을 차단한다. 저장 실패는 호출자가 같은 판으로 재시도한다.
+        if not self.AccountLoaded or runId == "" then return false end
+        local d = self._T.accountDoc
+        if d.last == runId then return true end
+        local nextTotal = math.min(_AccountRules.TotalRequired, d.total + math.max(0, amount))
+        local nextData = {version=1,total=nextTotal,profile=d.profile,frame=d.frame,title=d.title,last=runId}
+        local ok = self:CommitAccount(nextData)
+        if ok then self._T.accountPending = nil else self._T.accountPending = nextData end
+        if ok then log("[VRF] account awarded run=" .. runId .. " exp=" .. tostring(amount) .. " lv=" .. tostring(self.AccountLevel)) end
+        return ok
+    end
+
+    @ExecSpace("ServerOnly")
+    method table AccountBonuses()
+        -- 판 시작 시점의 보너스 스냅샷을 반환한다.
+        if not self.AccountLoaded then return {} end
+        return _AccountRules:Bonuses(self.AccountLevel)
+    end
+
+    @ExecSpace("Server")
+    method void RequestAccountCosmetic(string kind, string id)
+        -- 본인·로비·해금 레벨을 검증하고 선택한 항목만 변경한다.
+        if senderUserId ~= self.Entity.PlayerComponent.UserId or not self.AccountLoaded then return end
+        local map = self.Entity.CurrentMap
+        if not isvalid(map) or map.Name ~= self.LobbyMapName then return end
+        local item = _AccountRules:Cosmetic(kind, id)
+        if item == nil or item.level > self.AccountLevel then return end
+        if self._T.accountBusy then return end
+        local d = self._T.accountDoc
+        if d[kind] == id then self.AccountMsg = "이미 장착 중입니다" self.AccountSeq = self.AccountSeq + 1 return end
+        local n = {version=1,total=d.total,profile=d.profile,frame=d.frame,title=d.title,last=d.last}
+        n[kind] = id
+        local ok = self:CommitAccount(n)
+        self.AccountMsg = ok and "변경했습니다" or "저장하지 못했습니다. 다시 시도해 주세요"
+        self.AccountSeq = self.AccountSeq + 1
+        log("[VRF] account cosmetic " .. kind .. "=" .. id .. " saved=" .. tostring(ok))
+    end
 
 end

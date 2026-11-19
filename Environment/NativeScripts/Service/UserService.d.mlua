@@ -41,6 +41,12 @@ script UserService extends Service
 	---@sealed
 	method table<Entity> GetUsersByMapName(string mapName) end
 
+	---@description "Checks whether the user is a non-logged-in user who connected through a web browser. Only functions in a release environment."
+	---@sealed
+	@ReleaseOnly
+	@ExecSpace("ServerOnly")
+	method boolean IsGuest(string profileCode) end
+
 	---@description "Checks if the user was restricted by the world InSite. Only functions in a release environment."
 	---@sealed
 	@ReleaseOnly

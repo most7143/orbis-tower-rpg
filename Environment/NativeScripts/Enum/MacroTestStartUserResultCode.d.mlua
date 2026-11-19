@@ -1,0 +1,20 @@
+---@sealed
+@Enum
+script MacroTestStartUserResultCode
+	member Ok = 0
+	member InvalidNugu = 1000000
+	member InvalidOs = 1000001
+	member AlreadyTesting = 1000002
+	member NotExistUserSession = 1000003
+	member NetworkNotReady = 1000004
+	member FilteredNugu = 1000005
+	member FilteredOs = 1000006
+	member FilteredCountry = 1000007
+	member InternalServiceError = 1000008
+	member InvalidArgument = 1000009
+	member Unknown = -1
+
+	static method MacroTestStartUserResultCode CastFrom(number value) end
+
+	static method MacroTestStartUserResultCode CastFrom(string value) end
+end

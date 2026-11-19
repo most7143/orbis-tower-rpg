@@ -1,0 +1,20 @@
+---@sealed
+@Misc
+script MacroTestResultInfo
+
+	---@sealed
+	property string Extra
+
+	---@sealed
+	property MacroTestStartUserResultCode ResultCode = MacroTestStartUserResultCode.Unknown
+
+	---@sealed
+	property int32 SubType
+
+	---@sealed
+	property int32 Type
+
+	---@sealed
+	property string UserId
+
+end

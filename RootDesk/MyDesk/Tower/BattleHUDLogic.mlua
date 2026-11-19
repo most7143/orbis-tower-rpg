@@ -428,12 +428,20 @@ script BattleHUDLogic extends Logic
 		local mgr = map:GetComponent("script.TowerRunManager")
 		if isvalid(self.floorText) then self.floorText.Entity:SetEnable(mgr ~= nil) end
 		-- 층 바닥 타일셋 (원작 맵): 서버 FloorTileSet이 바뀌면 탑 맵 TileMap의 타일셋을 교체 (타일 배치는 그대로)
-		if mgr ~= nil and (mgr.FloorTileSet or "") ~= "" and self._T.tileSet ~= mgr.FloorTileSet then
+		-- 층 타일셋이 비어 있으면 탑 맵 원래 타일셋으로 되돌린다 (이전 층 타일셋이 남지 않게)
+		if mgr ~= nil then
 			local tm = map:GetChildByName("TileMap")
 			if isvalid(tm) and isvalid(tm.TileMapComponent) then
-				tm.TileMapComponent.TileSetRUID = mgr.FloorTileSet
-				self._T.tileSet = mgr.FloorTileSet
-				log("[VRF] floor tileset -> " .. mgr.FloorTileSet)
+				-- 맵에 다시 들어오면 타일셋이 원래대로 돌아오므로 기록도 새로 시작
+				if self._T.tsMap ~= map then self._T.tsMap = map self._T.tileSet = nil end
+				if self._T.defaultTileSet == nil then self._T.defaultTileSet = tm.TileMapComponent.TileSetRUID.DataId end
+				local want = mgr.FloorTileSet or ""
+				if want == "" then want = self._T.defaultTileSet end
+				if self._T.tileSet ~= want and want ~= "" then
+					tm.TileMapComponent.TileSetRUID = DataRef(want)
+					self._T.tileSet = want
+					log("[VRF] floor tileset -> " .. want)
+				end
 			end
 		end
 		if mgr == nil then
@@ -450,6 +458,7 @@ script BattleHUDLogic extends Logic
 			self._T.procTimer = 0
 			if isvalid(self.procText) and self.procText.Entity.Enable then self.procText.Entity:SetEnable(false) end
 			self:UpdateHeroRes(nil)
+			self:UpdateMate(nil)
 			return
 		end
 
@@ -505,6 +514,102 @@ script BattleHUDLogic extends Logic
 		self:UpdateMesoDrop(delta, player)
 		self:UpdateProcText(mgr, player, delta)
 		self:UpdateHeroRes(mgr)
+		self:UpdateMate(mgr)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateMate(Component mgr)
+		-- 동료 HUD (오른쪽 아래 스킬 칸 위): 직업 이름, 체력·마나 막대, 성수·쓰러짐, 장착 스킬 5칸 (배운 스킬만 아이콘·레벨·쿨타임).
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Mate")
+		if not isvalid(root) then return end
+		local comp = nil
+		local cc = nil
+		if mgr ~= nil and mgr.CompanionMaxHp > 0 and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR") then
+			comp = mgr.Entity:GetChildByName("Companion")
+			if isvalid(comp) then
+				cc = comp:GetComponent("script.BishopCombat")
+				if cc == nil then cc = comp:GetComponent("script.HeroCombat") end
+			end
+		end
+		local show = cc ~= nil
+		if root.Enable ~= show then root:SetEnable(show) end
+		if not show then return end
+		local function get(path) return _EntityService:GetEntityByPath("/ui/BattleHUD/Mate/" .. path) end
+		local function setText(path, txt)
+			local e = get(path)
+			if isvalid(e) and e.TextGUIRendererComponent.Text ~= txt then e.TextGUIRendererComponent.Text = txt end
+		end
+		local function setBar(path, ratio, full)
+			local e = get(path)
+			if not isvalid(e) then return end
+			local r = math.max(0, math.min(1, ratio))
+			local size = e.UITransformComponent.RectSize
+			local w = full * r
+			if math.abs(size.x - w) > 0.5 then e.UITransformComponent.RectSize = Vector2(w, size.y) end
+		end
+		if self._T.mateIcons == nil then
+			self._T.mateIcons = {}
+			for _, name in ipairs({ "HeroSkillTable", "JobSkillTable" }) do
+				local t = _DataService:GetTable(name)
+				if t ~= nil then
+					for i = 1, t:GetRowCount() do
+						local id = t:GetCell(i, "SkillId")
+						local icon = t:GetCell(i, "IconRUID") or ""
+						if id ~= nil and icon ~= "" and self._T.mateIcons[id] == nil then self._T.mateIcons[id] = icon end
+					end
+				end
+			end
+		end
+		local jobName = "히어로"
+		if cc.JobId == "Bishop" then jobName = "비숍" end
+		setText("Job", jobName)
+		setBar("HpFill", mgr.CompanionHp / math.max(1, mgr.CompanionMaxHp), 146)
+		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax), 146)
+		local state = ""
+		if mgr.CompanionDown then
+			state = "<color=#E5484D>쓰러짐</color>"
+		elseif cc.JobId == "Bishop" then
+			state = "성수 " .. tostring(cc.HolyWater) .. "/" .. tostring(cc.HolyMaxNow)
+		else
+			state = "HP " .. tostring(math.floor(mgr.CompanionHp)) .. "/" .. tostring(math.floor(mgr.CompanionMaxHp))
+		end
+		setText("State", state)
+		local list = {}
+		for entry in string.gmatch(cc.SlotInfo or "", "[^|]+") do
+			local id, left, max, lv = string.match(entry, "^([^:]+):([^:]+):([^:]+):?([^:]*)$")
+			if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0, lv = tonumber(lv) or 0 }) end
+		end
+		for i = 1, 5 do
+			local slot = "S" .. tostring(i)
+			local info = list[i]
+			local icon = get(slot .. "/Icon")
+			if isvalid(icon) then
+				local on = info ~= nil
+				if icon.Enable ~= on then icon:SetEnable(on) end
+				if on then
+					local ruid = self._T.mateIcons[info.id] or ""
+					local spr = icon.SpriteGUIRendererComponent
+					if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+					if spr.ImageRUID.DataId ~= ruid then spr.ImageRUID = DataRef(ruid) end
+				end
+			end
+			local ratio = 0
+			local cdText = ""
+			if info ~= nil and info.max > 0 and info.left > 0 then
+				ratio = info.left / info.max
+				cdText = tostring(math.ceil(info.left))
+			end
+			local cd = get(slot .. "/Cd")
+			if isvalid(cd) then
+				local h = 64 * ratio
+				local sz = cd.UITransformComponent.RectSize
+				if math.abs(sz.y - h) > 0.5 then cd.UITransformComponent.RectSize = Vector2(64, h) end
+			end
+			setText(slot .. "/CdText", cdText)
+			local lvText = ""
+			if info ~= nil and info.lv > 0 then lvText = "Lv." .. tostring(info.lv) end
+			setText(slot .. "/Lv", lvText)
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -512,7 +617,9 @@ script BattleHUDLogic extends Logic
 		-- 히어로 상태 줄(버프·소환검·자상·인스팅트 대기). 히어로 판 전투 중에만. 콤보·마나는 다른 곳에 표시.
 		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/HeroRes")
 		if not isvalid(root) then return end
-		local show = mgr ~= nil and _HeroCombatLogic.Active and mgr.JobId == "Hero" and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		local lp = _UserService.LocalPlayer
+		local hc = isvalid(lp) and lp:GetComponent("script.HeroCombat") or nil
+		local show = mgr ~= nil and hc ~= nil and hc.Active and mgr.JobId == "Hero" and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
 		if root.Enable ~= show then root:SetEnable(show) end
 		if not show then return end
 		local function setText(path, s)
@@ -528,7 +635,15 @@ script BattleHUDLogic extends Logic
 			end
 			if isvalid(root.SpriteGUIRendererComponent) then root.SpriteGUIRendererComponent.Color = Color(0, 0, 0, 0) end
 		end
-		setText("Status", _HeroCombatLogic.StatusText)
+		local status = hc.StatusText
+		-- 2인 편성: 동료 체력·쓰러짐을 상태 줄 앞에 붙인다 (전용 HUD는 다음 단계)
+		if mgr.CompanionMaxHp > 0 then
+			local c = "<color=#9FE3FF>동료 HP " .. tostring(math.floor(mgr.CompanionHp)) .. "/" .. tostring(math.floor(mgr.CompanionMaxHp)) .. "</color>"
+			if mgr.CompanionDown then c = "<color=#FF7070>동료 쓰러짐</color>" end
+			if mgr.PlayerDown then c = c .. "   <color=#FF7070>메인 쓰러짐 (웨이브를 끝내면 일어남)</color>" end
+			status = c .. "   " .. status
+		end
+		setText("Status", status)
 	end
 
 end

@@ -31,3 +31,18 @@ DarkKnight,DarkKnightDragonThrasher,드래곤 쓰레셔,,Proc,ProcStrike,검술,
 DarkKnight,DarkKnightSacrifice,새크리파이스,8a0b0d445b0448eb8265cb123245b38f,Proc,ProcStrike,검술,,,,0,,Pierce,15,200,1,,,,,공격 시 {c}% 확률로 공격력 {p}% 추가 피해 (방어 무시),,,,
 DarkKnight,DarkKnightDragonRoar,드래곤 로어,5b95027b2e3e409a9a0e5d7565bb82a8,Proc,ProcStrike,검술,,,,0,,Strike,14,280,1,,,,,공격 시 {c}% 확률로 주변 광역 공격 (공격력 {p}%),,,,
 DarkKnight,DarkKnightBeholder,비홀더,ff2d6cadf81a4633bf56b5fa462f40bc,Proc,ProcStrike,검술,,,,0,,Strike,25,60,1,,,,,비홀더가 {c}% 확률로 공격력 {p}% 추가 피해,,,,
+Bishop,B01,에너지 볼트,2d2fd410a67e4e15a3cd53e7d6c100b2,Skill,HeroStar,신성,,,,5,0,HeroStrike,0,120,1,,,,,"마나 8 · 쿨타임 {cd}초. 공격력 {p}% 마법 공격 (3마리), 성수 +1",8,0,0,0
+Bishop,B02,홀리 애로우,dddee74fb15342c5abe13dfa2d83c3fa,Skill,HeroStar,신성,,,,5,0,HeroStrike,0,110,2,,,,,마나 10 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 (2마리). 30% 확률로 재발동,10,0,0,0
+Bishop,B03,샤이닝 레이,49bd6b2c5d22446c9f8079a50bcc67c0,Skill,HeroStar,신성,,,,7,0,HeroStrike,0,300,1,,,,,"마나 25 · 쿨타임 {cd}초. 공격력 {p}% (3마리), 기절 1.5초. 성수 2를 쓰면 피해 +50%, 쓴 성수 1개당 파티 체력 1.5% 회복",25,2,50,0
+Bishop,B04,홀리 매직쉘,09e6b48982194c22b41ebd20b857cfe7,Guard,HeroStar,신성,,,,25,10,HeroBuff,0,0,1,,,,,파티원 체력이 50% 아래로 내려가면 자동 발동 (재사용 {cd}초). 피해 3회를 막고 최대 체력 10% 회복,0,0,0,0
+Bishop,B05,트라이엄프 페더,b2474cf9675e4335b535f96e3af98329,Cooldown,HeroStar,신성,,,,20,0,HeroBuff,0,150,1,,,,,쿨타임 {cd}초. 깃털 5개 충전. 직접 공격이 맞을 때마다 0.3초 뒤 공격력 {p}% 추가타,0,0,0,0
+Bishop,B06,엔젤레이,a1382da8fa7c417296cdff334f57acb1,Skill,HeroStar,신성,,,,10,0,HeroStrike,0,130,2,,,,,"마나 20 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 (4마리). 맞을 때마다 가장 다친 파티원 2% 회복, 15% 재발동",20,0,0,0
+Bishop,B07,빅뱅,b5178c975a694ec3a51106a448fd70dd,Skill,HeroStar,신성,,,,6,0,HeroStrike,0,400,1,,,,,마나 20 · 쿨타임 {cd}초. 공격력 {p}% 강타. 성수를 최대 3개 쓰고 1개당 피해 +20%,20,3,20,0
+Bishop,B08,바하뮤트,159dc1694b424ce8bffe2b74c9d604db,Cooldown,HeroStar,신성,,,,30,20,HeroBuff,0,200,1,,,,,쿨타임 {cd}초. 바하뮤트를 20초 소환. 3초마다 공격력 {p}% (3마리),0,0,0,0
+Bishop,B09,인피니티,eaf484bba47e4fdb8f55d13d86faf46a,Auto,HeroStar,신성,,,,25,10,HeroBuff,0,4,1,,,,,"{cd}초마다 자동 발동, 10초 동안 2초마다 파티 공격력 +{p}% (최대 +20%)",0,0,0,0
+Bishop,B10,헤븐즈 도어,c681452106ad4c10819ab7f446af384c,Skill,HeroStar,신성,,,,30,0,HeroStrike,0,650,1,,,,,마나 60 · 쿨타임 {cd}초. 공격력 {p}% (4마리). 30초 동안 파티원이 한 번씩 쓰러짐을 무시하고 체력 1로 버팀,60,0,0,0
+Bishop,B11,어드밴스드 블레스,e65b2d0a925e448789f67eab8aa9c244,Cooldown,HeroStar,신성,,,,30,15,HeroBuff,0,15,1,,,,,"쿨타임 {cd}초. 15초 동안 파티 공격력 +{p}%, 받는 피해 -10%",0,0,0,0
+Bishop,B12,프레이,ea5951b165714bc0849723a9556a5995,Instinct,HeroStar,신성,,,,15,10,HeroBuff,10,60,1,,,,,"기본 공격이 맞으면 10% 확률로 발동 (재사용 {cd}초). 10초 동안 파티 회복량 +50%, 기본 공격에 기도의 빛 {p}%",0,0,0,0
+Bishop,B13,엔젤 오브 제미니,7a0a45ca867b444bbe14400e8ae7f680,Skill,HeroStar,신성,,,,12,0,HeroStrike,0,100,4,,,,,"마나 50 · 쿨타임 {cd}초. 천사 2명이 공격력 {p}%로 {h}번씩 공격 (3마리), 끝까지 맞은 적에게 합동 피해 200%",50,0,200,0
+Bishop,B14,피스메이커,b7aa516d96af462db2eddb1c370af5e4,Skill,HeroStar,신성,,,,5,0,HeroStrike,0,90,2,,,,,"마나 12 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 (3마리). 4초간 몬스터가 받는 피해 +10%, 맞을 때마다 파티 1% 회복",12,0,0,0
+Bishop,B15,디바인 퍼니시먼트,3c1471ba763140878c405f2aefa9047a,Skill,HeroStar,신성,,,,20,0,HeroStrike,0,170,6,,,,,마나 100 · 쿨타임 {cd}초. 성수 5개 이상일 때 전부 써서 공격력 {p}% {h}연속 (4마리). 시전 중 무적,100,5,0,0

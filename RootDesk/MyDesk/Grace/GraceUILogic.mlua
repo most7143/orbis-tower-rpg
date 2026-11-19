@@ -22,12 +22,12 @@ script GraceUILogic extends Logic
 	-- 잠글 수 있는 줄 위에 있을 때 쓰는 커서 (애니메이션 클립 LockCursor)
 	property string LockCursorRUID = "33b2e7c280394e9f90e98b25851da730"
 	-- 어두운 칸 이미지 위 글자색
-	property Color RowTextColor = Color(0.839, 0.839, 0.82, 1)
-	property Color SubTextColor = Color(0.545, 0.545, 0.53, 1)
-	property Color SilverTextColor = Color(0.824, 0.827, 0.839, 1)
-	property Color TopStepColor = Color(0.847, 0.733, 0.475, 1)
-	property string PipOnHex = "#D2D3D6"
-	property string PipOffHex = "#404040"
+	property Color RowTextColor = Color(0.14, 0.17, 0.21, 1)
+	property Color SubTextColor = Color(0.36, 0.40, 0.46, 1)
+	property Color SilverTextColor = Color(0.12, 0.34, 0.52, 1)
+	property Color TopStepColor = Color(0.20, 0.48, 0.12, 1)
+	property string PipOnHex = "#348524"
+	property string PipOffHex = "#655776"
 	-- 깃털이 모자랄 때 보유 수 색
 	property string LackHex = "#C98B6B"
 	-- 새로 뽑힌 줄 반짝임 시간(초)
@@ -67,7 +67,7 @@ script GraceUILogic extends Logic
 		self.clickHandlers = {}
 		self._T.touchHandlers = {}
 		self._T.hoverSlot = 0
-		self:Bind(self.btnClose, function() self:Close() end)
+		self:Bind(self.btnClose, function() self:Close() _GrowthUILogic:Close() end)
 		self:Bind(self.btnRoll, function() self:OnRoll() end)
 		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
 		for i, b in ipairs(presets) do
@@ -96,22 +96,15 @@ script GraceUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void ApplySkins()
-		-- 프리셋(비선택 공용 + 은색 선택)과 은총 받기 버튼 이미지·글자색.
+		-- 프리셋(회색 기본 + 파랑 선택)과 은총 받기 버튼 이미지·글자색.
 		local presets = { self.btnPreset1, self.btnPreset2, self.btnPreset3 }
 		for _, b in ipairs(presets) do
 			if isvalid(b) then
-				_UIButtonLogic:SetSkin(b.Entity, {
-					normal = "75f3c6dbf2434bcaa0e4b2d430575e2d", hover = "6ba383acf31a4c5bb105720d50c0ccd4", pressed = "a79e3b3c39dd46d4bcf92f29ecf88733", disabled = "f2cf3f5019aa4da995e72294dacb3e64",
-					selected = "8b65aa5605394001960d0558e78304aa", selectedHover = "994b4f1aa8a44578a5bcbd5e0a44c5e4", selectedPressed = "e0c761bc31b94c1caa0e4bceeb107bc2",
-					textNormal = self.SubTextColor, textHover = self.RowTextColor, textSelected = self.SilverTextColor,
-				})
+				_GrowthUILogic:StyleButton(b.Entity)
 			end
 		end
 		if isvalid(self.btnRoll) then
-			_UIButtonLogic:SetSkin(self.btnRoll.Entity, {
-				normal = "359ea90151c042ad89f3eccf3ed758b6", hover = "69b856b1b9c24e89845934f43ff84cf2", pressed = "42eb348e71354d949ea41664074dc230", disabled = "4058bc4ce0dc4ca09f560a08631ee64d",
-				textNormal = self.RowTextColor, textHover = self.SilverTextColor, textDisabled = self.SubTextColor,
-			})
+			_GrowthUILogic:StyleButton(self.btnRoll.Entity)
 		end
 	end
 
@@ -197,6 +190,7 @@ script GraceUILogic extends Logic
 			local sel = self:Get(path .. "/Sel")
 			local label = self:Get(path .. "/Label")
 			local on = i == self._T.bookSel
+			_UIButtonLogic:SetSelected(self:Get(path), on)
 			if isvalid(sel) and sel.Enable ~= on then sel:SetEnable(on) end
 			if isvalid(label) then
 				local c = self.SubTextColor
@@ -210,7 +204,7 @@ script GraceUILogic extends Logic
 	method void Bind(ButtonComponent button, any fn)
 		-- 버튼 클릭 연결 + 해제 기록.
 		if not isvalid(button) then return end
-		local h = button.Entity:ConnectEvent(ButtonClickEvent, function(e) _UISoundLogic:PlayClick() fn(e) end)
+		local h = button.Entity:ConnectEvent(ButtonClickEvent, function(e) if not button.Entity.EnabledInHierarchy or not button.Enable then return end _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = button.Entity, eventHandler = h })
 	end
 
@@ -386,16 +380,8 @@ script GraceUILogic extends Logic
 				if color ~= nil then e.TextGUIRendererComponent.FontColor = color end
 			end
 			if isvalid(row) then
-				-- 칸 배경: 등급별 이미지 (빈 칸은 전용 이미지)
-				local slotRuid = self.EmptySlotRUID
-				if g ~= nil then
-					slotRuid = g.slot
-					if self._T.hoverSlot == i then slotRuid = g.hover end
-				end
-				if self._T.rowSlot[i] ~= slotRuid then
-					self._T.rowSlot[i] = slotRuid
-					row.SpriteGUIRendererComponent.ImageRUID = DataRef(slotRuid)
-				end
+				_UIButtonLogic:SetSelected(row, line ~= nil and line.lock)
+				_UIButtonLogic:SetDisabled(row, line == nil)
 			end
 			local tag = _EntityService:GetEntityByPath(base .. "/Grade")
 			if o ~= nil and g ~= nil then
@@ -419,7 +405,6 @@ script GraceUILogic extends Logic
 				setText("Step", "", nil)
 			end
 			-- 빈 줄은 잠글 수 없다
-			if isvalid(row) and row.ButtonComponent.Enable ~= (line ~= nil) then row.ButtonComponent.Enable = line ~= nil end
 			local lockIcon = _EntityService:GetEntityByPath(base .. "/LockIcon")
 			if isvalid(lockIcon) then lockIcon:SetEnable(line ~= nil and line.lock) end
 		end

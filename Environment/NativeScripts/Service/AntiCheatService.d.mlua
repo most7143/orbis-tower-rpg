@@ -16,7 +16,17 @@ script AntiCheatService extends Service
 	---@sealed
 	@ReleaseOnly
 	@ExecSpace("ServerOnly")
-	method MODScriptAsyncTask RequestUserAnalysisAndWait(int32 type, string userId) end
+	method MODScriptAsyncTask RequestBanSyncAndWait(int32 type, table param) end
+
+	---@sealed
+	@ReleaseOnly
+	@ExecSpace("ServerOnly")
+	method MODScriptAsyncTask RequestUserAnalysisAndWait(int32 type, string userId, table extra = nil) end
+
+	---@sealed
+	@ReleaseOnly
+	@ExecSpace("ServerOnly")
+	method void RequestUserAnalysisEvent(int32 type, string userId, table extra = nil) end
 
 	---@sealed
 	@ReleaseOnly
@@ -59,5 +69,7 @@ script AntiCheatService extends Service
 	emitter EmitMacroTestReadyEvent(MacroTestReadyEvent event) end
 
 	emitter EmitHackLogActionEvent(HackLogActionEvent event) end
+
+	emitter EmitUserAnalysisEvent(UserAnalysisEvent event) end
 
 end

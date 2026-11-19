@@ -38,9 +38,9 @@ script LobbyUILogic extends Logic
 
 	property string LobbyMapName = "Lobby"
 	-- 메인화면 버튼 (메인화면 리소스): 배경은 SpriteSwap, 아이콘·Label은 자식. 글자색은 상태별로 여기서 바꾼다.
-	property Color LabelNormal = Color(1, 0.953, 0.843, 1)
-	property Color LabelHover = Color(1, 1, 1, 1)
-	property Color LabelPressed = Color(1, 0.886, 0.627, 1)
+	property Color LabelNormal = Color(0.14, 0.17, 0.21, 1)
+	property Color LabelHover = Color(0.10, 0.25, 0.38, 1)
+	property Color LabelPressed = Color(0.10, 0.25, 0.38, 1)
 	property Color LabelDisabled = Color(0.714, 0.714, 0.745, 1)
 	property Color OutlineNormal = Color(0.145, 0.11, 0.212, 1)
 	property Color OutlineDisabled = Color(0.196, 0.196, 0.227, 1)
@@ -126,6 +126,7 @@ script LobbyUILogic extends Logic
 		end
 		if isvalid(rec.label) then
 			local t = rec.label.TextGUIRendererComponent
+			if rec.button == self.btnPlay and not rec.disabled then color = Color(1,1,1,1) end
 			t.FontColor = color
 			if rec.disabled then t.OutlineColor = self.OutlineDisabled else t.OutlineColor = self.OutlineNormal end
 			rec.label.UITransformComponent.anchoredPosition = rec.labelPos + d
@@ -204,7 +205,11 @@ script LobbyUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OpenStageSelect()
-		-- 플레이 버튼: 층 선택 창을 연다 (처음에는 가장 높은 열린 스테이지).
+		-- 플레이 버튼: 새 지역 선택 화면(RegionSelectLogic)을 연다. 예전 층 선택 창은 쓰지 않는다.
+		if _RegionSelectLogic ~= nil then
+			_RegionSelectLogic:Open(0)
+			return
+		end
 		if not isvalid(self.stageRoot) then
 			self:OnPlay()
 			return
@@ -372,10 +377,10 @@ script LobbyUILogic extends Logic
 		local region = names[first] or ""
 		if names[last] ~= nil and names[last] ~= region then region = region .. " ~ " .. names[last] end
 		local state = "도전 가능"
-		local stateColor = Color(1, 0.88, 0.45, 1)
+		local stateColor = Color(0.12, 0.43, 0.69, 1)
 		if n < unlocked then
 			state = "클리어 완료"
-			stateColor = Color(0.6, 0.95, 0.6, 1)
+			stateColor = Color(0.20, 0.48, 0.12, 1)
 		elseif n > unlocked then
 			if self.FloorsPerStage == 1 then
 				state = "잠김 · " .. tostring(n - 1) .. "층 클리어 필요"
@@ -399,7 +404,7 @@ script LobbyUILogic extends Logic
 		end
 		local books = math.floor(self.StageBookBase + n * self.StageBookPerStage)
 		local feathers = math.floor(self.StageFeatherBase + n * self.StageFeatherPerStage)
-		if isvalid(self.stageRewardText) then self.stageRewardText.Text = "클리어 보상: 스킬북 " .. tostring(books) .. " · 여신의 깃털 " .. tostring(feathers) end
+		if isvalid(self.stageRewardText) then self.stageRewardText.Text = "스킬북 " .. tostring(books) .. " · 깃털 " .. tostring(feathers) .. " · 계정 EXP " .. tostring(_AccountRules:ClearExp(first)) end
 		local eng = self:GetEntryEnergy()
 		local canEnter = eng ~= nil and eng.Loaded and eng.EnergyLoaded and eng.Energy >= eng.EnergyCost
 		self:SetStageButton(self.btnStageEnter, n > unlocked or not canEnter)
@@ -432,7 +437,7 @@ script LobbyUILogic extends Logic
 					row.TextGUIRendererComponent.Text = label .. "\n" .. status
 					-- 선택 색은 바로 바꾸지 않고 OnUpdate에서 부드럽게 바뀐다
 					if self._T.rowColor == nil then self._T.rowColor = {} end
-					self._T.rowColor[i] = i == n and Color(0.28, 0.43, 0.72, 1) or Color(0.18, 0.14, 0.28, 1)
+					self._T.rowColor[i] = i == n and Color(0.84, 0.93, 1, 1) or Color(1, 1, 1, 1)
 					row.TextGUIRendererComponent.FontColor = i > unlocked and Color(0.62, 0.61, 0.67, 1) or self.LabelNormal
 				end
 			end
@@ -441,16 +446,12 @@ script LobbyUILogic extends Logic
 		self:SetStageButton(self.btnStageNext, n >= self:MaxStage())
 	end
 
-	@ExecSpace("ClientOnly")
-	method void SetStageButton(ButtonComponent button, boolean disabled)
-		-- 층 선택 창 버튼 비활성: 클릭 막고 배경·글자를 어둡게.
-		if not isvalid(button) then return end
-		button.Enable = not disabled
-		local sp = button.Entity.SpriteGUIRendererComponent
-		if isvalid(sp) then sp.Color = disabled and Color(0.45, 0.45, 0.5, 1) or Color(1, 1, 1, 1) end
-		local tx = button.Entity.TextGUIRendererComponent
-		if isvalid(tx) then tx.FontColor = disabled and self.LabelDisabled or self.LabelNormal end
-	end
+@ExecSpace("ClientOnly")
+    method void SetStageButton(ButtonComponent button, boolean disabled)
+        -- 상태 이미지와 실제 입력을 공통 버튼 로직으로 함께 제어한다.
+        if not isvalid(button) then return end
+        _UIButtonLogic:SetDisabled(button.Entity,disabled)
+    end
 
 	@ExecSpace("ClientOnly")
 	method void OnPlay()
@@ -500,30 +501,42 @@ script LobbyUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void RefreshEnergy()
-		-- 우측 상단: 보유량, 입장 가능 횟수, 다음 1개 충전까지 남은 시간.
+		-- 메인에서는 보유량과 다음 충전 시간만 표시한다. 입장 비용은 스테이지 입장 버튼에서 안내한다.
 		local eng = self:GetEntryEnergy()
 		local ready = eng ~= nil and eng.EnergyLoaded
-		local count = "-- / 30"
-		local entries = "불러오는 중"
+		local count = "--/30"
 		local timer = ""
+		local charging = ready and eng.Energy < eng.EnergyMax
 		if ready then
-			count = tostring(eng.Energy) .. " / " .. tostring(eng.EnergyMax)
-			entries = "입장 가능 " .. tostring(math.floor(eng.Energy / eng.EnergyCost)) .. "회 · 1회 " .. tostring(eng.EnergyCost) .. "개"
-			if eng.Energy >= eng.EnergyMax then
-				timer = "충전 완료"
-			else
-				local left = math.max(0, eng.EnergyRemaining)
-				timer = string.format("다음 충전 %02d:%02d  (+1)", math.floor(left / 60), left % 60)
+			count = tostring(eng.Energy) .. "/" .. tostring(eng.EnergyMax)
+			if charging then
+				local left = math.max(0, math.ceil(eng.EnergyRemaining))
+				timer = string.format("%02d:%02d", math.floor(left / 60), left % 60)
 			end
 		end
-		if isvalid(self.energyCountText) then self.energyCountText.Text = count end
-		if isvalid(self.energyEntriesText) then self.energyEntriesText.Text = entries end
-		if isvalid(self.energyTimerText) then self.energyTimerText.Text = timer end
+		if isvalid(self.energyCountText) then
+			self.energyCountText.Text = count
+			local inset = self.energyCountText.Entity.Parent
+			local height = charging and 96 or 64
+			local y = charging and 14 or 0
+			self.energyCountText.Entity.UITransformComponent.anchoredPosition = Vector2(20, y)
+			if inset.UITransformComponent.RectSize.y ~= height then
+				inset.UITransformComponent.RectSize = Vector2(232, height)
+				inset.Parent.UITransformComponent.RectSize = Vector2(232, height)
+			end
+			local icon = inset:GetChildByName("Icon")
+			if isvalid(icon) then icon.UITransformComponent.anchoredPosition = Vector2(-84, y) end
+		end
+		if isvalid(self.energyEntriesText) then self.energyEntriesText.Entity:SetEnable(false) end
+		if isvalid(self.energyTimerText) then
+			self.energyTimerText.Text = timer
+			if self.energyTimerText.Entity.Enable ~= charging then self.energyTimerText.Entity:SetEnable(charging) end
+		end
 		local sig = ready and (tostring(eng.Energy) .. ":" .. tostring(eng.Loaded)) or "loading"
 		if self._T.energySignature ~= sig then
 			self._T.energySignature = sig
 			if isvalid(self.stageRoot) and self.stageRoot.Enable then self:RefreshStage() end
-			log("[VRF] energy HUD count=" .. count .. " entries=" .. entries .. " timer=" .. timer)
+			log("[VRF] compact energy count=" .. count .. " timer=" .. timer .. " charging=" .. tostring(charging))
 		end
 	end
 

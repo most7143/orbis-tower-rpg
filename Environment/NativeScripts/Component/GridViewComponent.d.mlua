@@ -14,8 +14,9 @@ script GridViewComponent extends Component
 	---@sealed
 	property GridViewFixedType FixedType
 
+	---@description "The orientation of the horizontal scrollbar."
 	---@sealed
-	property HorizontalScrollBarDirection HorizontalDirection = HorizontalScrollBarDirection.LeftToRight
+	property HorizontalScrollBarDirection HorizontalScrollBarDirection = HorizontalScrollBarDirection.LeftToRight
 
 	---@description "The source that will be cloned when creating a child UI Entity. Entity set as ItemEntity is disabled."
 	---@sealed
@@ -33,26 +34,33 @@ script GridViewComponent extends Component
 	---@sealed
 	property RectOffset Padding
 
+	---@description "The background color of the scrollbar."
 	---@sealed
-	property Color BackgroundColor = Color(1.000, 1.000, 1.000, 0.000)
+	property Color ScrollBarBackgroundColor = Color(1.000, 1.000, 1.000, 0.000)
 
+	---@description "The background image of the scrollbar."
 	---@sealed
-	property DataRef BackgroundImageRUID
+	property DataRef ScrollBarBackgroundImageRUID
 
+	---@description "The handle color of the scrollbar."
 	---@sealed
-	property Color HandleColor = Color(0.725, 0.710, 0.698, 1.000)
+	property Color ScrollBarHandleColor = Color(0.725, 0.710, 0.698, 1.000)
 
+	---@description "The handle image of the scrollbar."
 	---@sealed
-	property DataRef HandleImageRUID
+	property DataRef ScrollBarHandleImageRUID
 
+	---@description "Sets the action method when the scroll bar leaves the boundary."
 	---@sealed
-	property ScrollBarMovementType MovementType = ScrollBarMovementType.Elastic
+	property ScrollBarMovementType ScrollBarMovementType = ScrollBarMovementType.Elastic
 
+	---@description "The thickness of the scrollbar area."
 	---@sealed
-	property float Thickness = 10
+	property float ScrollBarThickness = 10
 
+	---@description "Sets whether to display the scrollbar automatically."
 	---@sealed
-	property ScrollBarVisibility Visible
+	property ScrollBarVisibility ScrollBarVisible
 
 	---@description "The spacing between child UI Entities."
 	---@sealed
@@ -66,8 +74,9 @@ script GridViewComponent extends Component
 	---@sealed
 	property boolean UseScroll = true
 
+	---@description "The orientation of the vertical scrollbar."
 	---@sealed
-	property VerticalScrollBarDirection VerticalDirection = VerticalScrollBarDirection.BottomToTop
+	property VerticalScrollBarDirection VerticalScrollBarDirection = VerticalScrollBarDirection.BottomToTop
 
 	---@description "Returns the normalized position of the scroll bar."
 	---@sealed

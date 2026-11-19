@@ -1,0 +1,19 @@
+---@sealed
+---@description "Indicates how the user entered the world."
+@Enum
+script UserEnterType
+	---@description "Entered the world through the MapleStory Worlds website or client."
+	member Normal = 0
+	---@description "Entered the world through the warp function. This refers to cases where TeleportService's WarpUserToWorld(), WarpUserToWorldInstance(), WarpAdminToWorldInstance(), or similar functions are used."
+	member Warp = 1
+	---@description "Entered the world through MatchmakingService."
+	member MatchMaking = 2
+	---@description "Re-entered an instance of the same world due to a server migration."
+	member Migrate = 3
+
+	---@description "Converts numbers to the applicable type."
+	static method UserEnterType CastFrom(number value) end
+
+	---@description "Converts strings to the applicable type."
+	static method UserEnterType CastFrom(string value) end
+end

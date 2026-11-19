@@ -15,6 +15,11 @@ script CameraService extends Service
 	---@sealed
 	readonly property float currentZoomRatio = 100
 
+	---@description "Immediately completes the camera transition started by SwitchCameraTo() and applies the target state right away."
+	---@sealed
+	@ExecSpace("ClientOnly")
+	method void CompleteTransitionBlend() end
+
 	---@description "Returns the CameraComponent currently being applied."
 	---@sealed
 	@ExecSpace("ClientOnly")

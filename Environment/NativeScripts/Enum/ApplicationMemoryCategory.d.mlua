@@ -6,6 +6,10 @@ script ApplicationMemoryCategory
 	member Lua = 0
 	---@description "Memory used internally by the MapleStory Worlds engine. Increases with the size of loaded resources and with the number of entities placed in the world. "
 	member Native = 1
+	---@description "Estimated amount of texture memory used by loaded image resources."
+	member Texture = 2
+	---@description "Estimated amount of audio memory used by loaded audio resources."
+	member Audio = 3
 
 	---@description "Converts numbers to the applicable type."
 	static method ApplicationMemoryCategory CastFrom(number value) end

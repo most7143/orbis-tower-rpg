@@ -1,0 +1,692 @@
+@Logic
+script RegionSelectLogic extends Logic
+
+	-- 지역 선택 화면 (LobbyUI Root/RegionSelect). 왼쪽 지역 목록(가상 스크롤 6칸), 오른쪽 상세(몬스터·별 미션·보상), 아래 구간 보상, 입장.
+	-- 선택만으로는 입장·에너지 소모가 없고 입장 버튼으로만 들어간다. 별·구간 수령 판정은 서버(PlayerEngrave)가 한다.
+	property string Base = "/ui/LobbyUI/Root/RegionSelect"
+	property number RowH = 88
+	property integer Slots = 6
+	property number ViewH = 432
+	property integer SectionSize = 10
+	property string SectionThresholds = "10|20|30"
+	property number StarTimeLimit = 600
+	-- 행 이미지 (기본·호버·누름·선택·선택 호버·선택 누름·비활성)
+	property string RowNormal = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string RowHighlight = "e9f1678141ff4a57bf17d5cf52e0a27b"
+	property string RowPressed = "1ee26fe6cab54961b986f0c552838954"
+	property string RowSelected = "1e130afe90a842028aed70edadbfb9f1"
+	property string RowSelectedHighlight = "9c050999cae047ffb4181315d7f321af"
+	property string RowSelectedPressed = "0049a1c1e17e4ac29de951a509838cd4"
+	property string StarFilled = "eb887abdd8834b78a419c3735cf43463"
+	property string StarEmpty = "1388fa0aaf29410dbd0cf148eed14d9d"
+	property string IconCheck = "f7edc578e4b84a40acac3264a277a3c9"
+	property string IconCheckSelected = "c31d3b5b5d5d4c868a6889c537fbfba8"
+	property string IconLock = "f190dca8fa0c4209b38eee869bd5e4ea"
+	property string ChestClaimed = "88bbe8bb3d9e4116868796ba3b2e34d8"
+	property string ChestLocked = "1cc85aefbfdb4f07b2b9d4da3e3a4fd2"
+	property string ChestReward = "7269636979ec41ebaf1828601e572c30"
+	property string CompactNormal = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string CompactDisabled = "d262f8e8502e4b7b88f381a9b7a4e4fb"
+	-- 결과 화면 '지역 선택으로'에서 로비에 도착하면 이 층을 골라 연다 (0 = 없음)
+	property integer PendingOpenFloor = 0
+
+	@HideFromInspector
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string sub)
+		-- 화면 안 엔티티 (경로: RegionSelect/sub).
+		return _EntityService:GetEntityByPath(self.Base .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void On(Entity e, any evt, any fn)
+		-- 이벤트 연결 + 해제용 기록.
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(evt, fn)
+		table.insert(self.handlers, { e = e, evt = evt, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnClick(string sub, any fn)
+		-- 버튼 클릭 (클릭음 포함).
+		self:On(self:E(sub), ButtonClickEvent, function() local e=self:E(sub) if not e.EnabledInHierarchy or not e.ButtonComponent.Enable then return end _UISoundLogic:PlayClick() fn() end)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 버튼·행·스크롤 입력 연결. 처음엔 숨긴다.
+		self.handlers = {}
+		self._T.rowState = {}
+		self:OnClick("back", function() self:Close() end)
+		self:OnClick("prev", function() self:Select((self._T.sel or 1) - 1, true) end)
+		self:OnClick("next", function() self:Select((self._T.sel or 1) + 1, true) end)
+		self:OnClick("currentRegion", function() self:Select(self:Unlocked(), true) end)
+		self:OnClick("enter", function() self:Enter() end)
+		for i = 0, 2 do
+			local tier = i + 1
+			self:OnClick("sectionChestButton" .. tostring(i), function() self:Claim(tier) end)
+		end
+		for k = 0, self.Slots - 1 do
+			local slot = k
+			local row = self:E("ListView/Row" .. tostring(k))
+			if isvalid(row) then
+				self._T.rowState[k] = { hover = false, pressed = false }
+				self:On(row, ButtonClickEvent, function()
+					if self._T.dragged then return end
+					_UISoundLogic:PlayClick()
+					self:Select(self:SlotIndex(slot), false)
+				end)
+				self:On(row, UITouchEnterEvent, function() self._T.rowState[slot].hover = true self:PaintRow(slot) end)
+				self:On(row, UITouchExitEvent, function() self._T.rowState[slot].hover = false self._T.rowState[slot].pressed = false self:PaintRow(slot) end)
+				self:On(row, UITouchDownEvent, function() self._T.rowState[slot].pressed = true self._T.dragged = false self._T.dragSum = 0 self:PaintRow(slot) end)
+				self:On(row, UITouchUpEvent, function() self._T.rowState[slot].pressed = false self:PaintRow(slot) end)
+				self:On(row, UITouchDragEvent, function(e) self:DragBy(e.TouchDelta.y) end)
+			end
+		end
+		self:On(self:E("scrollTrack/scrollThumb"), UITouchDragEvent, function(e)
+			-- 스크롤 손잡이 드래그: 손잡이 이동량을 목록 이동량으로 환산
+			local range = self:MaxScroll()
+			if range <= 0 then return end
+			local scale = self:UIScale()
+			self._T.scrollTarget = math.max(0, math.min(range, (self._T.scrollTarget or 0) - e.TouchDelta.y / scale * range / (self.ViewH - 80)))
+		end)
+		self._T.wheel = _InputService:ConnectEvent(MouseScrollEvent, function(e) self:Wheel(e.ScrollDelta) end)
+		local root = _EntityService:GetEntityByPath(self.Base)
+		if isvalid(root) then root:SetEnable(false) end
+		-- 설정값 (서버와 같은 RunConfig)
+		local cfg = _DataService:GetTable("RunConfig")
+		if cfg ~= nil then
+			for i = 1, cfg:GetRowCount() do
+				if cfg:GetCell(i, "Key") == "StarTimeLimit" then self.StarTimeLimit = tonumber(cfg:GetCell(i, "Value")) or self.StarTimeLimit end
+			end
+		end
+		log("[VRF] RegionSelectLogic begin handlers=" .. tostring(#self.handlers))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 이벤트 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.e) then r.e:DisconnectEvent(r.evt, r.h) end
+		end
+		self.handlers = {}
+		if self._T.wheel ~= nil then _InputService:DisconnectEvent(MouseScrollEvent, self._T.wheel) self._T.wheel = nil end
+	end
+
+	@ExecSpace("ClientOnly")
+	method number UIScale()
+		-- 화면 픽셀 → UI 단위 비율 (1920 기준 캔버스).
+		local w = _UILogic.ScreenWidth
+		if w == nil or w <= 0 then return 1 end
+		return w / 1920
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component Engrave()
+		-- 로컬 플레이어 저장 정보 (별·에너지·클리어 층).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadData()
+		-- 층 이름·몬스터를 한 번 읽는다 (FloorTable 순서가 목록 순서).
+		if self._T.floors ~= nil then return end
+		self._T.floors = {}
+		local mons = {}
+		local mt = _DataService:GetTable("MonsterTable")
+		if mt ~= nil then
+			for i = 1, mt:GetRowCount() do mons[mt:GetCell(i, "id")] = { name = mt:GetCell(i, "Name") or "", stand = mt:GetCell(i, "StandRUID") or "" } end
+		end
+		local ft = _DataService:GetTable("FloorTable")
+		if ft ~= nil then
+			for i = 1, ft:GetRowCount() do
+				local m = mons[ft:GetCell(i, "MonsterId")] or { name = "", stand = "" }
+				-- 이 층에 나올 수 있는 몬스터 전부 (MonsterIds 순서)
+				local list = {}
+				for id in string.gmatch(ft:GetCell(i, "MonsterIds") or "", "[^|]+") do
+					if mons[id] ~= nil then table.insert(list, mons[id]) end
+				end
+				if #list == 0 and m.name ~= "" then table.insert(list, m) end
+				table.insert(self._T.floors, { name = ft:GetCell(i, "FloorName") or (tostring(i) .. "층"), mon = m.name, stand = m.stand, pano = ft:GetCell(i, "PanoRUID") or "", mons = list })
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer Count()
+		-- 목록 항목 수.
+		self:LoadData()
+		return #self._T.floors
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer Unlocked()
+		-- 도전 가능한 가장 높은 층 = 클리어한 층 + 1.
+		local eng = self:Engrave()
+		local cleared = eng ~= nil and eng.ClearedFloor or 0
+		return math.max(1, math.min(self:Count(), cleared + 1))
+	end
+
+	@ExecSpace("ClientOnly")
+	method table StarMap()
+		-- 서버가 보낸 "층:비트" 문자열을 표로 (바뀔 때만 다시 읽음).
+		local eng = self:Engrave()
+		local raw = eng ~= nil and eng.StarData or ""
+		if self._T.starRaw ~= raw then
+			self._T.starRaw = raw
+			local t = {}
+			for f, b in string.gmatch(raw, "(%d+):(%d+)") do t[math.floor(tonumber(f))] = math.floor(tonumber(b)) end
+			self._T.starMap = t
+		end
+		return self._T.starMap or {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer ClaimBits(integer section)
+		-- 구간 수령 비트.
+		local eng = self:Engrave()
+		local raw = eng ~= nil and eng.SectionData or ""
+		for s, b in string.gmatch(raw, "(%d+):(%d+)") do
+			if math.floor(tonumber(s)) == section then return math.floor(tonumber(b)) end
+		end
+		return 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer StarCount(integer bits)
+		-- 비트 안 별 개수.
+		local n = 0
+		if bits & 1 ~= 0 then n = n + 1 end
+		if bits & 2 ~= 0 then n = n + 1 end
+		if bits & 4 ~= 0 then n = n + 1 end
+		return n
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer Threshold(integer tier)
+		-- 구간 상자 기준 별.
+		local i = 0
+		for v in string.gmatch(self.SectionThresholds, "[^|]+") do
+			i = i + 1
+			if i == tier then return math.floor(tonumber(v) or 0) end
+		end
+		return 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open(integer floor)
+		-- 화면 열기: 지정 층(0이면 현재 도전 층)을 고르고 스크롤을 맞춘 뒤 등장 연출.
+		local root = _EntityService:GetEntityByPath(self.Base)
+		if not isvalid(root) then return end
+		self:LoadData()
+		root:SetEnable(true)
+		if floor <= 0 then floor = self:Unlocked() end
+		self._T.sel = math.max(1, math.min(self:Count(), floor))
+		self:CenterOn(self._T.sel, true)
+		self._T.claiming = false
+		self._T.entering = false
+		self:Refresh()
+		self._T.openT = 0
+		self:ApplyOpen(0)
+		log("[VRF] region select open floor=" .. tostring(self._T.sel) .. " unlocked=" .. tostring(self:Unlocked()) .. " count=" .. tostring(self:Count()))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 화면 닫기.
+		local root = _EntityService:GetEntityByPath(self.Base)
+		if isvalid(root) then root:SetEnable(false) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsOpen()
+		-- 열려 있는지.
+		local root = _EntityService:GetEntityByPath(self.Base)
+		return isvalid(root) and root.Enable
+	end
+
+	@ExecSpace("ClientOnly")
+	method number MaxScroll()
+		-- 목록 최대 스크롤량.
+		return math.max(0, self:Count() * self.RowH - self.ViewH)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CenterOn(integer index, boolean instant)
+		-- 해당 항목이 목록 가운데쯤 오도록 스크롤.
+		local target = math.max(0, math.min(self:MaxScroll(), (index - 1) * self.RowH - (self.ViewH - self.RowH) / 2))
+		self._T.scrollTarget = target
+		if instant then self._T.scroll = target end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Wheel(number delta)
+		-- 마우스 휠: 목록 위에 커서가 있을 때만.
+		if not self:IsOpen() then return end
+		local view = self:E("ListView")
+		if not isvalid(view) then return end
+		local tr = view.UITransformComponent
+		local p = _UILogic:ScreenToLocalUIPosition(_InputService:GetCursorPosition(), tr)
+		if math.abs(p.x) > tr.RectSize.x / 2 or math.abs(p.y) > tr.RectSize.y / 2 then return end
+		self._T.scrollTarget = math.max(0, math.min(self:MaxScroll(), (self._T.scrollTarget or 0) - delta * self.RowH * 1.5))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void DragBy(number dy)
+		-- 행 위에서 드래그: 목록을 손가락 따라 이동 (조금이라도 움직이면 클릭은 무시).
+		local d = dy / self:UIScale()
+		self._T.dragSum = (self._T.dragSum or 0) + math.abs(d)
+		if self._T.dragSum > 12 then self._T.dragged = true end
+		local s = math.max(0, math.min(self:MaxScroll(), (self._T.scroll or 0) + d))
+		self._T.scroll = s
+		self._T.scrollTarget = s
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer SlotIndex(integer slot)
+		-- 행 칸 → 항목 번호.
+		return math.floor((self._T.scroll or 0) / self.RowH) + slot + 1
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Select(integer index, boolean scroll)
+		-- 지역 선택: 상세만 바뀌고 입장·에너지 소모 없음.
+		local n = math.max(1, math.min(self:Count(), index))
+		self._T.sel = n
+		if scroll then self:CenterOn(n, false) end
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PaintRow(integer slot)
+		-- 행 이미지: 선택 여부 × 입력 상태 조합 (엔진 SpriteSwap 대신 직접).
+		local row = self:E("ListView/Row" .. tostring(slot))
+		if not isvalid(row) then return end
+		local st = self._T.rowState[slot] or {}
+		local selected = self:SlotIndex(slot) == self._T.sel
+		local ruid = self.RowNormal
+		if selected then
+			ruid = self.RowSelected
+			if st.pressed then ruid = self.RowSelectedPressed elseif st.hover then ruid = self.RowSelectedHighlight end
+		else
+			if st.pressed then ruid = self.RowPressed elseif st.hover then ruid = self.RowHighlight end
+		end
+		local sp = row.SpriteGUIRendererComponent
+		if sp.ImageRUID.DataId ~= ruid then sp.ImageRUID = DataRef(ruid) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetStars(string prefix, integer bits)
+		-- 별 3개 그림 (prefix0~2).
+		for j = 0, 2 do
+			local s = self:E(prefix .. tostring(j))
+			if isvalid(s) then
+				local want = (bits & (1 << j)) ~= 0 and self.StarFilled or self.StarEmpty
+				if s.SpriteGUIRendererComponent.ImageRUID.DataId ~= want then s.SpriteGUIRendererComponent.ImageRUID = DataRef(want) end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string sub, string text, Color color)
+		-- 글자 바꾸기 (색은 nil이면 그대로).
+		local e = self:E(sub)
+		if not isvalid(e) then return end
+		local t = e.TextGUIRendererComponent
+		if t.Text ~= text then t.Text = text end
+		if color ~= nil then t.FontColor = color end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetImage(string sub, string ruid)
+		-- 그림 바꾸기 (빈 값이면 숨김).
+		local e = self:E(sub)
+		if not isvalid(e) then return end
+		if ruid == "" then
+			if e.Enable then e:SetEnable(false) end
+			return
+		end
+		if not e.Enable then e:SetEnable(true) end
+		local sp = e.SpriteGUIRendererComponent
+		if sp.ImageRUID.DataId ~= ruid then sp.ImageRUID = DataRef(ruid) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LayoutRows()
+		-- 가상 스크롤: 6칸 행을 스크롤 위치에 맞춰 배치하고 내용을 채운다.
+		local s = self._T.scroll or 0
+		local first = math.floor(s / self.RowH)
+		local frac = s - first * self.RowH
+		local unlocked = self:Unlocked()
+		local stars = self:StarMap()
+		local count = self:Count()
+		for k = 0, self.Slots - 1 do
+			local row = self:E("ListView/Row" .. tostring(k))
+			if isvalid(row) then
+				local idx = first + k + 1
+				local show = idx <= count
+				if row.Enable ~= show then row:SetEnable(show) end
+				if show then
+					row.UITransformComponent.anchoredPosition = Vector2(0, self.ViewH / 2 - 40 - k * self.RowH + frac)
+					local key = tostring(idx) .. ":" .. tostring(stars[idx] or 0) .. ":" .. tostring(self._T.sel) .. ":" .. tostring(unlocked)
+					if self._T.rowKey == nil then self._T.rowKey = {} end
+					if self._T.rowKey[k] ~= key then
+						self._T.rowKey[k] = key
+						local f = self._T.floors[idx]
+						local locked = idx > unlocked
+						local p = "ListView/Row" .. tostring(k)
+						self:SetText(p .. "/Row" .. tostring(k) .. "Name", f.name, locked and Color(0.48, 0.52, 0.58, 1) or Color(0.14, 0.17, 0.21, 1))
+						self:SetStars(p .. "/Row" .. tostring(k) .. "Star", stars[idx] or 0)
+						local status = ""
+						if idx == self._T.sel then status = self.IconCheckSelected
+						elseif locked then status = self.IconLock
+						elseif idx < unlocked then status = self.IconCheck end
+						self:SetImage(p .. "/Row" .. tostring(k) .. "Status", status)
+						self:PaintRow(k)
+					end
+				end
+			end
+		end
+		-- 스크롤 손잡이
+		local thumb = self:E("scrollTrack/scrollThumb")
+		if isvalid(thumb) then
+			local range = self:MaxScroll()
+			local t = range > 0 and s / range or 0
+			thumb.UITransformComponent.anchoredPosition = Vector2(0, (self.ViewH - 80) / 2 - t * (self.ViewH - 80))
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillMonsters(integer n, table list)
+		-- 등장 몬스터: 층에 나올 수 있는 몬스터를 모두 칸에 채운다 (6마리가 넘으면 가로로 스크롤). 층이 바뀌면 맨 앞으로.
+		if self._T.monFloor == n then return end
+		self._T.monFloor = n
+		for i = 0, 17 do
+			local slot = self:E("monsterList/Mon" .. tostring(i))
+			if isvalid(slot) then
+				local m = list[i + 1]
+				slot:SetEnable(m ~= nil)
+				if m ~= nil then
+					local icon = slot:GetChildByName("Icon")
+					icon.SpriteGUIRendererComponent.ImageRUID = m.stand ~= "" and ("thumbnail://" .. m.stand) or ""
+					icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, m.stand ~= "" and 1 or 0)
+					slot:GetChildByName("Name").TextGUIRendererComponent.Text = m.name
+				end
+			end
+		end
+		local view = self:E("monsterList")
+		if isvalid(view) then
+			view.ScrollLayoutGroupComponent:SetScrollNormalizedPosition(UITransformAxis.Horizontal, 0)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 목록·상세·구간 보상·입장 버튼 전체 갱신.
+		if not self:IsOpen() then return end
+		self._T.rowKey = {}
+		self:LayoutRows()
+		local n = self._T.sel or 1
+		local f = self._T.floors[n] or { name = "", mon = "", stand = "", bg = "" }
+		local unlocked = self:Unlocked()
+		local bits = self:StarMap()[n] or 0
+		local locked = n > unlocked
+		-- 상단·목록 머리
+		self:SetText("title", "오르비스탑 탐험", nil)
+		self:SetText("regionPlaque/regionPlaqueLabel", "지역 선택", nil)
+		self:SetText("regionFilter/regionFilterText", tostring(n) .. " / " .. tostring(self:Count()), nil)
+		self:SetText("back/backLabel", "메인으로", nil)
+		self:SetText("currentRegion/currentRegionText", "현재 도전 지역으로", nil)
+		-- 상세: 지역 이름·별·몬스터
+		local pano = "panoramaFrame/Panorama/"
+		self:SetText(pano .. "regionDetailName", f.name, nil)
+		self:SetStars(pano .. "detailStar", bits)
+		-- 파노라마 배경: 그 층 대표 맵의 배경을 캡처한 그림 (없으면 하늘색 바탕)
+		local sky = self:E(pano .. "Sky")
+		if isvalid(sky) and self._T.panoBg ~= (f.pano or "") then
+			self._T.panoBg = f.pano or ""
+			local r = sky.SpriteGUIRendererComponent
+			if f.pano ~= nil and f.pano ~= "" then
+				r.ImageRUID = f.pano
+				r.Color = Color(1, 1, 1, 1)
+			else
+				r.ImageRUID = ""
+				r.Color = Color(0.33, 0.46, 0.72, 1)
+			end
+		end
+		self:SetText("monsterLabel", "등장 몬스터", nil)
+		self:FillMonsters(n, f.mons or {})
+		-- 별 미션 3개 (공통 조건)
+		self:SetText("missionLabel", "별 미션", nil)
+		local mins = math.floor(self.StarTimeLimit / 60)
+		local names = { "스테이지 클리어", "제한 시간 내 클리어 (" .. tostring(mins) .. "분)", "체력 50% 이상으로 클리어" }
+		for j = 0, 2 do
+			local done = (bits & (1 << j)) ~= 0
+			self:SetText("missionTable/missionText" .. tostring(j), names[j + 1], nil)
+			self:SetText("missionTable/missionState" .. tostring(j), done and "달성" or "미달성", done and Color(0.20, 0.48, 0.12, 1) or Color(0.42, 0.46, 0.51, 1))
+		end
+		self:SetStars("missionTable/missionStar", bits)
+		self:SetText("clearRewardsTitle", "클리어 보상", nil)
+		self:SetText("possibleRewardsTitle", "획득 가능 아이템", nil)
+		-- 구간 보상 (선택한 층이 속한 구간)
+		local section = math.floor((n - 1) / self.SectionSize) + 1
+		local total = 0
+		local sm = self:StarMap()
+		for fl = (section - 1) * self.SectionSize + 1, section * self.SectionSize do total = total + self:StarCount(sm[fl] or 0) end
+		local maxStars = self:Threshold(3)
+		local first = (section - 1) * self.SectionSize + 1
+		self:SetText("sectionTitle", "구간별 보상", nil)
+		self:SetText("sectionCountPill/sectionCount", tostring(total) .. " / " .. tostring(maxStars), nil)
+		if (self._T.hintTime or 0) <= 0 then
+			self:SetText("sectionHint", tostring(first) .. "~" .. tostring(section * self.SectionSize) .. "번째 지역", nil)
+		end
+		local fill = self:E("sectionGauge/sectionGaugeFill")
+		if isvalid(fill) then fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, total / math.max(1, maxStars))) end
+		local claimed = self:ClaimBits(section)
+		for i = 0, 2 do
+			local need = self:Threshold(i + 1)
+			local got = (claimed & (1 << i)) ~= 0
+			local ready = not got and total >= need
+			local p = "sectionChestButton" .. tostring(i)
+			local btn = self:E(p)
+			if isvalid(btn) then
+				btn.ButtonComponent.Enable = ready and not self._T.claiming
+				btn.SpriteGUIRendererComponent.ImageRUID = DataRef(ready and self.CompactNormal or self.CompactDisabled)
+			end
+			self:SetText(p .. "/sectionChestThreshold" .. tostring(i), tostring(need), nil)
+			self:SetImage(p .. "/sectionChestIcon" .. tostring(i), got and self.ChestClaimed or (ready and self.ChestReward or self.ChestLocked))
+			self:SetImage(p .. "/sectionChestStatus" .. tostring(i), got and self.IconCheck or (ready and "" or self.IconLock))
+		end
+		-- 입장 버튼: 잠김·에너지 부족·요청 중이면 비활성
+		local eng = self:Engrave()
+		local canPay = eng ~= nil and eng.Loaded and eng.EnergyLoaded and eng.Energy >= eng.EnergyCost
+		local enter = self:E("enter")
+		if isvalid(enter) then enter.ButtonComponent.Enable = not locked and canPay and not self._T.entering end
+		local label = "입장"
+		if locked then label = "잠긴 지역" elseif eng ~= nil and eng.EnergyLoaded and not canPay then label = "에너지 부족" end
+		local textColor = (not locked and canPay) and Color(1, 0.957, 0.843, 1) or Color(0.42, 0.46, 0.51, 1)
+		self:SetText("enter/enterText", label, textColor)
+		self:SetText("enter/enterCost", "에너지 " .. tostring(eng ~= nil and eng.EnergyCost or 3), textColor)
+		-- 이전·다음
+		local prev = self:E("prev")
+		if isvalid(prev) then prev.ButtonComponent.Enable = n > 1 end
+		local nxt = self:E("next")
+		if isvalid(nxt) then nxt.ButtonComponent.Enable = n < self:Count() end
+		self:RefreshEnergy()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshEnergy()
+		-- 우측 상단 에너지·다음 충전 시간.
+		local eng = self:Engrave()
+		if eng == nil or not eng.EnergyLoaded then
+			self:SetText("energyPill/energy", "-- / 30", nil)
+			self:SetText("energyTimer", "불러오는 중", nil)
+			return
+		end
+		self:SetText("energyPill/energy", tostring(eng.Energy) .. " / " .. tostring(eng.EnergyMax), nil)
+		if eng.Energy >= eng.EnergyMax then
+			self:SetText("energyTimer", "충전 완료", nil)
+		else
+			local left = math.max(0, eng.EnergyRemaining)
+			self:SetText("energyTimer", string.format("다음 충전 %02d:%02d", math.floor(left / 60), left % 60), nil)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Hint(string msg)
+		-- 구간 보상 안내 줄에 잠깐 메시지.
+		self:SetText("sectionHint", msg, nil)
+		self._T.hintTime = 2.5
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Claim(integer tier)
+		-- 상자 수령 요청 (서버가 판정·지급). 응답이 올 때까지 다시 누를 수 없다.
+		if self._T.claiming then return end
+		local eng = self:Engrave()
+		if eng == nil then return end
+		local section = math.floor(((self._T.sel or 1) - 1) / self.SectionSize) + 1
+		self._T.claiming = true
+		self._T.claimSeq = eng.ClaimSeq
+		self._T.claimTimeout = 5
+		eng:RequestClaimSection(section, tier)
+		self:Refresh()
+		log("[VRF] claim request section=" .. tostring(section) .. " tier=" .. tostring(tier))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Enter()
+		-- 입장: 잠긴 지역·에너지 부족이면 막고, 아니면 로비 서버에 입장 요청 (에너지는 서버가 차감).
+		local n = self._T.sel or 1
+		if n > self:Unlocked() or self._T.entering then return end
+		local eng = self:Engrave()
+		if eng == nil or not eng.Loaded or not eng.EnergyLoaded then self:Hint("입장 에너지를 불러오는 중입니다") return end
+		if eng.Energy < eng.EnergyCost then self:Hint("입장 에너지가 부족합니다") return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return end
+		local lobby = player.CurrentMap:GetComponent("script.LobbyManager")
+		if lobby == nil then return end
+		self._T.entering = true
+		self:Refresh()
+		_ScreenFadeLogic:FadeOut(function()
+			self:Close()
+			lobby:RequestPlay(n)
+		end)
+		log("[VRF] region enter floor=" .. tostring(n))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyOpen(number t)
+		-- 등장 연출: 목록은 왼쪽에서, 상세는 오른쪽에서 밀려 들어오고, 아래 패널은 올라오며, 입장 버튼은 튀어나온다.
+		local function ease(x) x = math.max(0, math.min(1, x)) return 1 - (1 - x) ^ 3 end
+		local function back(x)
+			x = math.max(0, math.min(1, x))
+			return 1 + 2.70158 * (x - 1) ^ 3 + 1.70158 * (x - 1) ^ 2
+		end
+		if self._T.basePos == nil then
+			self._T.basePos = {}
+			for _, k in ipairs({ "listPanel", "detailPanel", "sectionRewards", "ListView", "scrollTrack", "regionPlaque", "prev", "next", "regionFilter", "currentRegion", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2" }) do
+				local e = self:E(k)
+				if isvalid(e) then self._T.basePos[k] = e.UITransformComponent.anchoredPosition end
+			end
+		end
+		local left = { "listPanel", "ListView", "scrollTrack", "regionPlaque", "prev", "next", "regionFilter", "currentRegion" }
+		local right = { "detailPanel", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather" }
+		local bottom = { "sectionRewards", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2" }
+		local kl = ease(t / 0.35)
+		local kr = ease((t - 0.06) / 0.35)
+		local kb = ease((t - 0.12) / 0.35)
+		for _, k in ipairs(left) do
+			local e = self:E(k)
+			local p = self._T.basePos[k]
+			if isvalid(e) and p ~= nil then e.UITransformComponent.anchoredPosition = Vector2(p.x - 80 * (1 - kl), p.y) end
+		end
+		for _, k in ipairs(right) do
+			local e = self:E(k)
+			local p = self._T.basePos[k]
+			if isvalid(e) and p ~= nil then e.UITransformComponent.anchoredPosition = Vector2(p.x + 80 * (1 - kr), p.y) end
+		end
+		for _, k in ipairs(bottom) do
+			local e = self:E(k)
+			local p = self._T.basePos[k]
+			if isvalid(e) and p ~= nil then e.UITransformComponent.anchoredPosition = Vector2(p.x, p.y - 60 * (1 - kb)) end
+		end
+		local enter = self:E("enter")
+		if isvalid(enter) then
+			local u = (t - 0.25) / 0.35
+			local sc = u <= 0 and 0.6 or (0.6 + 0.4 * back(u))
+			enter.UITransformComponent.UIScale = Vector3(sc, sc, 1)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 결과에서 돌아온 경우 열기, 스크롤 보간, 등장·선택 연출, 수령 응답, 에너지 표시.
+		local player = _UserService.LocalPlayer
+		if self.PendingOpenFloor > 0 and isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap.Name == "Lobby" then
+			self._T.pendingWait = (self._T.pendingWait or 0) + delta
+			if self._T.pendingWait > 0.6 then
+				local f = self.PendingOpenFloor
+				self.PendingOpenFloor = 0
+				self._T.pendingWait = 0
+				self:Open(f)
+			end
+		end
+		if not self:IsOpen() then return end
+		if isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap.Name ~= "Lobby" then
+			self:Close()
+			return
+		end
+		-- 스크롤: 목표 위치로 부드럽게
+		local s = self._T.scroll or 0
+		local target = self._T.scrollTarget or s
+		if math.abs(target - s) > 0.5 then
+			self._T.scroll = s + (target - s) * math.min(1, delta * 14)
+			self:LayoutRows()
+		elseif s ~= target then
+			self._T.scroll = target
+			self:LayoutRows()
+		end
+		if self._T.openT ~= nil then
+			self._T.openT = self._T.openT + delta
+			self:ApplyOpen(self._T.openT)
+			if self._T.openT >= 0.8 then self._T.openT = nil end
+		end
+		-- 수령 응답 (ClaimSeq 변화) 또는 시간 초과
+		if self._T.claiming then
+			local eng = self:Engrave()
+			self._T.claimTimeout = (self._T.claimTimeout or 0) - delta
+			if eng ~= nil and eng.ClaimSeq ~= self._T.claimSeq then
+				self._T.claiming = false
+				self:Hint(eng.ClaimMsg)
+				self:Refresh()
+			elseif self._T.claimTimeout <= 0 then
+				self._T.claiming = false
+				self:Hint("응답이 없습니다. 다시 시도해 주세요")
+				self:Refresh()
+			end
+		end
+		if (self._T.hintTime or 0) > 0 then
+			self._T.hintTime = self._T.hintTime - delta
+			if self._T.hintTime <= 0 then self:Refresh() end
+		end
+		-- 별·에너지 변화 감지 (0.25초마다)
+		self._T.tick = (self._T.tick or 0) - delta
+		if self._T.tick <= 0 then
+			self._T.tick = 0.25
+			local eng = self:Engrave()
+			local sig = eng ~= nil and (tostring(eng.StarSeq) .. ":" .. tostring(eng.Energy) .. ":" .. tostring(eng.EnergyLoaded) .. ":" .. tostring(eng.ClearedFloor)) or "-"
+			if sig ~= self._T.sig then
+				self._T.sig = sig
+				self:Refresh()
+			else
+				self:RefreshEnergy()
+			end
+		end
+	end
+
+end

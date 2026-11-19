@@ -21,6 +21,16 @@ script TowerPlayer extends AttackComponent
 	-- 스킬 동작 재생 순번 (클라이언트 전용: 상태 머신 복구 타이머가 다음 동작을 끊지 않게)
 	@HideFromInspector
 	property integer ActionSeq = 0
+	-- 2인 편성 동료(플레이어가 아닌 아바타)일 때: 연출·타격 요청을 주고받을 주인 플레이어 UserId
+	@Sync
+	property string OwnerUserId = ""
+
+	method string Uid()
+		-- 이 캐릭터의 클라이언트 통신 대상: 플레이어면 자기 UserId, 동료면 주인 플레이어 UserId.
+		local pc = self.Entity.PlayerComponent
+		if isvalid(pc) then return pc.UserId end
+		return self.OwnerUserId
+	end
 
 	@ExecSpace("ServerOnly")
 	method void DoAttack(Entity target, integer damage, number critRate, number critDmg, table procs)
@@ -69,14 +79,14 @@ script TowerPlayer extends AttackComponent
 		self._T.pending[self.HitSeq] = { seq = self.HitSeq, target = target, miss = miss, damage = damage, critRate = critRate, critDmg = critDmg, t = _UtilLogic.ElapsedSeconds, timer = timeout }
 		local controller = self.Entity.PlayerControllerComponent
 		if isvalid(controller) then controller.LookDirectionX = 1 end
-		self:PlayAttackMotion(self.HitSeq, actionFrames, actionTime, casterFx, self._T.castSounds or "", self.Entity.PlayerComponent.UserId)
+		self:PlayAttackMotion(self.HitSeq, actionFrames, actionTime, casterFx, self._T.castSounds or "", self:Uid())
 		self._T.castSounds = ""
 	end
 
 	@ExecSpace("Server")
 	method void RequestHit(integer seq)
 		-- 클라이언트 공격 동작 시작 신호: 대기 중인 같은 번호의 타격만 적용 (값은 서버가 정한 그대로).
-		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		if senderUserId ~= self:Uid() then return end
 		if self._T.pending == nil or self._T.pending[seq] == nil then return end
 		self:ApplyPendingHit(seq, "client")
 	end
@@ -92,10 +102,11 @@ script TowerPlayer extends AttackComponent
 		local tm = p.target:GetComponent("script.TowerMonster")
 		if tm ~= nil and tm.IsDead then
 			-- 기본 타격은 버리되, 같이 나간 히어로 스킬 타격은 다음 몬스터로 넘긴다
-			if p.procs ~= nil and #p.procs > 0 and _HeroCombatLogic.Active then
+			local hero = self.Entity:GetComponent("script.HeroCombat")
+			if p.procs ~= nil and #p.procs > 0 and hero ~= nil and hero.Active then
 				local map = self.Entity.CurrentMap
 				local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
-				if mgr ~= nil then mgr:ApplyJobProcs(p.procs, p.target) end
+				if mgr ~= nil then mgr:ApplyJobProcs(p.procs, p.target, self.Entity) end
 			end
 			return
 		end
@@ -104,7 +115,7 @@ script TowerPlayer extends AttackComponent
 			log("[VRF] hit apply reason=" .. reason .. " seq=" .. tostring(p.seq) .. " wait=" .. string.format("%.3f", _UtilLogic.ElapsedSeconds - p.t))
 		end
 		if p.miss then
-			self:ShowMiss(p.target, self.Entity.PlayerComponent.UserId)
+			self:ShowMiss(p.target, self:Uid())
 			return
 		end
 		self.CurrentDamage = p.damage
@@ -115,7 +126,7 @@ script TowerPlayer extends AttackComponent
 		if p.procs ~= nil and #p.procs > 0 then
 			local map = self.Entity.CurrentMap
 			local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
-			if mgr ~= nil then mgr:ApplyJobProcs(p.procs, p.target) end
+			if mgr ~= nil then mgr:ApplyJobProcs(p.procs, p.target, self.Entity) end
 		end
 	end
 
@@ -177,6 +188,22 @@ script TowerPlayer extends AttackComponent
 		end
 		if actionFrames ~= nil and actionFrames ~= "" then
 			self:PlayAction(actionFrames, actionTime)
+		elseif not isvalid(self.Entity.PlayerComponent) then
+			-- 동료(플레이어 컨트롤러 없음): 상태 머신 대신 몸통 공격 동작을 직접 다시 재생
+			self.ActionSeq = self.ActionSeq + 1
+			self:SetBodySelector(true)
+			local ev = BodyActionStateChangeEvent()
+			ev.ActionState = MapleAvatarBodyActionState.Attack
+			ev.needResetAction = true
+			self.Entity:SendEvent(ev)
+			local mySeq = self.ActionSeq
+			_TimerService:SetTimerOnce(function()
+				if self.ActionSeq ~= mySeq then return end
+				local back = BodyActionStateChangeEvent()
+				back.ActionState = MapleAvatarBodyActionState.Stand
+				back.needResetAction = true
+				self.Entity:SendEvent(back)
+			end, 0.6)
 		elseif isvalid(sc) then
 			-- 스킬 동작 중이었으면 동작 선택기를 먼저 되살린다 (이전 스킬의 복구 타이머는 순번으로 무효화)
 			self.ActionSeq = self.ActionSeq + 1
@@ -272,6 +299,29 @@ script TowerPlayer extends AttackComponent
 		local map = self._T.familyMap[self.WeaponFamily]
 		if map == nil or map[action] == nil then return action end
 		return map[action]
+	end
+
+	@ExecSpace("Multicast")
+	method void ResetPose()
+		-- 판 시작·로비 복귀 때 자세를 완전히 되돌린다: 진행 중이던 스킬 동작 타이머 무효화, 몸통 동작 선택기 켜기, 대기 동작 다시 적용.
+		self.ActionSeq = self.ActionSeq + 1
+		self:SetBodySelector(true)
+		local reset = BodyActionStateChangeEvent()
+		reset.ActionState = MapleAvatarBodyActionState.Stand
+		reset.needResetAction = true
+		self.Entity:SendEvent(reset)
+	end
+
+	@ExecSpace("Multicast")
+	method void SetDownPose(boolean down)
+		-- 동료 쓰러짐·일어남 자세 (플레이어 컨트롤러가 없어 상태 머신 대신 몸통 동작을 직접 바꾼다).
+		self.ActionSeq = self.ActionSeq + 1
+		self:SetBodySelector(true)
+		local ev = BodyActionStateChangeEvent()
+		ev.ActionState = MapleAvatarBodyActionState.Stand
+		if down then ev.ActionState = MapleAvatarBodyActionState.Dead end
+		ev.needResetAction = true
+		self.Entity:SendEvent(ev)
 	end
 
 	@ExecSpace("ClientOnly")

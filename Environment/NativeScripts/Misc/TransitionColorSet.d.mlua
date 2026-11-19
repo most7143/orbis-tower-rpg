@@ -1,28 +1,37 @@
 ---@sealed
+---@description "Indicates the color information to apply according to the button's state. Used when ButtonComponent's Transition is set to ColorTint."
 @Misc
 script TransitionColorSet
 
+	---@description "The multiplier applied to the color. Specify a value greater than 1 to display it brighter than the base color."
 	---@sealed
 	property float ColorMultiplier
 
+	---@description "The color to apply when the button is in a disabled state."
 	---@sealed
 	property Color DisabledColor
 
+	---@description "The time it takes for the color to transition when the state changes. The unit is seconds."
 	---@sealed
 	property float FadeDuration
 
+	---@description "The color to apply when the button is in a highlighted state. It is applied when the pointer is over the button."
 	---@sealed
 	property Color HighlightedColor
 
+	---@description "The color to apply when the button is in its default state."
 	---@sealed
 	property Color NormalColor
 
+	---@description "The color to apply when the button is pressed."
 	---@sealed
 	property Color PressedColor
 
+	---@description "The color to apply when the button is selected. If ButtonComponent's Selectable is false, NormalColor is applied instead of this color."
 	---@sealed
 	property Color SelectedColor
 
+	---@description "Generates a copy."
 	---@sealed
 	method TransitionColorSet Clone() end
 

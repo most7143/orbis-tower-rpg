@@ -1,0 +1,119 @@
+{
+  "version": 5,
+  "generated": "2026-11-14",
+  "textBaked": false,
+  "states": [
+    "normal",
+    "hover",
+    "pressed",
+    "disabled",
+    "selected",
+    "selected_hover",
+    "selected_pressed"
+  ],
+  "assets": {
+    "normal": "d43f9601372a41ccba2a9683dbc7b555",
+    "hover": "0fe6dec284ee4f9a87242a365186f38f",
+    "pressed": "1acc14cbd13547ba8d87a6a7bfdb3e7b",
+    "disabled": "e3c9d27ae2ae47efa46dc8feb0346f5a",
+    "selected": "06e2d86cc41b4d8495fa8d608d0e9e58",
+    "profile_hero": "82db26feff774009b156ecd9580d4098",
+    "profile_paladin": "81bad6541017455b8f55aa3e67d9c427",
+    "profile_darkknight": "bc638c6102b84cd5b9a67c7db26e6c79",
+    "mark_special": "3030ac775286498590cc014951763a59",
+    "mark_major": "8ebcf78597d14a46b0132338aadcd3bb",
+    "solid_white": "e64a2ce6121a4dbf9d377aa8204cf00c",
+    "selected_hover": "b5833c4a941c4697a38cb1f3a0e1d5fc",
+    "selected_pressed": "6cff12efaa8d4cee9ea4e0b1894ce9dd",
+    "panel_profile_menu": "a110c89635c2466f956c235d57850c75",
+    "panel_details": "f2b20824801f4bca8763edcda8d81deb"
+  },
+  "themeSource": "output/ui/region_select_result",
+  "legacyAssets": {
+    "window": "3ef7e721cb3c4c4ea52763bf28f30c7a",
+    "frame_gold": "80e4d77600414effbde40b9363edf45d",
+    "frame_blue": "e3ea382d885742b3936ecc5d07f1e739",
+    "frame_purple": "005d9afdfbcb4a2e9aa8954d06feefc2"
+  },
+  "layout": {
+    "header": [
+      24,
+      480,
+      680,
+      72
+    ],
+    "profileMenu": [
+      -654,
+      -20,
+      480,
+      856
+    ],
+    "details": [
+      244,
+      -20,
+      1256,
+      856
+    ],
+    "menuRowSize": [
+      400,
+      64
+    ],
+    "contentPadding": 52,
+    "exp": "LeftPanel/ProfileArea/Exp",
+    "appearanceRoot": "Window/Right/Appearance",
+    "gridColumns": 3,
+    "gridVisibleRows": 3,
+    "gridCellSize": [
+      152,
+      168
+    ],
+    "gridViewportSize": [
+      520,
+      520
+    ],
+    "gridCellBackground": "none",
+    "selectionBorderSize": [
+      140,
+      140
+    ],
+    "selectionStyle": "thin icon-sized outline, hover/pressed/selected; no rectangular card fill",
+    "gridSpacing": [
+      8,
+      0
+    ],
+    "previewAndGridSizes": {
+      "portrait": [
+        120,
+        120
+      ],
+      "frame": [
+        128,
+        128
+      ],
+      "nameTag": [
+        128,
+        128
+      ]
+    },
+    "frameInterior": "opaque black; frame tab uses identical icon in grid and preview",
+    "panelHeight": 888
+  },
+  "accountTabs": [
+    "프로필",
+    "프레임",
+    "칭호",
+    "레벨별 효과"
+  ],
+  "nameTags": {
+    "default": "9bf18287398c44699c20fc5123d1a1ae",
+    "decorated": "ac88638649c3479bbb754e4b34bb3eac",
+    "worldModel": "accounttitletag",
+    "component": "NameTagComponent",
+    "preservePlayerNickname": true
+  },
+  "catalogCounts": {
+    "profile": 3,
+    "frame": 9,
+    "title": 11
+  }
+}

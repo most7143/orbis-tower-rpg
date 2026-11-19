@@ -125,3 +125,78 @@ WarriorChanceAttack,WarriorChanceAttack_7,쿨타임 감각,CritCd,0.2,크리티�
 WarriorChanceAttack,WarriorChanceAttack_8,거인 급소,EliteCritDmg,30,강화 몬스터에게 크리티컬 데미지 +30%
 WarriorChanceAttack,WarriorChanceAttack_9,선제 급소,FirstCrit,1,몬스터 첫 타격 크리티컬 확정
 WarriorChanceAttack,WarriorChanceAttack_10,연쇄 치명,CritExtra,10,크리티컬 시 10% 확률로 추가 타격
+B01,B01_B1,끝없는 볼트,HeroBreak,1,쿨타임 5 → 3초
+B01,B01_B2,잔광,HeroBreak,1,발동 후 원래 피해의 60%로 추가 1회
+B01,B01_B3,성수의 원천,HeroBreak,1,성수 획득 1 → 3
+B01,B01_B4,신성 낙인,HeroBreak,1,맞은 몬스터에게 신성 낙인 (4초간 받는 피해 +10%)
+B01,B01_B5,연쇄 볼트,HeroBreak,1,25% 확률로 재발동
+B02,B02_B1,삼연사,HeroBreak,1,2타 → 3타
+B02,B02_B2,끝없는 화살,HeroBreak,1,쿨타임 5 → 3초
+B02,B02_B3,아케인 에임,HeroBreak,1,맞을 때마다 8초간 파티 모든 피해 +2% (최대 +10%)
+B02,B02_B4,연속 재발동,HeroBreak,1,재발동 확률 30% → 55%
+B02,B02_B5,성수 회수,HeroBreak,1,"발동 시 성수 2, 마나 4"
+B03,B03_B1,눈부신 빛,HeroBreak,1,맞은 몬스터 100% 암흑
+B03,B03_B2,성수 회수,HeroBreak,1,쓴 성수의 절반을 돌려받음
+B03,B03_B3,어드밴스드 성수,HeroBreak,1,성수 최대 5 → 10
+B03,B03_B4,완전한 계시,HeroBreak,1,성수가 가득일 때 최우선 시전. 마나 0
+B03,B03_B5,신성 낙인,HeroBreak,1,맞은 몬스터에게 신성 낙인 (4초간 받는 피해 +10%)
+B04,B04_B1,엑스트라 가드,HeroBreak,1,막는 횟수 3 → 5 (원작 하이퍼 패시브)
+B04,B04_B2,퍼시스트,HeroBreak,1,지속 10 → 15초 (원작 하이퍼 패시브)
+B04,B04_B3,모두의 방패,HeroBreak,1,위기의 파티원 1명 → 파티 전원에게 발동
+B04,B04_B4,끝없는 가호,HeroBreak,1,쿨타임 25 → 15초
+B04,B04_B5,깨진 축복,HeroBreak,1,보호막이 다 깨지면 성수가 가득 참
+B05,B05_B1,성수 회수,HeroBreak,1,추가타가 맞으면 40% 확률로 성수 1
+B05,B05_B2,깃털 폭풍,HeroBreak,1,충전 5 → 8개
+B05,B05_B3,치유의 깃털,HeroBreak,1,추가타가 맞을 때마다 가장 다친 파티원 1% 회복
+B05,B05_B4,신성 낙인,HeroBreak,1,추가타가 맞은 몬스터에게 신성 낙인 (4초간 받는 피해 +10%)
+B05,B05_B5,승리의 현신,HeroBreak,1,충전이 1회로 바뀌고 그 추가타 피해가 원래 충전 수만큼 배가
+B06,B06_B1,천사의 폭풍,HeroBreak,1,2타 → 4타
+B06,B06_B2,연속 재발동,HeroBreak,1,재발동 확률 15% → 35%
+B06,B06_B3,천사의 은총,HeroBreak,1,회복 2% → 4%
+B06,B06_B4,은총의 메아리,HeroBreak,1,재발동할 때마다 성수 1
+B06,B06_B5,날렵함,HeroBreak,1,"마나 20 → 12, 쿨타임 10 → 6초"
+B07,B07_B1,붕괴하는 별,HeroBreak,1,체력 50% 이하 대상에게 2배
+B07,B07_B2,처형자,HeroBreak,1,맞은 뒤 체력 15% 이하면 즉시 처치 (보스 제외)
+B07,B07_B3,과잉 응축,HeroBreak,1,"성수 최대 소비 3 → 6, 1개당 +20% → +25%"
+B07,B07_B4,날렵함,HeroBreak,1,"마나 20 → 10, 쿨타임 6 → 4초"
+B07,B07_B5,대폭발,HeroBreak,1,맞는 몬스터 1 → 4
+B08,B08_B1,영원한 신룡,HeroBreak,1,지속 20 → 30초
+B08,B08_B2,신룡의 숨결,HeroBreak,1,공격 3회마다 강화 공격 (1.5배)
+B08,B08_B3,수호룡,HeroBreak,1,소환 중 파티 받는 피해 -10%
+B08,B08_B4,쌍룡,HeroBreak,1,작은 용 2마리 추가 (원본 피해의 30%)
+B08,B08_B5,질풍,HeroBreak,1,공격 간격 30% 감소
+B09,B09_B1,무한한 마력,HeroBreak,1,피해 증가 최대 +20% → +32%
+B09,B09_B2,끝없는 시간,HeroBreak,1,지속 +50%
+B09,B09_B3,성수 순환,HeroBreak,1,지속 중 성수 획득 확률 30% → 45%
+B09,B09_B4,무한 회복,HeroBreak,1,지속 중 1초마다 파티 1% 회복
+B09,B09_B5,무한의 끝,HeroBreak,1,끝날 때 쌓인 피해 증가%의 10배 계수로 주변 폭발
+B10,B10_B1,천국의 문,HeroBreak,1,이 스킬 피해 +60%
+B10,B10_B2,빠른 개방,HeroBreak,1,쿨타임 30 → 18초
+B10,B10_B3,맨손의 기적,HeroBreak,1,캐릭터 동작 없이 시전. 마나 절반
+B10,B10_B4,리저렉션,HeroBreak,1,시전 시 쓰러진 파티원을 체력 50%로 일으킨다
+B10,B10_B5,재발동의 탄력,HeroBreak,1,다른 스킬이 재발동할 때마다 쿨타임 2초 감소
+B11,B11_B1,리인포스,HeroBreak,1,파티 공격력 +15% → +24% (원작 하이퍼 패시브)
+B11,B11_B2,퍼시스트,HeroBreak,1,지속 15 → 22초 (원작 하이퍼 패시브)
+B11,B11_B3,철벽의 축복,HeroBreak,1,받는 피해 감소 -10% → -20%
+B11,B11_B4,마나 축복,HeroBreak,1,지속 중 파티 마나 회복 +50%
+B11,B11_B5,홀리 심볼,HeroBreak,1,지속 중 처치 경험치 +30%
+B12,B12_B1,간절한 기도,HeroBreak,1,발동 확률 10% → 16%
+B12,B12_B2,끝없는 기도,HeroBreak,1,지속 10 → 15초
+B12,B12_B3,넘치는 은총,HeroBreak,1,발동 시 파티 전원에게 최대 체력 15% 보호막
+B12,B12_B4,기도의 빛 강화,HeroBreak,1,"기도의 빛 60% → 100%, 맞으면 마나 +1"
+B12,B12_B5,디스펠,HeroBreak,1,발동 시 파티 전원에게 3초 동안 피해 2회 막기
+B13,B13_B1,세 번째 천사,HeroBreak,1,천사 등장 2 → 3회
+B13,B13_B2,날렵함,HeroBreak,1,"마나 50 → 30, 쿨타임 12 → 8초"
+B13,B13_B3,낙인 파열,HeroBreak,1,신성 낙인이 걸린 몬스터에게 합동 피해 2배
+B13,B13_B4,흉터,HeroBreak,1,천사가 공격할 때마다 자상 1중첩
+B13,B13_B5,수호 천사,HeroBreak,1,천사가 사라질 때 가장 다친 파티원에게 보호막 15%
+B14,B14_B1,평화의 빛,HeroBreak,1,이 스킬 피해 +60%
+B14,B14_B2,낙인 강화,HeroBreak,1,신성 낙인 +10% → +20%
+B14,B14_B3,날렵함,HeroBreak,1,"마나 12 → 7, 쿨타임 5 → 3초"
+B14,B14_B4,넘치는 평화,HeroBreak,1,파티 회복 1% → 2%
+B14,B14_B5,심판의 날,HeroBreak,1,신성 낙인이 걸린 몬스터를 처치하면 주변에 빛기둥 200%
+B15,B15_B1,심판의 철퇴,HeroBreak,1,쓴 성수 1개당 피해 +20%
+B15,B15_B2,완전한 심판,HeroBreak,1,쿨타임 없음. 성수가 가득이면 최우선 시전
+B15,B15_B3,끝없는 형벌,HeroBreak,1,6타 → 10타
+B15,B15_B4,성역,HeroBreak,1,시전 중 파티원도 받는 피해 -50%
+B15,B15_B5,홀리 워터 강화,HeroBreak,1,홀리 워터 한 단계 강화. 성수 최대 15

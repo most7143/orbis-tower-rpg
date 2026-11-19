@@ -1,12 +1,19 @@
 ---@sealed
+---@description "The OverlayLightComponent lighting type."
 @Enum
 script OverlayLightType
+	---@description "A light source that appears as a circle. You can adjust the shape of the circle by adjusting the property values. Not affected by TransformComponent.Scale."
 	member Spot = 0
+	---@description "Creators can make the light source into any shape they want."
 	member Freeform = 1
+	---@description "A light source applied to the entire screen. A SortingLayer can't receive light effects from multiple Global Lights at the same time."
 	member Global = 2
+	---@description "The shape and color of the light source are created by combining the RGBA color information of the sprite specified by the creator."
 	member Sprite = 3
 
+	---@description "Converts numbers to the applicable type."
 	static method OverlayLightType CastFrom(number value) end
 
+	---@description "Converts strings to the applicable type."
 	static method OverlayLightType CastFrom(string value) end
 end

@@ -1,0 +1,23 @@
+---@sealed
+---@description "Indicates how the user left the world."
+@Enum
+script UserLeaveReason
+	---@description "Left the world voluntarily or due to a lost network connection."
+	member Normal = 0
+	---@description "Left the world through TeleportService's WarpUserToWorld(), WarpUserToWorldInstance(), WarpAdminToWorldInstance(), or similar functions."
+	member Warp = 1
+	---@description "Left the world through MatchmakingService."
+	member MatchMaking = 2
+	---@description "Left the world by moving to a new instance of the same world due to a server migration."
+	member Migrate = 3
+	---@description "Left the world after being kicked by the server or a script (KickUser)."
+	member Kick = 4
+	---@description "Left because the server was closed. Reasons for the server closing include world shutdown, maintenance, and platform maintenance."
+	member Shutdown = 5
+
+	---@description "Converts numbers to the applicable type."
+	static method UserLeaveReason CastFrom(number value) end
+
+	---@description "Converts strings to the applicable type."
+	static method UserLeaveReason CastFrom(string value) end
+end

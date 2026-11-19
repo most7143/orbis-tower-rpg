@@ -7,6 +7,10 @@ script TimerService extends Service
 	---@sealed
 	method void ClearTimer(integer id) end
 
+	---@description "Returns the number of currently scheduled timers. On the server, only timers scheduled in the current room are counted."
+	---@sealed
+	method int32 GetTimerCount() end
+
 	---@description "Sets a timer that calls the function passed to callback at a specific moment. The scriptable passes the owner of the action to reserve. The action's owner can be logic or component."
 	---@sealed
 	method integer SetTimer(IScriptable scriptable, func callback, float intervalSeconds, boolean isRepeat, float startDelaySeconds = 0) end

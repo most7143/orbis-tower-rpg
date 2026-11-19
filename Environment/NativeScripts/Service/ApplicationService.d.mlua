@@ -23,13 +23,22 @@ script ApplicationService extends Service
 	@ExecSpace("ClientOnly")
 	method boolean IsMobilePlatform() end
 
-	---@description "Returns whether the current environment is a PC platform."
+	---@description "Returns whether the current platform is a PC platform. When running in a web environment, returns true if the web browser is running on a PC, and false otherwise."
 	---@sealed
 	@ExecSpace("ClientOnly")
 	method boolean IsPCPlatform() end
 
+	---@description "Returns whether the current application is running in a web environment."
+	---@sealed
+	@ExecSpace("ClientOnly")
+	method boolean IsWebRuntime() end
+
 	emitter EmitApplicationFocusInEvent(ApplicationFocusInEvent event) end
 
 	emitter EmitApplicationFocusOutEvent(ApplicationFocusOutEvent event) end
+
+	emitter EmitWindowsMenuOpenedEvent(WindowsMenuOpenedEvent event) end
+
+	emitter EmitWindowsMenuClosedEvent(WindowsMenuClosedEvent event) end
 
 end

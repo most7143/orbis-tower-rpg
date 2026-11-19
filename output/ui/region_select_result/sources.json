@@ -1,0 +1,44 @@
+{
+  "stirge": {
+    "sourceRUID": "25152ef859744489b7e34a993b3a3c6d",
+    "category": "animationclip",
+    "thumbnailStatic": true,
+    "sourceName": "스티지",
+    "sourcePack": "mob/2300100.img",
+    "sourceURL": "https://maplestoryworlds-resourcesearch-new.nexon.com/search?q=스티지&selected=mob/2300100.img"
+  },
+  "skillBook": {
+    "sourceRUID": "00c119f6f437479d9b0f95edfb29e870",
+    "category": "sprite",
+    "sourceName": "sprite-8906359",
+    "uiRole": "스킬북 예시",
+    "sourceURL": "https://maplestoryworlds-resourcesearch-new.nexon.com/search?q=스킬북&selected=00c119f6f437479d9b0f95edfb29e870"
+  },
+  "feather": {
+    "sourceRUID": "8a668406667d48e89c0b29755bd3ebed",
+    "category": "sprite",
+    "sourceName": "뻣뻣한 깃털",
+    "uiRole": "깃털 예시",
+    "sourceURL": "https://maplestoryworlds-resourcesearch-new.nexon.com/search?q=깃털&selected=8a668406667d48e89c0b29755bd3ebed"
+  },
+  "rewardChest": {
+    "sourceRUID": "20724aa0526d4f6cba6a9695a07e1126",
+    "category": "sprite",
+    "sourceName": "매직박스",
+    "sourceURL": "https://maplestoryworlds-resourcesearch-new.nexon.com/search?q=보물상자&selected=20724aa0526d4f6cba6a9695a07e1126"
+  },
+  "weaponScrollTier02": {
+    "existingProjectRUID": "583f9e860ca446febffdb2032877cf1c",
+    "sourceCSV": "RootDesk/MyDesk/Data/SlotScrollTable.csv",
+    "sourceRow": {
+      "Slot": "Weapon",
+      "Tier": 2
+    },
+    "sourceFile": "/Users/seogeon-u/Documents/메이플월드_리소스/아이템/slot_enhance_scroll_02_weapon_64x56.png"
+  },
+  "lock": {
+    "sourceFile": "/Users/seogeon-u/Documents/메이플월드_리소스/Grace/Icons/grace_lock_closed_silver_48x56.png",
+    "derived": "Only lower-body color was changed; metal shackle kept distinct."
+  },
+  "note": "sourceRUID documents provenance only. New, padded, resized or recolored PNGs have no assigned runtime RUID. Reuse the original RUID for unchanged artwork with preserved aspect ratio, or register the supplied PNG as a new resource. Do not replace existing RUID data."
+}

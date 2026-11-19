@@ -52,7 +52,7 @@ script WebViewComponent extends Component
 	---@description "This is the URL of the webpage. Changing the Url will load that webpage. Cadence of changes will be limited to 10 times per minute. Only http and https protocols can be used."
 	---@sealed
 	@Sync
-	property string Url = "https://mod.nexon.com/"
+	property string Url = "https://maplestoryworlds.nexon.com/"
 
 	---@description "Click the given location. "
 	---@sealed

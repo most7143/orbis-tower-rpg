@@ -3,6 +3,10 @@
 @Event
 script UserLeaveEvent extends EventType
 
+	---@description "The reason the user left. Warp, MatchMaking, and Migrate do not occur in the Maker."
+	---@sealed
+	property UserLeaveReason LeaveReason
+
 	---@description "This player's profile code."
 	---@sealed
 	property string ProfileCode
@@ -13,6 +17,6 @@ script UserLeaveEvent extends EventType
 
 	constructor UserLeaveEvent(IUser user) end
 
-	constructor UserLeaveEvent(string userId = nil, string profileCode = nil) end
+	constructor UserLeaveEvent(string userId = nil, string profileCode = nil, UserLeaveReason leaveReason = UserLeaveReason.Normal) end
 
 end

@@ -21,10 +21,10 @@ script TarotLogic extends Logic
 	property string ChoiceCardPath = "/ui/TarotUI/Choice/Pick/Card"
 	-- 스킬 선택 카드 (스킬선택 리소스 casual-color-four-types-v3): 종류별 카드 일반/선택, NEW 배지, NEW 배지 x위치
 	-- 종류: active 공격(빨강) / passive 패시브(회색) / hyper 하이퍼(보라, 히어로 등급 5) / fifth 5차(파랑, 히어로 등급 6)
-	property string CardActive = "fd40f6bef6a84c78bd2668e7b7257fd9|9e47a15097364e6eb8c0d11c4cf3ab8c|64cca23cf9f54cb6b40ccf04e6b3fdac|138"
-	property string CardPassive = "db132dc7f7784a15b194c783696db24e|cc1061a9c7b34728a3f65b325855cb74|204b99a52c434f949d22be13d677a7ef|133"
-	property string CardHyper = "3d706be3dfc4455493958f053a2c543d|af4cf2dea8834c1fbac977fd6b8aef77|b8df00fbcec144b68859592f2ac0022f|140"
-	property string CardFifth = "51ed0b6f5c224232ac548d7d6ba94061|7715426f7d864b06a931e3dd52fc83e3|0c11fa6ac32d4b7283ffea8b706fedf1|150"
+	property string CardActive = "a88cfe62e8e64c39bf14d682a77ef4a0|1e130afe90a842028aed70edadbfb9f1|64cca23cf9f54cb6b40ccf04e6b3fdac|138"
+	property string CardPassive = "a88cfe62e8e64c39bf14d682a77ef4a0|1e130afe90a842028aed70edadbfb9f1|204b99a52c434f949d22be13d677a7ef|133"
+	property string CardHyper = "a88cfe62e8e64c39bf14d682a77ef4a0|1e130afe90a842028aed70edadbfb9f1|b8df00fbcec144b68859592f2ac0022f|140"
+	property string CardFifth = "a88cfe62e8e64c39bf14d682a77ef4a0|1e130afe90a842028aed70edadbfb9f1|0c11fa6ac32d4b7283ffea8b706fedf1|150"
 	property string CardStarFilled = "ba3ebade076a454c8df0a9bc62dcabc1"
 	property string CardStarEmpty = "a2deb30a737743a5b8394f678f214af8"
 	-- 한계돌파 공용 반짝임 (40프레임 60ms 반복)
@@ -42,10 +42,10 @@ script TarotLogic extends Logic
 	property string JobPath = "/ui/TarotUI/JobSelect/"
 	property number JobDimAlpha = 0.7
 	-- 직업선택 캐주얼 최종 리소스 (2026-11-06): 확인 버튼 4상태 (normal|hover|pressed|disabled)
-	property string JobConfirmRUIDs = "6e35d7bab986437dacfdd6439cce8f8b|8aa0cc5ea41e41c59e561b7e9c749edb|a85883f491674c1698e38075ae4c059d|47458ebbd8e64ec699443ed6ee389c5b"
-	property Color JobConfirmNormal = Color(1, 0.953, 0.843, 1)
+	property string JobConfirmRUIDs = "ffd05f5bf0274527b1e5cb977f2c49fe|2a218c009982464f9c6f581e763ea6aa|3127fb2d53b14c6a94e8d0c7e309ac92|db304db9f8de48278c56d7b13071f0d5"
+	property Color JobConfirmNormal = Color(1, 1, 1, 1)
 	property Color JobConfirmHover = Color(1, 1, 1, 1)
-	property Color JobConfirmPressed = Color(1, 0.886, 0.627, 1)
+	property Color JobConfirmPressed = Color(1, 1, 1, 1)
 	property Color JobConfirmDisabled = Color(0.714, 0.714, 0.745, 1)
 	property Color JobConfirmOutline = Color(0.145, 0.11, 0.212, 1)
 	property Color JobConfirmOutlineDisabled = Color(0.196, 0.196, 0.227, 1)
@@ -87,16 +87,26 @@ script TarotLogic extends Logic
 	method void InitJobSelect()
 		-- 직업별 카드 일반·선택 이미지 (같은 크기·위치, ImageRUID만 교체). 카드 안쪽 투명 버튼(Hit)과 확인 버튼 연결.
 		self._T.jobArt = {
-			Hero = { normal = "159ac990653f4666a6d7406c6bf18833", selected = "94406c894b2e4139a8126a6727c24d92" },
-			Paladin = { normal = "239bf9fbd5a94875b41072742ea18b58", selected = "11608b402edd4e098bd71a14febf9741" },
-			DarkKnight = { normal = "f54c8074d9b54953b7ae3b70fb655fa4", selected = "f40e1c24dcef49d4bbc448d6b230341f" },
+			Hero = { normal = "a88cfe62e8e64c39bf14d682a77ef4a0", selected = "1e130afe90a842028aed70edadbfb9f1" },
+			Paladin = { normal = "a88cfe62e8e64c39bf14d682a77ef4a0", selected = "1e130afe90a842028aed70edadbfb9f1" },
+			DarkKnight = { normal = "a88cfe62e8e64c39bf14d682a77ef4a0", selected = "1e130afe90a842028aed70edadbfb9f1" },
 		}
 		self._T.jobSlot = self.DefaultJobSlot
 		for i = 1, 3 do
 			local slot = i
 			local card = self:GetJobCard(i)
 			local hit = isvalid(card) and card:GetChildByName("Hit") or nil
-			if isvalid(hit) then self:Bind(hit.ButtonComponent, function() self:SelectJob(slot) end) end
+			if isvalid(hit) then
+				self:Bind(hit.ButtonComponent, function() self:SelectJob(slot) end)
+				local function touch(evt, fn)
+					local h = hit:ConnectEvent(evt,fn)
+					table.insert(self._T.hoverHandlers,{entity=hit,evt=evt,h=h})
+				end
+				touch(UITouchEnterEvent,function() self:PaintJobCard(slot,true,false) end)
+				touch(UITouchExitEvent,function() self:PaintJobCard(slot,false,false) end)
+				touch(UITouchDownEvent,function() self:PaintJobCard(slot,true,true) end)
+				touch(UITouchUpEvent,function() self:PaintJobCard(slot,true,false) end)
+			end
 		end
 		self:Bind(self.jobConfirm, function() self:OnJobConfirm() end)
 		-- 확인 버튼 상태 (기본·호버·눌림·비활성): 이미지와 글자색. 눌림은 위치 이동 없음
@@ -155,13 +165,37 @@ script TarotLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void PaintJobCard(integer slot, boolean hover, boolean pressed)
+		-- 일러스트와 프레임을 분리하고 선택·호버·누름·비활성 상태를 표시한다.
+		local card=self:GetJobCard(slot)
+		if not isvalid(card) then return end
+		local mgr=self:GetManager()
+		local disabled=mgr~=nil and not self:IsJobPickable(mgr,slot)
+		local selected=self._T.jobSlot==slot
+		local ruid="a88cfe62e8e64c39bf14d682a77ef4a0"
+		if disabled then ruid="d262f8e8502e4b7b88f381a9b7a4e4fb"
+		elseif selected and pressed then ruid="0049a1c1e17e4ac29de951a509838cd4"
+		elseif selected and hover then ruid="9c050999cae047ffb4181315d7f321af"
+		elseif selected then ruid="1e130afe90a842028aed70edadbfb9f1"
+		elseif pressed then ruid="1ee26fe6cab54961b986f0c552838954"
+		elseif hover then ruid="e9f1678141ff4a57bf17d5cf52e0a27b" end
+		card.SpriteGUIRendererComponent.ImageRUID=DataRef(ruid)
+		card.SpriteGUIRendererComponent.Color=Color(1,1,1,1)
+		local hit=card:GetChildByName("Hit")
+		if isvalid(hit) then hit.ButtonComponent.Enable=not disabled end
+		local clip=card:GetChildByName("ArtClip")
+		local art=isvalid(clip) and clip:GetChildByName("Artwork") or nil
+		if isvalid(art) then art.SpriteGUIRendererComponent.Color=disabled and Color(0.70,0.70,0.70,1) or Color(1,1,1,1) end
+	end
+
+	@ExecSpace("ClientOnly")
 	method void SetJobCard(integer slot, table art, boolean selected)
 		-- 카드 이미지만 일반/선택으로 바꾼다 (캔버스 크기·위치·배율은 그대로).
 		local card = self:GetJobCard(slot)
 		if not isvalid(card) then return end
 		local ruid = art.normal
 		if selected then ruid = art.selected end
-		card.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		self:PaintJobCard(slot,false,false)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -223,11 +257,11 @@ script TarotLogic extends Logic
 				self:SetJobCard(i, art, i == slot)
 				-- 아직 열리지 않은 직업만 어둡게 (고르지 않은 카드는 어둡게 하지 않음)
 				local c = 1
-				if not self:IsJobPickable(mgr, i) then c = 0.35 end
+				if not self:IsJobPickable(mgr, i) then c = 1 end
 				self:GetJobCard(i).SpriteGUIRendererComponent.Color = Color(c, c, c, 1)
 			end
 		end
-		-- 선택 카드의 금빛 강조 여백이 옆 카드에 가리지 않게 맨 위로
+		-- 선택 카드가 옆 카드에 가리지 않게 맨 위로
 		_UILogic:SetSiblingIndex(self:GetJobCard(slot).UITransformComponent, 2)
 		if isvalid(self.jobConfirm) then
 			local label = self.jobConfirm.Entity.Parent:GetChildByName("Label")
@@ -492,7 +526,7 @@ script TarotLogic extends Logic
 		if not isvalid(e) then return end
 		local art = self:CardArt(v)
 		local ruid = art.normal
-		if on then ruid = art.selected end
+		if on then ruid = "e9f1678141ff4a57bf17d5cf52e0a27b" end
 		e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
 	end
 
@@ -537,7 +571,7 @@ script TarotLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void FillCard(integer slot, string id, Component mgr, string mode)
 		-- 스킬 카드 한 장 (mode): learn 신규 습득(NEW 배지) / break 돌파 / option 돌파 옵션(한계돌파 반짝임) / 그 외 별 옵션 Id.
-		-- 카드 색은 스킬 종류(공격·패시브·하이퍼·5차)를 그대로 유지한다.
+		-- 공통 밝은 프레임을 사용하고 스킬 종류는 상단 표기로 구분한다.
 		local path = self.ChoiceCardPath .. tostring(slot)
 		local function sub(name) return _EntityService:GetEntityByPath(path .. "/" .. name) end
 		local title = ""
@@ -583,6 +617,8 @@ script TarotLogic extends Logic
 			root.SpriteGUIRendererComponent.ImageRUID = DataRef(art.normal)
 			root.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1)
 		end
+		local kind = sub("KindLabel")
+		if isvalid(kind) then kind.TextGUIRendererComponent.Text = ({active="액티브",passive="패시브",hyper="하이퍼",fifth="5차"})[variant] or "" end
 		local name = sub("Name")
 		if isvalid(name) then name.TextGUIRendererComponent.Text = title end
 		local d = sub("Desc")

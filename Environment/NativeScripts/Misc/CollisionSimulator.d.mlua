@@ -3,6 +3,22 @@
 @Misc
 script CollisionSimulator
 
+	---@description "Moves a rectangular collider at origin by distance along direction. Returns the collision information of the first component it collides with along the movement path."
+	---@sealed
+	method CollisionCastInfo BoxCast(string collisionGroupName, Vector2 origin, Vector2 size, float angle, Vector2 direction, float distance) end
+
+	---@description "Moves a rectangular collider at origin by distance along direction. Inserts the collision information of all components it collides with along the movement path into outputList in order of proximity to the start position, and returns the number of items in outputList."
+	---@sealed
+	method int32 BoxCastAllFast(string collisionGroupName, Vector2 origin, Vector2 size, float angle, Vector2 direction, float distance, table outputList) end
+
+	---@description "Moves a circular collider with a radius of radius at origin by distance along direction. Returns the collision information of the first component it collides with along the movement path."
+	---@sealed
+	method CollisionCastInfo CircleCast(string collisionGroupName, Vector2 origin, float radius, Vector2 direction, float distance) end
+
+	---@description "Moves a circular collider with a radius of radius at origin by distance along direction, inserts the collision information of all components it collides with along the movement path into outputList in order of proximity to the start position, and returns the number of items in outputList."
+	---@sealed
+	method int32 CircleCastAllFast(string collisionGroupName, Vector2 origin, float radius, Vector2 direction, float distance, table outputList) end
+
 	---@description "Finds and returns the first component that overlaps the input shape."
 	---@sealed
 	method Component Overlap(CollisionGroup collisionGroup, Shape shape) end

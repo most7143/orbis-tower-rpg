@@ -114,30 +114,18 @@ script MainPanelLogic extends Logic
 		log("[VRF] MainPanelLogic begin handlers=" .. tostring(#self.clickHandlers))
 	end
 
-	@ExecSpace("ClientOnly")
-	method void ApplyHudSkins()
-		-- 인게임 HUD 버튼 4상태(활성·비활성·하이라이트·셀렉트) 이미지와 상태별 글자색 (README_구현가이드 / text_style.json).
-		local text = { textNormal = Color(1, 0.953, 0.843, 1), textHover = Color(1, 1, 1, 1), textSelected = Color(1, 0.831, 0.42, 1), textDisabled = Color(0.714, 0.714, 0.745, 1) }
-		local function skin(entity, a, d, h, s)
-			local t = { normal = a, disabled = d, hover = h, pressed = s, selected = s, selectedHover = s, selectedPressed = s }
-			for k, v in pairs(text) do t[k] = v end
-			_UIButtonLogic:SetSkin(entity, t)
-		end
-		if isvalid(self.giveUpBtn) then skin(self.giveUpBtn.Entity, "5de8dc96e17142cfb3997fd0c64847b7", "5a39238442dc4826a2f22afde10e6599", "394368685c064befaec58de7984d1b41", "85df1041759843c68e7628433a9ab78b") end
-		local tabSkins = {
-			{ self.tabInfo, "82725f3a0dd5474b8f30a5b804279aae", "4ec3729e0ccd43198e844732fe3eb7a4", "7764e459b6dc4821be864bacd6ac30c5", "6f65959f1bcf4047a0423ddd15a7c861" },
-			{ self.tabTrait, "f7c03e1d96c64e96840f982b03c257b0", "277ced79f51f462f812cac49009f4f4c", "4312eed8ede14a0f95c0c61fabfc20fc", "d1f41da4bf744748b2c60b653acc5e98" },
-			{ self.tabStat, "1145d74d3eae4372a7ca5c20e2be4bb9", "566685f06e5945a386908682de0d831e", "70062f6284f0427888efa3c46d109da4", "6dc77c67889247858a5846f3cce5c5cc" },
-			{ self.tabSkill, "712e42fcce344c8cb71a73b3c2e04945", "f5d459b2c6cb4091a82a160f33fadfaf", "7bc0ee88d641404abdbfe4b9d4b39cc3", "759aa64fca7d46cba930d8fea1e6218e" },
-		}
-		for _, t in ipairs(tabSkins) do
-			if isvalid(t[1]) then skin(t[1].Entity, t[2], t[3], t[4], t[5]) end
-		end
-	end
+@ExecSpace("ClientOnly")
+    method void ApplyHudSkins()
+        -- 인게임 탭과 포기 버튼도 공통 UI 규칙을 사용한다.
+        if isvalid(self.giveUpBtn) then _UIButtonLogic:UseTheme(self.giveUpBtn.Entity,"button") end
+        for _,button in ipairs({self.tabInfo,self.tabTrait,self.tabStat,self.tabSkill}) do
+            if isvalid(button) then _UIButtonLogic:UseTheme(button.Entity,"button") end
+        end
+    end
 
 	@ExecSpace("ClientOnly")
 	method void UpdateSkillSlots()
-		-- 오른쪽 아래 스킬 슬롯 6칸: 히어로 장착 스킬 아이콘 + 남은 쿨타임(어둡게 덮고 초 표시). 히어로가 아니면 빈 칸.
+		-- 오른쪽 아래 스킬 슬롯 6칸: 이번 판에 배운 히어로 스킬 아이콘 + 레벨 + 남은 쿨타임(어둡게 덮고 초 표시). 히어로가 아니면 빈 칸.
 		if not isvalid(self.skillSlotsRoot) then return end
 		if self._T.slotIcons == nil then
 			self._T.slotIcons = {}
@@ -147,10 +135,12 @@ script MainPanelLogic extends Logic
 			end
 		end
 		local list = {}
-		if _HeroCombatLogic.Active then
-			for entry in string.gmatch(_HeroCombatLogic.SlotInfo, "[^|]+") do
-				local id, left, max = string.match(entry, "^([^:]+):([^:]+):([^:]+)$")
-				if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0 }) end
+		local lp = _UserService.LocalPlayer
+		local hc = isvalid(lp) and lp:GetComponent("script.HeroCombat") or nil
+		if hc ~= nil and hc.Active then
+			for entry in string.gmatch(hc.SlotInfo, "[^|]+") do
+				local id, left, max, lv = string.match(entry, "^([^:]+):([^:]+):([^:]+):?([^:]*)$")
+				if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0, lv = tonumber(lv) or 0 }) end
 			end
 		end
 		local base = "/ui/MainPanel/SkillSlots/Slot"
@@ -159,6 +149,14 @@ script MainPanelLogic extends Logic
 			local icon = _EntityService:GetEntityByPath(base .. tostring(i) .. "/Icon")
 			local cool = _EntityService:GetEntityByPath(base .. tostring(i) .. "/Cool")
 			local coolText = _EntityService:GetEntityByPath(base .. tostring(i) .. "/CoolText")
+			-- 아이콘 아래: 이번 판에 배운 스킬 레벨
+			local lvChip = _EntityService:GetEntityByPath(base .. tostring(i) .. "/LvChip")
+			if isvalid(lvChip) then
+				local lvs = (info ~= nil and info.lv > 0) and ("Lv." .. tostring(info.lv)) or ""
+				if lvChip.Enable ~= (lvs ~= "") then lvChip:SetEnable(lvs ~= "") end
+				local lvText = lvChip:GetChildByName("LvText")
+				if isvalid(lvText) and lvText.TextGUIRendererComponent.Text ~= lvs then lvText.TextGUIRendererComponent.Text = lvs end
+			end
 			local ruid = info ~= nil and (self._T.slotIcons[info.id] or "") or ""
 			if isvalid(icon) then
 				local show = ruid ~= ""
@@ -536,6 +534,8 @@ script MainPanelLogic extends Logic
 	method void ShowTab(integer index)
 		-- 선택한 탭의 내용만 켜고 패널 제목을 바꾼다.
 		self.SelectedTab = index
+		local heading=_EntityService:GetEntityByPath("/ui/MainPanel/Panel/ThemeTitle")
+		if isvalid(heading) then heading.TextGUIRendererComponent.Text=({"정보","직업","장비","스킬"})[index] or "정보" end
 		local contents = { self.contentInfo, self.contentTrait, self.contentStat, self.contentSkill }
 		for i = 1, 4 do
 			if isvalid(contents[i]) then contents[i]:SetEnable(i == index) end
@@ -690,15 +690,17 @@ script MainPanelLogic extends Logic
 			local s = "HP " .. tostring(math.floor(mgr.PlayerHp)) .. " / " .. tostring(math.floor(mgr.PlayerMaxHp))
 			if self.hpText.Text ~= s then self.hpText.Text = s end
 		end
-		local hero = _HeroCombatLogic.Active
+		local lp = _UserService.LocalPlayer
+		local hc = isvalid(lp) and lp:GetComponent("script.HeroCombat") or nil
+		local hero = hc ~= nil and hc.Active
 		if isvalid(self.mpFill) then
 			local r = 0
-			if hero and _HeroCombatLogic.ManaMax > 0 then r = math.max(0, math.min(1, _HeroCombatLogic.Mana / _HeroCombatLogic.ManaMax)) end
+			if hero and hc.ManaMax > 0 then r = math.max(0, math.min(1, hc.Mana / hc.ManaMax)) end
 			self.mpFill.FillAmount = r
 		end
 		if isvalid(self.mpText) then
 			local s = "MP -"
-			if hero then s = "MP " .. tostring(math.floor(_HeroCombatLogic.Mana)) .. " / " .. tostring(math.floor(_HeroCombatLogic.ManaMax)) end
+			if hero then s = "MP " .. tostring(math.floor(hc.Mana)) .. " / " .. tostring(math.floor(hc.ManaMax)) end
 			if self.mpText.Text ~= s then self.mpText.Text = s end
 		end
 	end
@@ -724,7 +726,7 @@ script MainPanelLogic extends Logic
 		if isvalid(self.expText) then
 			local label = "EXP " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. " (" .. string.format("%.1f", target * 100) .. "%)"
 			-- 스테이지 레벨업 모드: 막대 = 이번 스테이지 웨이브 처치 수
-			if mgr.StageLevelUp then label = "스테이지 " .. tostring(mgr.Stage) .. "/" .. tostring(mgr.StagesPerFloor) .. "  처치 " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) end
+			if mgr.StageLevelUp then label = "웨이브 " .. tostring(mgr.Stage) .. "/" .. tostring(mgr.StagesPerFloor) .. "  처치 " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) end
 			if self.expText.Text ~= label then self.expText.Text = label end
 		end
 	end
@@ -770,7 +772,7 @@ script MainPanelLogic extends Logic
 				.. "크리티컬    " .. string.format("%.1f", mgr.CritRate) .. "% / " .. tostring(math.floor(mgr.CritDmg)) .. "%\n"
 				.. "명중률      " .. string.format("%.1f", mgr.Accuracy) .. "%\n"
 				.. "공격 속도   " .. string.format("%.2f", speed) .. "회/초\n"
-				.. "현재 층      " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "스테이지\n"
+				.. "현재 층      " .. tostring(mgr.Floor) .. "층 " .. tostring(mgr.Stage) .. "웨이브\n"
 				.. "최고 층      " .. tostring(mgr.BestFloor) .. "층"
 			-- 악마의 거래 대가 (진행 중일 때만)
 			if mgr.CurseText ~= "" then info = info .. "\n대가        " .. mgr.CurseText end

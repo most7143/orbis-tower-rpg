@@ -7,7 +7,7 @@
   "Usage": 0,
   "UsePublish": 1,
   "UseService": 0,
-  "CoreVersion": "26.10.0.0",
+  "CoreVersion": "26.11.0.0",
   "StudioVersion": "0.1.0.0",
   "DynamicLoading": 0,
   "ContentProto": {
@@ -446,31 +446,31 @@
             {
               "@type": "MOD.Core.UITransformComponent",
               "ActivePlatform": 255,
-              "AlignmentOption": 0,
+              "AlignmentOption": 5,
               "AnchorsMax": {
-                "x": 0.5,
-                "y": 0.5
+                "x": 1.0,
+                "y": 1.0
               },
               "AnchorsMin": {
-                "x": 0.5,
-                "y": 0.5
+                "x": 1.0,
+                "y": 1.0
               },
               "MobileOnly": false,
               "OffsetMax": {
-                "x": 587.2,
-                "y": 346.0
+                "x": -20.0,
+                "y": -20.0
               },
               "OffsetMin": {
-                "x": 452.8,
-                "y": 290.0
+                "x": -84.0,
+                "y": -84.0
               },
               "Pivot": {
-                "x": 0.5,
-                "y": 0.5
+                "x": 1.0,
+                "y": 1.0
               },
               "RectSize": {
-                "x": 134.4,
-                "y": 56.0
+                "x": 64.0,
+                "y": 64.0
               },
               "UIMode": 1,
               "UIScale": {
@@ -480,8 +480,8 @@
               },
               "UIVersion": 2,
               "anchoredPosition": {
-                "x": 520.0,
-                "y": 318.0
+                "x": -20.0,
+                "y": -20.0
               },
               "Rotation": {
                 "x": 0.0,
@@ -489,8 +489,8 @@
                 "z": 0.0
               },
               "Position": {
-                "x": 520.0,
-                "y": 318.0,
+                "x": 940.0,
+                "y": 520.0,
                 "z": 0.0
               },
               "QuaternionRotation": {
@@ -513,7 +513,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                "DataId": "63cc491b18bd41ab961880e152b57e4d"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -527,7 +527,7 @@
               "OrderInLayer": 0,
               "OverrideSorting": false,
               "PlayRate": 1.0,
-              "PreserveSprite": 1,
+              "PreserveSprite": 0,
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
@@ -606,21 +606,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "e38cdce235d54681b4906e24f01ac8dd"
+                  "DataId": "234a3cef58ae4954a5ff024688ca66fd"
                 },
                 "PressedSprite": {
-                  "DataId": "54979bc4c3d24e8ab93cfc80149f5e27"
+                  "DataId": "6b79d55bd6d44f18b5ab84ffbe16da72"
                 },
                 "SelectedSprite": {
-                  "DataId": "a5e2d12f2b6742b5a25f0979ed60a72c"
+                  "DataId": "63cc491b18bd41ab961880e152b57e4d"
                 },
                 "DisabledSprite": {
-                  "DataId": "b51f729cc53349f3b5e93e81b24fc550"
+                  "DataId": "0473791f50d642249eb0fb7f4738e791"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -628,13 +629,14 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": true,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.2,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.84,
-                "g": 0.88,
+                "r": 1.0,
+                "g": 1.0,
                 "b": 1.0,
                 "a": 1.0
               },
@@ -662,7 +664,7 @@
               },
               "SizeFit": false,
               "SortingLayer": "UI",
-              "Text": "닫기",
+              "Text": "",
               "Underlay": false,
               "UseConstraintX": false,
               "UseConstraintY": false,
@@ -767,14 +769,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 30.0,
@@ -962,14 +965,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.521568656,
-                "g": 0.521568656,
-                "b": 0.5058824,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -1160,7 +1164,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "7d9b5d59a9b64746be70fd86216b81b6"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -1211,7 +1215,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -1308,14 +1312,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -1503,14 +1508,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 25.0,
@@ -1698,14 +1704,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -1893,14 +1900,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.521568656,
-                "g": 0.521568656,
-                "b": 0.5058824,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -2182,7 +2190,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -2233,7 +2241,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -2274,29 +2282,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -2579,14 +2597,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -3774,7 +3793,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -3825,7 +3844,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -3866,29 +3885,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -4171,14 +4200,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -5366,7 +5396,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -5417,7 +5447,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -5458,29 +5488,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -5763,14 +5803,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -6958,7 +6999,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -7009,7 +7050,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -7050,29 +7091,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -7355,14 +7406,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -8550,7 +8602,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -8601,7 +8653,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -8642,29 +8694,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -8947,14 +9009,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -10142,7 +10205,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -10193,7 +10256,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -10234,29 +10297,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -10539,14 +10612,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -11734,7 +11808,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -11785,7 +11859,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -11826,29 +11900,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -12131,14 +12215,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -13326,7 +13411,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -13377,7 +13462,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -13418,29 +13503,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -13723,14 +13818,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -14918,7 +15014,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -14969,7 +15065,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -15010,29 +15106,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -15315,14 +15421,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -16510,7 +16617,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -16561,7 +16668,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -16602,29 +16709,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -16907,14 +17024,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -18102,7 +18220,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -18153,7 +18271,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -18194,29 +18312,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -18499,14 +18627,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -19694,7 +19823,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -19745,7 +19874,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -19786,29 +19915,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -20091,14 +20230,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -21286,7 +21426,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -21337,7 +21477,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -21378,29 +21518,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -21683,14 +21833,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -22878,7 +23029,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -22929,7 +23080,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -22970,29 +23121,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -23275,14 +23436,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -24470,7 +24632,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -24521,7 +24683,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -24562,29 +24724,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -24867,14 +25039,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -26062,7 +26235,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -26113,7 +26286,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -26154,29 +26327,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -26459,14 +26642,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -27654,7 +27838,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -27705,7 +27889,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -27746,29 +27930,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -28051,14 +28245,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -29246,7 +29441,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -29297,7 +29492,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -29338,29 +29533,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -29643,14 +29848,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -30838,7 +31044,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -30889,7 +31095,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -30930,29 +31136,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -31235,14 +31451,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -32430,7 +32647,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b98a964cddde44bc91cc608e648320d4"
+                "DataId": "a88cfe62e8e64c39bf14d682a77ef4a0"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -32481,7 +32698,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -32522,29 +32739,39 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "e9f1678141ff4a57bf17d5cf52e0a27b"
+                },
+                "PressedSprite": {
+                  "DataId": "1ee26fe6cab54961b986f0c552838954"
+                },
+                "SelectedSprite": {
+                  "DataId": "1e130afe90a842028aed70edadbfb9f1"
+                },
+                "DisabledSprite": {
+                  "DataId": "d262f8e8502e4b7b88f381a9b7a4e4fb"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
-              "Transition": 1,
+              "Transition": 2,
               "Enable": true
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Default",
               "FontColor": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 24.0,
@@ -32827,14 +33054,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -34022,7 +34250,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b66ac8dc630b46a7b51f2687639b3092"
+                "DataId": "f6850016d5a94cfba07d55858733d8f1"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -34073,7 +34301,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -34173,7 +34401,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "75f3c6dbf2434bcaa0e4b2d430575e2d"
+                "DataId": "65d8340b880940b5b2d2d3342dad63aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -34224,7 +34452,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -34266,21 +34494,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "6ba383acf31a4c5bb105720d50c0ccd4"
+                  "DataId": "292e7807ec754ea19ff3c28ec4b10311"
                 },
                 "PressedSprite": {
-                  "DataId": "a79e3b3c39dd46d4bcf92f29ecf88733"
+                  "DataId": "7e3db0c2c7944ba29d49c35222ad98b3"
                 },
                 "SelectedSprite": {
-                  "DataId": "75f3c6dbf2434bcaa0e4b2d430575e2d"
+                  "DataId": "8739b8a9b7e84759abd297cae38822dc"
                 },
                 "DisabledSprite": {
-                  "DataId": "f2cf3f5019aa4da995e72294dacb3e64"
+                  "DataId": "b5179a32f5c54fabbd757a0d8a2fbe18"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -34288,14 +34517,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.8392157,
-                "g": 0.8784314,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -34430,7 +34660,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "75f3c6dbf2434bcaa0e4b2d430575e2d"
+                "DataId": "65d8340b880940b5b2d2d3342dad63aa"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -34481,7 +34711,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {
@@ -34523,21 +34753,22 @@
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
                 "HighlightedSprite": {
-                  "DataId": "6ba383acf31a4c5bb105720d50c0ccd4"
+                  "DataId": "292e7807ec754ea19ff3c28ec4b10311"
                 },
                 "PressedSprite": {
-                  "DataId": "a79e3b3c39dd46d4bcf92f29ecf88733"
+                  "DataId": "7e3db0c2c7944ba29d49c35222ad98b3"
                 },
                 "SelectedSprite": {
-                  "DataId": "75f3c6dbf2434bcaa0e4b2d430575e2d"
+                  "DataId": "8739b8a9b7e84759abd297cae38822dc"
                 },
                 "DisabledSprite": {
-                  "DataId": "f2cf3f5019aa4da995e72294dacb3e64"
+                  "DataId": "b5179a32f5c54fabbd757a0d8a2fbe18"
                 }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
+              "Selectable": false,
               "SortingLayer": "UI",
               "Transition": 2,
               "Enable": true
@@ -34545,14 +34776,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.8392157,
-                "g": 0.8784314,
-                "b": 1.0,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -34684,14 +34916,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -34882,7 +35115,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "b06371157189437db40ab9468f0f4869"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -34933,7 +35166,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -35030,14 +35263,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.521568656,
-                "g": 0.521568656,
-                "b": 0.5058824,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -35376,14 +35610,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 28.0,
@@ -35571,14 +35806,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -35769,7 +36005,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "ebd4a7846c884f178313dd511c24072c"
+                "DataId": "e64a2ce6121a4dbf9d377aa8204cf00c"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -35787,10 +36023,10 @@
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
-                "a": 1.0
+                "r": 0.53,
+                "g": 0.59,
+                "b": 0.67,
+                "a": 0.65
               },
               "DropShadow": false,
               "DropShadowAngle": 120.0,
@@ -35917,14 +36153,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.847058833,
-                "g": 0.733333349,
-                "b": 0.4745098,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 22.0,
@@ -36112,14 +36349,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -36307,14 +36545,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -36502,14 +36741,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -36697,14 +36937,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -36892,14 +37133,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -37087,14 +37329,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.9098039,
-                "g": 0.9098039,
-                "b": 0.894117653,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 21.0,
@@ -37285,7 +37528,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "ebd4a7846c884f178313dd511c24072c"
+                "DataId": "e64a2ce6121a4dbf9d377aa8204cf00c"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -37303,10 +37546,10 @@
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
-                "a": 1.0
+                "r": 0.53,
+                "g": 0.59,
+                "b": 0.67,
+                "a": 0.65
               },
               "DropShadow": false,
               "DropShadowAngle": 120.0,
@@ -37433,14 +37676,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -37631,7 +37875,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "f32c4e80330143dd891207c6b60020aa"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -37682,7 +37926,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -37779,14 +38023,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -37974,14 +38219,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -38169,14 +38415,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -38364,14 +38611,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -38559,14 +38807,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -38754,14 +39003,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -38949,14 +39199,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -39144,14 +39395,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -39339,14 +39591,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 19.0,
@@ -39537,7 +39790,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "9d64e560ca6c46afaf17ae025f547403"
+                "DataId": "bea05f1ee4ea484eb10471a620c69046"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -39588,7 +39841,7 @@
               },
               "OutlineWidth": 3.0,
               "RaycastTarget": false,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             }
           ],
@@ -39685,14 +39938,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.847058833,
-                "g": 0.733333349,
-                "b": 0.4745098,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 23.0,
@@ -39880,14 +40134,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.521568656,
-                "g": 0.521568656,
-                "b": 0.5058824,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 18.0,
@@ -40078,7 +40333,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "ebd4a7846c884f178313dd511c24072c"
+                "DataId": "e64a2ce6121a4dbf9d377aa8204cf00c"
               },
               "LocalPosition": {
                 "x": 0.0,
@@ -40096,10 +40351,10 @@
               "SortingLayer": "UI",
               "StartFrameIndex": 0,
               "Color": {
-                "r": 1.0,
-                "g": 1.0,
-                "b": 1.0,
-                "a": 1.0
+                "r": 0.53,
+                "g": 0.59,
+                "b": 0.67,
+                "a": 0.65
               },
               "DropShadow": false,
               "DropShadowAngle": 120.0,
@@ -40226,14 +40481,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -40421,14 +40677,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -40616,14 +40873,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -40811,14 +41069,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -41006,14 +41265,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -41201,14 +41461,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -41396,14 +41657,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -41591,14 +41853,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -41786,14 +42049,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -41981,14 +42245,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -42176,14 +42441,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.14,
+                "g": 0.17,
+                "b": 0.21,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -42371,14 +42637,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.5882353,
-                "g": 0.5882353,
-                "b": 0.572549045,
+                "r": 0.2,
+                "g": 0.48,
+                "b": 0.12,
                 "a": 1.0
               },
               "FontSize": 20.0,
@@ -42566,14 +42833,15 @@
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
               "BestFit": false,
+              "ColorGradient": false,
               "ConstraintX": 100.0,
               "ConstraintY": 100.0,
               "FaceDilate": 0.0,
               "Font": "Dotum",
               "FontColor": {
-                "r": 0.521568656,
-                "g": 0.521568656,
-                "b": 0.5058824,
+                "r": 0.36,
+                "g": 0.4,
+                "b": 0.46,
                 "a": 1.0
               },
               "FontSize": 17.0,

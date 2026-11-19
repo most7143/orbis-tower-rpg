@@ -1,0 +1,66 @@
+{
+  "referenceResolution": [
+    1920,
+    1080
+  ],
+  "engine": "TextGUIRendererComponent",
+  "rasterizedTextInRuntimeAssets": false,
+  "valuesAreStartingPointsNotMakerVerified": true,
+  "base": {
+    "Font": "Maple",
+    "FontStyle": 1,
+    "FontColor": "#FFF3D7",
+    "OutlineColor": "#251C36",
+    "OutlineWidth": 0.12,
+    "FaceDilate": 0,
+    "FaceSoftness": 0,
+    "Underlay": true,
+    "UnderlayColor": "#080B1ABF",
+    "UnderlayOffsetX": 0.1,
+    "UnderlayOffsetY": -0.16,
+    "UnderlayDilate": 0.04,
+    "UnderlaySoftness": 0.06,
+    "BestFit": false,
+    "SizeFit": false,
+    "IsRichText": false
+  },
+  "colors": {
+    "body": "#FFF3D7",
+    "title": "#FFE5A6",
+    "muted": "#B7AFCA",
+    "caption": "#9F94B2",
+    "success": "#A4EBAF",
+    "new": "#FFDD80",
+    "onCreamPlaque": "#482813",
+    "disabled": "#A6A3AE"
+  },
+  "sizes": {
+    "stageTitle": 56,
+    "resultTitle": 64,
+    "panelTitle": 38,
+    "sectionTitle": 28,
+    "regionRow": 28,
+    "detailTitle": 42,
+    "mission": 25,
+    "resultMission": 28,
+    "primaryButton": 54,
+    "resultButtons": 36,
+    "secondaryButton": 28,
+    "buttonCost": 26,
+    "itemLabel": 22,
+    "helper": 21
+  },
+  "buttonStates": {
+    "normal": "#FFF3D7",
+    "highlight": "#FFFFFF",
+    "pressed": "#FFE2A0",
+    "disabled": "#A6A3AE",
+    "selected": "#FFF3D7"
+  },
+  "creamPlaqueText": {
+    "FontColor": "#482813",
+    "OutlineWidth": 0,
+    "Underlay": false
+  },
+  "previewNote": "Preview text uses a system Korean font approximation; actual game text must use the project Maple font. layout JSON holds per-label overrides."
+}

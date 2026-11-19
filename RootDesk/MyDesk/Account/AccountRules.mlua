@@ -1,0 +1,199 @@
+@Logic
+script AccountRules extends Logic
+    property integer MaxLevel = 100
+    property integer ExpFloorCap = 105
+    property integer TotalRequired = 20370003
+
+    method table Rewards(integer level)
+        -- 계정 보상 단일 원본. Lv1 기본 효과 포함, 같은 종류는 합산한다.
+        if self._T.rewards == nil then
+            self._T.rewards = {
+        [1] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [2] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [3] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [4] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [5] = { { key = "BasicDmg", value = 6, label = "기본 공격 피해 +6%" } },
+        [6] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [7] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [8] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [9] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [10] = { { key = "SkillDmg", value = 10, label = "스킬 피해 +10%" }, { key = "BasicDmg", value = 6, label = "기본 공격 피해 +6%" } },
+        [11] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [12] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [13] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [14] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [15] = { { key = "MesoPct", value = 10, label = "메소 획득 +10%" } },
+        [16] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [17] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [18] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [19] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [20] = { { key = "EliteDmg", value = 10, label = "보스·엘리트 피해 +10%" }, { key = "Crit", value = 2, label = "치명타 확률 +2%p" } },
+        [21] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [22] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [23] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [24] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [25] = { { key = "Mastery", value = 6, label = "숙련도 +6%p" } },
+        [26] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [27] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [28] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [29] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [30] = { { key = "Speed", value = 6, label = "공격 속도 +6%" }, { key = "BasicDmg", value = 10, label = "기본 공격 피해 +10%" } },
+        [31] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [32] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [33] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [34] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [35] = { { key = "CritDmg", value = 10, label = "치명타 피해 +10%p" } },
+        [36] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [37] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [38] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [39] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [40] = { { key = "DmgReduce", value = 4, label = "받는 피해 -4%" }, { key = "EliteDmg", value = 10, label = "보스·엘리트 피해 +10%" } },
+        [41] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [42] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [43] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [44] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [45] = { { key = "FirstHitDmg", value = 10, label = "첫 타격 피해 +10%" } },
+        [46] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [47] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [48] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [49] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [50] = { { key = "SkillDmg", value = 16, label = "스킬 피해 +16%" }, { key = "MesoPct", value = 10, label = "메소 획득 +10%" } },
+        [51] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [52] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [53] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [54] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [55] = { { key = "Crit", value = 2, label = "치명타 확률 +2%p" } },
+        [56] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [57] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [58] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [59] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [60] = { { key = "EliteDmg", value = 16, label = "보스·엘리트 피해 +16%" }, { key = "CritDmg", value = 10, label = "치명타 피해 +10%p" } },
+        [61] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [62] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [63] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [64] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [65] = { { key = "EnhRate", value = 2, label = "인게임 장비 강화 확률 +2%p" } },
+        [66] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [67] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [68] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [69] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [70] = { { key = "BasicDmg", value = 20, label = "기본 공격 피해 +20%" }, { key = "Speed", value = 4, label = "공격 속도 +4%" } },
+        [71] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [72] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [73] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [74] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [75] = { { key = "ExtraPick", value = 4, label = "추가 스킬 카드 확률 +4%p" } },
+        [76] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [77] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [78] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [79] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [80] = { { key = "DmgReduce", value = 6, label = "받는 피해 -6%" }, { key = "Mastery", value = 10, label = "숙련도 +10%p" } },
+        [81] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [82] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [83] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [84] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [85] = { { key = "ProcChance", value = 2, label = "공격 시 발동 확률 +2%p" } },
+        [86] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [87] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [88] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [89] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [90] = { { key = "SkillDmg", value = 20, label = "스킬 피해 +20%" }, { key = "EliteDmg", value = 10, label = "보스·엘리트 피해 +10%" } },
+        [91] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [92] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [93] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [94] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [95] = { { key = "MesoPct", value = 20, label = "메소 획득 +20%" } },
+        [96] = { { key = "AccountAtk", value = 10, label = "공격력 +10%" } },
+        [97] = { { key = "AccountHp", value = 10, label = "최대 체력 +10%" } },
+        [98] = { { key = "AccountDef", value = 10, label = "방어력 +10%" } },
+        [99] = { { key = "AccountMana", value = 10, label = "최대 마나 +10%" } },
+        [100] = { { key = "BasicDmg", value = 20, label = "기본 공격 피해 +20%" }, { key = "SkillDmg", value = 20, label = "스킬 피해 +20%" }, { key = "EliteDmg", value = 20, label = "보스·엘리트 피해 +20%" } },
+            }
+        end
+        return self._T.rewards[math.max(1, math.min(100, level))]
+    end
+
+    method string RewardText(integer level)
+        -- 해당 레벨에서 추가되는 효과만 표시한다.
+        local labels = {}
+        for _, r in ipairs(self:Rewards(level)) do table.insert(labels, r.label) end
+        return table.concat(labels, " / ")
+    end
+
+    method integer Need(integer level)
+        -- 105층 성장 경로·하루20판·성공80% 기준 총량. 99단계에서 반올림 오차 보정.
+        if level >= 100 then return 0 end
+        if self._T.needs == nil then
+            self._T.needs = {}
+            local sum = 0
+            for i = 1, 99 do
+                local v = math.floor(self.TotalRequired / 328350 * i * i + 0.5)
+                self._T.needs[i] = v
+                sum = sum + v
+            end
+            self._T.needs[99] = self._T.needs[99] + self.TotalRequired - sum
+        end
+        return self._T.needs[math.max(1, level)]
+    end
+
+    method table Progress(integer total)
+        -- 총 누적 경험치에서 계정 레벨과 레벨 내 경험치를 복원한다.
+        local rest = math.max(0, math.min(self.TotalRequired, total))
+        local lv = 1
+        while lv < 100 and rest >= self:Need(lv) do rest = rest - self:Need(lv) lv = lv + 1 end
+        if lv >= 100 then rest = 0 end
+        return { level = lv, exp = rest, need = self:Need(lv) }
+    end
+
+    method table Bonuses(integer level)
+        -- 현재 레벨까지 재산출해 로그인·판 시작마다 중복 적용되지 않게 한다.
+        local result = {}
+        for i = 1, math.max(1, math.min(100, level)) do
+            for _, r in ipairs(self:Rewards(i)) do result[r.key] = (result[r.key] or 0) + r.value end
+        end
+        return result
+    end
+
+    method integer ClearExp(integer floor)
+        -- 실제 마지막105층에서 1층의20배. 테이블 확장 시에도 현재 상한을 유지한다.
+        local f = math.max(1, math.min(self.ExpFloorCap, floor))
+        return math.floor(100 * 20 ^ ((f - 1) / (self.ExpFloorCap - 1)) + 0.5)
+    end
+
+    method integer RunExp(integer floor, boolean clear, integer completed, integer total)
+        -- 실패·포기는 완료 스테이지 비례, 클리어는 확정 전량.
+        local base = self:ClearExp(floor)
+        if clear then return base end
+        return math.floor(base * 0.5 * math.max(0, math.min(total, completed)) / math.max(1, total))
+    end
+
+    method table Cosmetics(string kind)
+        -- 기본 초상3종은 무료 제공. 프레임·칭호는 계정 레벨로 해금하는 초기 카탈로그.
+        if kind == "profile" then return { {id="hero",name="히어로",level=1}, {id="paladin",name="팔라딘",level=1}, {id="darkknight",name="다크나이트",level=1} } end
+        if kind == "frame" then return {
+            {id="gold",name="따뜻한 금빛",level=1}, {id="silver",name="은빛 프레임",level=10}, {id="green",name="숲빛 프레임",level=20},
+            {id="blue",name="하늘빛 프레임",level=25}, {id="rose",name="장밋빛 프레임",level=35}, {id="purple",name="신비한 프레임",level=50},
+            {id="orange",name="노을빛 프레임",level=65}, {id="red",name="붉은 별 프레임",level=80}, {id="prism",name="무지개 프레임",level=100}
+        } end
+        if kind == "title" then return {
+            {id="none",name="칭호 해제",level=1,ruid=""},
+            {id="beginner",name="첫걸음",level=5,ruid="9bf18287398c44699c20fc5123d1a1ae"},
+            {id="challenger",name="탑의 도전자",level=10,ruid="ac88638649c3479bbb754e4b34bb3eac"},
+            {id="brave",name="굳건한 도전자",level=20,ruid="9bf18287398c44699c20fc5123d1a1ae"},
+            {id="explorer",name="탑의 탐험가",level=30,ruid="ac88638649c3479bbb754e4b34bb3eac"},
+            {id="guardian",name="탑의 수호자",level=40,ruid="9bf18287398c44699c20fc5123d1a1ae"},
+            {id="cloud",name="구름 위의 모험가",level=60,ruid="ac88638649c3479bbb754e4b34bb3eac"},
+            {id="hero",name="오르비스의 영웅",level=70,ruid="9bf18287398c44699c20fc5123d1a1ae"},
+            {id="master",name="탑의 지배자",level=80,ruid="ac88638649c3479bbb754e4b34bb3eac"},
+            {id="star",name="별의 계승자",level=90,ruid="9bf18287398c44699c20fc5123d1a1ae"},
+            {id="legend",name="탑의 전설",level=100,ruid="ac88638649c3479bbb754e4b34bb3eac"}
+        } end
+        return {}
+    end
+
+    method table Cosmetic(string kind, string id)
+        -- 유효 ID와 해금 조건을 공통 조회한다.
+        for _, item in ipairs(self:Cosmetics(kind)) do if item.id == id then return item end end
+        return nil
+    end
+end
