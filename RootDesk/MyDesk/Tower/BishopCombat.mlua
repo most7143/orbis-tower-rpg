@@ -409,9 +409,7 @@ script BishopCombat extends Component
 		-- 몬스터 상태(자상·기절 표시)를 들고 있는 메인 히어로.
 		local mgr = self._T.mgr
 		if mgr == nil then return nil end
-		local h = mgr:MainHero()
-		if h == self then return nil end
-		return h
+		return mgr:StatusHero()
 	end
 
 	@ExecSpace("ServerOnly")

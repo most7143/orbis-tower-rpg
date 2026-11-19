@@ -528,6 +528,7 @@ script BattleHUDLogic extends Logic
 			comp = mgr.Entity:GetChildByName("Companion")
 			if isvalid(comp) then
 				cc = comp:GetComponent("script.BishopCombat")
+				if cc == nil then cc = comp:GetComponent("script.JobCombat") end
 				if cc == nil then cc = comp:GetComponent("script.HeroCombat") end
 			end
 		end
@@ -560,8 +561,8 @@ script BattleHUDLogic extends Logic
 				end
 			end
 		end
-		local jobName = "히어로"
-		if cc.JobId == "Bishop" then jobName = "비숍" end
+		local names = { Hero = "히어로", Bishop = "비숍", NightLord = "나이트로드", Bowmaster = "보우마스터", Viper = "바이퍼" }
+		local jobName = names[cc.JobId] or cc.JobId
 		setText("Job", jobName)
 		setBar("HpFill", mgr.CompanionHp / math.max(1, mgr.CompanionMaxHp), 146)
 		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax), 146)
@@ -570,6 +571,12 @@ script BattleHUDLogic extends Logic
 			state = "<color=#E5484D>쓰러짐</color>"
 		elseif cc.JobId == "Bishop" then
 			state = "성수 " .. tostring(cc.HolyWater) .. "/" .. tostring(cc.HolyMaxNow)
+		elseif cc.JobId == "NightLord" then
+			state = "표식 " .. tostring(cc.Res) .. "/" .. tostring(cc.ResMax)
+		elseif cc.JobId == "Bowmaster" then
+			state = "화살 " .. tostring(cc.Res) .. "/" .. tostring(cc.ResMax)
+		elseif cc.JobId == "Viper" then
+			state = "에너지 " .. tostring(cc.Res)
 		else
 			state = "HP " .. tostring(math.floor(mgr.CompanionHp)) .. "/" .. tostring(math.floor(mgr.CompanionMaxHp))
 		end
@@ -618,8 +625,8 @@ script BattleHUDLogic extends Logic
 		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/HeroRes")
 		if not isvalid(root) then return end
 		local lp = _UserService.LocalPlayer
-		local hc = isvalid(lp) and lp:GetComponent("script.HeroCombat") or nil
-		local show = mgr ~= nil and hc ~= nil and hc.Active and mgr.JobId == "Hero" and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		local hc = (function() if not isvalid(lp) then return nil end for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do local c = lp:GetComponent(n) if c ~= nil and c.Active then return c end end return nil end)()
+		local show = mgr ~= nil and hc ~= nil and hc.Active and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
 		if root.Enable ~= show then root:SetEnable(show) end
 		if not show then return end
 		local function setText(path, s)

@@ -141,6 +141,17 @@ script PlayerEngrave extends Component
 	property integer HolyWaterMaxLv = 11
 	property integer HolyWaterBaseCost = 20
 	property integer HolyWaterStepCost = 10
+	-- 나이트로드·보우마스터·바이퍼 고유 패시브 레벨 (직업 → 레벨, 0이면 잠김). 저장 키 jp
+	@Sync
+	property SyncTable<string, integer> JobPassiveLv
+	property integer JobPassiveMaxLv = 11
+	property integer JobPassiveBaseCost = 20
+	property integer JobPassiveStepCost = 10
+	-- 2인 편성: 메인·동료 직업 (저장 키 mj·cj)
+	@Sync
+	property string MainJob = "Hero"
+	@Sync
+	property string CompJob = "Bishop"
 
 	-- 입장 에너지: 서버 UTC로 충전. 충전은 마지막 차감 시각에서 계산하므로 매초 저장하지 않는다.
 	-- 별 미션 (층마다 3개: 1=클리어, 2=제한 시간 안 클리어, 4=체력 50% 이상 클리어, 영구 누적)
@@ -1152,6 +1163,17 @@ script PlayerEngrave extends Component
 		self.SkillBooks = math.max(0, math.floor(t["b"] or 0))
 		self.ComboAttackLv = math.max(0, math.min(self.ComboAttackMaxLv, math.floor(t["p"] or 0)))
 		self.HolyWaterLv = math.max(1, math.min(self.HolyWaterMaxLv, math.floor(t["hw"] or 1)))
+		local jp = t["jp"] or {}
+		for _, job in ipairs(self._T.jobs) do
+			if job ~= "Hero" and job ~= "Bishop" then self.JobPassiveLv[job] = math.max(0, math.min(self.JobPassiveMaxLv, math.floor(jp[job] or 0))) end
+		end
+		self.MainJob = "Hero"
+		self.CompJob = "Bishop"
+		if self._T.jobGradeSkills[t["mj"] or ""] ~= nil then self.MainJob = t["mj"] end
+		if self._T.jobGradeSkills[t["cj"] or ""] ~= nil and t["cj"] ~= self.MainJob then self.CompJob = t["cj"] end
+		if self.CompJob == self.MainJob then
+			if self.MainJob == "Bishop" then self.CompJob = "Hero" else self.CompJob = "Bishop" end
+		end
 		for _, sk in ipairs(self._T.skills) do
 			self.SkillOwnLv[sk.id] = math.max(0, math.min(maxLv, math.floor(own[sk.id] or 0)))
 			self.SkillCnt[sk.id] = math.max(0, math.floor(cnt[sk.id] or 0))
@@ -1208,6 +1230,18 @@ script PlayerEngrave extends Component
 		local data = { b = self.SkillBooks }
 		if self.ComboAttackLv > 0 then data["p"] = self.ComboAttackLv end
 		if self.HolyWaterLv > 1 then data["hw"] = self.HolyWaterLv end
+		local jp = {}
+		local anyJp = false
+		for _, job in ipairs(self._T.jobs) do
+			local lv = self.JobPassiveLv[job] or 0
+			if lv > 0 then
+				jp[job] = lv
+				anyJp = true
+			end
+		end
+		if anyJp then data["jp"] = jp end
+		if self.MainJob ~= "Hero" then data["mj"] = self.MainJob end
+		if self.CompJob ~= "Bishop" then data["cj"] = self.CompJob end
 		local own = {}
 		local cnt = {}
 		local equip = {}
@@ -1399,6 +1433,37 @@ script PlayerEngrave extends Component
 	end
 
 	@ExecSpace("Server")
+	method void RequestJobPassiveUpgrade(string job)
+		-- 나이트로드·보우마스터·바이퍼 고유 패시브 레벨업 (Lv.0→1 해금). 스킬북 소모.
+		if not self:CanEditSkill(senderUserId) then return end
+		if job == "Hero" or job == "Bishop" or self._T.jobGradeSkills[job] == nil then return end
+		local lv = self.JobPassiveLv[job] or 0
+		if lv >= self.JobPassiveMaxLv then return end
+		local cost = self.JobPassiveBaseCost + lv * self.JobPassiveStepCost
+		if self.SkillBooks < cost then return end
+		self.SkillBooks = self.SkillBooks - cost
+		self.JobPassiveLv[job] = lv + 1
+		self.SkillResult = "JobPassive:" .. job
+		self.SkillMsg = "passive"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] job passive " .. job .. " lv=" .. tostring(lv + 1) .. " books=" .. tostring(self.SkillBooks))
+	end
+
+	@ExecSpace("Server")
+	method void RequestSetFormation(string mainJob, string compJob)
+		-- 편성 저장: 메인·동료 직업 (같은 직업 2명은 안 된다).
+		if not self:CanEditSkill(senderUserId) then return end
+		if self._T.jobGradeSkills[mainJob] == nil or self._T.jobGradeSkills[compJob] == nil or mainJob == compJob then return end
+		self.MainJob = mainJob
+		self.CompJob = compJob
+		self.SkillMsg = "formation"
+		self.SkillSeq = self.SkillSeq + 1
+		self:SaveSkills()
+		log("[VRF] formation main=" .. mainJob .. " comp=" .. compJob)
+	end
+
+	@ExecSpace("Server")
 	method void RequestSkillSynth(string id)
 		-- 합성: 같은 스킬 재료 3개로 등급표 확률에 따라 한 등급 위 스킬, 실패하면 같은 등급 스킬 하나.
 		if not self:CanEditSkill(senderUserId) then return end
@@ -1454,11 +1519,12 @@ script PlayerEngrave extends Component
 	@ExecSpace("ServerOnly")
 	method table SkillRunDataFor(string job)
 		-- 판 시작 시 쓸 그 직업의 장착 스킬과 레벨 { equip = {Id...}, lv = {Id: 레벨}, comboLv, holyLv }.
-		local data = { equip = {}, lv = {}, comboLv = 0, holyLv = 1, loaded = false }
+		local data = { equip = {}, lv = {}, comboLv = 0, holyLv = 1, passiveLv = 0, loaded = false }
 		if not self.SkillLoaded then return data end
 		data.loaded = true
 		data.comboLv = self.ComboAttackLv
 		data.holyLv = self.HolyWaterLv
+		data.passiveLv = self.JobPassiveLv[job] or 0
 		for i = 1, self.SkillEquipSlots do
 			local id = self.SkillEquip[self:EquipKey(job, i)] or ""
 			if id ~= "" then

@@ -2864,6 +2864,16 @@ script HeroCombat extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method void TickStatusOnly(Component mgr, number delta)
+		-- 편성에 히어로가 없을 때 (메인이 다른 직업): 몬스터 상태(디버프·줄 선 몬스터 상태·자상·기절 그림)만 돌린다.
+		self._T.mgr = mgr
+		self:TickDebuffs()
+		self:TickQueuedStatus()
+		self:TickBleed(delta)
+		if self._T.icons ~= nil and self._T.icons.stun ~= nil and self:Now() >= (self._T.till.stunFx or 0) then self:ClearIcon("stun") end
+	end
+
+	@ExecSpace("ServerOnly")
 	method void UpdateStatus()
 		-- HUD 상태 줄: 버프 남은 시간, 소환검 충전·시간, 몬스터 자상 중첩, 기절.
 		local parts = {}

@@ -29,6 +29,9 @@ script HeroSkillUILogic extends Logic
 	property number HolyAtkBase = 1
 	property number HolyAtkPerLv = 0.2
 	property string JobTabPath = "JobTab/"
+	-- 직업 이름·고유 패시브 (나이트로드·보우마스터·바이퍼). 수치는 JobCombat과 같게.
+	property string JobNames = "Hero:히어로,Bishop:비숍,NightLord:나이트로드,Bowmaster:보우마스터,Viper:바이퍼"
+	property string FormationPath = "Formation/"
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -92,6 +95,14 @@ script HeroSkillUILogic extends Logic
 		self:Bind(self:Get("BtnUpgrade"), function() self:OnUpgrade() end)
 		self:Bind(self:Get("BtnSynth"), function() self:OnSynth() end)
 		self:Bind(self:Get("Equip/Passive"), function() self:SelectPassive() end)
+		for _, name in ipairs({ "BtnMain", "BtnComp" }) do
+			local btn = self:Get(self.FormationPath .. name)
+			if isvalid(btn) then
+				_GrowthUILogic:StyleButton(btn)
+				local isMain = name == "BtnMain"
+				self:Bind(btn, function() self:OnFormation(isMain) end)
+			end
+		end
 		for _, job in ipairs(self._T.jobs) do
 			local j = job
 			local tab = self:Get(self.JobTabPath .. job)
@@ -218,6 +229,36 @@ script HeroSkillUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method string JobName(string job)
+		-- 직업 Id → 표시 이름.
+		for entry in string.gmatch(self.JobNames, "[^,]+") do
+			local k, v = string.match(entry, "^([^:]+):(.*)$")
+			if k == job then return v end
+		end
+		return job
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnFormation(boolean isMain)
+		-- 편성 버튼: 지금 보는 직업을 메인(또는 동료)으로. 반대쪽과 같은 직업이면 서로 바꾼다.
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local job = self._T.job
+		local main = eng.MainJob
+		local comp = eng.CompJob
+		if isMain then
+			if job == main then return end
+			if job == comp then comp = main end
+			main = job
+		else
+			if job == comp then return end
+			if job == main then main = comp end
+			comp = job
+		end
+		eng:RequestSetFormation(main, comp)
+	end
+
+	@ExecSpace("ClientOnly")
 	method string EquipKey(integer slot)
 		-- 지금 직업의 장착 칸 키 (PlayerEngrave.EquipKey와 같게).
 		if self._T.job == "Hero" then return tostring(slot) end
@@ -231,6 +272,41 @@ script HeroSkillUILogic extends Logic
 			local lv = eng.HolyWaterLv
 			return { name = self.HolyName, icon = self.HolyIconRUID, desc = self.HolyDesc, lv = lv, maxLv = eng.HolyWaterMaxLv, locked = false,
 				cost = eng.HolyWaterBaseCost + (lv - 1) * eng.HolyWaterStepCost, base = self.HolyAtkBase, per = self.HolyAtkPerLv, unit = "성수 1개당", full = 5, fullName = "5개" }
+		end
+		local job = self._T.job
+		if job == "NightLord" or job == "Bowmaster" or job == "Viper" then
+			local jlv = eng.JobPassiveLv[job] or 0
+			local info = { lv = jlv, maxLv = eng.JobPassiveMaxLv, locked = jlv <= 0, cost = eng.JobPassiveBaseCost + jlv * eng.JobPassiveStepCost }
+			if job == "NightLord" then
+				info.name = "마크 오브 나이트로드"
+				info.icon = "cdbd9959dee2488b923d01636d71327c"
+				info.desc = "직접 공격 타수마다 30% 확률로 맞은 몬스터에게 표식 1 (몬스터마다, 최대 5). 표식 1개당 그 몬스터가 나이트로드에게 받는 피해 증가. 가득 차면 약점 노출: 파티 치명타 +15% (8초), 표창 3개 추가"
+				info.base = 1.2
+				info.per = 0.2
+				info.unit = "표식 1개당 받는 피해"
+				info.stat = ""
+				info.full = 5
+				info.fullName = "5개"
+			elseif job == "Bowmaster" then
+				info.name = "퀴버 카트리지"
+				info.icon = "b98c590c48bc4456be86af5f5ec25777"
+				info.desc = "직접 공격 타수마다 30% 확률로 강화 화살 1개 (최대 10). 화살 1개당 기본 공격력 증가. 10개가 되면 다음 공격에 화살 폭풍 5발 (3마리, 둔화)"
+				info.base = 0.6
+				info.per = 0.1
+				info.unit = "화살 1개당"
+				info.full = 10
+				info.fullName = "10개"
+			else
+				info.name = "에너지 차지"
+				info.icon = "06ea89f3087349e39587db13f7f82a49"
+				info.desc = "직접 공격 타수마다 에너지 +5 (최대 100). 50 이상이면 받는 피해 감소, 100이면 기본 공격력 증가와 충전 완료 (8초간 직접 공격마다 체력 0.5% 회복)"
+				info.base = 6
+				info.per = 1
+				info.unit = "에너지 100일 때"
+				info.full = 1
+				info.fullName = "가득"
+			end
+			return info
 		end
 		local lv = eng.ComboAttackLv
 		return { name = self.PassiveName, icon = self.PassiveIconRUID, desc = self.PassiveDesc, lv = lv, maxLv = eng.ComboAttackMaxLv, locked = lv <= 0,
@@ -310,7 +386,10 @@ script HeroSkillUILogic extends Logic
 		if eng == nil then return end
 		-- 고유 패시브 칸을 보고 있으면 콤보 어택 레벨업 (스킬북 소모)
 		if (self._T.selected or 1) == 0 then
-			if self._T.job == "Bishop" then eng:RequestHolyWaterUpgrade() else eng:RequestComboAttackUpgrade() end
+			local job = self._T.job
+			if job == "Bishop" then eng:RequestHolyWaterUpgrade()
+			elseif job == "Hero" then eng:RequestComboAttackUpgrade()
+			else eng:RequestJobPassiveUpgrade(job) end
 			return
 		end
 		local sk = self:SelectedSkill()
@@ -345,11 +424,16 @@ script HeroSkillUILogic extends Logic
 			if isNew then tail = " 신규 획득!" end
 			self._T.msg = head .. "[" .. name .. "]" .. tail
 		elseif kind == "passive" then
-			if id == "HolyWater" then
+			local jp = string.match(eng.SkillResult or "", "^JobPassive:(.+)$")
+			if jp ~= nil then
+				self._T.msg = self:JobName(jp) .. " 고유 패시브 Lv." .. tostring(eng.JobPassiveLv[jp] or 0) .. " 달성!"
+			elseif id == "HolyWater" then
 				self._T.msg = "성수 Lv." .. tostring(eng.HolyWaterLv) .. " 달성!"
 			elseif eng.ComboAttackLv == 1 then self._T.msg = "콤보 어택 해금!" else self._T.msg = "콤보 어택 Lv." .. tostring(eng.ComboAttackLv) .. " 달성!" end
 		elseif kind == "equip" then
 			self._T.msg = ""
+		elseif kind == "formation" then
+			self._T.msg = "편성 저장: 메인 " .. self:JobName(eng.MainJob) .. " · 동료 " .. self:JobName(eng.CompJob)
 		end
 	end
 
@@ -393,6 +477,9 @@ script HeroSkillUILogic extends Logic
 		for _, job in ipairs(self._T.jobs) do
 			_UIButtonLogic:SetSelected(self:Get(self.JobTabPath .. job), job == self._T.job)
 		end
+		self:SetText(self.FormationPath .. "Text", "편성  메인 " .. self:JobName(eng.MainJob) .. " · 동료 " .. self:JobName(eng.CompJob), nil)
+		_UIButtonLogic:SetDisabled(self:Get(self.FormationPath .. "BtnMain"), eng.MainJob == self._T.job)
+		_UIButtonLogic:SetDisabled(self:Get(self.FormationPath .. "BtnComp"), eng.CompJob == self._T.job)
 		_UIButtonLogic:SetSelected(self:Get("Equip/Passive"), self._T.selected == 0)
 		local passiveMark = self:Get("Equip/Passive/Mark")
 		if isvalid(passiveMark) then passiveMark:SetEnable(self._T.selected == 0) end
@@ -489,11 +576,14 @@ script HeroSkillUILogic extends Logic
 		if lv > 0 then lvText = "Lv." .. tostring(lv) .. " / " .. tostring(maxLv) end
 		self:SetText("Info/Grade", "고유 패시브  ·  " .. lvText, self.GoldTextColor)
 		local kindText = "패시브  ·  콤보 자원 (장착 칸 사용 안 함)"
-		if self._T.job == "Bishop" then kindText = "패시브  ·  성수 자원 (장착 칸 사용 안 함)" end
+		if self._T.job == "Bishop" then kindText = "패시브  ·  성수 자원 (장착 칸 사용 안 함)"
+		elseif self._T.job == "NightLord" then kindText = "패시브  ·  표식 자원 (장착 칸 사용 안 함)"
+		elseif self._T.job == "Bowmaster" then kindText = "패시브  ·  강화 화살 자원 (장착 칸 사용 안 함)"
+		elseif self._T.job == "Viper" then kindText = "패시브  ·  에너지 자원 (장착 칸 사용 안 함)" end
 		self:SetText("Info/Category", kindText, self.SubTextColor)
 		self:SetText("Info/Desc", info.desc, self.MainTextColor)
 		local function per(l) return info.base + (l - 1) * info.per end
-		local power = info.unit .. " 기본 공격력 +" .. self:FormatNum(per(math.max(1, lv))) .. "%  (" .. info.fullName .. " +" .. self:FormatNum(per(math.max(1, lv)) * info.full) .. "%)"
+		local power = info.unit .. (info.stat or " 기본 공격력") .. " +" .. self:FormatNum(per(math.max(1, lv))) .. "%  (" .. info.fullName .. " +" .. self:FormatNum(per(math.max(1, lv)) * info.full) .. "%)"
 		if lv <= 0 then power = "해금하면 " .. power end
 		if lv > 0 and lv < maxLv then power = power .. "   (다음 레벨 +" .. self:FormatNum(per(lv + 1)) .. "%)" end
 		self:SetText("Info/Power", power, self.GoldTextColor)

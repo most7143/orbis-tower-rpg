@@ -46,3 +46,48 @@ Bishop,B12,프레이,ea5951b165714bc0849723a9556a5995,Instinct,HeroStar,신성,,
 Bishop,B13,엔젤 오브 제미니,7a0a45ca867b444bbe14400e8ae7f680,Skill,HeroStar,신성,,,,12,0,HeroStrike,0,100,4,,,,,"마나 50 · 쿨타임 {cd}초. 천사 2명이 공격력 {p}%로 {h}번씩 공격 (3마리), 끝까지 맞은 적에게 합동 피해 200%",50,0,200,0
 Bishop,B14,피스메이커,b7aa516d96af462db2eddb1c370af5e4,Skill,HeroStar,신성,,,,5,0,HeroStrike,0,90,2,,,,,"마나 12 · 쿨타임 {cd}초. 공격력 {p}% {h}연속 (3마리). 4초간 몬스터가 받는 피해 +10%, 맞을 때마다 파티 1% 회복",12,0,0,0
 Bishop,B15,디바인 퍼니시먼트,3c1471ba763140878c405f2aefa9047a,Skill,HeroStar,신성,,,,20,0,HeroStrike,0,170,6,,,,,마나 100 · 쿨타임 {cd}초. 성수 5개 이상일 때 전부 써서 공격력 {p}% {h}연속 (4마리). 시전 중 무적,100,5,0,0
+NightLord,N01,럭키 세븐,46b22e703399431d9ab0987233cac868,Skill,HeroStar,표창,,,,5,0,HeroStrike,0,60,2,,,,,마나 8 · 쿨타임 {cd}초. 맞은 몬스터 표식 +1,8,0,0,0
+NightLord,N02,드레인,b2c8721009e24a088730ec6aeb495553,Skill,HeroStar,표창,,,,5,0,HeroStrike,0,220,1,,,,,마나 10 · 쿨타임 {cd}초. 준 피해의 5%만큼 자신 회복 (최대 체력 3% 상한),10,0,0,0
+NightLord,N03,트리플 스로우,1f14d3611a4e45528551547f1f1b794b,Skill,HeroStar,표창,,,,5,0,HeroStrike,0,90,3,,,,,마나 15 · 쿨타임 {cd}초. 30% 재발동,15,0,0,0
+NightLord,N04,쉐도우 파트너,5d79c29ae4e44194a4deda2458adcf08,Auto,HeroStar,표창,,,,25,10,HeroBuff,0,30,1,,,,,{cd}초마다 자동 발동. 25초마다 자동. 직접 공격마다 분신이 원래 피해의 30%로 따라 공격,0,0,0,0
+NightLord,N05,다크 플레어,2e459dfac38b463790f45e7b93318dac,Cooldown,HeroStar,표창,,,,30,20,HeroBuff,0,200,1,,,,,{cd}초마다 자동 발동. 거대 수리검 소환. 나이트로드의 **유일한 범위 보조**,0,0,0,0
+NightLord,N06,쿼드러플 스로우,da7c1ce80f2c44079b2130022212bbbf,Skill,HeroStar,표창,,,,10,0,HeroStrike,0,70,4,,,,,마나 20 · 쿨타임 {cd}초. 15% 재발동. 마지막 타 표식 +1,20,0,0,0
+NightLord,N07,써든레이드,f199155baebe497c87fefbf3c39c7ccb,Skill,HeroStar,표창,,,,5,0,HeroStrike,0,180,1,,,,,마나 12 · 쿨타임 {cd}초. 맹독 2중첩,12,0,0,0
+NightLord,N08,쇼다운 챌린지,956727b76287433c80ddfd9c0dd9dd2f,Skill,HeroStar,표창,,,,7,0,HeroStrike,0,300,1,,,,,"마나 25 · 쿨타임 {cd}초. 결투: 6초간 대상 공격력 -20%, 대상 처치 시 경험치 +20%",25,0,0,0
+NightLord,N09,다크 사이트,ae6ed4be8e0e4c5c9eb19326bb0f8fce,Guard,HeroStar,표창,,,,25,2,HeroBuff,0,0,1,,,,,"체력 40% 이하가 되는 순간 2초 은신(무적, 위협 초기화). 은신 후 첫 공격 확정 치명타",0,0,0,0
+NightLord,N10,포 시즌,ae6ed4be8e0e4c5c9eb19326bb0f8fce,Skill,HeroStar,표창,,,,6,0,HeroStrike,0,400,1,,,,,마나 25 · 쿨타임 {cd}초. 대상의 표식 전부 소비. 1중첩당 피해 +20%,25,0,0,0
+NightLord,N11,블리딩 톡신,f2622075598c4d3dbc98640be7eb34c9,Cooldown,HeroStar,표창,,,,20,10,HeroBuff,0,0,1,,,,,{cd}초마다 자동 발동. 직접 공격이 맞으면 맹독 1중첩. 지속 중 맹독 최대 5 → 10,0,0,0,0
+NightLord,N12,래피드 스로우,59669089f1b44a0f8b4a981275674168,Cooldown,HeroStar,표창,,,,30,8,HeroBuff,0,25,1,,,,,{cd}초마다 자동 발동. 지속 중 기본 공격 속도 +40%. 기본 공격마다 같은 대상에게 표창 2개 추가,0,0,0,0
+NightLord,N13,쉐도우 스피어,f8d19df09dab415aa3cfd6439ff96d4a,Instinct,HeroStar,표창,,,,15,10,HeroBuff,10,60,1,,,,,기본 공격이 맞으면 10% 확률로 발동. 지속 중 기본 공격에 그림자 창,0,0,0,0
+NightLord,N14,풍마수리검,459228cf9906473d91d0df063132f3dd,Skill,HeroStar,표창,,,,12,0,HeroStrike,0,250,1,,,,,마나 50 · 쿨타임 {cd}초. 대상에게 박혀 3초간 0.5초마다 공격,50,0,0,0
+NightLord,N15,다크로드의 비전서,459228cf9906473d91d0df063132f3dd,Skill,HeroStar,표창,,,,20,8,HeroStrike,0,35,24,,,,,"마나 100 · 쿨타임 {cd}초. 8초간 대상에게 1초마다 표창 3개, 끝에 폭발. 시전 중 받는 피해 -50%",100,0,0,0
+Bowmaster,A01,애로우 블로우,f62b353e3f704eb097e427b7fc97980e,Skill,HeroStar,화살,,,,5,0,HeroStrike,0,70,2,,,,,마나 8 · 쿨타임 {cd}초. 맞은 몬스터 둔화,8,0,0,0
+Bowmaster,A02,애로우 봄,04f7ad2ee0ff4a63ba809ccc6d875d01,Skill,HeroStar,화살,,,,5,0,HeroStrike,0,150,1,,,,,마나 10 · 쿨타임 {cd}초. 30% 확률로 기절 1초,10,0,0,0
+Bowmaster,A03,인플레임,04f7ad2ee0ff4a63ba809ccc6d875d01,Skill,HeroStar,화살,,,,6,0,HeroStrike,0,110,2,,,,,마나 15 · 쿨타임 {cd}초. 화상. 화상 걸린 몬스터에게 피해 +20%,15,0,0,0
+Bowmaster,A04,피닉스,fd051469cf104e0bb1597e6930619354,Cooldown,HeroStar,화살,,,,30,20,HeroBuff,0,150,1,,,,,{cd}초마다 자동 발동. 불사조 소환. 공격마다 화상 30%,0,0,0,0
+Bowmaster,A05,애로우 플래터,22f848d3e25941d88f3bccaebe6f7f64,Cooldown,HeroStar,화살,,,,25,15,HeroBuff,0,60,2,,,,,{cd}초마다 자동 발동. 화살 발사대 설치. 맨 앞 몬스터를 넉백 (5초에 한 번),0,0,0,0
+Bowmaster,A06,폭풍의 시,54008fb6d99c400db04783b61de1c0bb,Skill,HeroStar,화살,,,,10,4,HeroStrike,0,40,10,,,,,마나 25 · 쿨타임 {cd}초. 4초간 맨 앞 몬스터에게 연사. 시전 중 받는 피해 -20%. **유일한 단일 집중기**,25,0,0,0
+Bowmaster,A07,애로우 일루전,333f9c5876124f14aa9a1ad80265a3f3,Skill,HeroStar,화살,,,,8,0,HeroStrike,0,90,3,,,,,마나 20 · 쿨타임 {cd}초. 맞은 몬스터 전부 넉백,20,0,0,0
+Bowmaster,A08,샤프 아이즈,5a78b6fc281449d08794e132030e258d,Auto,HeroStar,화살,,,,30,15,HeroBuff,0,0,1,,,,,"{cd}초마다 자동 발동. 30초마다 자동. 15초간 **파티 전원** 치명타 확률 +15%, 치명타 피해 +10%",0,0,0,0
+Bowmaster,A09,일루전 스텝,7084e10aa9044b3583296e7559c21393,Guard,HeroStar,화살,,,,25,3,HeroBuff,0,0,1,,,,,체력 40% 이하가 되는 순간 3초간 몬스터 공격 60% 빗나감 + 주위 몬스터 넉백,0,0,0,0
+Bowmaster,A10,애로우 레인,fd767f7da6c147a09c1a41aa28bf3b45,Cooldown,HeroStar,화살,,,,30,8,HeroBuff,0,80,1,,,,,{cd}초마다 자동 발동. 8초간 1초마다 화살비. 맞은 몬스터 둔화,0,0,0,0
+Bowmaster,A11,콘센트레이션,6c807cb9a18141e2b54d46394a3a3331,Cooldown,HeroStar,화살,,,,40,15,HeroBuff,0,0,1,,,,,"{cd}초마다 자동 발동. 15초간 공격력 +20%, 범위 공격 대상 +1",0,0,0,0
+Bowmaster,A12,퀴버 풀버스트,eb0e10236dcc40b2997ff4c17ba69796,Skill,HeroStar,화살,,,,15,0,HeroStrike,0,60,3,,,,,마나 40 · 쿨타임 {cd}초. 강화 화살 전부 소비. 화살 1개당 1발 추가,40,0,0,0
+Bowmaster,A13,가이디드 애로우,6d20c4d30dfe4d8f9bf37965445f3ceb,Instinct,HeroStar,화살,,,,15,10,HeroBuff,10,70,1,,,,,기본 공격 적중 시 10% 확률. 지속 중 기본 공격마다 유도 화살,0,0,0,0
+Bowmaster,A14,실루엣 미라주,7699857037a048af9951c755e8d1f212,Skill,HeroStar,화살,,,,12,0,HeroStrike,0,120,3,,,,,마나 50 · 쿨타임 {cd}초. 3연사 후 잔상이 같은 대상을 한 번 더 공격. 맞은 몬스터 둔화,50,0,0,0
+Bowmaster,A15,잔영의 시,a54a44aadf0b4525b20ba6603cfa1d55,Skill,HeroStar,화살,,,,20,6,HeroStrike,0,120,12,,,,,"마나 100 · 쿨타임 {cd}초. 6초간 화면 전체에 화살 폭풍, 끝에 폭발. 시전 중 넉백 무효 몬스터도 둔화",100,0,0,0
+Viper,V01,서머솔트 킥,,Skill,HeroStar,권법,,,,5,0,HeroStrike,0,80,2,,,,,마나 8 · 쿨타임 {cd}초. 에너지 +5 추가,8,0,0,0
+Viper,V02,백 스핀 블로우,d6b6b0bed15c4e41aae492922f2edfe7,Skill,HeroStar,권법,,,,5,0,HeroStrike,0,160,1,,,,,마나 10 · 쿨타임 {cd}초. 30% 확률로 기절 1초,10,0,0,0
+Viper,V03,스크류 펀치,c06426910ef343ee99dcc0d6ccf61e07,Skill,HeroStar,권법,,,,6,0,HeroStrike,0,70,4,,,,,마나 15 · 쿨타임 {cd}초. 마지막 타 끌어당김 (대기 몬스터 1마리),15,0,0,0
+Viper,V04,에너지 버스트,e22e5f4a9ac44089b63d3e1bbb170ff9,Skill,HeroStar,권법,,,,8,0,HeroStrike,0,200,1,,,,,마나 20 · 쿨타임 {cd}초. 에너지 전부 소비. 소비 50 이상이면 기절 1.5초,20,0,0,0
+Viper,V05,트랜스폼,e22e5f4a9ac44089b63d3e1bbb170ff9,Cooldown,HeroStar,권법,,,,30,12,HeroBuff,0,0,1,,,,,"{cd}초마다 자동 발동. 12초간 받는 피해 -20%, 공격력 +15%, 몸집 커짐",0,0,0,0
+Viper,V06,드래곤 스트라이크,e22e5f4a9ac44089b63d3e1bbb170ff9,Skill,HeroStar,권법,,,,10,0,HeroStrike,0,180,2,,,,,마나 25 · 쿨타임 {cd}초. 대기 몬스터 2마리 끌어당김 후 타격,25,0,0,0
+Viper,V07,데몰리션,d8c5e12e2a6640bfa9aa6652ca79660b,Skill,HeroStar,권법,,,,8,0,HeroStrike,0,50,7,,,,,마나 20 · 쿨타임 {cd}초. 마지막 타 기절 1초,20,0,0,0
+Viper,V08,타임 리프,f2e6bfcca3bb48a59097287c3d0f1abe,Cooldown,HeroStar,권법,,,,60,0,HeroBuff,0,0,1,,,,,{cd}초마다 자동 발동. 60초마다 자동. 다른 장착 스킬의 남은 쿨타임 50% 감소,0,0,0,0
+Viper,V09,언위어링 넥타,f2d46ff3a9534b8cb8dcff449c7c1c0e,Guard,HeroStar,권법,,,,25,6,HeroBuff,0,0,1,,,,,체력 40% 이하가 되는 순간 체력 20% 회복 + 6초간 받는 피해 -30%,0,0,0,0
+Viper,V10,스티뮬레이트,06ea89f3087349e39587db13f7f82a49,Auto,HeroStar,권법,,,,25,10,HeroBuff,0,0,1,,,,,{cd}초마다 자동 발동. 25초마다 자동. 10초간 매초 에너지 +8,0,0,0,0
+Viper,V11,가드 크러시,a793f95470904f488ea85cd7779e1f9a,Skill,HeroStar,권법,,,,7,0,HeroStrike,0,280,1,,,,,마나 25 · 쿨타임 {cd}초. 맞은 몬스터 공격력 -20% (6초),25,0,0,0
+Viper,V12,하울링 피스트,96c2f71ec9844a5fa64d4534712076d4,Skill,HeroStar,권법,,,,12,0,HeroStrike,0,90,5,,,,,마나 40 · 쿨타임 {cd}초. 5연타 후 충격파. 맞은 몬스터 기절 1초,40,0,0,0
+Viper,V13,서펀트 스크류,1959548778014c1a941049b83f7a2447,Instinct,HeroStar,권법,,,,15,10,HeroBuff,10,60,1,,,,,"기본 공격 적중 시 10% 확률. 지속 중 기본 공격마다 소용돌이, 받는 피해 -10%",0,0,0,0
+Viper,V14,퓨리어스 차지,eeeb4eabaf2f43eab8226214dd3497d0,Cooldown,HeroStar,권법,,,,30,8,HeroBuff,0,150,1,,,,,"{cd}초마다 자동 발동. 30초마다 앞으로 돌진하며 공격. 8초간 기절 무효, 받는 피해 -15%",0,0,0,0
+Viper,V15,리버레이트 넵투누스,22a3e349b8dc48919f01271633032429,Skill,HeroStar,권법,,,,20,5,HeroStrike,0,60,15,,,,,"마나 100 · 쿨타임 {cd}초. 에너지 50 소비. 5초간 넵투누스 소환, 끝에 해일. 시전 중 파티 전원 받는 피해 -20%",100,0,0,0

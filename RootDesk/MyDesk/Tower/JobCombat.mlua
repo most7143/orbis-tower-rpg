@@ -1,0 +1,1493 @@
+@Component
+script JobCombat extends Component
+
+	-- 직업 공용 전투 (나이트로드·보우마스터·바이퍼). TowerRunManager가 HeroCombat·BishopCombat과 같은 방식으로 부른다.
+	-- 스킬 15종과 돌파 75종은 Spec()·Breaks() 데이터로 정의하고, 데이터로 못 쓰는 돌파만 ID별 코드로 처리한다.
+	-- 고유 패시브 자원: 나이트로드 표식(몬스터마다), 보우마스터 강화 화살, 바이퍼 에너지.
+	-- 메인 캐릭터에 붙으면 판 시작 때 JobId를 편성 직업으로 바꾼 뒤 BeginRun을 부른다.
+	property string JobId = "NightLord"
+	property number ManaStart = 30
+	property number ManaRegen = 5
+	property number ManaPerHit = 2
+	property number HitNumGap = 0.18
+	property number SoundVolume = 0.7
+	-- 자원 획득 확률(%) (표식·강화 화살). 에너지는 타수마다 고정량.
+	property number ResChance = 30
+	property integer EnergyPerHit = 5
+	-- 둔화 기본값: 공격 간격 +%, 지속(초) / 넉백 거리 / 넉백 면역(초)
+	property number SlowPct = 30
+	property number SlowTime = 4
+	property number KnockDist = 0.6
+	property number KnockImmune = 2
+	-- 맹독: 중첩당 1초마다 공격력 %, 지속(초), 최대 중첩
+	property number VenomPct = 8
+	property number VenomTime = 6
+	property integer VenomMax = 5
+	-- 연출: 소환물이 없을 때 쓰는 기본 이펙트
+	property string HealAffectedRUID = "ab42514ac987474289817c576332f67a"
+
+	@Sync
+	property boolean Active = false
+	@Sync
+	property number Mana = 0
+	@Sync
+	property number ManaMax = 100
+	-- 고유 자원 (보우마스터 화살·바이퍼 에너지. 나이트로드는 맨 앞 몬스터 표식)
+	@Sync
+	property integer Res = 0
+	@Sync
+	property integer ResMax = 10
+	@Sync
+	property integer PassiveLv = 0
+	@Sync
+	property number SummonLeft = 0
+	@Sync
+	property string StatusText = ""
+	@Sync
+	property string SlotInfo = ""
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 스킬표를 읽고 상태를 비운다 (JobId가 바뀌면 BeginRun에서 다시 읽는다).
+		self:LoadSkills()
+		self:ClearState()
+		log("[VRF] JobCombat begin job=" .. self.JobId .. " skills=" .. tostring(self._T.skillCount or 0))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadSkills()
+		-- JobSkillTable(JobId) + SkillActionTable(연출)을 읽는다.
+		self._T.skills = {}
+		self._T.skillCount = 0
+		self._T.loadedJob = self.JobId
+		local acts = {}
+		local at = _DataService:GetTable("SkillActionTable")
+		if at ~= nil then
+			for i = 1, at:GetRowCount() do
+				acts[at:GetCell(i, "SkillId")] = { actionFrames = at:GetCell(i, "ActionFrames") or "", actionTime = tonumber(at:GetCell(i, "ActionTime")) or 0.6,
+					casterFx = at:GetCell(i, "CasterFx") or "", fx = at:GetCell(i, "HitFx") or "", fxScale = tonumber(at:GetCell(i, "FxScale")) or 1, mobFx = at:GetCell(i, "MobFx") or "",
+					policy = at:GetCell(i, "HitPolicy") or "per_hit", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
+					gap = tonumber(at:GetCell(i, "HitGap")) or 0.12, targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)) }
+			end
+		end
+		local js = _DataService:GetTable("JobSkillTable")
+		if js == nil then return end
+		for i = 1, js:GetRowCount() do
+			if js:GetCell(i, "JobId") == self.JobId then
+				local id = js:GetCell(i, "SkillId")
+				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
+				local a = acts[id] or { actionFrames = "", actionTime = 0.6, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", gap = 0.12, targets = 1 }
+				self._T.skills[id] = { id = id, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Skill", cooldown = num("Cooldown"), buffTime = num("BuffTime"),
+					mana = num("Mana"), chance = num("Chance"), pct = num("Pct"), hits = math.max(1, math.floor(num("ProcHits"))), a = a }
+				self._T.skillCount = self._T.skillCount + 1
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table Spec()
+		-- 스킬 기본 효과. kind: strike(기본)/summon/buff/auto/guard/instinct. 타격 효과 필드는 맞은 몬스터마다 적용.
+		-- slow·knock·stun{확률,초}·burn(확률)·venom(중첩)·mark(중첩)·bleed·dark(확률)·pull(마리)·atkDown{%,초}·life(흡혈%)·res(자원 추가)
+		if self._T.spec ~= nil then return self._T.spec end
+		self._T.spec = {
+			N01 = { mark = 1 },
+			N02 = { life = 5, lifeCap = 3 },
+			N03 = { recast = 30 },
+			N04 = { kind = "auto", partner = 30 },
+			N05 = { kind = "summon", interval = 3, targets = 3 },
+			N06 = { recast = 15, markLast = 1 },
+			N07 = { venom = 2 },
+			N08 = { atkDown = { 20, 6 } },
+			N09 = { kind = "guard", hpLine = 40, stealth = 2 },
+			N10 = { useMarks = 20 },
+			N11 = { kind = "buff", toxin = true },
+			N12 = { kind = "buff", speed = 40, extraStars = 2, extraPct = 25 },
+			N13 = { kind = "instinct", procTargets = 1 },
+			N14 = { linger = 6, lingerPct = 80, lingerGap = 0.5 },
+			N15 = { channel = true, finisher = 180, reduce = 50 },
+			A01 = { slow = true },
+			A02 = { stun = { 30, 1 } },
+			A03 = { burn = 100, burnBonus = 20 },
+			A04 = { kind = "summon", interval = 3, targets = 3, burn = 30 },
+			A05 = { kind = "summon", interval = 1.5, targets = 2, knockEvery = 5 },
+			A06 = { channel = true, reduce = 20 },
+			A07 = { knock = true },
+			A08 = { kind = "auto", crit = 15, critDmg = 10 },
+			A09 = { kind = "guard", hpLine = 40, evade = 60 },
+			A10 = { kind = "buff", rain = true, interval = 1, targets = 6, slow = true },
+			A11 = { kind = "buff", atk = 20, extraTargets = 1 },
+			A12 = { useArrows = true },
+			A13 = { kind = "instinct", procTargets = 2 },
+			A14 = { echoHits = 3, echoPct = 80, slow = true },
+			A15 = { channel = true, finisher = 300 },
+			V01 = { res = 5 },
+			V02 = { stun = { 30, 1 } },
+			V03 = { pullLast = 1 },
+			V04 = { useEnergy = 20, stunAt = 50, stunSec = 1.5 },
+			V05 = { kind = "buff", reduce = 20, atk = 15, transform = true },
+			V06 = { pull = 2 },
+			V07 = { stunLast = 1 },
+			V08 = { kind = "buff", timeLeap = 50 },
+			V09 = { kind = "guard", hpLine = 40, healPct = 20, reduce = 30 },
+			V10 = { kind = "auto", energyTick = 8 },
+			V11 = { atkDown = { 20, 6 } },
+			V12 = { stunAll = 1 },
+			V13 = { kind = "instinct", procTargets = 2, reduce = 10 },
+			V14 = { kind = "buff", dash = 150, dashTargets = 3, reduce = 15 },
+			V15 = { channel = true, finisher = 400, useEnergyN = 50, partyReduce = 20 },
+		}
+		return self._T.spec
+	end
+
+	@ExecSpace("ServerOnly")
+	method table Breaks()
+		-- 돌파 효과. cd·mana·hits·targets·recast·dur·interval·proc = 값 바꾸기, dmg = 피해 +%, set = 효과 필드 덮어쓰기, flag = 코드 처리.
+		if self._T.brk ~= nil then return self._T.brk end
+		self._T.brk = {
+			N01_B1 = { cd = 3 }, N01_B2 = { echo = 60 }, N01_B3 = { set = { mark = 2 } }, N01_B4 = { set = { venom = 1 } }, N01_B5 = { flag = "jackpot" },
+			N02_B1 = { set = { life = 10, lifeCap = 5 } }, N02_B2 = { cd = 3 }, N02_B3 = { dmg = 60 }, N02_B4 = { set = { bleed = 2 } }, N02_B5 = { flag = "thirst" },
+			N03_B1 = { dmg = 60 }, N03_B2 = { mana = 9 }, N03_B3 = { hits = 4 }, N03_B4 = { recast = 55 }, N03_B5 = { set = { venom = 1 } },
+			N04_B1 = { set = { partner = 50 } }, N04_B2 = { durMul = 1.5 }, N04_B3 = { flag = "partnerMark" }, N04_B4 = { set = { partner2 = 15 } }, N04_B5 = { set = { evade = 20 } },
+			N05_B1 = { dur = 30 }, N05_B2 = { set = { every3 = 1.5 } }, N05_B3 = { set = { venomChance = 30 } }, N05_B4 = { targets = 1, dmgMul = 2 }, N05_B5 = { intervalMul = 0.7 },
+			N06_B1 = { hits = 6 }, N06_B2 = { recast = 35 }, N06_B3 = { actionMul = 0.67 }, N06_B4 = { flag = "exposeCrit" }, N06_B5 = { mana = 12, cd = 6 },
+			N07_B1 = { dmg = 60 }, N07_B2 = { set = { venom = 4 } }, N07_B3 = { mana = 7, cd = 3 }, N07_B4 = { set = { venomMaxAdd = 5 } }, N07_B5 = { flag = "fatalVenom" },
+			N08_B1 = { dmg = 60 }, N08_B2 = { set = { markFull = true } }, N08_B3 = { set = { dark = 100 } }, N08_B4 = { set = { expBuff = 50 } }, N08_B5 = { set = { duelVuln = 20 } },
+			N09_B1 = { set = { stealth = 4 } }, N09_B2 = { flag = "ambush" }, N09_B3 = { set = { stealthHeal = 5 } }, N09_B4 = { cd = 15 }, N09_B5 = { set = { hpLine = 60 } },
+			N10_B1 = { flag = "seasons" }, N10_B2 = { set = { execute = 0.15 } }, N10_B3 = { set = { useMarks = 35 } }, N10_B4 = { mana = 15, cd = 4 }, N10_B5 = { set = { bleed = 3 } },
+			N11_B1 = { flag = "toxinMark" }, N11_B2 = { durMul = 2 }, N11_B3 = { flag = "venomMana" }, N11_B4 = { flag = "venomStrong" }, N11_B5 = { flag = "venomBurst" },
+			N12_B1 = { set = { extraStars = 3 } }, N12_B2 = { flag = "rapidCd" }, N12_B3 = { dur = 12 }, N12_B4 = { flag = "rapidMark" }, N12_B5 = { set = { speed = 70, extraStars = 0 } },
+			N13_B1 = { proc = 16 }, N13_B2 = { dur = 15 }, N13_B3 = { flag = "bigSpear" }, N13_B4 = { set = { venom = 1 } }, N13_B5 = { flag = "spearEndMark" },
+			N14_B1 = { dmg = 60 }, N14_B2 = { mana = 30, cd = 8 }, N14_B3 = { set = { lingerVenom = true } }, N14_B4 = { echo = 60 }, N14_B5 = { set = { lingerMark = true } },
+			N15_B1 = { set = { finisher = 500 } }, N15_B2 = { flag = "arcanePriority" }, N15_B3 = { hits = 36 }, N15_B4 = { flag = "verdict" }, N15_B5 = { resMax = 8 },
+			A01_B1 = { cd = 3 }, A01_B2 = { hits = 3 }, A01_B3 = { set = { resSure = true } }, A01_B4 = { targets = 5 }, A01_B5 = { set = { knock = true } },
+			A02_B1 = { dmg = 60 }, A02_B2 = { set = { stun = { 60, 1 } } }, A02_B3 = { recast = 25 }, A02_B4 = { mana = 6 }, A02_B5 = { set = { burn = 100 } },
+			A03_B1 = { dmg = 60 }, A03_B2 = { set = { spreadBurn = true } }, A03_B3 = { mana = 9, cd = 4 }, A03_B4 = { set = { burnBonus = 50 } }, A03_B5 = { hits = 3 },
+			A04_B1 = { dur = 30 }, A04_B2 = { set = { phoenixHeal = 3 } }, A04_B3 = { set = { knock = true } }, A04_B4 = { set = { burn = 100 } }, A04_B5 = { set = { endBurst = 400 } },
+			A05_B1 = { interval = 1 }, A05_B2 = { dur = 25 }, A05_B3 = { set = { knockEvery = 3 } }, A05_B4 = { set = { double = true } }, A05_B5 = { set = { resChance = 20 } },
+			A06_B1 = { hits = 14 }, A06_B2 = { dmg = 60 }, A06_B3 = { targets = 3, dmgMul = 0.7 }, A06_B4 = { set = { knockEvery = 5 } }, A06_B5 = { mana = 15, cd = 7 },
+			A07_B1 = { dmg = 60 }, A07_B2 = { set = { knockMul = 2 } }, A07_B3 = { recast = 20 }, A07_B4 = { set = { dark = 50 } }, A07_B5 = { mana = 12, cd = 5 },
+			A08_B1 = { set = { crit = 25 } }, A08_B2 = { dur = 25 }, A08_B3 = { set = { defIgnore = 10 } }, A08_B4 = { cd = 20 }, A08_B5 = { flag = "hunterArrow" },
+			A09_B1 = { dur = 5 }, A09_B2 = { cd = 15 }, A09_B3 = { flag = "guardAlly" }, A09_B4 = { set = { counter = 150 } }, A09_B5 = { set = { healPct = 15 } },
+			A10_B1 = { dmg = 60 }, A10_B2 = { dur = 12 }, A10_B3 = { set = { slowPct = 60 } }, A10_B4 = { cd = 20 }, A10_B5 = { set = { hail = true } },
+			A11_B1 = { set = { atk = 35 } }, A11_B2 = { dur = 25 }, A11_B3 = { set = { extraTargets = 2 } }, A11_B4 = { set = { fillRes = true } }, A11_B5 = { set = { partyAtk = 10 } },
+			A12_B1 = { dmg = 50 }, A12_B2 = { set = { halfUse = true } }, A12_B3 = { targets = 6 }, A12_B4 = { mana = 24, cd = 10 }, A12_B5 = { resMax = 15 },
+			A13_B1 = { proc = 16 }, A13_B2 = { dur = 15 }, A13_B3 = { set = { procHits = 2 } }, A13_B4 = { set = { slow = true } }, A13_B5 = { flag = "endlessGuide" },
+			A14_B1 = { set = { echoPct = 150 } }, A14_B2 = { mana = 30, cd = 8 }, A14_B3 = { set = { knock = true, knockMul = 2 } }, A14_B4 = { set = { echoTwice = true } }, A14_B5 = { set = { resPerTarget = true } },
+			A15_B1 = { set = { finisher = 800 } }, A15_B2 = { set = { resTick = true } }, A15_B3 = { hits = 18 }, A15_B4 = { set = { freeze = true } }, A15_B5 = { mana = 60, cd = 15 },
+			V01_B1 = { cd = 3 }, V01_B2 = { hits = 3 }, V01_B3 = { set = { res = 15 } }, V01_B4 = { set = { bleed = 2 } }, V01_B5 = { set = { afterReduce = 30 } },
+			V02_B1 = { dmg = 60 }, V02_B2 = { set = { stun = { 60, 1 } } }, V02_B3 = { recast = 25 }, V02_B4 = { mana = 6 }, V02_B5 = { targets = 5 },
+			V03_B1 = { dmg = 60 }, V03_B2 = { hits = 6 }, V03_B3 = { set = { pullLast = 3 } }, V03_B4 = { mana = 9, cd = 4 }, V03_B5 = { set = { healHit = 0.5 } },
+			V04_B1 = { set = { useEnergy = 35 } }, V04_B2 = { set = { halfUse = true } }, V04_B3 = { set = { stunAt = 30, stunSec = 2.5 } }, V04_B4 = { mana = 12, cd = 5 }, V04_B5 = { set = { energyShield = 0.2 } },
+			V05_B1 = { set = { reduce = 35 } }, V05_B2 = { dur = 20 }, V05_B3 = { set = { atk = 30 } }, V05_B4 = { cd = 20 }, V05_B5 = { set = { quake = 300 } },
+			V06_B1 = { dmg = 60 }, V06_B2 = { set = { pull = 4 } }, V06_B3 = { set = { atkDown = { 15, 5 } } }, V06_B4 = { mana = 15, cd = 7 }, V06_B5 = { hits = 3 },
+			V07_B1 = { dmg = 60 }, V07_B2 = { hits = 10 }, V07_B3 = { set = { stunLast = 2 } }, V07_B4 = { set = { bleed = 1 } }, V07_B5 = { mana = 12, cd = 5 },
+			V08_B1 = { set = { timeLeap = 100 } }, V08_B2 = { cd = 40 }, V08_B3 = { set = { leapAlly = 30 } }, V08_B4 = { set = { leapMana = 50 } }, V08_B5 = { set = { leapSlow = 5 } },
+			V09_B1 = { set = { healPct = 35 } }, V09_B2 = { cd = 15 }, V09_B3 = { set = { allyHeal = 15 } }, V09_B4 = { set = { undying = true } }, V09_B5 = { set = { fillRes = true } },
+			V10_B1 = { set = { energyTick = 14 } }, V10_B2 = { dur = 15 }, V10_B3 = { set = { speed = 30 } }, V10_B4 = { cd = 15 }, V10_B5 = { set = { fullBonus = 25 } },
+			V11_B1 = { dmg = 60 }, V11_B2 = { set = { atkDown = { 35, 6 } } }, V11_B3 = { set = { bleed = 4 } }, V11_B4 = { mana = 15, cd = 4 }, V11_B5 = { targets = 3 },
+			V12_B1 = { dmg = 60 }, V12_B2 = { set = { stunAll = 2 } }, V12_B3 = { targets = 6 }, V12_B4 = { mana = 24, cd = 8 }, V12_B5 = { flag = "energyPlus" },
+			V13_B1 = { proc = 16 }, V13_B2 = { dur = 15 }, V13_B3 = { set = { vortexPull = true } }, V13_B4 = { set = { reduce = 20 } }, V13_B5 = { set = { bleed = 1 } },
+			V14_B1 = { set = { dash = 240 } }, V14_B2 = { dur = 12 }, V14_B3 = { set = { dashStun = 1.5 } }, V14_B4 = { cd = 20 }, V14_B5 = { set = { allyReduce = 15 } },
+			V15_B1 = { set = { finisher = 1000 } }, V15_B2 = { set = { partyReduce = 35 } }, V15_B3 = { hits = 24 }, V15_B4 = { set = { useEnergyN = 0 } }, V15_B5 = { mana = 60, cd = 15 },
+		}
+		return self._T.brk
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ClearState()
+		-- 판 상태 비우기.
+		local t = self._T
+		t.equip = {}
+		t.ownLv = {}
+		t.cd = {}
+		t.till = {}
+		t.lastActionTime = 0
+		if t.summons ~= nil then
+			for _, s in pairs(t.summons) do
+				if (s.serial or 0) ~= 0 then _EffectService:RemoveEffect(s.serial) end
+			end
+		end
+		t.summons = {}
+		t.mon = {}
+		t.mgr = nil
+		t.counter = {}
+		self.SummonLeft = 0
+		self.Active = false
+		self.Mana = 0
+		self.Res = 0
+		self.StatusText = ""
+		self.SlotInfo = ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BeginRun(Component mgr)
+		-- 판 시작: 성장창에서 장착한 이 직업 스킬 5종(아웃게임 레벨 포함)을 레벨업 카드 후보로. 입장 직후에는 Lv.0.
+		if self._T.loadedJob ~= self.JobId then
+			self._T.spec = nil
+			self:LoadSkills()
+		end
+		self:ClearState()
+		self._T.mgr = mgr
+		local eng = mgr:GetEngrave()
+		local data = nil
+		if eng ~= nil then data = eng:SkillRunDataFor(self.JobId) end
+		if data == nil or not data.loaded or #data.equip == 0 then
+			data = { equip = {}, lv = {}, passiveLv = 1 }
+			local ids = {}
+			for id, _ in pairs(self._T.skills) do table.insert(ids, id) end
+			table.sort(ids)
+			for k = 1, math.min(5, #ids) do
+				table.insert(data.equip, ids[k])
+				data.lv[ids[k]] = 1
+			end
+		end
+		self.PassiveLv = data.passiveLv or 0
+		for _, id in ipairs(data.equip) do
+			if self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.ownLv[id] = data.lv[id] or 1
+				mgr.SkillLv[id] = 0
+			end
+		end
+		self.Active = true
+		self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
+		self.Mana = self.ManaStart
+		self.ResMax = self:CalcResMax()
+		local list = {}
+		for _, id in ipairs(self._T.equip) do
+			local a = self._T.skills[id].a
+			for _, field in ipairs({ a.casterFx, a.fx, a.mobFx, a.useSound, a.hitSound }) do
+				for ruid in string.gmatch(field or "", "[^|]+") do table.insert(list, ruid) end
+			end
+		end
+		local uid = self:OwnerUid()
+		if uid ~= "" and #list > 0 then self:PreloadFx(table.concat(list, "|"), uid) end
+		log("[VRF] jobcombat run job=" .. self.JobId .. " equip=" .. table.concat(self._T.equip, ",") .. " passiveLv=" .. tostring(self.PassiveLv))
+	end
+
+	@ExecSpace("Client")
+	method void PreloadFx(string ruids)
+		-- 클라이언트: 스킬 이펙트·사운드 미리 불러오기.
+		local list = {}
+		for ruid in string.gmatch(ruids, "[^|]+") do table.insert(list, ruid) end
+		if #list == 0 then return end
+		_ResourceService:PreloadAsync(list, function(result) log("[VRF] jobcombat fx preloaded n=" .. tostring(#list)) end)
+	end
+
+	@ExecSpace("Client")
+	method void PlaySfx(string ruid, number volume)
+		-- 클라이언트: 효과음.
+		if ruid == nil or ruid == "" then return end
+		_SoundService:PlaySound(ruid, volume)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugLearn(string ids)
+		-- 검증용: 장착 목록을 ids로 바꾸고 모두 Lv.1로 배운 상태로.
+		local mgr = self._T.mgr
+		if mgr == nil then return end
+		self._T.equip = {}
+		for id in string.gmatch(ids, "[^,]+") do
+			if self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.ownLv[id] = 1
+				mgr.SkillLv[id] = 1
+			end
+		end
+		self.Mana = self.ManaMax
+		if self.PassiveLv <= 0 then self.PassiveLv = 1 end
+		log("[VRF] jobcombat debug learn " .. self.JobId .. " " .. ids)
+	end
+
+	-- ========== 기본 정보 ==========
+
+	@ExecSpace("ServerOnly")
+	method number Now()
+		-- 서버 시간(초).
+		return _UtilLogic.ElapsedSeconds
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Equipped(string id)
+		-- 이번 판에 장착한 스킬인지.
+		for _, e in ipairs(self._T.equip or {}) do
+			if e == id then return true end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Learned(string id)
+		-- 이번 판 레벨업으로 배운 스킬인지.
+		local mgr = self._T.mgr
+		if mgr == nil or not self:Equipped(id) then return false end
+		return (mgr.SkillLv[id] or 0) > 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean BreakAllowed(string breakId)
+		-- 돌파 카드 등장 조건 (지금은 모두 허용).
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Has(string id, integer n)
+		-- 돌파 id_Bn을 이번 판에 얻었는지.
+		local mgr = self._T.mgr
+		if mgr == nil then return false end
+		return mgr:HeroBreak(id, id .. "_B" .. tostring(n))
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Flag(string id, string name)
+		-- 그 스킬의 얻은 돌파 중 flag가 name인 것이 있는지.
+		local brk = self:Breaks()
+		for n = 1, 5 do
+			local b = brk[id .. "_B" .. tostring(n)]
+			if b ~= nil and b.flag == name and self:Has(id, n) then return true end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method table Params(table sk)
+		-- 스킬 기본값 + 기본 효과 + 얻은 돌파를 합친 이번 시전 수치.
+		local base = self:Spec()[sk.id] or {}
+		local p = { cd = sk.cooldown, mana = sk.mana, hits = sk.hits, pct = sk.pct, dur = sk.buffTime, targets = sk.a.targets, proc = sk.chance, dmg = 0, dmgMul = 1, recast = 0, echo = 0, actionMul = 1, interval = 0 }
+		for k, v in pairs(base) do p[k] = v end
+		if base.targets ~= nil then p.targets = base.targets end
+		local brk = self:Breaks()
+		for n = 1, 5 do
+			local b = brk[sk.id .. "_B" .. tostring(n)]
+			if b ~= nil and self:Has(sk.id, n) then
+				if b.cd ~= nil then p.cd = b.cd end
+				if b.mana ~= nil then p.mana = b.mana end
+				if b.hits ~= nil then p.hits = b.hits end
+				if b.targets ~= nil then p.targets = b.targets end
+				if b.recast ~= nil then p.recast = b.recast end
+				if b.dur ~= nil then p.dur = b.dur end
+				if b.durMul ~= nil then p.dur = p.dur * b.durMul end
+				if b.interval ~= nil then p.interval = b.interval end
+				if b.intervalMul ~= nil then p.interval = (p.interval or 0) * b.intervalMul end
+				if b.proc ~= nil then p.proc = b.proc end
+				if b.dmg ~= nil then p.dmg = p.dmg + b.dmg end
+				if b.dmgMul ~= nil then p.dmgMul = p.dmgMul * b.dmgMul end
+				if b.echo ~= nil then p.echo = b.echo end
+				if b.actionMul ~= nil then p.actionMul = b.actionMul end
+				if b.set ~= nil then
+					for k, v in pairs(b.set) do p[k] = v end
+				end
+			end
+		end
+		-- 콘센트레이션: 범위 공격 대상 +1 (돌파 3: +2)
+		if p.targets ~= nil and p.targets > 1 and self:On("A11") then p.targets = p.targets + (self._T.concTargets or 1) end
+		return p
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer CalcResMax()
+		-- 고유 자원 최대치 (표식 5 / 강화 화살 10 / 에너지 100, 돌파로 증가).
+		if self.JobId == "NightLord" then
+			if self:Has("N15", 5) then return 8 end
+			return 5
+		elseif self.JobId == "Bowmaster" then
+			if self:Has("A12", 5) then return 15 end
+			return 10
+		end
+		return 100
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ManaCost(table sk)
+		-- 마나 비용 (돌파 반영).
+		return math.ceil(self:Params(sk).mana or 0)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number Cooldown(table sk)
+		-- 쿨타임 (돌파 반영).
+		return self:Params(sk).cd or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RunSkills(Component mgr)
+		-- 이번 판에 배운 스킬 (장착 순서).
+		local list = {}
+		for _, id in ipairs(self._T.equip or {}) do
+			local sk = self._T.skills[id]
+			if sk ~= nil and self:Learned(id) then table.insert(list, sk) end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method number LvMul(string id)
+		-- 아웃게임 스킬 레벨 배율: Lv.1 1배 → Lv.11 3배.
+		return 1 + ((self._T.ownLv[id] or 1) - 1) * 0.2
+	end
+
+	@ExecSpace("ServerOnly")
+	method number Star(string id, string key)
+		-- 별 강화 합계.
+		local mgr = self._T.mgr
+		if mgr == nil then return 0 end
+		return mgr:HeroStarVal(id, key)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddMana(number n)
+		-- 마나 증감.
+		self.Mana = math.max(0, math.min(self.ManaMax, self.Mana + n))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string OwnerUid()
+		-- 이 캐릭터의 클라이언트 통신 대상 UserId.
+		local tp = self.Entity:GetComponent("script.TowerPlayer")
+		if tp == nil then return "" end
+		return tp:Uid()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Sfx(string ruid)
+		-- 효과음 (주인 클라이언트).
+		if ruid == nil or ruid == "" then return end
+		local uid = self:OwnerUid()
+		if uid ~= "" then self:PlaySfx(ruid, self.SoundVolume, uid) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetTill(string key, number value)
+		-- 지속 효과 끝나는 시각.
+		local t = self._T.till or {}
+		t[key] = value
+		self._T.till = t
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean On(string key)
+		-- 지속 효과가 켜져 있는지.
+		return self:Now() < ((self._T.till or {})[key] or 0)
+	end
+
+	-- ========== 매니저가 부르는 공통 인터페이스 ==========
+
+	@ExecSpace("ServerOnly")
+	method number MissChance()
+		-- 빗나감 확률은 몬스터 상태 담당(히어로)이 판단한다.
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method number QueuedMissChance(Entity e)
+		-- 줄 선 몬스터 빗나감 확률도 담당이 판단.
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean IsInvuln()
+		-- 다크 사이트 은신 중 무적.
+		return self:On("inv")
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SelfReduce()
+		-- 이 캐릭터만 받는 피해 감소(%): 에너지·트랜스폼·시전 중 감소 등.
+		local r = 0
+		if self.JobId == "Viper" and self.PassiveLv > 0 and self.Res >= 50 then r = r + 5 + 0.5 * (self.PassiveLv - 1) end
+		for key, v in pairs(self._T.reduce or {}) do
+			if self:On("red_" .. key) then r = r + v end
+		end
+		return math.min(60, r)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ResAtkPct()
+		-- 고유 자원 공격력 보너스(%): 강화 화살 1개당 / 에너지 100.
+		if self.PassiveLv <= 0 then return 0 end
+		if self.JobId == "Bowmaster" then return self.Res * (0.6 + 0.1 * (self.PassiveLv - 1)) end
+		if self.JobId == "Viper" and self.Res >= 100 then return 6 + (self.PassiveLv - 1) end
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DirectMul()
+		-- 기본 공격 피해 배율: 자원 공격력.
+		return 1 + self:ResAtkPct() / 100
+	end
+
+	@ExecSpace("ServerOnly")
+	method number LastActionTime()
+		-- 이번 공격에 나간 스킬 동작 시간.
+		return self._T.lastActionTime or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PauseClock(number delta)
+		-- 카드 선택 중: 따로 멈출 시계가 없다.
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnMonsterSpawn(Component mgr, Entity monster, string standRUID)
+		-- 새 몬스터.
+		self._T.mgr = mgr
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnShellBroken()
+		-- 비숍 매직쉘 콜백 (쓰지 않음).
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnRecast()
+		-- 재발동 콜백 (쓰지 않음).
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component StatusOwner()
+		-- 몬스터 상태(자상·암흑·기절·화상)를 들고 있는 히어로 전투 컴포넌트.
+		local mgr = self._T.mgr
+		if mgr == nil then return nil end
+		return mgr:StatusHero()
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DefDownPct()
+		-- 공유 자상으로 몬스터가 받는 피해 증가(%).
+		local o = self:StatusOwner()
+		if o == nil then return 0 end
+		return o:DefDownPct()
+	end
+
+	-- ========== 몬스터별 상태 (표식·맹독) ==========
+
+	@ExecSpace("ServerOnly")
+	method table MonState(Entity e)
+		-- 몬스터별 상태 표 (표를 고친 뒤 SaveMon으로 다시 넣는다).
+		if not isvalid(e) then return {} end
+		local all = self._T.mon or {}
+		return all[e.Id] or { marks = 0, venom = 0, venomTill = 0, venomNext = 0, ent = e }
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveMon(Entity e, table st)
+		-- 몬스터별 상태 저장.
+		if not isvalid(e) then return end
+		local all = self._T.mon or {}
+		st.ent = e
+		all[e.Id] = st
+		self._T.mon = all
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer Marks(Entity e)
+		-- 그 몬스터의 표식 중첩.
+		return self:MonState(e).marks or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddMarks(Entity e, integer n)
+		-- 나이트로드 표식 n 추가. 가득 차면 약점 노출 (파티 치명타 +15% 8초 + 표창 3개) 후 0.
+		if self.JobId ~= "NightLord" or self.PassiveLv <= 0 or n <= 0 or not isvalid(e) then return end
+		local st = self:MonState(e)
+		st.marks = math.min(self.ResMax, (st.marks or 0) + n)
+		self:SaveMon(e, st)
+		if st.marks >= self.ResMax then self:Expose(e) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Expose(Entity e)
+		-- 약점 노출: 파티 치명타 +15% (8초), 표창 3개 추가 (각 60+10×(레벨-1)%), 표식 0.
+		local mgr = self._T.mgr
+		if mgr == nil then return end
+		local st = self:MonState(e)
+		st.marks = 0
+		self:SaveMon(e, st)
+		mgr:AddBuff("nlExpose", "Crit", 15, 8, 0)
+		self:SetTill("expose", self:Now() + 8)
+		local pct = 60 + 10 * (self.PassiveLv - 1)
+		for k = 1, 3 do
+			local s = self:Strike("", pct, 0)
+			local target = e
+			_TimerService:SetTimerOnce(function()
+				if mgr.RunState == "FIGHT" and isvalid(target) then self:DealTo(target, s.dmg, s.crit, "", 1, 0.3 * k) end
+			end, 0.12 * k)
+		end
+		log("[VRF] jobcombat expose")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddVenom(Entity e, integer n, integer maxAdd)
+		-- 맹독 n중첩 (최대 VenomMax + 블리딩 톡신·돌파). 다시 걸면 시간 갱신.
+		if n <= 0 or not isvalid(e) then return end
+		local st = self:MonState(e)
+		local cap = self.VenomMax + (maxAdd or 0)
+		if self:On("N11") then cap = cap + 5 end
+		st.venom = math.min(cap, (st.venom or 0) + n)
+		st.venomTill = self:Now() + self.VenomTime
+		if (st.venomNext or 0) <= 0 then st.venomNext = 1 end
+		self:SaveMon(e, st)
+		-- 블리딩 톡신 돌파 1 '표식 회수': 맹독이 걸릴 때 40% 확률로 표식 1
+		if self:On("N11") and self:Flag("N11", "toxinMark") and _UtilLogic:RandomDouble() < 0.4 then self:AddMarks(e, 1) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickVenom(Component mgr, number delta)
+		-- 맹독: 1초마다 중첩 × 공격력 VenomPct%. 시간이 끝나면 사라진다.
+		local all = self._T.mon or {}
+		local changed = false
+		for key, st in pairs(all) do
+			local e = st.ent
+			local tm = isvalid(e) and e:GetComponent("script.TowerMonster") or nil
+			if tm == nil or tm.IsDead then
+				all[key] = nil
+				changed = true
+			elseif (st.venom or 0) > 0 then
+				if self:Now() >= (st.venomTill or 0) then
+					st.venom = 0
+				else
+					st.venomNext = (st.venomNext or 1) - delta
+					if st.venomNext <= 0 then
+						st.venomNext = 1
+						local pct = self.VenomPct
+						if self:Flag("N11", "venomStrong") then pct = 12 end
+						if self:Flag("N07", "fatalVenom") then pct = pct * 1.5 end
+						local s = self:Strike("", pct * st.venom, 0)
+						self:DealTo(e, s.dmg, false, "", 1, 0.2)
+						if self:Flag("N11", "venomMana") and _UtilLogic:RandomDouble() < 0.2 then self:AddMana(1) end
+					end
+				end
+				changed = true
+			end
+		end
+		if changed then self._T.mon = all end
+	end
+
+	-- ========== 몬스터 제어 (둔화·넉백·끌어당김·공격력 감소) ==========
+
+	@ExecSpace("ServerOnly")
+	method void ApplyEffects(table p, Entity e, boolean last)
+		-- 맞은 몬스터 1마리에게 타격 효과 적용.
+		local mgr = self._T.mgr
+		if mgr == nil or not isvalid(e) then return end
+		local tm = e:GetComponent("script.TowerMonster")
+		if tm == nil or tm.IsDead then return end
+		local o = self:StatusOwner()
+		if p.slow then tm:SetSlow(p.slowPct or self.SlowPct, self.SlowTime) end
+		if p.knock then self:Knock(e, (p.knockMul or 1)) end
+		if p.stun ~= nil and _UtilLogic:RandomDouble() * 100 < p.stun[1] and o ~= nil then o:StunTarget(mgr, p.stun[2], e) end
+		if last and (p.stunLast or 0) > 0 and o ~= nil then o:StunTarget(mgr, p.stunLast, e) end
+		if (p.stunAll or 0) > 0 and last and o ~= nil then o:StunTarget(mgr, p.stunAll, e) end
+		if (p.burn or 0) > 0 and o ~= nil and _UtilLogic:RandomDouble() * 100 < p.burn then o:ApplyDebuff("Burn", e) end
+		if (p.dark or 0) > 0 and o ~= nil and _UtilLogic:RandomDouble() * 100 < p.dark then o:ApplyDebuff("Darkness", e) end
+		if (p.bleed or 0) > 0 and o ~= nil then o:AddBleed(p.bleed, "job", e) end
+		if (p.venom or 0) > 0 then self:AddVenom(e, p.venom, p.venomMaxAdd or 0) end
+		if (p.venomChance or 0) > 0 and _UtilLogic:RandomDouble() * 100 < p.venomChance then self:AddVenom(e, 1, 0) end
+		if (p.mark or 0) > 0 then self:AddMarks(e, p.mark) end
+		if last and (p.markLast or 0) > 0 then self:AddMarks(e, p.markLast) end
+		if p.markFull then self:AddMarks(e, self.ResMax) end
+		if p.atkDown ~= nil then tm:SetAtkDown(p.atkDown[1], p.atkDown[2]) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Knock(Entity e, number mul)
+		-- 넉백: 뒤로 밀고 공격 대기를 처음부터. 맨 앞 몬스터는 공격 대기만 늦춘다. 같은 몬스터는 KnockImmune초 동안 다시 밀리지 않는다.
+		local mgr = self._T.mgr
+		local tm = isvalid(e) and e:GetComponent("script.TowerMonster") or nil
+		if mgr == nil or tm == nil then return end
+		if self:Now() < tm.KnockImmuneUntil then return end
+		tm:Knockback(self.KnockDist * mul, self.KnockImmune)
+		if e == mgr:HeroMonster() then mgr:DelayFrontAttack(0.8) end
+	end
+
+	-- ========== 시전 ==========
+
+	@ExecSpace("ServerOnly")
+	method table Strike(string id, number pct, number bonusPct)
+		-- 한 타 피해: 공격력 × 계수 × 레벨 × (1+별 위력+보너스) × (1+자원 공격력) × (1+공유 자상) → 치명타.
+		local mgr = self._T.mgr
+		local lv = 1
+		if id ~= "" then lv = self:LvMul(id) end
+		local base = mgr:PlayerHitDamage() * pct / 100 * lv
+		local starPow = 0
+		local starCrit = 0
+		if id ~= "" then
+			starPow = self:Star(id, "StarPower")
+			starCrit = self:Star(id, "StarCrit")
+		end
+		local mul = (1 + (starPow + bonusPct) / 100) * (1 + self:ResAtkPct() / 100) * (1 + self:DefDownPct() / 100)
+		local critRate = mgr.CritRate + starCrit
+		if self._T.sureCrit then critRate = 100 end
+		local crit = _UtilLogic:RandomDouble() * 100 < critRate
+		if crit then mul = mul * (mgr.CritDmg + starCrit * 2) / 100 end
+		return { dmg = math.max(1, math.floor(base * mul + 0.5)), crit = crit }
+	end
+
+	@ExecSpace("ServerOnly")
+	method table MakeCast(table sk)
+		-- 시전 1회 결과를 미리 계산 (타격 순간 ApplyCast로 돌아온다).
+		local mgr = self._T.mgr
+		local a = sk.a
+		local p = self:Params(sk)
+		local r = { hero = true, id = sk.id, sk = sk, p = p, hitDmg = {}, hitCrit = {}, fx = a.fx, fxScale = a.fxScale, mobFx = a.mobFx, policy = a.policy,
+			hitSound = a.hitSound, useSound = a.useSound, gap = a.gap, targets = p.targets or 1,
+			actionFrames = a.actionFrames, actionTime = a.actionTime * p.actionMul * (1 - math.min(0.5, self:Star(sk.id, "StarTempo") / 100)), casterFx = a.casterFx }
+		local kind = p.kind or "strike"
+		if kind ~= "strike" then
+			r.buffSkill = true
+			return r
+		end
+		local bonus = p.dmg
+		local hits = p.hits
+		local front = mgr:HeroMonster()
+		-- 자원 소비 스킬
+		if p.useMarks ~= nil and isvalid(front) then
+			local m = self:Marks(front)
+			bonus = bonus + p.useMarks * m
+			r.clearMarks = true
+		end
+		if p.useArrows then
+			local n = self.Res
+			r.resUse = n
+			if p.halfUse then r.resUse = math.floor(n / 2) end
+			hits = hits + n
+		end
+		if p.useEnergy ~= nil then
+			local n = self.Res
+			r.resUse = n
+			if p.halfUse then r.resUse = math.floor(n / 2) end
+			bonus = bonus + p.useEnergy * math.floor(n / 10)
+			if n >= (p.stunAt or 50) then r.stunEnd = p.stunSec or 1.5 end
+			if (p.energyShield or 0) > 0 then r.energyShield = r.resUse * p.energyShield end
+		end
+		if (p.useEnergyN or 0) > 0 then r.resUse = math.min(self.Res, p.useEnergyN) end
+		-- 조건부 피해
+		if self:Flag("N02", "thirst") and sk.id == "N02" and mgr:ActorHp(self.Entity) <= mgr:ActorMaxHp(self.Entity) * 0.5 then bonus = bonus + 100 end
+		if sk.id == "N15" and self:Flag("N15", "verdict") and mgr.MonsterHp >= mgr.MonsterMaxHp * 0.9 then bonus = bonus + 50 end
+		if sk.id == "A03" and isvalid(front) and (p.burnBonus or 0) > 0 then bonus = bonus + p.burnBonus end
+		if self._T.ambush then
+			bonus = bonus + 200
+			self._T.ambush = false
+		end
+		-- 포 시즌 돌파 1 '사계절 순환'
+		if sk.id == "N10" and self:Flag("N10", "seasons") then
+			local s = ((self._T.season or 0) % 4) + 1
+			self._T.season = s
+			r.season = s
+		end
+		local gap = a.gap or 0.12
+		if p.channel then gap = math.max(gap, (sk.buffTime > 0 and sk.buffTime or 4) / math.max(1, hits)) end
+		r.delays = {}
+		local forceCritLast = sk.id == "N06" and self:Flag("N06", "exposeCrit") and self:On("expose")
+		for h = 1, hits do
+			if forceCritLast and h > hits - 2 then self._T.sureCrit = true end
+			local s = self:Strike(sk.id, sk.pct * p.dmgMul, bonus)
+			self._T.sureCrit = false
+			table.insert(r.hitDmg, s.dmg)
+			table.insert(r.hitCrit, s.crit)
+			table.insert(r.delays, (h - 1) * gap)
+		end
+		local total = hits * gap
+		-- 머무는 공격 (풍마수리검)
+		if (p.linger or 0) > 0 then
+			for k = 1, p.linger do
+				local s = self:Strike(sk.id, p.lingerPct, bonus)
+				table.insert(r.hitDmg, s.dmg)
+				table.insert(r.hitCrit, s.crit)
+				table.insert(r.delays, total + k * p.lingerGap)
+			end
+			total = total + p.linger * p.lingerGap
+		end
+		-- 잔상 (실루엣 미라주)
+		if (p.echoHits or 0) > 0 then
+			local times = 1
+			if p.echoTwice then times = 2 end
+			for t = 1, times do
+				for k = 1, p.echoHits do
+					local s = self:Strike(sk.id, p.echoPct, bonus)
+					table.insert(r.hitDmg, s.dmg)
+					table.insert(r.hitCrit, s.crit)
+					table.insert(r.delays, total + 0.3 + (k - 1) * gap)
+				end
+				total = total + 0.3 + p.echoHits * gap
+			end
+		end
+		if (p.finisher or 0) > 0 then
+			r.finisher = self:Strike(sk.id, p.finisher, bonus)
+			r.finisherDelay = total + 0.25
+			total = total + 0.25
+		end
+		if p.channel and (p.reduce or 0) > 0 then r.selfReduce = { p.reduce, total + 0.5 } end
+		if (p.partyReduce or 0) > 0 then r.partyReduce = { p.partyReduce, total + 0.5 } end
+		if p.recast > 0 and _UtilLogic:RandomDouble() * 100 < p.recast then r.recast = true end
+		if sk.id == "N01" and self:Flag("N01", "jackpot") and _UtilLogic:RandomDouble() < 0.07 then r.jackpot = true end
+		r.total = total
+		log("[VRF] jobcombat cast " .. sk.id .. " hits=" .. tostring(#r.hitDmg) .. " dmg1=" .. tostring(r.hitDmg[1] or 0) .. " res=" .. tostring(self.Res) .. " mana=" .. tostring(math.floor(self.Mana)))
+		return r
+	end
+
+	@ExecSpace("ServerOnly")
+	method table ExtraHit(string id, string tag, number pct, integer targets, string fx, number delay)
+		-- 동작 없는 추가타 1회 (분신·추가 표창·유도 화살 등).
+		local s = self:Strike(id, pct, 0)
+		local sk = self._T.skills[id]
+		return { hero = true, id = tag, sk = sk, p = {}, hitDmg = { s.dmg }, hitCrit = { s.crit }, fx = fx, fxScale = 1, mobFx = "", policy = "once",
+			hitSound = "", useSound = "", gap = 0.1, targets = targets, actionFrames = "", actionTime = 0, casterFx = "", delay = delay, extra = true }
+	end
+
+	@ExecSpace("ServerOnly")
+	method void GainRes(integer hits, Entity target)
+		-- 직접 공격 타수마다 자원 획득 (패시브 Lv.0이면 잠김).
+		if self.PassiveLv <= 0 or hits <= 0 then return end
+		if self.JobId == "NightLord" then
+			local n = 0
+			for h = 1, hits do
+				if _UtilLogic:RandomDouble() * 100 < self.ResChance then n = n + 1 end
+			end
+			self:AddMarks(target, n)
+		elseif self.JobId == "Bowmaster" then
+			for h = 1, hits do
+				if _UtilLogic:RandomDouble() * 100 < self.ResChance then self.Res = math.min(self.ResMax, self.Res + 1) end
+			end
+		elseif self.JobId == "Viper" then
+			local per = self.EnergyPerHit
+			if self:Flag("V12", "energyPlus") then per = 8 end
+			self:AddEnergy(per * hits)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddEnergy(integer n)
+		-- 바이퍼 에너지 증감. 100이 되면 충전 완료 (8초, 돌파로 12초).
+		if self.JobId ~= "Viper" or self.PassiveLv <= 0 then return end
+		local before = self.Res
+		self.Res = math.max(0, math.min(100, self.Res + n))
+		if before < 100 and self.Res >= 100 and not self:On("charged") then
+			local dur = 8
+			if self:Flag("V12", "energyPlus") then dur = 12 end
+			self:SetTill("charged", self:Now() + dur)
+			self._T.chargedActive = true
+			log("[VRF] jobcombat viper charged")
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollCasts(Component mgr)
+		-- 기본 공격 1회(명중): 마나·자원 후 함께 시전할 스킬을 정한다. 동작 있는 스킬은 1개: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		self._T.mgr = mgr
+		self:AddMana(self.ManaPerHit)
+		local mon = mgr:HeroMonster()
+		self:GainRes(1, mon)
+		local list = {}
+		local spec = self:Spec()
+		-- 보우마스터 화살 폭풍: 화살이 가득이면 이번 공격에 화살 5발 (3마리, 둔화)
+		-- 퀴버 풀버스트를 바로 쓸 수 있으면 폭풍 대신 풀버스트가 화살을 쓴다
+		local burst = self._T.skills.A12
+		local burstReady = burst ~= nil and self:Learned("A12") and (self._T.cd.A12 or 0) <= 0 and self.Mana >= self:ManaCost(burst)
+		if self.JobId == "Bowmaster" and self.PassiveLv > 0 and self.Res >= self.ResMax and not burstReady then
+			local n = 5
+			if self:Has("A12", 5) then n = 7 end
+			local pct = 50 + 10 * (self.PassiveLv - 1)
+			for k = 1, n do
+				local e = self:ExtraHit("", "storm", pct, 3, "", 0.1 + 0.08 * k)
+				e.p = { slow = true }
+				table.insert(list, e)
+			end
+			self.Res = 0
+			log("[VRF] jobcombat arrow storm n=" .. tostring(n))
+		end
+		-- 바이퍼 충전 완료: 직접 공격마다 체력 0.5% 회복
+		if self.JobId == "Viper" and self:On("charged") then mgr:HealActor(self.Entity, mgr:ActorMaxHp(self.Entity) * 0.005) end
+		-- 쉐도우 파트너: 직접 공격을 분신이 따라 공격
+		if self:On("N04") then
+			local p = self:Params(self._T.skills.N04)
+			local e = self:ExtraHit("N04", "partner", p.partner or 30, 1, "", 0.2)
+			if self:Flag("N04", "partnerMark") then e.p = { mark = 1 } end
+			table.insert(list, e)
+			if (p.partner2 or 0) > 0 then table.insert(list, self:ExtraHit("N04", "partner2", p.partner2, 1, "", 0.3)) end
+		end
+		-- 래피드 스로우: 기본 공격마다 추가 표창
+		if self:On("N12") then
+			local p = self:Params(self._T.skills.N12)
+			for k = 1, (p.extraStars or 0) do
+				local e = self:ExtraHit("N12", "rapid", p.extraPct or 25, 1, self._T.skills.N12.a.fx, 0.1 * k)
+				if self:Flag("N12", "rapidMark") then e.p = { mark = 1 } end
+				table.insert(list, e)
+			end
+			if self:Flag("N12", "rapidCd") then
+				for id, t in pairs(self._T.cd) do if id ~= "N12" then self._T.cd[id] = math.max(0, t - 0.5) end end
+			end
+		end
+		-- Instinct (N13·A13·V13): 확률 발동, 지속 중 기본 공격에 추가타
+		for _, sk in ipairs(self:RunSkills(mgr)) do
+			if sk.trigger == "Instinct" then
+				local p = self:Params(sk)
+				if not self:On(sk.id) and (self._T.cd[sk.id] or 0) <= 0 and _UtilLogic:RandomDouble() * 100 < (p.proc or 10) then
+					self._T.cd[sk.id] = p.cd
+					self:SetTill(sk.id, self:Now() + p.dur)
+					self._T.instCount = 0
+					if (p.reduce or 0) > 0 then self:SetReduce(sk.id, p.reduce, p.dur) end
+					if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+					self:Sfx(sk.a.useSound)
+					log("[VRF] jobcombat instinct " .. sk.id)
+				end
+				if self:On(sk.id) then
+					self._T.instCount = (self._T.instCount or 0) + 1
+					local pct = sk.pct
+					if sk.id == "N13" and self:Flag("N13", "bigSpear") and self._T.instCount % 5 == 0 then pct = 300 end
+					for k = 1, (p.procHits or 1) do
+						local e = self:ExtraHit(sk.id, "inst", pct, p.procTargets or 1, sk.a.fx, 0.15 + 0.1 * k)
+						e.p = { slow = p.slow, venom = p.venom, bleed = p.bleed }
+						table.insert(list, e)
+					end
+					if p.vortexPull and (self._T.instCount % 3) == 0 then mgr:PullQueued(1) end
+				end
+			end
+		end
+		local acted = false
+		-- 다크로드의 비전서 돌파 2 '완전한 비전': 약점 노출 중이면 최우선 (쿨타임 없음)
+		local arc = self._T.skills.N15
+		if arc ~= nil and self:Learned("N15") and self:Flag("N15", "arcanePriority") and self:On("expose") and self.Mana >= self:ManaCost(arc) then
+			self.Mana = self.Mana - self:ManaCost(arc)
+			table.insert(list, self:MakeCast(arc))
+			acted = true
+		end
+		local skills = self:RunSkills(mgr)
+		for _, sk in ipairs(skills) do
+			if acted then break end
+			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 then
+				self._T.cd[sk.id] = self:Cooldown(sk)
+				table.insert(list, self:MakeCast(sk))
+				acted = true
+				break
+			end
+		end
+		if not acted then
+			local best = nil
+			for _, sk in ipairs(skills) do
+				local ok = sk.trigger == "Skill" and (self._T.cd[sk.id] or 0) <= 0 and self.Mana >= self:ManaCost(sk)
+				local sp = spec[sk.id] or {}
+				if ok and (sp.useEnergyN or 0) > 0 and not self:Has(sk.id, 4) and self.Res < sp.useEnergyN then ok = false end
+				if ok and (best == nil or self:ManaCost(sk) > self:ManaCost(best)) then best = sk end
+			end
+			if best ~= nil then
+				self.Mana = self.Mana - self:ManaCost(best)
+				self._T.cd[best.id] = self:Cooldown(best)
+				table.insert(list, self:MakeCast(best))
+			end
+		end
+		self._T.lastActionTime = 0
+		for _, r in ipairs(list) do
+			if (r.actionFrames or "") ~= "" and (r.actionTime or 0) > self._T.lastActionTime then self._T.lastActionTime = r.actionTime end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetReduce(string key, number pct, number dur)
+		-- 이 캐릭터만 받는 피해 감소 (dur초).
+		local t = self._T.reduce or {}
+		t[key] = pct
+		self._T.reduce = t
+		self:SetTill("red_" .. key, self:Now() + dur)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyCast(Component mgr, table r, Entity target)
+		-- 시전 결과 적용 (TowerPlayer의 타격 순간). 지연 추가타는 잠시 뒤.
+		self._T.mgr = mgr
+		if (r.delay or 0) > 0 then
+			local info = r
+			local d = r.delay
+			info.delay = 0
+			_TimerService:SetTimerOnce(function() self:ApplyCast(mgr, info, target) end, d)
+			return
+		end
+		if r.buffSkill then
+			self:ApplyBuffSkill(mgr, r)
+			return
+		end
+		local p = r.p or {}
+		if (r.resUse or 0) > 0 then
+			if self.JobId == "Viper" then self:AddEnergy(-r.resUse) else self.Res = math.max(0, self.Res - r.resUse) end
+		end
+		if r.clearMarks and isvalid(target) then
+			local st = self:MonState(target)
+			st.marks = 0
+			self:SaveMon(target, st)
+		end
+		if (r.energyShield or 0) > 0 then mgr:AddShield(self.Entity, mgr:ActorMaxHp(self.Entity) * r.energyShield / 100) end
+		if r.selfReduce ~= nil then self:SetReduce(r.id, r.selfReduce[1], r.selfReduce[2]) end
+		if r.partyReduce ~= nil then mgr:AddBuff("job" .. r.id .. "party", "DmgReduce", r.partyReduce[1], r.partyReduce[2], 0) end
+		if (p.pull or 0) > 0 then mgr:PullQueued(p.pull) end
+		if (p.afterReduce or 0) > 0 then self:SetReduce("after" .. r.id, p.afterReduce, 2) end
+		if (p.duelVuln or 0) > 0 then mgr:HeroSetVuln(p.duelVuln, 6) end
+		if (p.expBuff or 0) > 0 then mgr:AddBuff("nlBounty", "ExpPct", p.expBuff, 6, 0) end
+		if r.season ~= nil then
+			local o = self:StatusOwner()
+			if r.season == 1 then mgr:HealActor(self.Entity, mgr:ActorMaxHp(self.Entity) * 0.05)
+			elseif r.season == 2 and o ~= nil then o:ApplyDebuff("Burn", target)
+			elseif r.season == 3 then self:AddVenom(target, 3, 0)
+			elseif o ~= nil then o:StunTarget(mgr, 1.5, target) end
+		end
+		local n = #r.hitDmg
+		for h = 1, n do
+			local hit = h
+			local d = (r.delays or {})[h]
+			if d == nil then d = (h - 1) * (r.gap or 0.12) end
+			if d <= 0 then
+				self:ApplyHit(r, target, hit)
+			else
+				_TimerService:SetTimerOnce(function() self:ApplyHit(r, target, hit) end, d)
+			end
+		end
+		if r.finisher ~= nil then
+			local fin = r.finisher
+			local fx = r.fx
+			local tg = r.targets
+			_TimerService:SetTimerOnce(function()
+				local mon = mgr:HeroMonster()
+				if mgr.RunState ~= "FIGHT" or not isvalid(mon) then return end
+				local list = self:DealTo(mon, fin.dmg, fin.crit, fx, tg, 0.6)
+				for _, e in ipairs(list) do self:ApplyEffects(p, e, true) end
+				log("[VRF] jobcombat finisher " .. r.id .. " dmg=" .. tostring(fin.dmg))
+			end, r.finisherDelay or 1)
+		end
+		if (r.echo or 0) == 0 and (p.echo or 0) > 0 then r.echo = p.echo end
+		if (r.echo or 0) > 0 and n > 0 then
+			local dmg = math.floor(r.hitDmg[1] * r.echo / 100 + 0.5)
+			local fx = r.fx
+			local tg = r.targets or 1
+			_TimerService:SetTimerOnce(function()
+				local mon = mgr:HeroMonster()
+				if mgr.RunState == "FIGHT" and isvalid(mon) then self:DealTo(mon, dmg, false, fx, tg, 0.5) end
+			end, (r.total or 0.3) + 0.35)
+		end
+		if r.jackpot then
+			for k = 1, 7 do
+				local s = self:Strike("N01", 60, 0)
+				_TimerService:SetTimerOnce(function()
+					local mon = mgr:HeroMonster()
+					if mgr.RunState == "FIGHT" and isvalid(mon) then self:DealTo(mon, s.dmg, s.crit, r.fx, 1, 0.15 * k) end
+				end, 0.4 + 0.08 * k)
+			end
+			self:AddMana(7)
+			log("[VRF] jobcombat jackpot")
+		end
+		if not r.extra and r.id ~= "" then
+			if self.JobId == "Viper" and (p.res or 0) > 0 then self:AddEnergy(p.res) end
+			if p.resSure and self.JobId == "Bowmaster" then self.Res = math.min(self.ResMax, self.Res + n) end
+			self:GainRes(n, target)
+			if self:On("N11") then
+				for _, e in ipairs({ target }) do self:AddVenom(e, 1, 0) end
+			end
+		end
+		if r.stunEnd ~= nil then
+			local o = self:StatusOwner()
+			if o ~= nil then o:StunTarget(mgr, r.stunEnd, target) end
+		end
+		if (p.pullLast or 0) > 0 then
+			local cnt = p.pullLast
+			_TimerService:SetTimerOnce(function() mgr:PullQueued(cnt) end, (r.total or 0.3))
+		end
+		if r.recast then
+			local sk = r.sk
+			_TimerService:SetTimerOnce(function()
+				if mgr.RunState ~= "FIGHT" then return end
+				local again = self:MakeCast(sk)
+				again.recast = false
+				again.actionFrames = ""
+				local mon = mgr:HeroMonster()
+				if isvalid(mon) then self:ApplyCast(mgr, again, mon) end
+				log("[VRF] jobcombat recast " .. sk.id)
+			end, (r.total or n * 0.12) + 0.2)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyHit(table r, Entity target, integer h)
+		-- 타격 h: 이펙트·소리·숫자·피해 후 맞은 몬스터마다 효과.
+		local mgr = self._T.mgr
+		if mgr == nil or mgr.RunState ~= "FIGHT" then return end
+		if not isvalid(target) or target ~= mgr:HeroMonster() then
+			target = mgr:HeroMonster()
+			if not isvalid(target) then return end
+		end
+		local p = r.p or {}
+		local dmg = r.hitDmg[h] or 0
+		local fx = ""
+		if r.policy == "per_hit" or h == 1 then
+			fx = r.fx or ""
+			self:Sfx(r.hitSound)
+		end
+		if h == 1 and (r.mobFx or "") ~= "" then
+			_EffectService:PlayEffectAttached(r.mobFx, target, Vector3(0, 0.5, 0), 0, Vector3(1, 1, 1), false)
+		end
+		local last = h == #r.hitDmg
+		local list = self:DealTo(target, dmg, r.hitCrit[h] == true, fx, r.targets or 1, ((h - 1) % 4) * self.HitNumGap)
+		for _, e in ipairs(list) do
+			self:ApplyEffects(p, e, last)
+			if (p.life or 0) > 0 then mgr:HealActor(self.Entity, math.min(dmg * p.life / 100, mgr:ActorMaxHp(self.Entity) * (p.lifeCap or 3) / 100)) end
+			if (p.healHit or 0) > 0 then mgr:HealActor(self.Entity, mgr:ActorMaxHp(self.Entity) * p.healHit / 100) end
+			if p.lingerVenom and h > (p.hits or 1) then self:AddVenom(e, 1, 0) end
+			if p.lingerMark and h > (p.hits or 1) then self:AddMarks(e, 1) end
+		end
+		if p.resPerTarget and last and self.JobId == "Bowmaster" then self.Res = math.min(self.ResMax, self.Res + #list) end
+		if (p.knockEvery or 0) > 0 and r.id == "A06" and h % p.knockEvery == 0 then self:Knock(target, 1) end
+		if (p.execute or 0) > 0 and last and isvalid(target) and target == mgr:HeroMonster() and not mgr.MonsterElite and mgr.MonsterHp > 0 and mgr.MonsterHp <= mgr.MonsterMaxHp * p.execute then
+			local rest = math.ceil(mgr.MonsterHp)
+			self:DealTo(target, rest, true, "", 1, 0.8)
+			log("[VRF] jobcombat execute")
+		end
+		if p.spreadBurn and last then
+			local tm = isvalid(target) and target:GetComponent("script.TowerMonster") or nil
+			local o = self:StatusOwner()
+			if tm ~= nil and tm.IsDead and o ~= nil then
+				for _, e in ipairs(mgr:SplashTargets(2)) do o:ApplyDebuff("Burn", e) end
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table DealTo(Entity target, integer dmg, boolean crit, string fx, integer targets, number yOff)
+		-- 맨 앞 몬스터 + 줄 선 몬스터 (targets-1)마리에게 피해. 나이트로드는 표식만큼 피해 증가. 맞은 몬스터 목록을 돌려준다.
+		local mgr = self._T.mgr
+		local list = {}
+		if dmg <= 0 or not isvalid(target) or mgr == nil then return list end
+		local first = ""
+		if fx ~= nil and fx ~= "" then first = string.match(fx, "^([^|]+)") or fx end
+		local tp = self.Entity:GetComponent("script.TowerPlayer")
+		local uid = self:OwnerUid()
+		table.insert(list, target)
+		if targets > 1 then
+			for _, e in ipairs(mgr:SplashTargets(targets - 1)) do table.insert(list, e) end
+		end
+		local markPer = 1.2 + 0.2 * math.max(0, self.PassiveLv - 1)
+		for i, e in ipairs(list) do
+			if not isvalid(e) or e.TransformComponent == nil then continue end
+			local d = dmg
+			if self.JobId == "NightLord" and self.PassiveLv > 0 then d = math.floor(d * (1 + self:Marks(e) * markPer / 100) + 0.5) end
+			if first ~= "" then
+				local wp = e.TransformComponent.WorldPosition
+				_EffectService:PlayEffect(first, e, Vector3(wp.x, wp.y + 0.45 * e.TransformComponent.Scale.y, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
+			end
+			if e == mgr:HeroMonster() then
+				if tp ~= nil and uid ~= "" then tp:ShowProcDamageAt(e, d, crit, yOff, uid) end
+				mgr:ApplyMonsterDamage(d)
+				if crit then mgr:OnPlayerCrit() end
+			else
+				mgr:ApplySplashDamage(e, d, crit, yOff)
+			end
+		end
+		return list
+	end
+
+	-- ========== 버프·소환·자동·보호 ==========
+
+	@ExecSpace("ServerOnly")
+	method void ApplyBuffSkill(Component mgr, table r)
+		-- 소환·버프·자동 스킬 시작.
+		local sk = r.sk
+		local p = r.p
+		local kind = p.kind
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		self:Sfx(sk.a.useSound)
+		if kind == "summon" or p.rain then
+			local s = { id = sk.id, left = p.dur, next = 0.3, interval = (p.interval or 0) > 0 and p.interval or 3, count = 0, knockNext = p.knockEvery or 0 }
+			if self:Has("N05", 5) and sk.id == "N05" then s.interval = s.interval * 0.7 end
+			local all = self._T.summons or {}
+			all[sk.id] = s
+			self._T.summons = all
+			log("[VRF] jobcombat summon " .. sk.id .. " dur=" .. tostring(p.dur))
+			return
+		end
+		local dur = p.dur or 0
+		self:SetTill(sk.id, self:Now() + dur)
+		if (p.atk or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "atk", "AtkPct", p.atk, dur, 0) end
+		if (p.partyAtk or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "patk", "AtkPct", p.partyAtk, dur, 0) end
+		if (p.crit or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "crit", "Crit", p.crit, dur, 0) end
+		if (p.critDmg or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "cdmg", "CritDmg", p.critDmg, dur, 0) end
+		if (p.defIgnore or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "def", "DefIgnore", p.defIgnore, dur, 0) end
+		if (p.speed or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "spd", "Speed", p.speed, dur, 0) end
+		if (p.evade or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "eva", "Evade", p.evade, dur, 0) end
+		if (p.reduce or 0) > 0 and kind ~= "instinct" then self:SetReduce(sk.id, p.reduce, dur) end
+		if (p.allyReduce or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "ally", "DmgReduce", p.allyReduce, dur, 0) end
+		if p.extraTargets ~= nil then self._T.concTargets = p.extraTargets end
+		if p.fillRes then
+			if self.JobId == "Viper" then self:AddEnergy(100) else self.Res = self.ResMax end
+		end
+		if (p.timeLeap or 0) > 0 then
+			for id, t in pairs(self._T.cd) do if id ~= sk.id then self._T.cd[id] = t * (1 - p.timeLeap / 100) end end
+			if (p.leapAlly or 0) > 0 then
+				for _, h in ipairs(mgr:Heroes()) do
+					if h ~= self and h._T.cd ~= nil then
+						local cds = h._T.cd
+						for id, t in pairs(cds) do cds[id] = t * (1 - p.leapAlly / 100) end
+						h._T.cd = cds
+					end
+				end
+			end
+			if (p.leapMana or 0) > 0 then self:AddMana(self.ManaMax * p.leapMana / 100) end
+			if (p.leapSlow or 0) > 0 then
+				for _, e in ipairs(self:AllMonsters()) do
+					local tm = e:GetComponent("script.TowerMonster")
+					if tm ~= nil then tm:SetSlow(self.SlowPct, p.leapSlow) end
+				end
+			end
+		end
+		if (p.dash or 0) > 0 then
+			local s = self:Strike(sk.id, p.dash, 0)
+			local mon = mgr:HeroMonster()
+			if isvalid(mon) then
+				local list = self:DealTo(mon, s.dmg, s.crit, sk.a.fx, p.dashTargets or 3, 0)
+				local o = self:StatusOwner()
+				if (p.dashStun or 0) > 0 and o ~= nil then
+					for _, e in ipairs(list) do o:StunTarget(mgr, p.dashStun, e) end
+				end
+			end
+		end
+		if (p.quake or 0) > 0 then
+			local s = self:Strike(sk.id, p.quake, 0)
+			local mon = mgr:HeroMonster()
+			if isvalid(mon) then
+				local list = self:DealTo(mon, s.dmg, s.crit, sk.a.fx, 5, 0)
+				local o = self:StatusOwner()
+				for _, e in ipairs(list) do if o ~= nil then o:StunTarget(mgr, 1, e) end end
+			end
+		end
+		log("[VRF] jobcombat buff " .. sk.id .. " dur=" .. tostring(dur))
+	end
+
+	@ExecSpace("ServerOnly")
+	method table AllMonsters()
+		-- 살아 있는 맨 앞 + 줄 선 몬스터.
+		local mgr = self._T.mgr
+		local list = {}
+		local mon = mgr:HeroMonster()
+		if isvalid(mon) then table.insert(list, mon) end
+		for _, e in ipairs(mgr:SplashTargets(20)) do table.insert(list, e) end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickSummons(Component mgr, number delta)
+		-- 소환물·지속 공격(애로우 레인): interval초마다 앞 몬스터(+줄 선 몬스터)를 공격, 시간이 다 되면 사라진다.
+		local all = self._T.summons or {}
+		local left = 0
+		for id, s in pairs(all) do
+			s.left = s.left - delta
+			if s.left > left then left = s.left end
+			local sk = self._T.skills[id]
+			local p = self:Params(sk)
+			if s.left <= 0 then
+				all[id] = nil
+				-- 피닉스 돌파 5 '재탄생'
+				local mon = mgr:HeroMonster()
+				if (p.endBurst or 0) > 0 and mgr.RunState == "FIGHT" and isvalid(mon) then
+					local hit = self:Strike(id, p.endBurst, 0)
+					self:DealTo(mon, hit.dmg, hit.crit, sk.a.fx, 6, 0.4)
+				end
+			else
+				s.next = s.next - delta
+				local mon = mgr:HeroMonster()
+				if s.next <= 0 and mgr.RunState == "FIGHT" and isvalid(mon) then
+					s.next = s.interval
+					s.count = s.count + 1
+					local pct = sk.pct * p.dmgMul * (1 + p.dmg / 100)
+					if (p.every3 or 0) > 0 and s.count % 3 == 0 then pct = pct * p.every3 end
+					local volleys = 1
+					if p.double then volleys = 2 end
+					for v = 1, volleys do
+						for hh = 1, sk.hits do
+							local hit = self:Strike(id, pct, 0)
+							local tgt = mon
+							local tg = p.targets or 1
+							if v == 2 then tg = math.max(1, tg) end
+							local list = self:DealTo(tgt, hit.dmg, hit.crit, sk.a.fx, tg, 0.2 * hh)
+							for _, e in ipairs(list) do self:ApplyEffects(p, e, false) end
+							if (p.resChance or 0) > 0 and self.JobId == "Bowmaster" and _UtilLogic:RandomDouble() * 100 < p.resChance then self.Res = math.min(self.ResMax, self.Res + 1) end
+						end
+					end
+					if p.hail and s.count % 3 == 0 then
+						local o = self:StatusOwner()
+						for _, e in ipairs(self:AllMonsters()) do if o ~= nil then o:StunTarget(mgr, 0.5, e) end end
+					end
+					if (p.phoenixHeal or 0) > 0 and s.count % 3 == 0 then
+						for _, e in ipairs(mgr:Actors()) do if not mgr:IsDown(e) then mgr:HealActor(e, mgr:ActorMaxHp(e) * p.phoenixHeal / 100) end end
+					end
+					self:Sfx(sk.a.hitSound)
+				end
+				-- 애로우 플래터: knockEvery초마다 맨 앞 몬스터 넉백
+				if (p.knockEvery or 0) > 0 and id == "A05" then
+					s.knockNext = s.knockNext - delta
+					if s.knockNext <= 0 and isvalid(mon) then
+						s.knockNext = p.knockEvery
+						self:Knock(mon, 1)
+					end
+				end
+			end
+		end
+		self._T.summons = all
+		self.SummonLeft = math.max(0, left)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickAuto(Component mgr)
+		-- Auto(쿨타임마다 자동 버프)·Guard(위기 시 자동)·Buff형 Cooldown 스킬.
+		if mgr.RunState ~= "FIGHT" then return end
+		local hp = mgr:ActorHp(self.Entity)
+		local maxHp = mgr:ActorMaxHp(self.Entity)
+		for _, sk in ipairs(self:RunSkills(mgr)) do
+			if (self._T.cd[sk.id] or 0) <= 0 then
+				local p = self:Params(sk)
+				if sk.trigger == "Auto" then
+					self._T.cd[sk.id] = p.cd
+					self:ApplyBuffSkill(mgr, { sk = sk, p = p })
+				elseif sk.trigger == "Guard" then
+					local low = hp < maxHp * (p.hpLine or 40) / 100 and not mgr:IsDown(self.Entity)
+					local who = self.Entity
+					-- 일루전 스텝 돌파 3 '동료 보호'
+					if not low and self:Flag("A09", "guardAlly") then
+						local ally = mgr:LowestAlly()
+						if isvalid(ally) and mgr:ActorHp(ally) < mgr:ActorMaxHp(ally) * 0.4 then
+							low = true
+							who = ally
+						end
+					end
+					if low then
+						self._T.cd[sk.id] = p.cd
+						self:ApplyGuard(mgr, sk, p, who)
+					end
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyGuard(Component mgr, table sk, table p, Entity who)
+		-- 위기 보호 발동: 다크 사이트(은신)·일루전 스텝(회피·넉백)·언위어링 넥타(회복·감소).
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, who, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		self:Sfx(sk.a.useSound)
+		local dur = p.dur or 2
+		if sk.id == "N09" then
+			dur = p.stealth or 2
+			self:SetTill("inv", self:Now() + dur)
+			self:SetTill("N09", self:Now() + dur)
+			self._T.sureCritNext = true
+			if self:Flag("N09", "ambush") then self._T.ambush = true end
+		elseif sk.id == "A09" then
+			mgr:AddBuff("jobA09eva", "Evade", p.evade or 60, dur, 0)
+			self:SetTill("A09", self:Now() + dur)
+			if (p.counter or 0) > 0 then mgr:AddBuff("jobA09ctr", "EvadeCounter", p.counter, dur, 0) end
+			for _, e in ipairs(self:AllMonsters()) do self:Knock(e, 1) end
+		elseif sk.id == "V09" then
+			self:SetReduce("V09", p.reduce or 30, dur)
+			self:SetTill("V09", self:Now() + dur)
+			if p.undying then mgr:SetDeathWard(dur) end
+			if p.fillRes then self:AddEnergy(100) end
+			if (p.allyHeal or 0) > 0 then
+				for _, e in ipairs(mgr:Actors()) do if e ~= self.Entity and not mgr:IsDown(e) then mgr:HealActor(e, mgr:ActorMaxHp(e) * p.allyHeal / 100) end end
+			end
+		end
+		if (p.healPct or 0) > 0 then mgr:HealActor(who, mgr:ActorMaxHp(who) * p.healPct / 100) end
+		log("[VRF] jobcombat guard " .. sk.id .. " -> " .. who.Name)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickBuffs(Component mgr, number delta)
+		-- 지속 중인 버프의 매초 효과: 스티뮬레이트 에너지, 다크 사이트 회복, 블리딩 톡신 끝 폭발, 충전 완료 종료.
+		self._T.sec = (self._T.sec or 0) - delta
+		local tick = false
+		if self._T.sec <= 0 then
+			self._T.sec = 1
+			tick = true
+		end
+		if tick and self:On("V10") then
+			local p = self:Params(self._T.skills.V10)
+			self:AddEnergy(p.energyTick or 8)
+		end
+		if tick and self:On("N09") then
+			local p = self:Params(self._T.skills.N09)
+			if (p.stealthHeal or 0) > 0 then mgr:HealActor(self.Entity, mgr:ActorMaxHp(self.Entity) * p.stealthHeal / 100) end
+		end
+		if self._T.chargedActive and not self:On("charged") then
+			self._T.chargedActive = false
+			if self.Res >= 100 then self.Res = 50 end
+		end
+		-- 블리딩 톡신 돌파 5: 끝날 때 맹독 남은 피해를 즉시
+		if self._T.toxinWas and not self:On("N11") then
+			if self:Flag("N11", "venomBurst") then
+				for _, st in pairs(self._T.mon or {}) do
+					if (st.venom or 0) > 0 and isvalid(st.ent) then
+						local remain = math.max(0, (st.venomTill or 0) - self:Now())
+						local s = self:Strike("", self.VenomPct * st.venom * remain, 0)
+						self:DealTo(st.ent, s.dmg, false, "", 1, 0.3)
+					end
+				end
+			end
+		end
+		self._T.toxinWas = self:On("N11")
+		-- 쉐도우 스피어 돌파 5: 끝날 때 앞 몬스터 표식 가득
+		if self._T.spearWas and not self:On("N13") and self:Flag("N13", "spearEndMark") then self:AddMarks(mgr:HeroMonster(), self.ResMax) end
+		self._T.spearWas = self:On("N13")
+		-- 다크 사이트 뒤 첫 공격 확정 치명타
+		if self._T.sureCritNext and not self:On("N09") then
+			self._T.sureCrit = true
+			self._T.sureCritNext = false
+			_TimerService:SetTimerOnce(function() self._T.sureCrit = false end, 1.5)
+		end
+	end
+
+	-- ========== 매 프레임 ==========
+
+	@ExecSpace("ServerOnly")
+	method void Tick(Component mgr, number delta)
+		-- 전투 중: 쿨타임, 마나 회복, 자동·보호 스킬, 소환물, 맹독, HUD 표시.
+		self._T.mgr = mgr
+		for id, t in pairs(self._T.cd) do self._T.cd[id] = math.max(0, t - delta) end
+		self:AddMana(self.ManaRegen * delta)
+		self:TickAuto(mgr)
+		self:TickSummons(mgr, delta)
+		self:TickVenom(mgr, delta)
+		self:TickBuffs(mgr, delta)
+		self._T.statusTick = (self._T.statusTick or 0) - delta
+		if self._T.statusTick <= 0 then
+			self._T.statusTick = 0.2
+			self:UpdateStatus()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void UpdateStatus()
+		-- HUD용 상태 줄·스킬 칸 (id:남은 쿨:최대 쿨:레벨).
+		local parts = {}
+		local mgr = self._T.mgr
+		if self.JobId == "NightLord" and mgr ~= nil then
+			local m = self:Marks(mgr:HeroMonster())
+			self.Res = m
+			if m > 0 then table.insert(parts, "<color=#D9A8FF>표식 " .. tostring(m) .. "/" .. tostring(self.ResMax) .. "</color>") end
+			if self:On("expose") then table.insert(parts, "<color=#FF9FD0>약점 노출</color>") end
+		elseif self.JobId == "Bowmaster" then
+			if self.Res > 0 then table.insert(parts, "<color=#B8F0A8>강화 화살 " .. tostring(self.Res) .. "/" .. tostring(self.ResMax) .. "</color>") end
+		elseif self.JobId == "Viper" then
+			table.insert(parts, "<color=#9FE8FF>에너지 " .. tostring(self.Res) .. "</color>")
+			if self:On("charged") then table.insert(parts, "<color=#FFE08A>충전 완료</color>") end
+		end
+		for id, sk in pairs(self._T.skills or {}) do
+			if sk.trigger ~= "Skill" and sk.trigger ~= "Guard" and self:On(id) then table.insert(parts, sk.name) end
+		end
+		if self:On("inv") then table.insert(parts, "<color=#C0C0FF>은신</color>") end
+		self.StatusText = table.concat(parts, "   ")
+		local slots = {}
+		for _, id in ipairs(self._T.equip or {}) do
+			local sk = self._T.skills[id]
+			if sk ~= nil and self:Learned(id) then
+				table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":" .. tostring(mgr ~= nil and (mgr.SkillLv[id] or 0) or 0))
+			end
+		end
+		self.SlotInfo = table.concat(slots, "|")
+		local rm = self:CalcResMax()
+		if self.ResMax ~= rm then self.ResMax = rm end
+	end
+
+end

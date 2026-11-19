@@ -136,7 +136,7 @@ script MainPanelLogic extends Logic
 		end
 		local list = {}
 		local lp = _UserService.LocalPlayer
-		local hc = isvalid(lp) and lp:GetComponent("script.HeroCombat") or nil
+		local hc = (function() if not isvalid(lp) then return nil end for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do local c = lp:GetComponent(n) if c ~= nil and c.Active then return c end end return nil end)()
 		if hc ~= nil and hc.Active then
 			for entry in string.gmatch(hc.SlotInfo, "[^|]+") do
 				local id, left, max, lv = string.match(entry, "^([^:]+):([^:]+):([^:]+):?([^:]*)$")
@@ -691,7 +691,7 @@ script MainPanelLogic extends Logic
 			if self.hpText.Text ~= s then self.hpText.Text = s end
 		end
 		local lp = _UserService.LocalPlayer
-		local hc = isvalid(lp) and lp:GetComponent("script.HeroCombat") or nil
+		local hc = (function() if not isvalid(lp) then return nil end for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do local c = lp:GetComponent(n) if c ~= nil and c.Active then return c end end return nil end)()
 		local hero = hc ~= nil and hc.Active
 		if isvalid(self.mpFill) then
 			local r = 0

@@ -56,6 +56,23 @@ script TowerMonster extends AttackComponent
 	property number MoveSpeed = 0
 	@HideFromInspector
 	property boolean Moving = false
+	-- 둔화 (보우마스터): 공격 간격 +SlowPct%, SlowUntil까지
+	@HideFromInspector
+	property number SlowUntil = 0
+	@HideFromInspector
+	property number SlowPct = 0
+	-- 공격력 감소 (나이트로드·바이퍼): AtkDownPct%, AtkDownUntil까지
+	@HideFromInspector
+	property number AtkDownUntil = 0
+	@HideFromInspector
+	property number AtkDownPct = 0
+	-- 넉백: 밀린 뒤 돌아갈 자리, 다시 밀리지 않는 시각
+	@HideFromInspector
+	property number KnockReturnX = 0
+	@HideFromInspector
+	property boolean KnockBack = false
+	@HideFromInspector
+	property number KnockImmuneUntil = 0
 	
 	@ExecSpace("ServerOnly")
 	method void OnBeginPlay()
@@ -105,6 +122,50 @@ script TowerMonster extends AttackComponent
 	end
 
 	@ExecSpace("ServerOnly")
+	method void SetSlow(number pct, number sec)
+		-- 둔화: 더 센 값이 남는다. 다시 걸면 시간 갱신.
+		local now = _UtilLogic.ElapsedSeconds
+		if now >= self.SlowUntil then self.SlowPct = pct else self.SlowPct = math.max(self.SlowPct, pct) end
+		self.SlowUntil = math.max(self.SlowUntil, now + sec)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SlowMul()
+		-- 지금 공격 간격 배율 (둔화 없으면 1).
+		if _UtilLogic.ElapsedSeconds >= self.SlowUntil then return 1 end
+		return 1 + self.SlowPct / 100
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetAtkDown(number pct, number sec)
+		-- 공격력 감소: 더 센 값이 남는다.
+		local now = _UtilLogic.ElapsedSeconds
+		if now >= self.AtkDownUntil then self.AtkDownPct = pct else self.AtkDownPct = math.max(self.AtkDownPct, pct) end
+		self.AtkDownUntil = math.max(self.AtkDownUntil, now + sec)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number AtkMul()
+		-- 지금 공격력 배율 (감소 없으면 1).
+		if _UtilLogic.ElapsedSeconds >= self.AtkDownUntil then return 1 end
+		return math.max(0, 1 - self.AtkDownPct / 100)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Knockback(number dist, number immune)
+		-- 넉백: 뒤(+X)로 dist만큼 빠르게 밀린 뒤 원래 자리로 걸어 돌아온다. 공격 대기는 처음부터.
+		if self.IsDead then return end
+		local x = self.Entity.TransformComponent.Position.x
+		local back = x
+		if self.Moving then back = self.MoveTargetX end
+		self.KnockReturnX = back
+		self.KnockBack = true
+		self.KnockImmuneUntil = _UtilLogic.ElapsedSeconds + immune
+		self.AtkTimer = -1
+		self:WalkTo(x + dist, 6)
+	end
+
+	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
 		-- 걸어가기, 공격/피격 모션이 끝나면 stand로 복귀.
 		if self.IsDead then return end
@@ -116,6 +177,11 @@ script TowerMonster extends AttackComponent
 			if math.abs(dx) <= step then
 				tf.Position = Vector3(self.MoveTargetX, p.y, p.z)
 				self.Moving = false
+				-- 넉백으로 밀려난 끝: 원래 자리로 걸어 돌아간다
+				if self.KnockBack then
+					self.KnockBack = false
+					self:WalkTo(self.KnockReturnX, 1.5)
+				end
 			elseif dx > 0 then
 				tf:Translate(step, 0)
 			else

@@ -102,7 +102,11 @@ script TowerPlayer extends AttackComponent
 		local tm = p.target:GetComponent("script.TowerMonster")
 		if tm ~= nil and tm.IsDead then
 			-- 기본 타격은 버리되, 같이 나간 히어로 스킬 타격은 다음 몬스터로 넘긴다
-			local hero = self.Entity:GetComponent("script.HeroCombat")
+			local hero = nil
+			for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do
+				local c = self.Entity:GetComponent(n)
+				if c ~= nil and c.Active then hero = c end
+			end
 			if p.procs ~= nil and #p.procs > 0 and hero ~= nil and hero.Active then
 				local map = self.Entity.CurrentMap
 				local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil

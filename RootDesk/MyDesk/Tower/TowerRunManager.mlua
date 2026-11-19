@@ -188,6 +188,15 @@ script TowerRunManager extends Component
 	-- 이번 판 직업 Id (직업 선택 전에는 "")
 	@Sync
 	property string JobId = ""
+	-- 2인 편성 동료 직업 (편성 화면에서 고름)
+	@Sync
+	property string CompJobId = ""
+	-- 동료 직업 → 모델 Id
+	property string CompanionModels = "Hero:towercompanion,Bishop:towerbishop,NightLord:towernightlord,Bowmaster:towerbowmaster,Viper:towerviper"
+	-- 메인 직업 무기 (직업:RUID:계열 O=한손/T=두손). 히어로는 장비 단계 무기를 쓴다.
+	property string JobWeapons = "Bishop:061712eadf7d4357a6c306dfd5368860:O,NightLord:c80eb7c8ad1f45988e6d74b1c95a0b13:O,Bowmaster:edde225a13754c149f7191fd8a2dac35:T,Viper:fe25f3973345486a836f8b9b539d268a:O"
+	-- 직업 위협 배율 (몬스터가 누구를 노릴지)
+	property string JobThreat = "Hero:1.0,Bishop:1.0,NightLord:1.0,Bowmaster:0.7,Viper:2.0"
 	@Sync
 	property number EnhanceBonus = 0
 	@Sync
@@ -394,10 +403,100 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method Component HeroOf(Entity e)
 		-- 전투 캐릭터(플레이어·동료)의 히어로 전투 컴포넌트.
+		-- 편성 직업이 있으면 그 직업 컴포넌트 (메인은 HeroCombat·BishopCombat·JobCombat을 모두 가진다).
 		if not isvalid(e) then return nil end
-		local h = e:GetComponent("script.HeroCombat")
-		if h ~= nil then return h end
-		return e:GetComponent("script.BishopCombat")
+		local job = nil
+		if e == self._T.player then job = self._T.mainJob elseif isvalid(self._T.comp) and e == self._T.comp then job = self._T.compJob end
+		if job == nil or job == "" then
+			local h = e:GetComponent("script.HeroCombat")
+			if h ~= nil then return h end
+			local b = e:GetComponent("script.BishopCombat")
+			if b ~= nil then return b end
+			return e:GetComponent("script.JobCombat")
+		end
+		if job == "Hero" then return e:GetComponent("script.HeroCombat") end
+		if job == "Bishop" then return e:GetComponent("script.BishopCombat") end
+		local j = e:GetComponent("script.JobCombat")
+		if j ~= nil and j.JobId ~= job then j.JobId = job end
+		return j
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean IsSkillJob(string job)
+		-- 장착 스킬 5종 + 돌파로 싸우는 직업인지.
+		return job == "Hero" or job == "Bishop" or job == "NightLord" or job == "Bowmaster" or job == "Viper"
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component StatusHero()
+		-- 몬스터 상태(자상·암흑·기절·화상)를 들고 있는 히어로 전투 컴포넌트: 편성에 히어로가 있으면 그쪽(메인 우선), 없으면 메인 캐릭터에 붙은 HeroCombat.
+		for _, h in ipairs(self:Heroes()) do
+			if h.JobId == "Hero" then return h end
+		end
+		if isvalid(self._T.player) then return self._T.player:GetComponent("script.HeroCombat") end
+		return nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component ExtraStatusHero()
+		-- 상태 담당 히어로가 편성 밖(메인이 다른 직업)이면 그 컴포넌트, 아니면 nil. 따로 상태 시계를 돌려야 한다.
+		local sh = self:StatusHero()
+		if sh == nil then return nil end
+		for _, h in ipairs(self:Heroes()) do
+			if h == sh then return nil end
+		end
+		return sh
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadFormation()
+		-- 저장된 편성(메인·동료 직업)을 읽는다. 없으면 히어로 + 비숍.
+		local mainJob = "Hero"
+		local compJob = "Bishop"
+		local eng = self:GetEngrave()
+		if eng ~= nil and eng.SkillLoaded then
+			if self:IsSkillJob(eng.MainJob) then mainJob = eng.MainJob end
+			if self:IsSkillJob(eng.CompJob) and eng.CompJob ~= mainJob then compJob = eng.CompJob end
+		end
+		if compJob == mainJob then
+			if mainJob == "Bishop" then compJob = "Hero" else compJob = "Bishop" end
+		end
+		self._T.mainJob = mainJob
+		self._T.compJob = compJob
+		self.CompJobId = compJob
+	end
+
+	@ExecSpace("ServerOnly")
+	method string ListValue(string list, string key)
+		-- "키:값,키:값" 목록에서 키의 값 (없으면 "").
+		for entry in string.gmatch(list, "[^,]+") do
+			local k, v = string.match(entry, "^([^:]+):(.*)$")
+			if k == key then return v end
+		end
+		return ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PullQueued(integer n)
+		-- 끌어당김 (바이퍼): 가장 먼 줄 선 몬스터 n마리를 대기열 앞쪽으로 옮겨 가까운 자리로 걸어오게 한다.
+		local q = self._T.queue or {}
+		if #q <= 1 or n <= 0 then return end
+		local moved = 0
+		for k = 1, n do
+			if #q <= 1 then break end
+			local last = table.remove(q, #q)
+			table.insert(q, 1, last)
+			moved = moved + 1
+		end
+		self._T.queue = q
+		self:LayoutWave()
+		log("[VRF] pull queued n=" .. tostring(moved))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DelayFrontAttack(number sec)
+		-- 넉백 (보우마스터): 맨 앞 몬스터의 다음 공격을 sec초 늦춘다.
+		self.MonsterAttackTimer = self.MonsterAttackTimer + sec
 	end
 
 	@ExecSpace("ServerOnly")
@@ -628,15 +727,25 @@ script TowerRunManager extends Component
 		if not self.DuoTest then return end
 		local player = self._T.player
 		if not isvalid(player) then return end
+		self:LoadFormation()
+		local modelId = self:ListValue(self.CompanionModels, self._T.compJob)
+		if modelId == "" then modelId = self.CompanionModelId end
 		local pos = self.PlayerPos + Vector3(-self.CompanionGap, 0, 0)
 		local comp = self._T.comp
+		-- 편성이 바뀌어 동료 직업이 달라졌으면 새로 만든다
+		if isvalid(comp) and self._T.compModel ~= modelId then
+			comp:Destroy()
+			comp = nil
+			self._T.comp = nil
+		end
 		if not isvalid(comp) then
-			comp = _SpawnService:SpawnByModelId(self.CompanionModelId, "Companion", pos, self.Entity)
+			comp = _SpawnService:SpawnByModelId(modelId, "Companion", pos, self.Entity)
 			if not isvalid(comp) then
-				log_warning("[VRF] companion spawn failed model=" .. self.CompanionModelId)
+				log_warning("[VRF] companion spawn failed model=" .. modelId)
 				return
 			end
 			self._T.comp = comp
+			self._T.compModel = modelId
 		end
 		comp.TransformComponent.Position = pos
 		local tp = comp:GetComponent("script.TowerPlayer")
@@ -649,9 +758,11 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void LinkStatusOwner()
 		-- 2인 편성: 몬스터 상태(자상·디버프·기절)는 메인 히어로가 들고, 동료 히어로는 그것을 함께 쓴다.
-		local main = self:MainHero()
+		local main = self:StatusHero()
 		for _, h in ipairs(self:Heroes()) do
-			if h == main then h._T.statusOwner = nil else h._T.statusOwner = main end
+			if h.JobId == "Hero" then
+				if h == main then h._T.statusOwner = nil else h._T.statusOwner = main end
+			end
 		end
 		log("[VRF] duo status owner linked heroes=" .. tostring(#self:Heroes()))
 	end
@@ -704,6 +815,8 @@ script TowerRunManager extends Component
 			if not self:IsDown(e) then
 				local w = 1.0
 				if not self:IsCompanion(e) then w = 1.5 end
+				local h = self:HeroOf(e)
+				if h ~= nil then w = w * (tonumber(self:ListValue(self.JobThreat, h.JobId)) or 1) end
 				table.insert(cands, { e = e, w = w })
 				total = total + w
 			end
@@ -783,7 +896,7 @@ script TowerRunManager extends Component
 	method boolean IsHeroRun()
 		-- 이번 판이 히어로 2단계 전투(장착 스킬 5종)인지.
 		local hero = self:MainHero()
-		return self.JobId == "Hero" and hero ~= nil and hero.Active
+		return self:IsSkillJob(self.JobId) and hero ~= nil and hero.Active
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1113,7 +1226,7 @@ script TowerRunManager extends Component
 		-- 이번 판에 쓸 스킬: 직업 액티브 + 계열 공용 패시브 (직업 선택 전이면 빈 목록).
 		if self.JobId == "" or self._T.jobSkills == nil then return {} end
 		-- 히어로: 아웃게임에서 장착한 5종만 (계열 공용 패시브 없음, 콤보 어택은 고유 패시브)
-		if self.JobId == "Hero" then
+		if self:IsSkillJob(self.JobId) then
 			-- 2인 편성: 메인(히어로)과 동료(비숍 등)가 각자 장착한 스킬을 모두 카드 후보로 (판 안 레벨은 공유)
 			local list = {}
 			local seen = {}
@@ -1169,6 +1282,17 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void RollJobChoices()
 		-- 판 시작 직업 선택: 첫 고를 수 있는 직업과 같은 계열 직업 3개를 보여 준다 (고를 수 없는 직업은 화면에서 잠금).
+		-- 편성이 있으면 직업 선택 없이 메인 직업으로 바로 시작
+		if self._T.mainJob ~= nil and self:IsSkillJob(self._T.mainJob) and self._T.jobById[self._T.mainJob] ~= nil then
+			self.ChoiceIds["1"] = self._T.mainJob
+			self.ChoiceIds["2"] = ""
+			self.ChoiceIds["3"] = ""
+			self.ChoiceSeq = self.ChoiceSeq + 1
+			self.RunState = "JOBSELECT"
+			log("[VRF] formation start main=" .. self._T.mainJob .. " comp=" .. tostring(self._T.compJob))
+			self:PickJob(self._T.mainJob)
+			return
+		end
 		local first = self._T.jobById[self._T.playableJobs[1] or ""]
 		local list = {}
 		for _, id in ipairs(self._T.jobOrder) do
@@ -1333,9 +1457,23 @@ script TowerRunManager extends Component
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		if self.RunState ~= "JOBSELECT" then return end
 		local job = self._T.jobById[self.ChoiceIds[tostring(slot)] or ""]
-		if job == nil or not job.playable then return end
+		if job == nil or not (job.playable or self:IsSkillJob(job.id)) then return end
+		self:PickJob(job.id)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PickJob(string jobId)
+		-- 직업 확정: 직업 무기로 갈아입고, 첫 스킬 카드부터 시작. 스킬 직업은 메인·동료 전투 컴포넌트가 장착 스킬로 판을 시작한다.
+		local job = self._T.jobById[jobId]
+		if job == nil then return end
 		self.JobId = job.id
-		if job.id == "Hero" then
+		if self:IsSkillJob(job.id) then
+			local extra = self:ExtraStatusHero()
+			if extra ~= nil then
+				extra:ClearState()
+				extra._T.mgr = self
+				extra._T.statusOwner = nil
+			end
 			-- 히어로: 장착 스킬 5종은 레벨업 카드 후보일 뿐 입장 직후에는 아무 스킬도 없다 (BeginRun이 SkillLv를 0으로 정함).
 			-- 시작 기본 카드 1장은 빼고 레벨업 때 배운다 (각인 '선행 학습'으로 오른 시작 레벨만큼의 카드는 유지).
 			for _, h in ipairs(self:Heroes()) do h:BeginRun(self) end
@@ -1596,6 +1734,8 @@ script TowerRunManager extends Component
 		end
 		if self:IsHeroRun() then
 			for _, h in ipairs(self:Heroes()) do h:Tick(self, delta) end
+			local extra = self:ExtraStatusHero()
+			if extra ~= nil then extra:TickStatusOnly(self, delta) end
 		end
 		for id, t in pairs(self._T.cd) do self._T.cd[id] = math.max(0, t - delta) end
 		local changed = false
@@ -1909,6 +2049,22 @@ script TowerRunManager extends Component
 					end
 				else
 					cm:SetEquip(cats[slot], row.ruid)
+				end
+			end
+		end
+		-- 메인이 히어로가 아닌 스킬 직업이면 그 직업 무기를 든다
+		local w = self:ListValue(self.JobWeapons, self._T.mainJob or "")
+		if w ~= "" and self.JobId == self._T.mainJob then
+			local ruid, fam = string.match(w, "^([^:]+):(.*)$")
+			if ruid ~= nil then
+				local attacker = player:GetComponent("script.TowerPlayer")
+				if attacker ~= nil then attacker.WeaponFamily = fam end
+				if fam == "T" then
+					cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, "")
+					cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, ruid)
+				else
+					cm:SetEquip(MapleAvatarItemCategory.TwoHandedWeapon, "")
+					cm:SetEquip(MapleAvatarItemCategory.OneHandedWeapon, ruid)
 				end
 			end
 		end
@@ -2441,6 +2597,8 @@ script TowerRunManager extends Component
 		self:FillQueue(info)
 		if self:IsHeroRun() then
 			for _, h in ipairs(self:Heroes()) do h:OnMonsterSpawn(self, monster, info.stand) end
+			local extra = self:ExtraStatusHero()
+			if extra ~= nil then extra:OnMonsterSpawn(self, monster, info.stand) end
 		end
 		self._T.compAtkTimer = 0.5 + walkTime + 0.25
 		-- 걸어 들어오는 동안은 서로 공격하지 않는다
@@ -2651,7 +2809,7 @@ script TowerRunManager extends Component
 				if mc.AtkTimer < 0 then
 					mc.AtkTimer = interval * (0.5 + _UtilLogic:RandomDouble() * 0.7)
 				else
-					mc.AtkTimer = mc.AtkTimer - delta
+					mc.AtkTimer = mc.AtkTimer - delta / mc:SlowMul()
 					if mc.AtkTimer <= 0 then
 						mc.AtkTimer = interval
 						self:DoMonsterAttack(q, false)
@@ -2711,6 +2869,9 @@ script TowerRunManager extends Component
 			if self.PlayerHp >= self.PlayerMaxHp * 0.5 then reduceSum = reduceSum + self:Bonus("HighHpReduce") end
 			if self.PlayerHp <= self.PlayerMaxHp * 0.3 then reduceSum = reduceSum + self:Bonus("LowHpReduce") end
 			if front and self.MonsterElite then reduceSum = reduceSum + self:Bonus("EliteReduce") end
+			-- 직업 공용 전투(바이퍼 에너지·트랜스폼 등): 그 캐릭터만 받는 피해 감소 (합계 60% 상한)
+			local jc = player:GetComponent("script.JobCombat")
+			if jc ~= nil and jc.Active and self:HeroOf(player) == jc then reduceSum = math.min(math.max(reduceSum, 60), reduceSum + jc:SelfReduce()) end
 			local cut = math.max(0, 1 - reduceSum / 100)
 			-- 악마의 거래 대가: 받는 피해 증가
 			cut = cut * (1 + self:Bonus("DmgTaken") / 100)
@@ -2718,7 +2879,7 @@ script TowerRunManager extends Component
 			cut = cut * math.max(0, 1 - (self._T.symCut or 0) / 100)
 			local crit = 0
 			if front then crit = self._T.monsterCrit or 0 end
-			local dmg = math.max(1, math.floor(self.MonsterAtk * (1 - reduce) * cut + 0.5))
+			local dmg = math.max(1, math.floor(self.MonsterAtk * mc:AtkMul() * (1 - reduce) * cut + 0.5))
 			if toComp then
 				-- 동료는 엔진 피격 판정 대신 공격 동작 뒤 직접 피해 (치명타는 여기서 판정)
 				mc:SetClip(mc.AttackRUID, mc.AttackAnimTime)
@@ -3557,7 +3718,10 @@ script TowerRunManager extends Component
 				end
 			end
 
-			self.MonsterAttackTimer = self.MonsterAttackTimer - delta
+			local frontSlow = 1
+			local fmc = isvalid(self._T.monster) and self._T.monster:GetComponent("script.TowerMonster") or nil
+			if fmc ~= nil then frontSlow = fmc:SlowMul() end
+			self.MonsterAttackTimer = self.MonsterAttackTimer - delta / frontSlow
 			if self.MonsterAttackTimer <= 0 and self.RunState == "FIGHT" then
 				-- 직업 스킬 '서리 갑옷': 몬스터 공격 간격 증가
 				self.MonsterAttackTimer = (self._T.monsterInterval or self.MonsterAttackInterval) * (1 + self:Bonus("MonSlow") / 100)
