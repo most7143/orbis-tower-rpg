@@ -134,6 +134,32 @@ script TowerPlayer extends AttackComponent
 		end
 	end
 
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 함께 생성되는 구성원(2·3번)은 조작 컴포넌트가 없어 기본 방향(왼쪽)을 본다. 아바타 몸통만 좌우 반전해 몬스터 쪽(오른쪽)을 보게 한다.
+		-- 붙어 있는 이펙트·피해 숫자는 뒤집지 않도록 엔티티 전체가 아니라 아바타 루트만 바꾼다. 아바타는 늦게 만들어질 수 있어 잠시 반복 확인한다.
+		if isvalid(self.Entity.PlayerComponent) then return end
+		self._T.faceTimer = _TimerService:SetTimerRepeat(function() self:FaceRight() end, 0.3)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 방향 맞춤 타이머 정리.
+		if (self._T.faceTimer or 0) ~= 0 then _TimerService:ClearTimer(self._T.faceTimer) end
+		self._T.faceTimer = 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FaceRight()
+		-- 구성원 아바타를 오른쪽으로 (조작 캐릭터가 오른쪽을 볼 때와 같은 값: 아바타 루트 크기 x = -1).
+		local ar = self.Entity.AvatarRendererComponent
+		if not isvalid(ar) then return end
+		local root = ar:GetAvatarRootEntity()
+		if not isvalid(root) then return end
+		local sc = root.TransformComponent.Scale
+		if sc.x > 0 then root.TransformComponent.Scale = Vector3(-sc.x, sc.y, sc.z) end
+	end
+
 	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
 		-- 클라이언트 신호가 오지 않으면(렉·창 비활성 등) 시간이 지난 뒤 서버가 직접 적용해 전투가 멈추지 않게 한다.

@@ -736,8 +736,10 @@ script MainPanelLogic extends Logic
 		-- 탑 맵에서만 패널을 보이고, 열린 탭 내용을 판 상태(@Sync)로 갱신한다.
 		local mgr = self:GetManager()
 		local inTower = mgr ~= nil
-		for _, root in ipairs({ self.sideTabsRoot, self.bottomBarRoot, self.skillSlotsRoot }) do
-			if isvalid(root) and root.Enable ~= inTower then root:SetEnable(inTower) end
+		if isvalid(self.sideTabsRoot) and self.sideTabsRoot.Enable ~= inTower then self.sideTabsRoot:SetEnable(inTower) end
+		-- 하단은 전투 화면의 구성원 HUD(구성원 3명 패널 + 레벨·경험치 줄)를 쓴다. 예전 하단 바·스킬 칸은 숨긴다.
+		for _, root in ipairs({ self.bottomBarRoot, self.skillSlotsRoot }) do
+			if isvalid(root) and root.Enable then root:SetEnable(false) end
 		end
 		-- 중단하기: 전투 진행 중에만 보이고, 패배·결과 상태가 되면 확인 창도 닫는다
 		-- (왼쪽 패널이 열려 있으면 패널 제목과 겹치므로 버튼만 숨긴다)

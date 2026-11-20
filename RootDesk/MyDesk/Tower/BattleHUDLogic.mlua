@@ -458,8 +458,7 @@ script BattleHUDLogic extends Logic
 			self._T.procTimer = 0
 			if isvalid(self.procText) and self.procText.Entity.Enable then self.procText.Entity:SetEnable(false) end
 			self:UpdateHeroRes(nil)
-			self:UpdateMate(nil, 1)
-			self:UpdateMate(nil, 2)
+			self:UpdateParty(nil)
 			return
 		end
 
@@ -515,49 +514,71 @@ script BattleHUDLogic extends Logic
 		self:UpdateMesoDrop(delta, player)
 		self:UpdateProcText(mgr, player, delta)
 		self:UpdateHeroRes(mgr)
-		self:UpdateMate(mgr, 1)
-		self:UpdateMate(mgr, 2)
+		self:UpdateParty(mgr)
 	end
 
 	@ExecSpace("ClientOnly")
-	method void UpdateMate(Component mgr, integer idx)
-		-- 구성원 2·3번 HUD (오른쪽 아래 스킬 칸 위, 2번 아래·3번 위): 직업 이름, 체력·마나 막대, 자원·쓰러짐, 장착 스킬 5칸.
-		local rootName = "Mate"
-		local entName = "Companion"
-		if idx == 2 then
-			rootName = "Mate2"
-			entName = "Companion2"
+	method void UpdateParty(Component mgr)
+		-- 하단 구성원 HUD: 구성원 1·2·3번 패널 + 레벨·경험치 줄. 전투 중(FIGHT·CLEAR)에만 보인다.
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Party")
+		if not isvalid(root) then return end
+		local show = mgr ~= nil and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		if root.Enable ~= show then root:SetEnable(show) end
+		if not show then return end
+		for k = 1, 3 do self:UpdateMember(mgr, k) end
+		-- 레벨·경험치
+		local lv = _EntityService:GetEntityByPath("/ui/BattleHUD/Party/Exp/Lv")
+		local lvText = "Lv." .. tostring(mgr.Level)
+		if isvalid(lv) and lv.TextGUIRendererComponent.Text ~= lvText then lv.TextGUIRendererComponent.Text = lvText end
+		local ratio = 0
+		if mgr.ExpToNext > 0 then ratio = math.max(0, math.min(1, mgr.Exp / mgr.ExpToNext)) end
+		local fill = _EntityService:GetEntityByPath("/ui/BattleHUD/Party/Exp/Fill")
+		if isvalid(fill) then
+			local w = 1836 * ratio
+			local sz = fill.UITransformComponent.RectSize
+			if math.abs(sz.x - w) > 0.5 then fill.UITransformComponent.RectSize = Vector2(w, sz.y) end
 		end
-		local base = "/ui/BattleHUD/" .. rootName
+		local et = _EntityService:GetEntityByPath("/ui/BattleHUD/Party/Exp/Text")
+		local label = "EXP " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. " (" .. string.format("%.1f", ratio * 100) .. "%)"
+		if isvalid(et) and et.TextGUIRendererComponent.Text ~= label then et.TextGUIRendererComponent.Text = label end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateMember(Component mgr, integer k)
+		-- 구성원 k번 패널: 번호·직업, 체력(숫자)·마나 막대, 자원·쓰러짐, 장착 스킬 5칸(배운 스킬만 아이콘·레벨·쿨타임).
+		local base = "/ui/BattleHUD/Party/P" .. tostring(k)
 		local root = _EntityService:GetEntityByPath(base)
 		if not isvalid(root) then return end
-		local comp = nil
-		local cc = nil
+		local ent = nil
 		local hp = 0
 		local maxHp = 0
 		local down = false
-		if mgr ~= nil then
-			if idx == 2 then
-				hp = mgr.Companion2Hp
-				maxHp = mgr.Companion2MaxHp
-				down = mgr.Companion2Down
-			else
-				hp = mgr.CompanionHp
-				maxHp = mgr.CompanionMaxHp
-				down = mgr.CompanionDown
+		if k == 1 then
+			ent = _UserService.LocalPlayer
+			hp = mgr.PlayerHp
+			maxHp = mgr.PlayerMaxHp
+			down = mgr.PlayerDown
+		elseif k == 2 then
+			ent = mgr.Entity:GetChildByName("Companion")
+			hp = mgr.CompanionHp
+			maxHp = mgr.CompanionMaxHp
+			down = mgr.CompanionDown
+		else
+			ent = mgr.Entity:GetChildByName("Companion2")
+			hp = mgr.Companion2Hp
+			maxHp = mgr.Companion2MaxHp
+			down = mgr.Companion2Down
+		end
+		local cc = nil
+		if isvalid(ent) then
+			for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do
+				local c = ent:GetComponent(n)
+				if c ~= nil and c.Active then cc = c end
 			end
 		end
-		if mgr ~= nil and maxHp > 0 and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR") then
-			comp = mgr.Entity:GetChildByName(entName)
-			if isvalid(comp) then
-				cc = comp:GetComponent("script.BishopCombat")
-				if cc == nil then cc = comp:GetComponent("script.JobCombat") end
-				if cc == nil then cc = comp:GetComponent("script.HeroCombat") end
-			end
-		end
-		local show = cc ~= nil
-		if root.Enable ~= show then root:SetEnable(show) end
-		if not show then return end
+		local on = cc ~= nil and maxHp > 0
+		if root.Enable ~= on then root:SetEnable(on) end
+		if not on then return end
 		local function get(path) return _EntityService:GetEntityByPath(base .. "/" .. path) end
 		local function setText(path, txt)
 			local e = get(path)
@@ -585,13 +606,15 @@ script BattleHUDLogic extends Logic
 			end
 		end
 		local names = { Hero = "히어로", Bishop = "비숍", NightLord = "나이트로드", Bowmaster = "보우마스터", Viper = "바이퍼" }
-		local jobName = names[cc.JobId] or cc.JobId
-		setText("Job", jobName)
-		setBar("HpFill", hp / math.max(1, maxHp), 146)
-		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax), 146)
+		setText("Job", tostring(k) .. "  " .. (names[cc.JobId] or cc.JobId))
+		setBar("HpFill", hp / math.max(1, maxHp), 160)
+		setText("HpText", tostring(math.floor(hp)) .. " / " .. tostring(math.floor(maxHp)))
+		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax or 100), 160)
 		local state = ""
 		if down then
 			state = "<color=#E5484D>쓰러짐</color>"
+		elseif cc.JobId == "Hero" then
+			state = "콤보 " .. tostring(cc.Combo)
 		elseif cc.JobId == "Bishop" then
 			state = "성수 " .. tostring(cc.HolyWater) .. "/" .. tostring(cc.HolyMaxNow)
 		elseif cc.JobId == "NightLord" then
@@ -600,8 +623,6 @@ script BattleHUDLogic extends Logic
 			state = "화살 " .. tostring(cc.Res) .. "/" .. tostring(cc.ResMax)
 		elseif cc.JobId == "Viper" then
 			state = "에너지 " .. tostring(cc.Res)
-		else
-			state = "HP " .. tostring(math.floor(hp)) .. "/" .. tostring(math.floor(maxHp))
 		end
 		setText("State", state)
 		local list = {}
@@ -614,9 +635,9 @@ script BattleHUDLogic extends Logic
 			local info = list[i]
 			local icon = get(slot .. "/Icon")
 			if isvalid(icon) then
-				local on = info ~= nil
-				if icon.Enable ~= on then icon:SetEnable(on) end
-				if on then
+				local has = info ~= nil
+				if icon.Enable ~= has then icon:SetEnable(has) end
+				if has then
 					local ruid = self._T.mateIcons[info.id] or ""
 					local spr = icon.SpriteGUIRendererComponent
 					if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
@@ -631,9 +652,9 @@ script BattleHUDLogic extends Logic
 			end
 			local cd = get(slot .. "/Cd")
 			if isvalid(cd) then
-				local h = 64 * ratio
+				local h = 66 * ratio
 				local sz = cd.UITransformComponent.RectSize
-				if math.abs(sz.y - h) > 0.5 then cd.UITransformComponent.RectSize = Vector2(64, h) end
+				if math.abs(sz.y - h) > 0.5 then cd.UITransformComponent.RectSize = Vector2(66, h) end
 			end
 			setText(slot .. "/CdText", cdText)
 			local lvText = ""

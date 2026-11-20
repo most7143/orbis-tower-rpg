@@ -352,7 +352,8 @@ script TowerRunManager extends Component
 	-- 2인 편성 (솔로도 메인 + 동료). 동료 체력·쓰러짐은 HUD용으로 동기화한다.
 	property boolean DuoTest = true
 	property string CompanionModelId = "towerbishop"
-	property number CompanionGap = 0.8
+	-- 구성원 사이 간격 (구성원 1 뒤로 2번, 그 뒤로 3번)
+	property number CompanionGap = 0.45
 	property number ReviveHpPct = 30
 	property number CompanionHitDelay = 0.35
 	@Sync
