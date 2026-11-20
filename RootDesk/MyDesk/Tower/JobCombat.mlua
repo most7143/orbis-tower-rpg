@@ -299,6 +299,67 @@ script JobCombat extends Component
 		log("[VRF] jobcombat debug learn " .. self.JobId .. " " .. ids)
 	end
 
+	@ExecSpace("ServerOnly")
+	method string DebugDump(table p)
+		-- 검증용: 수치 표를 "키=값" 문자열로 (표는 a/b).
+		local keys = {}
+		for k, _ in pairs(p) do table.insert(keys, k) end
+		table.sort(keys)
+		local parts = {}
+		for _, k in ipairs(keys) do
+			local v = p[k]
+			if type(v) == "table" then
+				local t = {}
+				for _, x in ipairs(v) do table.insert(t, tostring(x)) end
+				v = table.concat(t, "/")
+			end
+			table.insert(parts, k .. "=" .. tostring(v))
+		end
+		return table.concat(parts, ";")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugAudit(Component mgr, string job)
+		-- 검증용: 그 직업 스킬마다 돌파 1~5를 하나씩만 얻은 상태로 수치를 계산해, 돌파 없을 때와 달라진 값과 flag를 기록한다.
+		self._T.mgr = mgr
+		self.JobId = job
+		self._T.spec = nil
+		self:LoadSkills()
+		local ids = {}
+		for id, _ in pairs(self._T.skills) do table.insert(ids, id) end
+		table.sort(ids)
+		local brk = self:Breaks()
+		for _, id in ipairs(ids) do
+			local sk = self._T.skills[id]
+			mgr:DebugClearBreaks()
+			local base = self:Params(sk)
+			local line = {}
+			for n = 1, 5 do
+				local bid = id .. "_B" .. tostring(n)
+				mgr:DebugClearBreaks()
+				mgr:DebugGiveBreaks(bid)
+				local p = self:Params(sk)
+				local diff = {}
+				for k, v in pairs(p) do
+					local a = base[k]
+					local sv = v
+					local sa = a
+					if type(v) == "table" then sv = self:DebugDump({ x = v }) end
+					if type(a) == "table" then sa = self:DebugDump({ x = a }) end
+					if tostring(sv) ~= tostring(sa) then table.insert(diff, k .. ":" .. tostring(sa) .. ">" .. tostring(sv)) end
+				end
+				table.sort(diff)
+				local b = brk[bid] or {}
+				if b.flag ~= nil then table.insert(diff, "flag:" .. b.flag .. "=" .. tostring(self:Flag(id, b.flag))) end
+				if b.resMax ~= nil then table.insert(diff, "resMax>" .. tostring(self:CalcResMax())) end
+				if #diff == 0 then table.insert(diff, "변화없음") end
+				table.insert(line, "B" .. tostring(n) .. "{" .. table.concat(diff, ",") .. "}")
+			end
+			log("[VRF] audit " .. id .. " " .. table.concat(line, " "))
+		end
+		mgr:DebugClearBreaks()
+	end
+
 	-- ========== 기본 정보 ==========
 
 	@ExecSpace("ServerOnly")
@@ -715,6 +776,7 @@ script JobCombat extends Component
 			starPow = self:Star(id, "StarPower")
 			starCrit = self:Star(id, "StarCrit")
 		end
+		if self:On("V10") and self.Res >= 100 then bonusPct = bonusPct + (self._T.fullBonus or 0) end
 		local mul = (1 + (starPow + bonusPct) / 100) * (1 + self:ResAtkPct() / 100) * (1 + self:DefDownPct() / 100)
 		local critRate = mgr.CritRate + starCrit
 		if self._T.sureCrit then critRate = 100 end
@@ -764,7 +826,12 @@ script JobCombat extends Component
 		-- 조건부 피해
 		if self:Flag("N02", "thirst") and sk.id == "N02" and mgr:ActorHp(self.Entity) <= mgr:ActorMaxHp(self.Entity) * 0.5 then bonus = bonus + 100 end
 		if sk.id == "N15" and self:Flag("N15", "verdict") and mgr.MonsterHp >= mgr.MonsterMaxHp * 0.9 then bonus = bonus + 50 end
-		if sk.id == "A03" and isvalid(front) and (p.burnBonus or 0) > 0 then bonus = bonus + p.burnBonus end
+		-- 인플레임: 맨 앞 몬스터가 화상 중이면 피해 증가 (돌파 4: +50%)
+		if sk.id == "A03" and isvalid(front) and (p.burnBonus or 0) > 0 then
+			local o = self:StatusOwner()
+			local debuff = o ~= nil and o._T.debuff or {}
+			if (debuff.Burn or 0) > self:Now() then bonus = bonus + p.burnBonus end
+		end
 		if self._T.ambush then
 			bonus = bonus + 200
 			self._T.ambush = false
@@ -776,7 +843,8 @@ script JobCombat extends Component
 			r.season = s
 		end
 		local gap = a.gap or 0.12
-		if p.channel then gap = math.max(gap, (sk.buffTime > 0 and sk.buffTime or 4) / math.max(1, hits)) end
+		-- 채널 스킬: 간격은 기본 타수 기준 (지속 돌파로 타수가 늘면 시간도 늘어난다)
+		if p.channel then gap = math.max(gap, (sk.buffTime > 0 and sk.buffTime or 4) / math.max(1, sk.hits)) end
 		r.delays = {}
 		local forceCritLast = sk.id == "N06" and self:Flag("N06", "exposeCrit") and self:On("expose")
 		for h = 1, hits do
@@ -926,6 +994,10 @@ script JobCombat extends Component
 					self._T.cd[sk.id] = p.cd
 					self:SetTill(sk.id, self:Now() + p.dur)
 					self._T.instCount = 0
+					if sk.id == "A13" then
+						self._T.guideExt = 0
+						self._T.guideKilled = {}
+					end
 					if (p.reduce or 0) > 0 then self:SetReduce(sk.id, p.reduce, p.dur) end
 					if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
 					self:Sfx(sk.a.useSound)
@@ -1020,6 +1092,17 @@ script JobCombat extends Component
 		if r.selfReduce ~= nil then self:SetReduce(r.id, r.selfReduce[1], r.selfReduce[2]) end
 		if r.partyReduce ~= nil then mgr:AddBuff("job" .. r.id .. "party", "DmgReduce", r.partyReduce[1], r.partyReduce[2], 0) end
 		if (p.pull or 0) > 0 then mgr:PullQueued(p.pull) end
+		-- 잔영의 시 돌파 4 '정지된 시간': 시전 중 모든 몬스터 공격 정지 (강화 몬스터는 둔화 60%)
+		if p.freeze then
+			local sec = (r.total or 3) + 0.3
+			for _, e in ipairs(self:AllMonsters()) do
+				local tm = e:GetComponent("script.TowerMonster")
+				if tm ~= nil then
+					if e == mgr:HeroMonster() and mgr.MonsterElite then tm:SetSlow(60, sec) else tm:SetSlow(1000, sec) end
+				end
+			end
+			log("[VRF] jobcombat freeze " .. tostring(sec))
+		end
 		if (p.afterReduce or 0) > 0 then self:SetReduce("after" .. r.id, p.afterReduce, 2) end
 		if (p.duelVuln or 0) > 0 then mgr:HeroSetVuln(p.duelVuln, 6) end
 		if (p.expBuff or 0) > 0 then mgr:AddBuff("nlBounty", "ExpPct", p.expBuff, 6, 0) end
@@ -1133,6 +1216,7 @@ script JobCombat extends Component
 			if p.lingerMark and h > (p.hits or 1) then self:AddMarks(e, 1) end
 		end
 		if p.resPerTarget and last and self.JobId == "Bowmaster" then self.Res = math.min(self.ResMax, self.Res + #list) end
+		if p.resTick and r.id == "A15" and self.JobId == "Bowmaster" then self.Res = math.min(self.ResMax, self.Res + 1) end
 		if (p.knockEvery or 0) > 0 and r.id == "A06" and h % p.knockEvery == 0 then self:Knock(target, 1) end
 		if (p.execute or 0) > 0 and last and isvalid(target) and target == mgr:HeroMonster() and not mgr.MonsterElite and mgr.MonsterHp > 0 and mgr.MonsterHp <= mgr.MonsterMaxHp * p.execute then
 			local rest = math.ceil(mgr.MonsterHp)
@@ -1178,6 +1262,19 @@ script JobCombat extends Component
 			else
 				mgr:ApplySplashDamage(e, d, crit, yOff)
 			end
+			-- 샤프 아이즈 돌파 5 '사냥꾼의 직감': 지속 중 치명타면 15% 확률로 강화 화살 +1
+			if crit and self.JobId == "Bowmaster" and self:On("A08") and self:Flag("A08", "hunterArrow") and _UtilLogic:RandomDouble() < 0.15 then self.Res = math.min(self.ResMax, self.Res + 1) end
+			-- 가이디드 애로우 돌파 5 '끝없는 추적': 지속 중 처치마다 지속 +1초 (최대 +10초)
+			if self:On("A13") and self:Flag("A13", "endlessGuide") and (self._T.guideExt or 0) < 10 then
+				local tm = e:GetComponent("script.TowerMonster")
+				if tm ~= nil and tm.IsDead and not (self._T.guideKilled or {})[e.Id] then
+					local killed = self._T.guideKilled or {}
+					killed[e.Id] = true
+					self._T.guideKilled = killed
+					self._T.guideExt = (self._T.guideExt or 0) + 1
+					self:SetTill("A13", ((self._T.till or {}).A13 or 0) + 1)
+				end
+			end
 		end
 		return list
 	end
@@ -1194,7 +1291,6 @@ script JobCombat extends Component
 		self:Sfx(sk.a.useSound)
 		if kind == "summon" or p.rain then
 			local s = { id = sk.id, left = p.dur, next = 0.3, interval = (p.interval or 0) > 0 and p.interval or 3, count = 0, knockNext = p.knockEvery or 0 }
-			if self:Has("N05", 5) and sk.id == "N05" then s.interval = s.interval * 0.7 end
 			local all = self._T.summons or {}
 			all[sk.id] = s
 			self._T.summons = all
@@ -1213,6 +1309,7 @@ script JobCombat extends Component
 		if (p.reduce or 0) > 0 and kind ~= "instinct" then self:SetReduce(sk.id, p.reduce, dur) end
 		if (p.allyReduce or 0) > 0 then mgr:AddBuff("job" .. sk.id .. "ally", "DmgReduce", p.allyReduce, dur, 0) end
 		if p.extraTargets ~= nil then self._T.concTargets = p.extraTargets end
+		if sk.id == "V10" then self._T.fullBonus = p.fullBonus or 0 end
 		if p.fillRes then
 			if self.JobId == "Viper" then self:AddEnergy(100) else self.Res = self.ResMax end
 		end

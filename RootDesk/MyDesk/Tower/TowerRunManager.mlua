@@ -546,6 +546,12 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method void DebugClearBreaks()
+		-- 검증용: 이번 판에 얻은 돌파를 모두 지운다.
+		self._T.breakTaken = {}
+	end
+
+	@ExecSpace("ServerOnly")
 	method void DebugGiveBreaks(string ids)
 		-- 검증용: 돌파 id 목록(쉼표)을 이번 판에 얻은 것으로 표시.
 		local taken = self._T.breakTaken or {}
