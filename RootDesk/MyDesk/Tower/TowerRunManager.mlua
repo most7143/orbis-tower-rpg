@@ -191,6 +191,8 @@ script TowerRunManager extends Component
 	-- 2인 편성 동료 직업 (편성 화면에서 고름)
 	@Sync
 	property string CompJobId = ""
+	@Sync
+	property string Comp2JobId = ""
 	-- 동료 직업 → 모델 Id
 	property string CompanionModels = "Hero:towercompanion,Bishop:towerbishop,NightLord:towernightlord,Bowmaster:towerbowmaster,Viper:towerviper"
 	-- 메인 직업 무기 (직업:RUID:계열 O=한손/T=두손). 히어로는 장비 단계 무기를 쓴다.
@@ -359,6 +361,13 @@ script TowerRunManager extends Component
 	property number CompanionMaxHp = 0
 	@Sync
 	property boolean CompanionDown = false
+	-- 3인 파티: 구성원 3번 (위 Companion* 은 구성원 2번)
+	@Sync
+	property number Companion2Hp = 0
+	@Sync
+	property number Companion2MaxHp = 0
+	@Sync
+	property boolean Companion2Down = false
 	@Sync
 	property boolean PlayerDown = false
 	@HideFromInspector
@@ -406,7 +415,12 @@ script TowerRunManager extends Component
 		-- 편성 직업이 있으면 그 직업 컴포넌트 (메인은 HeroCombat·BishopCombat·JobCombat을 모두 가진다).
 		if not isvalid(e) then return nil end
 		local job = nil
-		if e == self._T.player then job = self._T.mainJob elseif isvalid(self._T.comp) and e == self._T.comp then job = self._T.compJob end
+		if e == self._T.player then
+			job = self._T.mainJob
+		else
+			local i = self:MateIndex(e)
+			if i > 0 then job = (self._T.mateJobs or {})[i] end
+		end
 		if job == nil or job == "" then
 			local h = e:GetComponent("script.HeroCombat")
 			if h ~= nil then return h end
@@ -451,19 +465,34 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void LoadFormation()
 		-- 저장된 편성(메인·동료 직업)을 읽는다. 없으면 히어로 + 비숍.
-		local mainJob = "Hero"
-		local compJob = "Bishop"
+		-- 3인 파티: 구성원 1(직접 조작) · 2 · 3. 같은 직업은 한 번만.
+		local want = { "Hero", "Bishop", "NightLord" }
 		local eng = self:GetEngrave()
-		if eng ~= nil and eng.SkillLoaded then
-			if self:IsSkillJob(eng.MainJob) then mainJob = eng.MainJob end
-			if self:IsSkillJob(eng.CompJob) and eng.CompJob ~= mainJob then compJob = eng.CompJob end
+		if eng ~= nil and eng.SkillLoaded then want = { eng.MainJob, eng.CompJob, eng.Comp2Job } end
+		local used = {}
+		local jobs = {}
+		for k = 1, 3 do
+			local j = want[k]
+			if not self:IsSkillJob(j or "") or used[j] then j = nil end
+			if j ~= nil then used[j] = true end
+			jobs[k] = j
 		end
-		if compJob == mainJob then
-			if mainJob == "Bishop" then compJob = "Hero" else compJob = "Bishop" end
+		for k = 1, 3 do
+			if jobs[k] == nil then
+				for _, cand in ipairs({ "Hero", "Bishop", "NightLord", "Bowmaster", "Viper" }) do
+					if not used[cand] then
+						jobs[k] = cand
+						used[cand] = true
+						break
+					end
+				end
+			end
 		end
-		self._T.mainJob = mainJob
-		self._T.compJob = compJob
-		self.CompJobId = compJob
+		self._T.mainJob = jobs[1]
+		self._T.mateJobs = { jobs[2], jobs[3] }
+		self._T.compJob = jobs[2]
+		self.CompJobId = jobs[2]
+		self.Comp2JobId = jobs[3]
 	end
 
 	@ExecSpace("ServerOnly")
@@ -582,9 +611,9 @@ script TowerRunManager extends Component
 			self.PlayerHp = math.max(1, math.floor(self.PlayerMaxHp * pct / 100 + 0.5))
 			log("[VRF] duo resurrect main hp=" .. tostring(self.PlayerHp))
 		end
-		if self.CompanionDown then
+		if self:AnyMateDownAlive() then
 			self:ReviveCompanion(pct)
-			log("[VRF] duo resurrect companion hp=" .. tostring(self.CompanionHp))
+			log("[VRF] party resurrect members")
 		end
 	end
 
@@ -643,11 +672,91 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method table Actors()
-		-- 이번 판 전투 캐릭터 목록: 메인(플레이어) 다음 동료. 쓰러진 캐릭터도 포함.
+		-- 이번 판 전투 캐릭터 목록: 구성원 1(직접 조작) → 2 → 3. 쓰러진 캐릭터도 포함.
 		local list = {}
 		if isvalid(self._T.player) then table.insert(list, self._T.player) end
-		if isvalid(self._T.comp) then table.insert(list, self._T.comp) end
+		for i = 1, 2 do
+			local e = self:Mate(i)
+			if isvalid(e) then table.insert(list, e) end
+		end
 		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method Entity Mate(integer i)
+		-- 생성된 구성원 (i=1 → 구성원 2번, i=2 → 구성원 3번).
+		local m = self._T.mates or {}
+		local e = m[i]
+		if isvalid(e) then return e end
+		return nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer MateIndex(Entity e)
+		-- 생성된 구성원 번호 (아니면 0).
+		if not isvalid(e) then return 0 end
+		for i = 1, 2 do
+			if self:Mate(i) == e then return i end
+		end
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method number MateHp(integer i)
+		-- 구성원 체력.
+		if i == 2 then return self.Companion2Hp end
+		return self.CompanionHp
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetMateHp(integer i, number v)
+		-- 구성원 체력 쓰기.
+		if i == 2 then self.Companion2Hp = v else self.CompanionHp = v end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number MateMax(integer i)
+		-- 구성원 최대 체력.
+		if i == 2 then return self.Companion2MaxHp end
+		return self.CompanionMaxHp
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetMateMax(integer i, number v)
+		-- 구성원 최대 체력 쓰기.
+		if i == 2 then self.Companion2MaxHp = v else self.CompanionMaxHp = v end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean MateDown(integer i)
+		-- 구성원이 쓰러졌는지 (없는 구성원도 true).
+		if not isvalid(self:Mate(i)) then return true end
+		if i == 2 then return self.Companion2Down end
+		return self.CompanionDown
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetMateDown(integer i, boolean v)
+		-- 구성원 쓰러짐 쓰기.
+		if i == 2 then self.Companion2Down = v else self.CompanionDown = v end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean AnyMateDownAlive()
+		-- 생성돼 있는데 쓰러진 구성원이 있는지.
+		for i = 1, 2 do
+			if isvalid(self:Mate(i)) and self:MateDown(i) then return true end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean AnyMateUp()
+		-- 생성된 구성원 중 쓰러지지 않은 사람이 있는지.
+		for i = 1, 2 do
+			if not self:MateDown(i) then return true end
+		end
+		return false
 	end
 
 	@ExecSpace("ServerOnly")
@@ -663,42 +772,46 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method boolean IsCompanion(Entity e)
-		-- 동료 캐릭터인지.
-		return isvalid(e) and isvalid(self._T.comp) and e == self._T.comp
+		-- 생성된 구성원(2·3번)인지.
+		return self:MateIndex(e) > 0
 	end
 
 	@ExecSpace("ServerOnly")
 	method boolean IsDown(Entity e)
 		-- 쓰러진 캐릭터인지 (공격도 받지도 않는다).
-		if self:IsCompanion(e) then return self.CompanionDown end
+		local i = self:MateIndex(e)
+		if i > 0 then return self:MateDown(i) end
 		return self.PlayerDown
 	end
 
 	@ExecSpace("ServerOnly")
 	method number ActorMaxHp(Entity e)
-		-- 캐릭터별 최대 체력 (동료는 메인과 같은 능력치를 쓴다).
-		if self:IsCompanion(e) then return self.CompanionMaxHp end
+		-- 캐릭터별 최대 체력 (구성원 모두 같은 능력치를 쓴다).
+		local i = self:MateIndex(e)
+		if i > 0 then return self:MateMax(i) end
 		return self.PlayerMaxHp
 	end
 
 	@ExecSpace("ServerOnly")
 	method number ActorHp(Entity e)
 		-- 캐릭터별 현재 체력.
-		if self:IsCompanion(e) then return self.CompanionHp end
+		local i = self:MateIndex(e)
+		if i > 0 then return self:MateHp(i) end
 		return self.PlayerHp
 	end
 
 	@ExecSpace("ServerOnly")
 	method void HealActor(Entity e, number amount)
 		-- 캐릭터별 회복. 메인은 기존 회복(회복 숫자 표시 포함), 동료는 동료 체력에.
-		if not self:IsCompanion(e) then
+		local i = self:MateIndex(e)
+		if i == 0 then
 			self:HealPlayer(amount)
 			return
 		end
-		if self.CompanionDown then return end
+		if self:MateDown(i) then return end
 		local heal = math.floor(amount * (1 + self:Bonus("HealRecv") / 100) + 0.5)
-		if heal <= 0 or self.CompanionHp >= self.CompanionMaxHp then return end
-		self.CompanionHp = math.min(self.CompanionMaxHp, self.CompanionHp + heal)
+		if heal <= 0 or self:MateHp(i) >= self:MateMax(i) then return end
+		self:SetMateHp(i, math.min(self:MateMax(i), self:MateHp(i) + heal))
 		local tp = e:GetComponent("script.TowerPlayer")
 		if tp ~= nil then tp:ShowHeal(heal, tp:Uid()) end
 	end
@@ -706,15 +819,19 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method number ShieldOf(Entity e)
 		-- 캐릭터별 보호막.
-		if self:IsCompanion(e) then return self._T.compShield or 0 end
+		local i = self:MateIndex(e)
+		if i > 0 then return (self._T.mateShield or {})[i] or 0 end
 		return self._T.shield or 0
 	end
 
 	@ExecSpace("ServerOnly")
 	method void AddShield(Entity e, number amount)
 		-- 캐릭터별 보호막 더하기(음수면 빼기, 0 아래로 내려가지 않음).
-		if self:IsCompanion(e) then
-			self._T.compShield = math.max(0, (self._T.compShield or 0) + amount)
+		local i = self:MateIndex(e)
+		if i > 0 then
+			local sh = self._T.mateShield or {}
+			sh[i] = math.max(0, (sh[i] or 0) + amount)
+			self._T.mateShield = sh
 		else
 			self._T.shield = math.max(0, (self._T.shield or 0) + amount)
 		end
@@ -724,7 +841,9 @@ script TowerRunManager extends Component
 	method void FullHealParty()
 		-- 판 시작·레벨업: 쓰러지지 않은 캐릭터 체력을 가득 채운다.
 		if not self.PlayerDown then self.PlayerHp = self.PlayerMaxHp end
-		if not self.CompanionDown then self.CompanionHp = self.CompanionMaxHp end
+		for i = 1, 2 do
+			if isvalid(self:Mate(i)) and not self:MateDown(i) then self:SetMateHp(i, self:MateMax(i)) end
+		end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -734,31 +853,38 @@ script TowerRunManager extends Component
 		local player = self._T.player
 		if not isvalid(player) then return end
 		self:LoadFormation()
-		local modelId = self:ListValue(self.CompanionModels, self._T.compJob)
-		if modelId == "" then modelId = self.CompanionModelId end
-		local pos = self.PlayerPos + Vector3(-self.CompanionGap, 0, 0)
-		local comp = self._T.comp
-		-- 편성이 바뀌어 동료 직업이 달라졌으면 새로 만든다
-		if isvalid(comp) and self._T.compModel ~= modelId then
-			comp:Destroy()
-			comp = nil
-			self._T.comp = nil
-		end
-		if not isvalid(comp) then
-			comp = _SpawnService:SpawnByModelId(modelId, "Companion", pos, self.Entity)
-			if not isvalid(comp) then
-				log_warning("[VRF] companion spawn failed model=" .. modelId)
-				return
+		local mates = self._T.mates or {}
+		local models = self._T.mateModels or {}
+		for i = 1, 2 do
+			local modelId = self:ListValue(self.CompanionModels, self._T.mateJobs[i] or "")
+			if modelId == "" then modelId = self.CompanionModelId end
+			local pos = self.PlayerPos + Vector3(-self.CompanionGap * i, 0, 0)
+			local comp = mates[i]
+			-- 편성이 바뀌어 그 자리 직업이 달라졌으면 새로 만든다
+			if isvalid(comp) and models[i] ~= modelId then
+				comp:Destroy()
+				comp = nil
 			end
-			self._T.comp = comp
-			self._T.compModel = modelId
+			if not isvalid(comp) then
+				local name = "Companion"
+				if i == 2 then name = "Companion2" end
+				comp = _SpawnService:SpawnByModelId(modelId, name, pos, self.Entity)
+				if not isvalid(comp) then log_warning("[VRF] party member spawn failed model=" .. modelId) end
+				models[i] = modelId
+			end
+			mates[i] = comp
+			if isvalid(comp) then
+				comp.TransformComponent.Position = pos
+				local tp = comp:GetComponent("script.TowerPlayer")
+				if tp ~= nil then tp.OwnerUserId = player.PlayerComponent.UserId end
+			end
 		end
-		comp.TransformComponent.Position = pos
-		local tp = comp:GetComponent("script.TowerPlayer")
-		if tp ~= nil then tp.OwnerUserId = player.PlayerComponent.UserId end
-		self:ReviveCompanion(100)
+		self._T.mates = mates
+		self._T.mateModels = models
+		self._T.comp = mates[1]
+		for i = 1, 2 do self:ReviveMate(i, 100) end
 		self:CopyCostumeToCompanion()
-		log("[VRF] companion ready pos=" .. tostring(pos.x) .. "," .. tostring(pos.y) .. " hero=" .. tostring(self:HeroOf(comp) ~= nil))
+		log("[VRF] party ready jobs=" .. tostring(self._T.mainJob) .. "," .. tostring(self._T.mateJobs[1]) .. "," .. tostring(self._T.mateJobs[2]))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -776,21 +902,36 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void DestroyCompanion()
 		-- 동료 캐릭터 제거 (로비로 갈 때·플레이어가 맵을 떠날 때).
-		local comp = self._T.comp
+		for i = 1, 2 do
+			local comp = self:Mate(i)
+			if isvalid(comp) then comp:Destroy() end
+		end
+		self._T.mates = {}
+		self._T.mateModels = {}
 		self._T.comp = nil
-		if isvalid(comp) then comp:Destroy() end
 		self.CompanionDown = false
+		self.Companion2Down = false
 	end
 
 	@ExecSpace("ServerOnly")
 	method void ReviveCompanion(number hpPct)
-		-- 동료 일으키기: 체력 hpPct%, 대기 자세.
-		local comp = self._T.comp
+		-- 쓰러진 구성원(2·3번)을 모두 체력 hpPct%로 일으킨다.
+		for i = 1, 2 do
+			if isvalid(self:Mate(i)) and self:MateDown(i) then self:ReviveMate(i, hpPct) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ReviveMate(integer i, number hpPct)
+		-- 구성원 i 일으키기: 체력 hpPct%, 대기 자세.
+		local comp = self:Mate(i)
 		if not isvalid(comp) then return end
-		self.CompanionDown = false
-		self._T.compShield = 0
-		self.CompanionMaxHp = self.PlayerMaxHp
-		self.CompanionHp = math.max(1, math.floor(self.CompanionMaxHp * hpPct / 100 + 0.5))
+		self:SetMateDown(i, false)
+		local sh = self._T.mateShield or {}
+		sh[i] = 0
+		self._T.mateShield = sh
+		self:SetMateMax(i, self.PlayerMaxHp)
+		self:SetMateHp(i, math.max(1, math.floor(self.PlayerMaxHp * hpPct / 100 + 0.5)))
 		local tp = comp:GetComponent("script.TowerPlayer")
 		if tp ~= nil then tp:SetDownPose(false) end
 	end
@@ -805,9 +946,9 @@ script TowerRunManager extends Component
 			self.PlayerHp = math.max(1, math.floor(self.PlayerMaxHp * self.ReviveHpPct / 100 + 0.5))
 			log("[VRF] duo revive main hp=" .. tostring(self.PlayerHp))
 		end
-		if self.CompanionDown then
+		if self:AnyMateDownAlive() then
 			self:ReviveCompanion(self.ReviveHpPct)
-			log("[VRF] duo revive companion hp=" .. tostring(self.CompanionHp))
+			log("[VRF] party revive members")
 		end
 	end
 
@@ -842,31 +983,38 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void ApplyCompanionDamage(integer damage)
-		-- 몬스터 공격이 동료에게 맞았을 때: 무적·보호막 후 체력을 깎고, 0이면 쓰러짐. 둘 다 쓰러지면 패배.
-		if self.RunState ~= "FIGHT" or self.CompanionDown then return end
-		local comp = self._T.comp
-		if not isvalid(comp) then return end
+		-- 검증용 호환: 구성원 2번에게 피해.
+		self:ApplyMateDamage(self:Mate(1), damage)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyMateDamage(Entity comp, integer damage)
+		-- 몬스터 공격이 구성원(2·3번)에게 맞았을 때: 무적·보호막 후 체력을 깎고, 0이면 쓰러짐. 셋 다 쓰러지면 패배.
+		local i = self:MateIndex(comp)
+		if i == 0 or self.RunState ~= "FIGHT" or self:MateDown(i) then return end
 		local hero = self:HeroOf(comp)
 		if self:TryBlock(comp) then return end
 		if self:IsHeroRun() and hero ~= nil and hero:IsInvuln() then return end
-		local shield = self._T.compShield or 0
+		local sh = self._T.mateShield or {}
+		local shield = sh[i] or 0
 		if shield > 0 then
 			local absorbed = math.min(shield, damage)
-			self._T.compShield = shield - absorbed
+			sh[i] = shield - absorbed
+			self._T.mateShield = sh
 			damage = damage - absorbed
 		end
-		self.CompanionHp = math.max(0, self.CompanionHp - damage)
+		self:SetMateHp(i, math.max(0, self:MateHp(i) - damage))
 		local tp = comp:GetComponent("script.TowerPlayer")
 		if tp ~= nil and damage > 0 then tp:ShowProcDamage(comp, damage, false, tp:Uid()) end
-		if self.CompanionHp > 0 then return end
+		if self:MateHp(i) > 0 then return end
 		if self:UseDeathWard(comp) then
-			self.CompanionHp = 1
+			self:SetMateHp(i, 1)
 			return
 		end
-		self.CompanionDown = true
+		self:SetMateDown(i, true)
 		if tp ~= nil then tp:SetDownPose(true) end
-		log("[VRF] duo companion down mainDown=" .. tostring(self.PlayerDown))
-		if self.PlayerDown then self:Defeat() end
+		log("[VRF] party member " .. tostring(i + 1) .. " down")
+		if self.PlayerDown and not self:AnyMateUp() then self:Defeat() end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1316,6 +1464,11 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void RollChoices()
 		-- 레벨업 카드: 최고 레벨이 아닌 스킬 중 서로 다른 최대 3개. 카드 내용(신규/별 옵션/돌파)은 이때 정해 보여 준다.
+		-- 스킬 직업 판(3인 파티): 카드 없이 자동 성장, 돌파만 고른다.
+		if self:IsHeroRun() then
+			self:AutoGrowRound()
+			return
+		end
 		local pool = {}
 		for _, sk in ipairs(self:JobSkills()) do
 			if (self.SkillLv[sk.id] or 0) < sk.max then table.insert(pool, sk.id) end
@@ -1337,6 +1490,82 @@ script TowerRunManager extends Component
 		self.ChoiceSeq = self.ChoiceSeq + 1
 		self.RunState = "CHOICE"
 		log("[VRF] skill choices " .. tostring(self.ChoiceIds["1"]) .. "(" .. tostring(self.ChoiceOpts["1"]) .. ") " .. tostring(self.ChoiceIds["2"]) .. "(" .. tostring(self.ChoiceOpts["2"]) .. ") " .. tostring(self.ChoiceIds["3"]) .. "(" .. tostring(self.ChoiceOpts["3"]) .. ") pending=" .. tostring(self.PendingPicks))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AutoGrowRound()
+		-- 레벨업 1회 (3인 파티): 구성원마다 자기 장착 스킬 중 최고 레벨이 아닌 것 하나를 완전 랜덤으로 +1.
+		-- 습득·별 강화는 자동 (별 종류도 랜덤). 다음 레벨이 돌파 레벨(3·6·9)이면 그 스킬은 돌파 선택 대기열에 넣는다.
+		if self.PendingPicks <= 0 then
+			self:ContinueGrowth()
+			return
+		end
+		self.PendingPicks = self.PendingPicks - 1
+		local queue = self._T.breakQueue or {}
+		local msgs = {}
+		local grew = false
+		for _, h in ipairs(self:Heroes()) do
+			local cands = {}
+			for _, sk in ipairs(self._T.jobSkills[h.JobId] or {}) do
+				if h:Equipped(sk.id) and (self.SkillLv[sk.id] or 0) < sk.max then table.insert(cands, sk) end
+			end
+			if #cands > 0 then
+				grew = true
+				local sk = cands[_UtilLogic:RandomIntegerRange(1, #cands)]
+				local mode = self:RollCardOption(sk)
+				if mode == "break" then
+					table.insert(queue, sk.id)
+				elseif mode == "learn" then
+					self.SkillLv[sk.id] = (self.SkillLv[sk.id] or 0) + 1
+					self:UpdateSkillInfo(sk)
+					table.insert(msgs, sk.name .. " 습득")
+				else
+					local o = self._T.starById[mode]
+					if o ~= nil then
+						self:ApplySkillOption(sk, o.effect, o.value)
+						if self._T.starCount[sk.id] == nil then self._T.starCount[sk.id] = {} end
+						self._T.starCount[sk.id][o.id] = (self._T.starCount[sk.id][o.id] or 0) + 1
+						table.insert(msgs, sk.name .. " Lv." .. tostring((self.SkillLv[sk.id] or 0) + 1) .. " " .. o.name)
+					end
+					self.SkillLv[sk.id] = (self.SkillLv[sk.id] or 0) + 1
+					self:UpdateSkillInfo(sk)
+				end
+			end
+		end
+		self._T.breakQueue = queue
+		if #msgs > 0 then self:SetEnhanceMsg(table.concat(msgs, " · ")) end
+		self:RecalcStats()
+		log("[VRF] auto grow " .. table.concat(msgs, ",") .. " breaks=" .. tostring(#queue) .. " pending=" .. tostring(self.PendingPicks))
+		if not grew then self.PendingPicks = 0 end
+		self:ContinueGrowth()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ContinueGrowth()
+		-- 자동 성장 다음 단계: 돌파 대기열이 있으면 돌파 선택 화면, 남은 레벨업이 있으면 다시 자동 성장, 다 끝나면 전투.
+		local queue = self._T.breakQueue or {}
+		while #queue > 0 do
+			local id = table.remove(queue, 1)
+			local sk = self._T.skillById[id]
+			self._T.breakQueue = queue
+			if sk ~= nil and #self:RemainingBreaks(sk) > 0 then
+				self._T.growBreak = true
+				self:RollBreakChoices(sk)
+				return
+			end
+			-- 돌파가 더 없으면 레벨만 올린다
+			if sk ~= nil then
+				self.SkillLv[id] = (self.SkillLv[id] or 0) + 1
+				self:UpdateSkillInfo(sk)
+			end
+		end
+		self._T.breakQueue = queue
+		self._T.growBreak = false
+		if self.PendingPicks > 0 then
+			self:AutoGrowRound()
+		else
+			self:SpawnMonster()
+		end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1520,6 +1749,15 @@ script TowerRunManager extends Component
 			local prev = self.SkillBreaks[sk.id] or ""
 			if prev ~= "" then prev = prev .. "," end
 			self.SkillBreaks[sk.id] = prev .. b.id
+			if self._T.growBreak then
+				self.SkillLv[sk.id] = (self.SkillLv[sk.id] or 0) + 1
+				self:UpdateSkillInfo(sk)
+				self:SetEnhanceMsg(sk.name .. " 돌파! [" .. b.name .. "]")
+				self:RecalcStats()
+				log("[VRF] grow break " .. sk.id .. " lv=" .. tostring(self.SkillLv[sk.id]) .. " " .. b.id)
+				self:ContinueGrowth()
+				return
+			end
 			self:FinishSkillPick(sk, sk.name .. " 돌파! [" .. b.name .. "]")
 			return
 		end
@@ -2081,8 +2319,18 @@ script TowerRunManager extends Component
 	method void CopyCostumeToCompanion()
 		-- 2인 편성 테스트(히어로 2명): 동료가 메인과 같은 옷·무기를 입는다.
 		local player = self._T.player
-		local comp = self._T.comp
-		if not isvalid(player) or not isvalid(comp) then return end
+		if not isvalid(player) then return end
+		for i = 1, 2 do
+			local comp = self:Mate(i)
+			if isvalid(comp) then self:CopyCostumeTo(comp) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void CopyCostumeTo(Entity comp)
+		-- 히어로 구성원: 구성원 1의 옷·무기를 입는다 (구성원 1이 히어로가 아니면 모델 옷 그대로).
+		local player = self._T.player
+		if not isvalid(player) or not isvalid(comp) or self._T.mainJob ~= "Hero" then return end
 		local src = player.CostumeManagerComponent
 		local dst = comp.CostumeManagerComponent
 		if not isvalid(src) or not isvalid(dst) then return end
@@ -2250,10 +2498,12 @@ script TowerRunManager extends Component
 			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + (self.PlayerMaxHp - oldMax))
 		end
 		-- 동료는 메인과 같은 능력치 (최대 체력 증가분만큼 현재 체력도)
-		local oldComp = self.CompanionMaxHp
-		self.CompanionMaxHp = self.PlayerMaxHp
-		if oldComp > 0 and self.CompanionMaxHp > oldComp and not self.CompanionDown then
-			self.CompanionHp = math.min(self.CompanionMaxHp, self.CompanionHp + (self.CompanionMaxHp - oldComp))
+		for i = 1, 2 do
+			local oldComp = self:MateMax(i)
+			self:SetMateMax(i, self.PlayerMaxHp)
+			if oldComp > 0 and self.PlayerMaxHp > oldComp and not self:MateDown(i) then
+				self:SetMateHp(i, math.min(self.PlayerMaxHp, self:MateHp(i) + (self.PlayerMaxHp - oldComp)))
+			end
 		end
 		for _, slot in ipairs(self._T.slots) do self.EquipCost[slot] = self:CalcEquipCost(slot) end
 	end
@@ -2352,7 +2602,9 @@ script TowerRunManager extends Component
 		self.BreakSkill = ""
 		for _, h in ipairs(self:Heroes()) do h:ClearState() end
 		self.PlayerDown = false
-		self._T.compShield = 0
+		self._T.mateShield = {}
+		self._T.breakQueue = {}
+		self._T.growBreak = false
 		self._T.runSkillsJob = nil
 		self._T.skillMods = {}
 		self._T.runBonus = {}
@@ -2606,7 +2858,7 @@ script TowerRunManager extends Component
 			local extra = self:ExtraStatusHero()
 			if extra ~= nil then extra:OnMonsterSpawn(self, monster, info.stand) end
 		end
-		self._T.compAtkTimer = 0.5 + walkTime + 0.25
+		self._T.mateAtk = { 0.5 + walkTime + 0.25, 0.5 + walkTime + 0.4 }
 		-- 걸어 들어오는 동안은 서로 공격하지 않는다
 		self.PlayerAttackTimer = 0.5 + walkTime
 		self.MonsterAttackTimer = interval + walkTime
@@ -2891,7 +3143,8 @@ script TowerRunManager extends Component
 				mc:SetClip(mc.AttackRUID, mc.AttackAnimTime)
 				if crit > 0 and _UtilLogic:RandomDouble() * 100 < crit then dmg = math.floor(dmg * self.MonsterCritDmg / 100 + 0.5) end
 				local d = dmg
-				_TimerService:SetTimerOnce(function() self:ApplyCompanionDamage(d) end, self.CompanionHitDelay)
+				local victim = player
+				_TimerService:SetTimerOnce(function() self:ApplyMateDamage(victim, d) end, self.CompanionHitDelay)
 			else
 				mc:DoAttack(player, dmg, crit, self.MonsterCritDmg)
 			end
@@ -3189,12 +3442,12 @@ script TowerRunManager extends Component
 			return
 		end
 		-- 2인 편성: 동료가 살아 있으면 메인만 쓰러지고 전투는 계속된다 (웨이브를 끝내면 일어남)
-		if isvalid(self._T.comp) and not self.CompanionDown then
+		if self:AnyMateUp() then
 			self.PlayerDown = true
 			self.PlayerHp = 0
 			local player = self._T.player
 			if isvalid(player) and isvalid(player.StateComponent) then player.StateComponent:ChangeState("DEAD") end
-			log("[VRF] duo main down, companion fights on hp=" .. tostring(self.CompanionHp))
+			log("[VRF] party member 1 down, others fight on")
 			return
 		end
 
@@ -3697,21 +3950,25 @@ script TowerRunManager extends Component
 			end
 
 			-- 동료 기본 공격 (자기 히어로 전투 컴포넌트로 스킬을 고른다)
-			local comp = self._T.comp
-			-- 동료는 몸체(물리)가 없어 발판에 내려앉지 않으므로 메인의 발 높이에 맞춰 세운다
-			if isvalid(comp) and not self.PlayerDown then
-				local pp = player.TransformComponent.WorldPosition
-				local cp = comp.TransformComponent.WorldPosition
-				if math.abs(cp.y - pp.y) > 0.01 then comp.TransformComponent.WorldPosition = Vector3(self.PlayerPos.x - self.CompanionGap, pp.y, cp.z) end
-			end
-			if isvalid(comp) and not self.CompanionDown and self.RunState == "FIGHT" then
-				self._T.compAtkTimer = (self._T.compAtkTimer or 0) - delta
-				if self._T.compAtkTimer <= 0 then
-					self._T.compAtkTimer = self.PlayerAttackInterval
-					local wait = self:ActorAttack(comp, monster, false)
-					if wait > 0 then self._T.compAtkTimer = math.max(self._T.compAtkTimer, wait) end
+			local timers = self._T.mateAtk or {}
+			for i = 1, 2 do
+				local comp = self:Mate(i)
+				-- 구성원 2·3번은 몸체(물리)가 없어 발판에 내려앉지 않으므로 구성원 1의 발 높이에 맞춰 세운다
+				if isvalid(comp) and not self.PlayerDown then
+					local pp = player.TransformComponent.WorldPosition
+					local cp = comp.TransformComponent.WorldPosition
+					if math.abs(cp.y - pp.y) > 0.01 then comp.TransformComponent.WorldPosition = Vector3(self.PlayerPos.x - self.CompanionGap * i, pp.y, cp.z) end
+				end
+				if isvalid(comp) and not self:MateDown(i) and self.RunState == "FIGHT" then
+					timers[i] = (timers[i] or 0) - delta
+					if timers[i] <= 0 then
+						timers[i] = self.PlayerAttackInterval
+						local wait = self:ActorAttack(comp, monster, false)
+						if wait > 0 then timers[i] = math.max(timers[i], wait) end
+					end
 				end
 			end
+			self._T.mateAtk = timers
 
 			-- 연속 베기 추가 타격 (메인)
 			if (self._T.extraHitTimer or 0) > 0 then

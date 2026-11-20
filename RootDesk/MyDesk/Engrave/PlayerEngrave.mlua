@@ -147,11 +147,13 @@ script PlayerEngrave extends Component
 	property integer JobPassiveMaxLv = 11
 	property integer JobPassiveBaseCost = 20
 	property integer JobPassiveStepCost = 10
-	-- 2인 편성: 메인·동료 직업 (저장 키 mj·cj)
+	-- 3인 파티 편성: 구성원 1·2·3 직업 (저장 키 mj·cj·c2). 구성원 1은 직접 조작 캐릭터.
 	@Sync
 	property string MainJob = "Hero"
 	@Sync
 	property string CompJob = "Bishop"
+	@Sync
+	property string Comp2Job = "NightLord"
 
 	-- 입장 에너지: 서버 UTC로 충전. 충전은 마지막 차감 시각에서 계산하므로 매초 저장하지 않는다.
 	-- 별 미션 (층마다 3개: 1=클리어, 2=제한 시간 안 클리어, 4=체력 50% 이상 클리어, 영구 누적)
@@ -1167,13 +1169,30 @@ script PlayerEngrave extends Component
 		for _, job in ipairs(self._T.jobs) do
 			if job ~= "Hero" and job ~= "Bishop" then self.JobPassiveLv[job] = math.max(0, math.min(self.JobPassiveMaxLv, math.floor(jp[job] or 0))) end
 		end
-		self.MainJob = "Hero"
-		self.CompJob = "Bishop"
-		if self._T.jobGradeSkills[t["mj"] or ""] ~= nil then self.MainJob = t["mj"] end
-		if self._T.jobGradeSkills[t["cj"] or ""] ~= nil and t["cj"] ~= self.MainJob then self.CompJob = t["cj"] end
-		if self.CompJob == self.MainJob then
-			if self.MainJob == "Bishop" then self.CompJob = "Hero" else self.CompJob = "Bishop" end
+		-- 편성 3칸: 저장값을 읽고, 없거나 겹치면 남은 직업으로 채운다
+		local want = { t["mj"] or "Hero", t["cj"] or "Bishop", t["c2"] or "NightLord" }
+		local used = {}
+		local jobs = {}
+		for k = 1, 3 do
+			local j = want[k]
+			if self._T.jobGradeSkills[j] == nil or used[j] then j = nil end
+			if j ~= nil then used[j] = true end
+			jobs[k] = j
 		end
+		for k = 1, 3 do
+			if jobs[k] == nil then
+				for _, cand in ipairs(self._T.jobs) do
+					if not used[cand] then
+						jobs[k] = cand
+						used[cand] = true
+						break
+					end
+				end
+			end
+		end
+		self.MainJob = jobs[1] or "Hero"
+		self.CompJob = jobs[2] or "Bishop"
+		self.Comp2Job = jobs[3] or "NightLord"
 		for _, sk in ipairs(self._T.skills) do
 			self.SkillOwnLv[sk.id] = math.max(0, math.min(maxLv, math.floor(own[sk.id] or 0)))
 			self.SkillCnt[sk.id] = math.max(0, math.floor(cnt[sk.id] or 0))
@@ -1242,6 +1261,7 @@ script PlayerEngrave extends Component
 		if anyJp then data["jp"] = jp end
 		if self.MainJob ~= "Hero" then data["mj"] = self.MainJob end
 		if self.CompJob ~= "Bishop" then data["cj"] = self.CompJob end
+		if self.Comp2Job ~= "NightLord" then data["c2"] = self.Comp2Job end
 		local own = {}
 		local cnt = {}
 		local equip = {}
@@ -1451,16 +1471,19 @@ script PlayerEngrave extends Component
 	end
 
 	@ExecSpace("Server")
-	method void RequestSetFormation(string mainJob, string compJob)
-		-- 편성 저장: 메인·동료 직업 (같은 직업 2명은 안 된다).
+	method void RequestSetFormation(string job1, string job2, string job3)
+		-- 편성 저장: 구성원 1·2·3 직업 (같은 직업은 한 번만).
 		if not self:CanEditSkill(senderUserId) then return end
-		if self._T.jobGradeSkills[mainJob] == nil or self._T.jobGradeSkills[compJob] == nil or mainJob == compJob then return end
-		self.MainJob = mainJob
-		self.CompJob = compJob
+		local g = self._T.jobGradeSkills
+		if g[job1] == nil or g[job2] == nil or g[job3] == nil then return end
+		if job1 == job2 or job1 == job3 or job2 == job3 then return end
+		self.MainJob = job1
+		self.CompJob = job2
+		self.Comp2Job = job3
 		self.SkillMsg = "formation"
 		self.SkillSeq = self.SkillSeq + 1
 		self:SaveSkills()
-		log("[VRF] formation main=" .. mainJob .. " comp=" .. compJob)
+		log("[VRF] formation party=" .. job1 .. "," .. job2 .. "," .. job3)
 	end
 
 	@ExecSpace("Server")

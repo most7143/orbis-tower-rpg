@@ -32010,11 +32010,11 @@
               },
               "MobileOnly": false,
               "OffsetMax": {
-                "x": -90,
+                "x": -150,
                 "y": 71
               },
               "OffsetMin": {
-                "x": -410,
+                "x": -490,
                 "y": 39
               },
               "Pivot": {
@@ -32022,7 +32022,7 @@
                 "y": 0.5
               },
               "RectSize": {
-                "x": 320,
+                "x": 340,
                 "y": 32
               },
               "UIMode": 1,
@@ -32033,7 +32033,7 @@
               },
               "UIVersion": 2,
               "anchoredPosition": {
-                "x": -250,
+                "x": -320,
                 "y": 55
               },
               "Position": {
@@ -32127,7 +32127,7 @@
                 "b": 0.1843137254901961,
                 "a": 1
               },
-              "FontSize": 20,
+              "FontSize": 18,
               "FontStyle": 0,
               "HorizontalAlignment": 1,
               "IgnoreMapLayerCheck": false,
@@ -32151,7 +32151,7 @@
               },
               "SizeFit": false,
               "SortingLayer": "UI",
-              "Text": "편성  메인 히어로 · 동료 비숍",
+              "Text": "편성  1 히어로 · 2 비숍 · 3 나이트로드",
               "Underlay": false,
               "UseConstraintX": false,
               "UseConstraintY": false,
@@ -32164,11 +32164,11 @@
       },
       {
         "id": "9c116789-1a4d-4cde-8a4d-97f99bea51e4",
-        "path": "/ui/SkillUI/Panel/Formation/BtnMain",
+        "path": "/ui/SkillUI/Panel/Formation/Btn1",
         "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextGUIRendererComponent,MOD.Core.UITouchReceiveComponent",
         "jsonString": {
-          "name": "BtnMain",
-          "path": "/ui/SkillUI/Panel/Formation/BtnMain",
+          "name": "Btn1",
+          "path": "/ui/SkillUI/Panel/Formation/Btn1",
           "nameEditable": true,
           "enable": true,
           "visible": true,
@@ -32199,11 +32199,11 @@
               },
               "MobileOnly": false,
               "OffsetMax": {
-                "x": 65,
+                "x": -30,
                 "y": 79
               },
               "OffsetMin": {
-                "x": -85,
+                "x": -140,
                 "y": 31
               },
               "Pivot": {
@@ -32211,7 +32211,7 @@
                 "y": 0.5
               },
               "RectSize": {
-                "x": 150,
+                "x": 110,
                 "y": 48
               },
               "UIMode": 1,
@@ -32222,7 +32222,7 @@
               },
               "UIVersion": 2,
               "anchoredPosition": {
-                "x": -10,
+                "x": -85,
                 "y": 55
               },
               "Position": {
@@ -32366,7 +32366,7 @@
                 "b": 1,
                 "a": 1
               },
-              "FontSize": 20,
+              "FontSize": 18,
               "FontStyle": 1,
               "HorizontalAlignment": 2,
               "IgnoreMapLayerCheck": false,
@@ -32390,7 +32390,7 @@
               },
               "SizeFit": false,
               "SortingLayer": "UI",
-              "Text": "메인으로",
+              "Text": "1번으로",
               "Underlay": false,
               "UseConstraintX": false,
               "UseConstraintY": false,
@@ -32407,11 +32407,11 @@
       },
       {
         "id": "fa5c1646-22ca-4c15-b39b-77c14d56736d",
-        "path": "/ui/SkillUI/Panel/Formation/BtnComp",
+        "path": "/ui/SkillUI/Panel/Formation/Btn2",
         "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextGUIRendererComponent,MOD.Core.UITouchReceiveComponent",
         "jsonString": {
-          "name": "BtnComp",
-          "path": "/ui/SkillUI/Panel/Formation/BtnComp",
+          "name": "Btn2",
+          "path": "/ui/SkillUI/Panel/Formation/Btn2",
           "nameEditable": true,
           "enable": true,
           "visible": true,
@@ -32442,11 +32442,11 @@
               },
               "MobileOnly": false,
               "OffsetMax": {
-                "x": 225,
+                "x": 88,
                 "y": 79
               },
               "OffsetMin": {
-                "x": 75,
+                "x": -22,
                 "y": 31
               },
               "Pivot": {
@@ -32454,7 +32454,7 @@
                 "y": 0.5
               },
               "RectSize": {
-                "x": 150,
+                "x": 110,
                 "y": 48
               },
               "UIMode": 1,
@@ -32465,7 +32465,7 @@
               },
               "UIVersion": 2,
               "anchoredPosition": {
-                "x": 150,
+                "x": 33,
                 "y": 55
               },
               "Position": {
@@ -32609,7 +32609,7 @@
                 "b": 1,
                 "a": 1
               },
-              "FontSize": 20,
+              "FontSize": 18,
               "FontStyle": 1,
               "HorizontalAlignment": 2,
               "IgnoreMapLayerCheck": false,
@@ -32633,7 +32633,250 @@
               },
               "SizeFit": false,
               "SortingLayer": "UI",
-              "Text": "동료로",
+              "Text": "2번으로",
+              "Underlay": false,
+              "UseConstraintX": false,
+              "UseConstraintY": false,
+              "VerticalAlignment": 512,
+              "Enable": true
+            },
+            {
+              "@type": "MOD.Core.UITouchReceiveComponent",
+              "Enable": true
+            }
+          ],
+          "@version": 1
+        }
+      },
+      {
+        "id": "f9d90121-84d0-4ba3-b05e-b3d288168862",
+        "path": "/ui/SkillUI/Panel/Formation/Btn3",
+        "componentNames": "MOD.Core.UITransformComponent,MOD.Core.SpriteGUIRendererComponent,MOD.Core.ButtonComponent,MOD.Core.TextGUIRendererComponent,MOD.Core.UITouchReceiveComponent",
+        "jsonString": {
+          "name": "Btn3",
+          "path": "/ui/SkillUI/Panel/Formation/Btn3",
+          "nameEditable": true,
+          "enable": true,
+          "visible": true,
+          "localize": true,
+          "displayOrder": 3,
+          "pathConstraints": "/////",
+          "revision": 0,
+          "origin": {
+            "type": "Model",
+            "entry_id": "UIButton",
+            "sub_entity_id": null,
+            "root_entity_id": null,
+            "replaced_model_id": null
+          },
+          "modelId": "uibutton",
+          "@components": [
+            {
+              "@type": "MOD.Core.UITransformComponent",
+              "ActivePlatform": 255,
+              "AlignmentOption": 0,
+              "AnchorsMax": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "AnchorsMin": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "MobileOnly": false,
+              "OffsetMax": {
+                "x": 206,
+                "y": 79
+              },
+              "OffsetMin": {
+                "x": 96,
+                "y": 31
+              },
+              "Pivot": {
+                "x": 0.5,
+                "y": 0.5
+              },
+              "RectSize": {
+                "x": 110,
+                "y": 48
+              },
+              "UIMode": 1,
+              "UIScale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              },
+              "UIVersion": 2,
+              "anchoredPosition": {
+                "x": 151,
+                "y": 55
+              },
+              "Position": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "QuaternionRotation": {
+                "x": 0,
+                "y": 0,
+                "z": 0,
+                "w": 1
+              },
+              "Scale": {
+                "x": 1,
+                "y": 1,
+                "z": 1
+              },
+              "Enable": true
+            },
+            {
+              "@type": "MOD.Core.SpriteGUIRendererComponent",
+              "AnimClipPlayType": 0,
+              "EndFrameIndex": 2147483647,
+              "ImageRUID": {
+                "DataId": "65d8340b880940b5b2d2d3342dad63aa"
+              },
+              "IgnoreMapLayerCheck": false,
+              "LocalPosition": {
+                "x": 0,
+                "y": 0
+              },
+              "LocalScale": {
+                "x": 1,
+                "y": 1
+              },
+              "MaterialId": "",
+              "OrderInLayer": 0,
+              "OverrideSorting": false,
+              "PlayRate": 1,
+              "PreserveSprite": 0,
+              "SortingLayer": "UI",
+              "StartFrameIndex": 0,
+              "Color": {
+                "r": 1,
+                "g": 1,
+                "b": 1,
+                "a": 1
+              },
+              "DropShadow": false,
+              "DropShadowAngle": 120,
+              "DropShadowColor": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 0.72
+              },
+              "DropShadowDistance": 3,
+              "FillAmount": 1,
+              "FillCenter": true,
+              "FillClockWise": true,
+              "FillMethod": 0,
+              "FillOrigin": 0,
+              "FlipX": false,
+              "FlipY": false,
+              "FrameColumn": 1,
+              "FrameRate": 0,
+              "FrameRow": 1,
+              "Outline": false,
+              "OutlineColor": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 1
+              },
+              "OutlineWidth": 3,
+              "RaycastTarget": true,
+              "Type": 1,
+              "Enable": true
+            },
+            {
+              "@type": "MOD.Core.ButtonComponent",
+              "Colors": {
+                "NormalColor": {
+                  "r": 1,
+                  "g": 1,
+                  "b": 1,
+                  "a": 1
+                },
+                "HighlightedColor": {
+                  "r": 0.9607843,
+                  "g": 0.9607843,
+                  "b": 0.9607843,
+                  "a": 1
+                },
+                "PressedColor": {
+                  "r": 0.784313738,
+                  "g": 0.784313738,
+                  "b": 0.784313738,
+                  "a": 1
+                },
+                "SelectedColor": {
+                  "r": 0.9607843,
+                  "g": 0.9607843,
+                  "b": 0.9607843,
+                  "a": 1
+                },
+                "DisabledColor": {
+                  "r": 0.784313738,
+                  "g": 0.784313738,
+                  "b": 0.784313738,
+                  "a": 0.5019608
+                },
+                "ColorMultiplier": 1,
+                "FadeDuration": 0.1
+              },
+              "IgnoreMapLayerCheck": false,
+              "ImageRUIDs": {
+                "HighlightedSprite": null,
+                "PressedSprite": null,
+                "SelectedSprite": null,
+                "DisabledSprite": null
+              },
+              "KeyCode": 0,
+              "OrderInLayer": 0,
+              "OverrideSorting": false,
+              "SortingLayer": "UI",
+              "Transition": 1,
+              "Enable": true
+            },
+            {
+              "@type": "MOD.Core.TextGUIRendererComponent",
+              "BestFit": false,
+              "ConstraintX": 100,
+              "ConstraintY": 100,
+              "FaceDilate": 0,
+              "Font": "Dotum",
+              "FontColor": {
+                "r": 1,
+                "g": 1,
+                "b": 1,
+                "a": 1
+              },
+              "FontSize": 18,
+              "FontStyle": 1,
+              "HorizontalAlignment": 2,
+              "IgnoreMapLayerCheck": false,
+              "MaxSize": 40,
+              "MinSize": 10,
+              "OrderInLayer": 0,
+              "OutlineColor": {
+                "r": 0,
+                "g": 0,
+                "b": 0,
+                "a": 1
+              },
+              "OutlineWidth": 0,
+              "Overflow": 0,
+              "OverrideSorting": false,
+              "Padding": {
+                "left": 0,
+                "right": 0,
+                "top": 0,
+                "bottom": 0
+              },
+              "SizeFit": false,
+              "SortingLayer": "UI",
+              "Text": "3번으로",
               "Underlay": false,
               "UseConstraintX": false,
               "UseConstraintY": false,
