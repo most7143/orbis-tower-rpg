@@ -39521,7 +39521,7 @@
           "name": "TabStat",
           "path": "/ui/MainPanel/SideTabs/TabStat",
           "nameEditable": true,
-          "enable": true,
+          "enable": false,
           "visible": true,
           "localize": true,
           "displayOrder": 2,
@@ -39822,11 +39822,11 @@
               "MobileOnly": false,
               "OffsetMax": {
                 "x": 64,
-                "y": -384
+                "y": -256
               },
               "OffsetMin": {
                 "x": -64,
-                "y": -512
+                "y": -384
               },
               "Pivot": {
                 "x": 0.5,
@@ -39845,16 +39845,11 @@
               "UIVersion": 2,
               "anchoredPosition": {
                 "x": 0,
-                "y": -384
-              },
-              "Rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0
+                "y": -256
               },
               "Position": {
-                "x": 64,
-                "y": 128,
+                "x": 0,
+                "y": 0,
                 "z": 0
               },
               "QuaternionRotation": {
@@ -39868,7 +39863,6 @@
                 "y": 1,
                 "z": 1
               },
-              "ZRotation": 0,
               "Enable": true
             },
             {

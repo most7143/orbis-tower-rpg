@@ -417,6 +417,24 @@ script BattleHUDLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void UpdateBossBar(Component mgr, Entity monster)
+		-- 상단 보스 게이지: 맨 앞 몬스터가 보스이고 전투 중일 때만.
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar")
+		if not isvalid(root) then return end
+		local show = mgr ~= nil and mgr.MonsterBoss and isvalid(monster) and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		if root.Enable ~= show then root:SetEnable(show) end
+		if not show then return end
+		local ratio = 0
+		if mgr.MonsterMaxHp > 0 then ratio = math.max(0, math.min(1, mgr.MonsterHp / mgr.MonsterMaxHp)) end
+		local fill = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar/Fill")
+		if isvalid(fill) then fill.UITransformComponent.RectSize = Vector2(880 * ratio, 22) end
+		local name = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar/Name")
+		if isvalid(name) and name.TextGUIRendererComponent.Text ~= mgr.MonsterLabel then name.TextGUIRendererComponent.Text = mgr.MonsterLabel end
+		local hp = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar/HpText")
+		if isvalid(hp) then hp.TextGUIRendererComponent.Text = tostring(math.ceil(mgr.MonsterHp)) .. " / " .. tostring(math.ceil(mgr.MonsterMaxHp)) end
+	end
+
+	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
 		-- 매 프레임 판 상태(@Sync)를 읽어 HUD를 갱신한다.
 		local player = _UserService.LocalPlayer
@@ -448,6 +466,7 @@ script BattleHUDLogic extends Logic
 			if isvalid(self.playerHpRoot) then self.playerHpRoot.Entity:SetEnable(false) end
 			if isvalid(self.monsterHpRoot) then self.monsterHpRoot.Entity:SetEnable(false) end
 			if isvalid(self.monsterTagRoot) then self.monsterTagRoot.Entity:SetEnable(false) end
+			self:UpdateBossBar(nil, nil)
 			for _, qb in ipairs(self._T.qbars or {}) do
 				if isvalid(qb) and qb.Enable then qb:SetEnable(false) end
 			end
@@ -481,8 +500,14 @@ script BattleHUDLogic extends Logic
 
 		local monster = nil
 		if mgr.MonsterName ~= "" then monster = map:GetChildByName(mgr.MonsterName) end
-		self:PlaceMonsterBar(monster, mgr.MonsterHp, mgr.MonsterMaxHp)
-		self:PlaceNameTag(monster, mgr.MonsterLabel, mgr.MonsterElite)
+		-- 보스는 머리 위 막대·이름표 대신 상단 보스 게이지, 정예는 몬스터에 붙은 붉은 이름표가 있으므로 발밑 이름표를 숨긴다
+		local barTarget = monster
+		local tagTarget = monster
+		if mgr.MonsterBoss then barTarget = nil tagTarget = nil end
+		if mgr.MonsterElite then tagTarget = nil end
+		self:PlaceMonsterBar(barTarget, mgr.MonsterHp, mgr.MonsterMaxHp)
+		self:PlaceNameTag(tagTarget, mgr.MonsterLabel, mgr.MonsterElite)
+		self:UpdateBossBar(mgr, monster)
 		self:UpdateQueueBars(map, monster)
 
 		-- 몬스터 처치(KillSeq 증가) 시 메소 드롭 연출. 강화 몬스터는 동전을 더 많이.
