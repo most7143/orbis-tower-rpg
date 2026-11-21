@@ -126,7 +126,7 @@ script RelicUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SetIcon(Entity e, string ruid, boolean owned)
-		-- 아바타 아이템 아이콘 (thumbnail://), 미보유는 옅게.
+		-- 아바타 아이템 아이콘 (thumbnail://). 칸의 미보유 표시는 칸 위 어두운 덮개(Dim)가 맡고, 오른쪽 상세 아이콘만 옅게.
 		if not isvalid(e) then return end
 		local spr = e.SpriteGUIRendererComponent
 		if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
@@ -150,9 +150,17 @@ script RelicUILogic extends Logic
 			if owned and s.lv >= self.MaxLv then maxN = maxN + 1 end
 			local cell = self:Find("Grid/Cell_" .. i)
 			if isvalid(cell) then
-				self:SetIcon(self:Find("Grid/Cell_" .. i .. "/Icon"), r.icon, owned)
+				self:SetIcon(self:Find("Grid/Cell_" .. i .. "/Icon"), r.icon, true)
+				-- 미보유: 칸 배경과 같은 이미지를 어둡게 반투명으로 덮어 비활성 느낌
+				local dim = self:Find("Grid/Cell_" .. i .. "/Dim")
+				if isvalid(dim) and dim.Enable == owned then dim:SetEnable(not owned) end
 				self:SetText("Grid/Cell_" .. i .. "/Lv", owned and (s.lv >= self.MaxLv and "MAX" or ("Lv." .. tostring(s.lv))) or "미보유")
-				self:SetText("Grid/Cell_" .. i .. "/Cnt", (owned and s.cnt > 0) and ("x" .. tostring(s.cnt)) or "")
+				-- 강화 가능(만렙 전 + 보유 개수 ≥ 필요 개수)이면 레드닷
+				local dot = self:Find("Grid/Cell_" .. i .. "/Dot")
+				if isvalid(dot) then
+					local can = owned and s.lv < self.MaxLv and s.cnt >= (self._T.costs[s.lv] or 999)
+					if dot.Enable ~= can then dot:SetEnable(can) end
+				end
 				_UIButtonLogic:SetSelected(cell, i == self._T.sel)
 			end
 		end
@@ -176,6 +184,11 @@ script RelicUILogic extends Logic
 			self:SetText("Rate", canEnh and (tostring(math.floor(rate)) .. "%") or "-")
 			self:SetText("Cost", canEnh and (tostring(cost) .. "개") or "-")
 			self:SetText("Fail", canEnh and ("+" .. tostring(s.fail * self.FailStep) .. "%p") or "-")
+			local enhDot = self:Find("EnhDot")
+			if isvalid(enhDot) then
+				local can = canEnh and s.cnt >= cost
+				if enhDot.Enable ~= can then enhDot:SetEnable(can) end
+			end
 			local btn = self:Find("Enhance")
 			if isvalid(btn) then _UIButtonLogic:SetDisabled(btn, not canEnh or s.cnt < cost) end
 		end
@@ -185,7 +198,7 @@ script RelicUILogic extends Logic
 		if isvalid(d1) then _UIButtonLogic:SetDisabled(d1, allMax or eng.TowerKeys < 1) end
 		local d10 = self:Find("Draw10")
 		if isvalid(d10) then _UIButtonLogic:SetDisabled(d10, allMax or eng.TowerKeys < 10) end
-		self:SetText("DrawHint", allMax and "모든 유물이 최대 레벨입니다" or "열쇠 1개로 1회 · 만렙 유물은 나오지 않음")
+		self:SetText("DrawHint", allMax and "모든 유물이 최대 레벨입니다" or "1개당 1회 · 만렙 유물은 나오지 않음")
 		self:SetText("Msg", eng.RelicMsg or "")
 		-- 뽑기 결과
 		local got = {}
