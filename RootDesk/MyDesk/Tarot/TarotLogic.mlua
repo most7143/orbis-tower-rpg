@@ -648,13 +648,23 @@ script TarotLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void FillChoice(Component mgr)
 		-- 스킬 카드 3장 (빈 칸은 숨김) + 제목·안내 문구.
+		local shown = {}
 		for i = 1, 3 do
 			local key = tostring(i)
 			local id = mgr.ChoiceIds[key] or ""
 			local path = self.ChoiceCardPath .. key
 			local root = _EntityService:GetEntityByPath(path)
 			if isvalid(root) then root:SetEnable(id ~= "") end
-			if id ~= "" then self:FillCard(i, id, mgr, mgr.ChoiceOpts[key] or "") end
+			if id ~= "" then
+				self:FillCard(i, id, mgr, mgr.ChoiceOpts[key] or "")
+				if isvalid(root) then table.insert(shown, root) end
+			end
+		end
+		-- 보이는 카드만 가운데 기준으로 고르게 (마법의 서 돌파처럼 2장일 때도 가운데 정렬). 카드 간격 480
+		for k, root in ipairs(shown) do
+			local x = (k - (#shown + 1) / 2) * 480
+			local pos = root.UITransformComponent.anchoredPosition
+			if math.abs(pos.x - x) > 0.5 then root.UITransformComponent.anchoredPosition = Vector2(x, pos.y) end
 		end
 		local title = _EntityService:GetEntityByPath(self.ChoiceTitlePath)
 		local titleText = "강화할 스킬을 고르세요"

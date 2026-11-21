@@ -33,13 +33,16 @@ script TowerPortal extends Component
 		-- 머리 위 이름 모양 (글자 모양은 클라이언트에서 정해야 적용된다: 메이커 실측).
 		local text = self.Entity.TextRendererComponent
 		if not isvalid(text) then return end
+		-- 글자 크기·위치 모두 엔티티 크기(Scale)를 따른다 (메이커 실측): 글자 크기만 되돌려 같은 크기로 보이게, 높이(LabelY)는 엔티티 기준 값
+		self._T.appliedY = self.LabelY
 		local sc = math.max(0.1, self.Entity.TransformComponent.Scale.y)
+		self._T.appliedSc = sc
 		text.FontSize = self.LabelSize / sc
 		text.FontColor = Color(1, 1, 1, 1)
 		text.OutlineWidth = 0.3
 		text.OutlineColor = Color(0, 0, 0, 1)
-		text.RectSize = Vector2(3, 0.6)
-		text.RectOffset = Vector2(0, self.LabelY / sc)
+		text.RectSize = Vector2(3 / sc, 0.6 / sc)
+		text.RectOffset = Vector2(0, self.LabelY)
 		text.SortingLayer = "MapLayer0"
 		text.OrderInLayer = 30
 	end
@@ -62,9 +65,9 @@ script TowerPortal extends Component
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnSyncProperty(string name, any value)
-		-- 이름 높이·크기가 늦게 도착해도 다시 적용.
-		if name == "LabelY" or name == "LabelSize" then self:ApplyLabelStyle() end
+	method void OnUpdate(number delta)
+		-- 이름 높이가 늦게 동기화되면 다시 적용 (OnSyncProperty는 호출되지 않음: 메이커 실측).
+		if self._T.appliedY ~= self.LabelY or self._T.appliedSc ~= math.max(0.1, self.Entity.TransformComponent.Scale.y) then self:ApplyLabelStyle() end
 	end
 
 	@ExecSpace("ClientOnly")

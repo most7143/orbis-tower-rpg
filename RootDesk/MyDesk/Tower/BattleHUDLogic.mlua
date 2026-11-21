@@ -540,6 +540,23 @@ script BattleHUDLogic extends Logic
 		self:UpdateProcText(mgr, player, delta)
 		self:UpdateHeroRes(mgr)
 		self:UpdateParty(mgr)
+		self:UpdateStone(mgr)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateStone(Component mgr)
+		-- 왼쪽 위 스킬석 개수 (판 진행 중에만).
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Stone")
+		if not isvalid(root) then return end
+		local st = mgr ~= nil and mgr.RunState or ""
+		local show = mgr ~= nil and st ~= "WAIT" and st ~= "READY" and st ~= "RESULT" and st ~= "DEFEAT"
+		if root.Enable ~= show then root:SetEnable(show) end
+		if not show then return end
+		local text = _EntityService:GetEntityByPath("/ui/BattleHUD/Stone/Text")
+		if isvalid(text) then
+			local s2 = "스킬석 " .. tostring(mgr.SkillStone)
+			if text.TextGUIRendererComponent.Text ~= s2 then text.TextGUIRendererComponent.Text = s2 end
+		end
 	end
 
 	@ExecSpace("ClientOnly")

@@ -46,6 +46,8 @@ script WorkshopUILogic extends Logic
 		self:Bind("Win/Shop/Reroll", function() self:Call("reroll") end)
 		self:Bind("Win/Detail/Sell", function() self:OnSell() end)
 		self:Bind("Win/Detail/Leave", function() self:Call("leave") end)
+		-- 공통 X 닫기 = 나가기 (마법의 서로 자동 이동)
+		self:Bind("Win/Close", function() self:Call("leave") end)
 		self._T.shown = nil
 		self:Show(false)
 		log("[VRF] WorkshopUILogic begin items=" .. tostring(t ~= nil and t:GetRowCount() or 0))

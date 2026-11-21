@@ -289,8 +289,8 @@ script TowerRunManager extends Component
 	-- 상점 스테이지 오브젝트: 장신구 상인 → 마법의 서 → 포탈 순으로 자동 이동
 	property string MerchantRUID = "bcfe14337469478cb532b66d752269d1"
 	property string BookRUID = "d16280b9ce154eba8882edbcc1bb312f"
-	property number MerchantX = 0.0
-	property number BookX = 0.9
+	property number MerchantX = -0.2
+	property number BookX = 1.4
 	property number BookScale = 0.6
 	-- 오브젝트 앞에 설 때 맨 앞 구성원과 오브젝트 사이 거리
 	property number NpcStandGap = 0.7
@@ -4590,6 +4590,8 @@ script TowerRunManager extends Component
 		local firstX = xs[1] or 1.6
 		local lastX = xs[#xs] or (1.6 * #kinds)
 		local respread = minX > firstX
+		-- 다시 놓을 때는 오른쪽 끝을 조금 더 써서 포탈끼리 겹치지 않게
+		if respread then lastX = lastX + 0.2 end
 		local lo = math.min(math.max(firstX, minX), lastX)
 		for idx, kind in ipairs(kinds) do
 			local x = xs[idx] or (1.6 * idx)
@@ -4647,6 +4649,15 @@ script TowerRunManager extends Component
 			self:SpawnMonster()
 			return
 		end
+		self:PlacePartyAtEntry()
+		self:BeginPartyWalk(self.PlayerPos.x, "fight")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PlacePartyAtEntry()
+		-- 구성원을 자리보다 EntryDist 왼쪽(입장 출발점)에 세운다.
+		local player = self._T.player
+		if not isvalid(player) then return end
 		player.PlayerComponent:SetWorldPosition(self.PlayerPos + Vector3(-self.EntryDist, 0, 0))
 		for i = 1, 2 do
 			local comp = self:Mate(i)
@@ -4655,7 +4666,6 @@ script TowerRunManager extends Component
 				comp.TransformComponent.WorldPosition = Vector3(self.PlayerPos.x - self.CompanionGap * i - self.EntryDist, wp.y, wp.z)
 			end
 		end
-		self:BeginPartyWalk(self.PlayerPos.x, "fight")
 	end
 
 	@ExecSpace("ServerOnly")
@@ -4749,7 +4759,7 @@ script TowerRunManager extends Component
 	method void SpawnShopNpcs()
 		-- 상점 스테이지 오브젝트: 장신구 상인과 마법의 서 (포탈 모델 재사용, 터치는 반응 없음).
 		self._T.npcs = {}
-		local list = { { x = self.MerchantX, ruid = self.MerchantRUID, label = "장신구 상인", scale = 1, y = 1.35 }, { x = self.BookX, ruid = self.BookRUID, label = "마법의 서", scale = self.BookScale, y = 1.95 } }
+		local list = { { x = self.MerchantX, ruid = self.MerchantRUID, label = "장신구 상인", scale = 1, y = 1.25 }, { x = self.BookX, ruid = self.BookRUID, label = "마법의 서", scale = self.BookScale, y = 2.25 } }
 		for k, d in ipairs(list) do
 			local ent = _SpawnService:SpawnByModelId(self.PortalModelId, "ShopNpc" .. tostring(k), Vector3(d.x, self.MonsterPos.y, 0), self.Entity)
 			if isvalid(ent) then
@@ -4964,6 +4974,8 @@ script TowerRunManager extends Component
 			self._T.lastNonCombat = true
 			self._T.routePending = true
 			self:SpawnShopNpcs()
+			-- 왼쪽에서 걸어 들어와 장신구 상인 앞에 선다
+			self:PlacePartyAtEntry()
 			self:BeginPartyWalk(self.MerchantX - self.NpcStandGap, "shop")
 		elseif choice == "mystery" then
 			self._T.lastNonCombat = true
