@@ -1,0 +1,78 @@
+@Component
+script TowerPortal extends Component
+
+	-- 층 안 갈림길 포탈 하나: 클릭하면 판 진행 매니저에 이 포탈(번호)을 고른다고 알린다.
+	-- 서버가 Setup으로 종류·이름·그림을 정하고, 클라이언트는 터치만 받아 서버에 전달한다.
+	@Sync
+	property integer Index = 0
+	@Sync
+	property string Kind = ""
+
+	@HideFromInspector
+	property any touchHandler = nil
+
+	@ExecSpace("ServerOnly")
+	method void Setup(integer index, string kind, string label, string ruid)
+		-- 포탈 정보 설정: 번호·종류, 그림(애니메이션), 머리 위 이름.
+		self.Index = index
+		self.Kind = kind
+		local sprite = self.Entity.SpriteRendererComponent
+		if isvalid(sprite) then sprite.SpriteRUID = ruid end
+		local text = self.Entity.TextRendererComponent
+		if isvalid(text) then text.Text = label end
+		self:ApplyTouchArea()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyLabelStyle()
+		-- 머리 위 이름 모양 (글자 모양은 클라이언트에서 정해야 적용된다: 메이커 실측).
+		local text = self.Entity.TextRendererComponent
+		if not isvalid(text) then return end
+		text.FontSize = 2.4
+		text.FontColor = Color(1, 1, 1, 1)
+		text.OutlineWidth = 0.3
+		text.OutlineColor = Color(0, 0, 0, 1)
+		text.RectSize = Vector2(3, 0.6)
+		text.RectOffset = Vector2(0, 2.1)
+		text.SortingLayer = "MapLayer0"
+		text.OrderInLayer = 30
+	end
+
+	method void ApplyTouchArea()
+		-- 클릭 영역: 포탈 그림(약 1.5 × 1.9, 원점이 아래쪽)에 맞춘다.
+		local touch = self.Entity.TouchReceiveComponent
+		if isvalid(touch) then
+			touch.TouchArea = Vector2(1.5, 2.0)
+			touch.Offset = Vector2(0, 0.9)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 클릭(터치) 받기 연결.
+		self:ApplyTouchArea()
+		self:ApplyLabelStyle()
+		self.touchHandler = self.Entity:ConnectEvent(TouchEvent, self.OnTouch)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 클릭 연결 해제.
+		if self.touchHandler ~= nil then
+			self.Entity:DisconnectEvent(TouchEvent, self.touchHandler)
+			self.touchHandler = nil
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnTouch(TouchEvent event)
+		-- 포탈 클릭: 서버 매니저에 선택 전달.
+		local map = self.Entity.CurrentMap
+		local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
+		if mgr == nil then return end
+		_UISoundLogic:PlayClick()
+		mgr:RequestPortal(self.Index)
+		log("[VRF] portal touched index=" .. tostring(self.Index) .. " kind=" .. self.Kind)
+	end
+
+end

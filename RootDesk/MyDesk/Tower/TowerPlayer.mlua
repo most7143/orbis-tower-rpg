@@ -90,6 +90,46 @@ script TowerPlayer extends AttackComponent
 		self._T.castSounds = ""
 	end
 
+	@ExecSpace("Multicast")
+	method void SetWalkPose(boolean walk)
+		-- 포탈로 걸어가는 동안 걷기 자세 (조작 컴포넌트가 없는 구성원용, 끝나면 서기).
+		self.ActionSeq = self.ActionSeq + 1
+		self:SetBodySelector(true)
+		local ev = BodyActionStateChangeEvent()
+		ev.ActionState = MapleAvatarBodyActionState.Stand
+		if walk then ev.ActionState = MapleAvatarBodyActionState.Walk end
+		ev.needResetAction = true
+		self.Entity:SendEvent(ev)
+	end
+
+	@ExecSpace("Client")
+	method void ClientWalkTo(number targetX, number speed)
+		-- 조작 캐릭터(구성원 1)를 포탈까지 걷게 한다: 위치는 조작 클라이언트가 옮겨야 서버에 반영된다.
+		-- 방향 이동 명령은 조작 컴포넌트가 막으므로, 매 프레임 조금씩 위치를 옮기고 이동(MOVE) 상태로 걷기 동작을 낸다.
+		local movement = self.Entity.MovementComponent
+		if not isvalid(movement) then return end
+		if self._T.walkTimer ~= nil then _TimerService:ClearTimer(self._T.walkTimer) end
+		local sc = self.Entity.StateComponent
+		if isvalid(sc) then sc:ChangeState("MOVE") end
+		local last = _UtilLogic.ElapsedSeconds
+		local startAt = last
+		self._T.walkTimer = _TimerService:SetTimerRepeat(function()
+			local now = _UtilLogic.ElapsedSeconds
+			local dt = math.min(0.1, now - last)
+			last = now
+			local wp = self.Entity.TransformComponent.WorldPosition
+			if wp.x >= targetX or now - startAt > 6 then
+				_TimerService:ClearTimer(self._T.walkTimer)
+				self._T.walkTimer = nil
+				if isvalid(sc) then sc:ChangeState("IDLE") end
+				return
+			end
+			movement:SetWorldPosition(Vector2(math.min(targetX, wp.x + speed * dt), wp.y))
+			if isvalid(sc) and sc.CurrentStateName ~= "MOVE" then sc:ChangeState("MOVE") end
+		end, 1 / 60)
+		log("[VRF] client walk to " .. string.format("%.2f", targetX))
+	end
+
 	@ExecSpace("ServerOnly")
 	method void MemberAttackState()
 		-- 구성원(2·3번) 기본 공격: 상태 머신에 ATTACK 상태를 두고 전환한다 (아바타 공격 동작 + 무기 잔상). 잠시 뒤 IDLE로.

@@ -4,7 +4,8 @@ MonsterHpPerLevel,10,몬스터 체력 레벨당 증가
 MonsterAtkBase,5,몬스터 공격력 기본
 MonsterAtkPerLevel,1,몬스터 공격력 레벨당 증가
 MonsterAttackInterval,1.6,몬스터 공격 간격(초)
-StagesPerFloor,20,층당 웨이브 수 (4구간 × 5)
+StagesPerFloor,10,층당 전투 스테이지 수 (보스 포함, 갈림길 구조)
+WavesPerStage,2,전투 스테이지 하나의 웨이브 수
 LastStageStatMul,2.5,층 마지막 스테이지(강화 몬스터) 능력치 배율
 EliteRewardMul,3,강화 몬스터 보상 배율
 MonsterCritDmg,150,몬스터 크리티컬 데미지(%)
