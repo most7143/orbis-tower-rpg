@@ -4,7 +4,7 @@ script TowerRunManager extends Component
 	-- 몬스터 모델 / 배치 위치 (월드 단위)
 	property string MonsterModelId = "towerstarpixie"
 	property Vector3 PlayerPos = Vector3(-1.0, 0.2, 0)
-	property Vector3 MonsterPos = Vector3(1.0, -0.04, 0)
+	property Vector3 MonsterPos = Vector3(-0.4, -0.04, 0)
 	property string LobbyMapName = "Lobby"
 	property Vector3 LobbyPos = Vector3(0, 0.2, 0)
 	property string StorageKey = "OrbisTower"
@@ -925,6 +925,8 @@ script TowerRunManager extends Component
 			mates[i] = comp
 			if isvalid(comp) then
 				comp.TransformComponent.Position = pos
+				-- 구성원은 조작 컴포넌트가 없어 기본 방향(왼쪽)을 본다: 엔티티 전체를 좌우 반전해 몬스터 쪽을 보게 한다 (무기 잔상도 함께 뒤집힘)
+				comp.TransformComponent.Scale = Vector3(-1, 1, 1)
 				local tp = comp:GetComponent("script.TowerPlayer")
 				if tp ~= nil then tp.OwnerUserId = player.PlayerComponent.UserId end
 			end

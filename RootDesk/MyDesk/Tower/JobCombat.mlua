@@ -999,7 +999,7 @@ script JobCombat extends Component
 						self._T.guideKilled = {}
 					end
 					if (p.reduce or 0) > 0 then self:SetReduce(sk.id, p.reduce, p.dur) end
-					if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+					if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
 					self:Sfx(sk.a.useSound)
 					log("[VRF] jobcombat instinct " .. sk.id)
 				end
@@ -1287,7 +1287,7 @@ script JobCombat extends Component
 		local sk = r.sk
 		local p = r.p
 		local kind = p.kind
-		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
 		self:Sfx(sk.a.useSound)
 		if kind == "summon" or p.rain then
 			local s = { id = sk.id, left = p.dur, next = 0.3, interval = (p.interval or 0) > 0 and p.interval or 3, count = 0, knockNext = p.knockEvery or 0 }
@@ -1463,7 +1463,7 @@ script JobCombat extends Component
 	@ExecSpace("ServerOnly")
 	method void ApplyGuard(Component mgr, table sk, table p, Entity who)
 		-- 위기 보호 발동: 다크 사이트(은신)·일루전 스텝(회피·넉백)·언위어링 넥타(회복·감소).
-		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, who, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, who, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = who.TransformComponent.Scale.x > 0 }) end
 		self:Sfx(sk.a.useSound)
 		local dur = p.dur or 2
 		if sk.id == "N09" then

@@ -951,7 +951,7 @@ script BishopCombat extends Component
 		if sk.id == "B08" then
 			local old = self._T.summon
 			if old ~= nil and (old.serial or 0) ~= 0 then _EffectService:RemoveEffect(old.serial) end
-			local serial = _EffectService:PlayEffectAttached(self.BahamutStandRUID, self.Entity, self.BahamutOffset, 0, Vector3(1, 1, 1), true, { FlipX = true })
+			local serial = _EffectService:PlayEffectAttached(self.BahamutStandRUID, self.Entity, Vector3(self.BahamutOffset.x * self.Entity.TransformComponent.Scale.x, self.BahamutOffset.y, 0), 0, Vector3(1, 1, 1), true, { FlipX = self.Entity.TransformComponent.Scale.x > 0 })
 			local dur = sk.buffTime
 			if self:Has("B08", 1) then dur = 30 end
 			self._T.summon = { left = dur, next = 0.5, serial = serial, count = 0 }
@@ -995,7 +995,7 @@ script BishopCombat extends Component
 			end
 		end
 		mgr:AddBuff("bishopB12", "HealRecv", self.PrayHealPct * self:BuffPower(sk.id), dur, 0)
-		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
 		for _, e in ipairs(mgr:Actors()) do
 			if not mgr:IsDown(e) and (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
 		end
@@ -1015,7 +1015,7 @@ script BishopCombat extends Component
 			local dur = sk.buffTime
 			if self:Has("B09", 2) then dur = dur * 1.5 end
 			inf = { left = dur, stacks = 0, next = 0, heal = 1 }
-			if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+			if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
 			log("[VRF] bishop infinity on")
 		end
 		inf.left = inf.left - delta
@@ -1083,7 +1083,7 @@ script BishopCombat extends Component
 				_TimerService:SetTimerOnce(function() if isvalid(m0) and m0 == mgr:HeroMonster() then self:DealTo(m0, small, false, fx, 1, 0.4) end end, 0.2)
 				_TimerService:SetTimerOnce(function() if isvalid(m0) and m0 == mgr:HeroMonster() then self:DealTo(m0, small, false, fx, 1, 0.6) end end, 0.35)
 			end
-			_EffectService:PlayEffectAttached(self.BahamutAttackRUID, self.Entity, self.BahamutOffset, 0, Vector3(1, 1, 1), false, { FlipX = true })
+			_EffectService:PlayEffectAttached(self.BahamutAttackRUID, self.Entity, Vector3(self.BahamutOffset.x * self.Entity.TransformComponent.Scale.x, self.BahamutOffset.y, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 })
 			self:Sfx(sk.a.hitSound)
 			self:DealTo(mon, hit.dmg, hit.crit, sk.a.fx, sk.a.targets, 0)
 		end
@@ -1137,7 +1137,7 @@ script BishopCombat extends Component
 			mgr:AddBlockFor(e, blocks, dur, self.ShellRepeatRUID, self)
 			self:HealTo(e, self.ShellHealPct)
 		end
-		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true }) end
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
 		if (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, low, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
 		self:Sfx(sk.a.useSound)
 		log("[VRF] bishop magic shell -> " .. low.Name .. " hp=" .. tostring(mgr:ActorHp(low)))

@@ -3,7 +3,7 @@ script TowerProjectile extends Component
 
 	-- 원거리 기본 공격 발사체 (나이트로드 표창·비숍 에너지 볼트). 서버에서 몬스터를 향해 날아가 닿으면 주인(TowerPlayer)에게 타격을 넘기고 사라진다.
 	-- 몸체가 없는 엔티티라 위치를 직접 옮긴다 (매 프레임, 속도 × delta).
-	property number Speed = 11
+	property number Speed = 8.8
 	-- 초당 회전(도). 표창은 돌고, 에너지 볼트는 0
 	property number SpinPerSec = 0
 	-- 닿았다고 볼 거리
@@ -26,7 +26,7 @@ script TowerProjectile extends Component
 
 	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
-		-- 대상(몬스터 몸 가운데)을 향해 날아가고, 닿거나 시간이 다 되면 타격을 넘기고 사라진다.
+		-- 대상 쪽으로 직선(수평)으로 날아가고, 대상 위치에 닿거나 시간이 다 되면 타격을 넘기고 사라진다.
 		if self._T.done or self._T.owner == nil then return end
 		self._T.life = (self._T.life or 0) + delta
 		local tf = self.Entity.TransformComponent
@@ -36,18 +36,15 @@ script TowerProjectile extends Component
 			self:Finish()
 			return
 		end
-		local tp = target.TransformComponent.WorldPosition
-		local goal = Vector3(tp.x, tp.y + 0.4 * target.TransformComponent.Scale.y, tf.WorldPosition.z)
+		-- 직선 비행: 높이는 출발 높이 그대로, 앞(오른쪽)으로만 날아가 대상의 x에 닿으면 명중
+		local tx = target.TransformComponent.WorldPosition.x
 		local cur = tf.WorldPosition
-		local dx = goal.x - cur.x
-		local dy = goal.y - cur.y
-		local dist = math.sqrt(dx * dx + dy * dy)
 		local step = self.Speed * delta
-		if dist <= math.max(self.HitDist, step) then
+		if tx - cur.x <= math.max(self.HitDist, step) then
 			self:Finish()
 			return
 		end
-		tf.WorldPosition = Vector3(cur.x + dx / dist * step, cur.y + dy / dist * step, cur.z)
+		tf.WorldPosition = Vector3(cur.x + step, cur.y, cur.z)
 		if self.SpinPerSec ~= 0 then tf.ZRotation = tf.ZRotation - self.SpinPerSec * delta end
 	end
 

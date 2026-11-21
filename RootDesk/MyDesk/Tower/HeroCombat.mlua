@@ -1520,7 +1520,7 @@ script HeroCombat extends Component
 			for entry in string.gmatch(casterFx, "[^|]+") do
 				local ruid, sc = string.match(entry, "^([^@]+)@?(.*)$")
 				local s = tonumber(sc) or 1
-				_EffectService:PlayEffectAttached(ruid, player, Vector3(0, 0, 0), 0, Vector3(s, s, 1), false, { FlipX = true })
+				_EffectService:PlayEffectAttached(ruid, player, Vector3(0, 0, 0), 0, Vector3(s, s, 1), false, { FlipX = player.TransformComponent.Scale.x > 0 })
 			end
 		end
 		self:PlaySound(r.useSound)

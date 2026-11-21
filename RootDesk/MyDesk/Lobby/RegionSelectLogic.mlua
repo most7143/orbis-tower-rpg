@@ -442,7 +442,9 @@ script RegionSelectLogic extends Logic
 		self:SetText("currentRegion/currentRegionText", "현재 도전 지역으로", nil)
 		-- 상세: 지역 이름·별·몬스터
 		local pano = "panoramaFrame/Panorama/"
-		self:SetText(pano .. "regionDetailName", f.name, nil)
+		-- 배경 그림 안 지역 이름은 표시하지 않는다 (사용자 요청)
+		local nameEnt = self:E(pano .. "regionDetailName")
+		if isvalid(nameEnt) and nameEnt.Enable then nameEnt:SetEnable(false) end
 		self:SetStars(pano .. "detailStar", bits)
 		-- 파노라마 배경: 그 층 대표 맵의 배경을 캡처한 그림 (없으면 하늘색 바탕)
 		local sky = self:E(pano .. "Sky")
