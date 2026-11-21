@@ -468,7 +468,10 @@ script JobCombat extends Component
 	@ExecSpace("ServerOnly")
 	method number Cooldown(table sk)
 		-- 쿨타임 (돌파 반영).
-		return self:Params(sk).cd or 0
+		local cd = self:Params(sk).cd or 0
+		local mgr = self._T.mgr
+		if mgr ~= nil then cd = cd * math.max(0.2, 1 - mgr:AccessoryBonus(self.Entity, "CdReduce") / 100) end
+		return cd
 	end
 
 	@ExecSpace("ServerOnly")
@@ -782,7 +785,7 @@ script JobCombat extends Component
 		local critRate = mgr:ActorCrit(self.Entity) + starCrit
 		if self._T.sureCrit then critRate = 100 end
 		local crit = _UtilLogic:RandomDouble() * 100 < critRate
-		if crit then mul = mul * (mgr.CritDmg + starCrit * 2) / 100 end
+		if crit then mul = mul * (mgr:ActorCritDmg(self.Entity) + starCrit * 2) / 100 end
 		return { dmg = math.max(1, math.floor(base * mul + 0.5)), crit = crit }
 	end
 

@@ -1,0 +1,323 @@
+@Logic
+script WorkshopUILogic extends Logic
+
+	-- 정비소 화면 (WorkshopUI.ui): 판 상태가 SHOP일 때 열린다.
+	-- 왼쪽 진열대 카드를 고른 뒤 오른쪽 구성원의 같은 종류 칸을 누르면 구매·장착.
+	-- 끼운 장신구를 고른 뒤 다른 구성원의 같은 종류 칸을 누르면 바꿔 끼기, '판매'를 누르면 절반 환급.
+	property string RootPath = "/ui/WorkshopUI"
+
+	@HideFromInspector
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 표 읽기, 버튼 연결, 화면 숨기기.
+		self._T.defs = {}
+		local t = _DataService:GetTable("AccessoryTable")
+		if t ~= nil then
+			for i = 1, t:GetRowCount() do
+				self._T.defs[t:GetCell(i, "Id")] = { name = t:GetCell(i, "Name"), slot = t:GetCell(i, "Slot"), effect = t:GetCell(i, "Effect"),
+					value = tonumber(t:GetCell(i, "Value")) or 0, label = t:GetCell(i, "Label"), icon = t:GetCell(i, "IconRUID"), avatar = t:GetCell(i, "Avatar") == "1" }
+			end
+		end
+		self._T.grades = {}
+		local g = _DataService:GetTable("GradeTable")
+		if g ~= nil then
+			for i = 1, g:GetRowCount() do self._T.grades[tonumber(g:GetCell(i, "Grade")) or 0] = { name = g:GetCell(i, "Name"), color = g:GetCell(i, "ColorHex") } end
+		end
+		self._T.subLabels = {}
+		local s = _DataService:GetTable("AccessorySubTable")
+		if s ~= nil then
+			for i = 1, s:GetRowCount() do self._T.subLabels[s:GetCell(i, "Effect")] = s:GetCell(i, "Label") end
+		end
+		self._T.slots = { "Ring", "Pendant", "Earring" }
+		self._T.sel = nil
+		self.handlers = {}
+		for i = 1, 3 do
+			local idx = i
+			self:Bind("Win/Shop/Item" .. i, function() self:OnShopItem(idx) end)
+		end
+		for m = 1, 3 do
+			for s2 = 1, 3 do
+				local mm, ss = m, s2
+				self:Bind("Win/Party/Row" .. m .. "/Slot" .. s2, function() self:OnSlot(mm, ss) end)
+			end
+		end
+		self:Bind("Win/Shop/Reroll", function() self:Call("reroll") end)
+		self:Bind("Win/Detail/Sell", function() self:OnSell() end)
+		self:Bind("Win/Detail/Leave", function() self:Call("leave") end)
+		self._T.shown = nil
+		self:Show(false)
+		log("[VRF] WorkshopUILogic begin items=" .. tostring(t ~= nil and t:GetRowCount() or 0))
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Find(string sub)
+		-- 화면 안 엔티티 찾기.
+		return _EntityService:GetEntityByPath(self.RootPath .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(string sub, any fn)
+		-- 버튼 클릭 연결 (해제 기록 포함).
+		local e = self:Find(sub)
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(ButtonClickEvent, function()
+			_UISoundLogic:PlayClick()
+			fn()
+		end)
+		table.insert(self.handlers, { entity = e, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 연결 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.entity) then r.entity:DisconnectEvent(ButtonClickEvent, r.h) end
+		end
+		self.handlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 판 진행 매니저.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(boolean on)
+		-- 화면 켜기/끄기 (흐림 배경 + 창).
+		if self._T.shown == on then return end
+		self._T.shown = on
+		for _, n in ipairs({ "Dim", "Win" }) do
+			local e = self:Find(n)
+			if isvalid(e) then e:SetEnable(on) end
+		end
+		if on then
+			self._T.sel = nil
+			self._T.key = nil
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table ParseItem(string text)
+		-- "종류,Id,등급,배율,가격,부가" → 장신구 표.
+		local f = {}
+		for v in string.gmatch(text .. ",", "([^,]*),") do table.insert(f, v) end
+		local subs = {}
+		for e, v in string.gmatch(f[6] or "", "([^:;]+):([^;]+)") do table.insert(subs, { e, tonumber(v) or 0 }) end
+		return { slot = f[1], id = f[2], grade = tonumber(f[3]) or 1, mul = tonumber(f[4]) or 1, price = tonumber(f[5]) or 0, subs = subs }
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Parse(Component mgr)
+		-- 진열대·장착 상태 문자열 풀기.
+		local shop = {}
+		local reroll = 0
+		local head, rest = string.match(mgr.ShopJson or "", "^([^|]*)|(.*)$")
+		reroll = tonumber(head or "") or 0
+		for part in string.gmatch(rest or "", "[^/]+") do
+			local idx, sold, body = string.match(part, "^(%d+)=(%d)=(.*)$")
+			if idx ~= nil then
+				local it = self:ParseItem(body)
+				it.sold = sold == "1"
+				shop[tonumber(idx)] = it
+			end
+		end
+		local own = { {}, {}, {} }
+		for part in string.gmatch(mgr.AccessoryJson or "", "[^/]+") do
+			local m, body = string.match(part, "^(%d)=(.*)$")
+			if m ~= nil then
+				local it = self:ParseItem(body)
+				own[tonumber(m)][it.slot] = it
+			end
+		end
+		self._T.shop = shop
+		self._T.reroll = reroll
+		self._T.own = own
+	end
+
+	@ExecSpace("ClientOnly")
+	method string ItemLines(table it)
+		-- 기본 옵션(등급 배율 반영) + 부가 옵션 문구.
+		local d = self._T.defs[it.id]
+		if d == nil then return "" end
+		local lines = {}
+		local base = math.floor(d.value * it.mul * 10 + 0.5) / 10
+		table.insert(lines, (string.gsub(d.label, "{v}", tostring(base))))
+		for _, s in ipairs(it.subs or {}) do
+			local label = self._T.subLabels[s[1]] or s[1]
+			table.insert(lines, "<color=#347F24>+ " .. (string.gsub(label, "{v}", tostring(s[2]))) .. "</color>")
+		end
+		return table.concat(lines, "\n")
+	end
+
+	@ExecSpace("ClientOnly")
+	method string ItemTitle(table it)
+		-- 이름 + 등급(등급색).
+		local d = self._T.defs[it.id]
+		local g = self._T.grades[it.grade] or { name = "", color = "9E9E9E" }
+		return "<color=#" .. g.color .. ">[" .. g.name .. "]</color> " .. (d ~= nil and d.name or it.id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetIcon(Entity e, table it)
+		-- 장신구 아이콘 (귀고리는 아바타 아이템이라 thumbnail:// 접두어).
+		if not isvalid(e) then return end
+		local sprite = e.SpriteGUIRendererComponent
+		if it == nil then
+			e:SetEnable(false)
+			return
+		end
+		local d = self._T.defs[it.id]
+		if d == nil then return end
+		e:SetEnable(true)
+		local ruid = d.icon
+		if d.avatar then ruid = "thumbnail://" .. ruid end
+		sprite.ImageRUID = DataRef(ruid)
+		sprite.Color = Color(1, 1, 1, 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string JobName(string id)
+		-- 직업 표시 이름.
+		local names = { Hero = "히어로", Bishop = "비숍", NightLord = "나이트로드", Bowmaster = "보우마스터", Viper = "바이퍼" }
+		return names[id] or id
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh(Component mgr)
+		-- 화면 전체 갱신.
+		self:Parse(mgr)
+		local meso = mgr.Meso
+		local mesoE = self:Find("Win/Meso")
+		if isvalid(mesoE) then mesoE.TextGUIRendererComponent.Text = tostring(meso) .. " 메소" end
+		local sel = self._T.sel
+		for i = 1, 3 do
+			local it = self._T.shop[i]
+			local card = self:Find("Win/Shop/Item" .. i)
+			if isvalid(card) then
+				card:SetEnable(it ~= nil)
+				if it ~= nil then
+					self:SetIcon(self:Find("Win/Shop/Item" .. i .. "/Icon"), it)
+					local nameE = self:Find("Win/Shop/Item" .. i .. "/Name")
+					local optE = self:Find("Win/Shop/Item" .. i .. "/Opt")
+					local priceE = self:Find("Win/Shop/Item" .. i .. "/Price")
+					if isvalid(nameE) then nameE.TextGUIRendererComponent.Text = self:ItemTitle(it) end
+					if isvalid(optE) then optE.TextGUIRendererComponent.Text = self:ItemLines(it) end
+					if isvalid(priceE) then
+						local txt = tostring(it.price) .. " 메소"
+						if it.sold then txt = "판매 완료" elseif meso < it.price then txt = "<color=#C0392B>" .. txt .. "</color>" end
+						priceE.TextGUIRendererComponent.Text = txt
+					end
+					_UIButtonLogic:SetDisabled(card, it.sold)
+					_UIButtonLogic:SetSelected(card, sel ~= nil and sel.kind == "shop" and sel.idx == i)
+				end
+			end
+		end
+		local reroll = self:Find("Win/Shop/Reroll")
+		if isvalid(reroll) then
+			reroll.TextGUIRendererComponent.Text = "다시 뽑기  (" .. tostring(self._T.reroll) .. " 메소)"
+			_UIButtonLogic:SetDisabled(reroll, meso < self._T.reroll)
+		end
+		local jobs = { mgr.JobId, mgr.CompJobId, mgr.Comp2JobId }
+		for m = 1, 3 do
+			local jobE = self:Find("Win/Party/Row" .. m .. "/Job")
+			if isvalid(jobE) then jobE.TextGUIRendererComponent.Text = tostring(m) .. "\n" .. self:JobName(jobs[m] or "") end
+			for s = 1, 3 do
+				local slot = self._T.slots[s]
+				local it = self._T.own[m][slot]
+				local btn = self:Find("Win/Party/Row" .. m .. "/Slot" .. s)
+				self:SetIcon(self:Find("Win/Party/Row" .. m .. "/Slot" .. s .. "/Icon"), it)
+				if isvalid(btn) then _UIButtonLogic:SetSelected(btn, sel ~= nil and sel.kind == "own" and sel.m == m and sel.slot == slot) end
+			end
+		end
+		local detail = self:Find("Win/Detail/Text")
+		local sell = self:Find("Win/Detail/Sell")
+		local text = "진열대의 장신구를 고른 뒤, 구성원의 같은 종류 칸을 누르면 구매해서 끼웁니다."
+		local canSell = false
+		if sel ~= nil and sel.kind == "shop" and self._T.shop[sel.idx] ~= nil then
+			local it = self._T.shop[sel.idx]
+			text = self:ItemTitle(it) .. "   " .. tostring(it.price) .. " 메소\n" .. string.gsub(self:ItemLines(it), "\n", "  /  ")
+		elseif sel ~= nil and sel.kind == "own" then
+			local it = self._T.own[sel.m][sel.slot]
+			if it ~= nil then
+				canSell = true
+				text = self:ItemTitle(it) .. "   판매 " .. tostring(math.floor(it.price * 0.5 + 0.5)) .. " 메소 · 다른 구성원 칸을 누르면 바꿔 끼기\n" .. string.gsub(self:ItemLines(it), "\n", "  /  ")
+			end
+		end
+		if isvalid(detail) then detail.TextGUIRendererComponent.Text = text end
+		if isvalid(sell) then _UIButtonLogic:SetDisabled(sell, not canSell) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnShopItem(integer i)
+		-- 진열 카드 선택/해제.
+		local it = (self._T.shop or {})[i]
+		if it == nil or it.sold then return end
+		local sel = self._T.sel
+		if sel ~= nil and sel.kind == "shop" and sel.idx == i then self._T.sel = nil else self._T.sel = { kind = "shop", idx = i } end
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSlot(integer m, integer s)
+		-- 구성원 칸: 진열 카드를 골랐으면 구매·장착, 끼운 장신구를 골랐으면 바꿔 끼기, 아니면 그 칸 장신구 선택.
+		local mgr = self:GetManager()
+		if mgr == nil then return end
+		local slot = self._T.slots[s]
+		local sel = self._T.sel
+		if sel ~= nil and sel.kind == "shop" then
+			local it = self._T.shop[sel.idx]
+			if it ~= nil and it.slot == slot and mgr.Meso >= it.price then
+				mgr:RequestShopBuy(sel.idx, m)
+				self._T.sel = nil
+			end
+		elseif sel ~= nil and sel.kind == "own" and sel.slot == slot and sel.m ~= m then
+			mgr:RequestAccMove(sel.m, m, slot)
+			self._T.sel = nil
+		elseif self._T.own[m][slot] ~= nil then
+			if sel ~= nil and sel.kind == "own" and sel.m == m and sel.slot == slot then self._T.sel = nil else self._T.sel = { kind = "own", m = m, slot = slot } end
+		end
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSell()
+		-- 고른 장신구 판매.
+		local mgr = self:GetManager()
+		local sel = self._T.sel
+		if mgr == nil or sel == nil or sel.kind ~= "own" then return end
+		mgr:RequestAccUnequip(sel.m, sel.slot)
+		self._T.sel = nil
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Call(string what)
+		-- 다시 뽑기·나가기 요청.
+		local mgr = self:GetManager()
+		if mgr == nil then return end
+		if what == "reroll" then mgr:RequestShopReroll() end
+		if what == "leave" then mgr:RequestShopLeave() end
+		self._T.sel = nil
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 정비소 상태에서만 보이고, 데이터가 바뀌면 다시 그린다.
+		local mgr = self:GetManager()
+		local on = mgr ~= nil and mgr.RunState == "SHOP"
+		self:Show(on)
+		if not on then return end
+		local key = tostring(mgr.ShopSeq) .. "|" .. mgr.AccessoryJson .. "|" .. tostring(mgr.Meso)
+		if self._T.key ~= key then
+			self._T.key = key
+			self:Refresh(mgr)
+		end
+	end
+
+end

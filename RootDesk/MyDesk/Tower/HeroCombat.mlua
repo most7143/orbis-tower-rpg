@@ -778,7 +778,7 @@ script HeroCombat extends Component
 	method number AllDmgPct()
 		-- 에픽 어드벤쳐: 모든 피해 증가.
 		local mgr = self._T.mgr
-        return mgr ~= nil and mgr:Bonus("SkillDmg") or 0
+        return mgr ~= nil and (mgr:Bonus("SkillDmg") + mgr:AccessoryBonus(self.Entity, "SkillDmg")) or 0
 	end
 
 	@ExecSpace("ServerOnly")
@@ -798,7 +798,7 @@ script HeroCombat extends Component
 		-- 자상 방어력 감소
 		mul = mul * (1 + self:DefDownPct() / 100)
 		local rate = mgr:ActorCrit(self.Entity) + self:Star(id, "StarCrit")
-		local critDmg = mgr.CritDmg + self:Star(id, "StarCrit") * 2
+		local critDmg = mgr:ActorCritDmg(self.Entity) + self:Star(id, "StarCrit") * 2
 		local crit = forceCrit or _UtilLogic:RandomDouble() * 100 < rate
 		if crit then mul = mul * critDmg / 100 end
 		return { dmg = math.max(1, math.floor(base * mul + 0.5)), crit = crit }
@@ -843,6 +843,9 @@ script HeroCombat extends Component
 		if sk.id == "H03" and self:Has("H03", 4) then cd = 4 end
 		-- 레이징 블로우 '날렵함': 쿨타임 6초
 		if sk.id == "H08" and self:Has("H08", 5) then cd = 6 end
+		-- 장신구 '미스틱 이어링' 등: 재사용 대기시간 감소
+		local mgr = self._T.mgr
+		if mgr ~= nil then cd = cd * math.max(0.2, 1 - mgr:AccessoryBonus(self.Entity, "CdReduce") / 100) end
 		return cd
 	end
 
@@ -2741,7 +2744,7 @@ script HeroCombat extends Component
 		local base = mgr:ActorHitDamage(self.Entity) * pct / 100 * self:LvMul("H12") * (1 + bonus / 100) * (1 + self:AllDmgPct() / 100)
 		local rate = mgr:ActorCrit(self.Entity) + self:Star("H12", "StarCrit")
 		local crit = _UtilLogic:RandomDouble() * 100 < rate
-		if crit then base = base * (mgr.CritDmg + self:Star("H12", "StarCrit") * 2) / 100 end
+		if crit then base = base * (mgr:ActorCritDmg(self.Entity) + self:Star("H12", "StarCrit") * 2) / 100 end
 		local dmg = math.max(1, math.floor(base + 0.5))
 		local clip = self.SwordAttackRUID
 		local hitFx = self.SwordHitRUID
