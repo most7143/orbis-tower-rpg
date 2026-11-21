@@ -26,7 +26,9 @@ script TowerPlayer extends AttackComponent
 	property string OwnerUserId = ""
 	-- 원거리 기본 공격 발사체: 모델 Id, 직업별 그림(직업:RUID:초당 회전), 출발 위치(캐릭터 기준)
 	property string ProjectileModelId = "towerprojectile"
-	property string ProjectileLooks = "NightLord:598f25c8b05f4542a36f0ba339191246:900,Bishop:d393500fd23f4537a2dd1f65089fc4a1:0"
+	-- 직업:그림:회전(도/초):크기:원점보정X:원점보정Y (보정은 월드 단위, 그림 원점이 가운데가 아닐 때 눈에 보이는 중심을 발사 위치에 맞춘다)
+	-- 표창 그림은 원점이 모서리(-3,-3)라 그림이 위·앞으로 치우쳐 그려진다 → 아래·뒤로 보정
+	property string ProjectileLooks = "NightLord:598f25c8b05f4542a36f0ba339191246:0:1:-0.17:-0.17,Bishop:d393500fd23f4537a2dd1f65089fc4a1:0:0.5:0:0"
 	property Vector3 ProjectileOffset = Vector3(0, 0.35, 0)
 
 	method string Uid()
@@ -152,7 +154,7 @@ script TowerPlayer extends AttackComponent
 
 	@ExecSpace("ServerOnly")
 	method table ProjectileLook()
-		-- 이 캐릭터의 원거리 기본 공격 그림 {ruid, spin} (근거리 직업이면 nil).
+		-- 이 캐릭터의 원거리 기본 공격 그림 {ruid, spin, scale, ox, oy} (근거리 직업이면 nil).
 		local job = ""
 		for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do
 			local c = self.Entity:GetComponent(n)
@@ -160,8 +162,11 @@ script TowerPlayer extends AttackComponent
 		end
 		if job == "" then return nil end
 		for entry in string.gmatch(self.ProjectileLooks, "[^,]+") do
-			local j, ruid, spin = string.match(entry, "^([^:]+):([^:]+):?(.*)$")
-			if j == job then return { ruid = ruid, spin = tonumber(spin) or 0 } end
+			local f = {}
+			for v in string.gmatch(entry, "[^:]+") do table.insert(f, v) end
+			if f[1] == job then
+				return { ruid = f[2], spin = tonumber(f[3] or "") or 0, scale = tonumber(f[4] or "") or 1, ox = tonumber(f[5] or "") or 0, oy = tonumber(f[6] or "") or 0 }
+			end
 		end
 		return nil
 	end
@@ -172,7 +177,7 @@ script TowerPlayer extends AttackComponent
 		local map = self.Entity.CurrentMap
 		if not isvalid(map) then return false end
 		local wp = self.Entity.TransformComponent.WorldPosition
-		local pos = Vector3(wp.x + self.ProjectileOffset.x, wp.y + self.ProjectileOffset.y, wp.z)
+		local pos = Vector3(wp.x + self.ProjectileOffset.x + (look.ox or 0), wp.y + self.ProjectileOffset.y + (look.oy or 0), wp.z)
 		local proj = _SpawnService:SpawnByModelId(self.ProjectileModelId, "Proj", pos, map)
 		if not isvalid(proj) then return false end
 		local pc = proj:GetComponent("script.TowerProjectile")
@@ -183,6 +188,8 @@ script TowerPlayer extends AttackComponent
 		local flying = self._T.flying or {}
 		flying[p.seq] = p
 		self._T.flying = flying
+		local sc = look.scale or 1
+		proj.TransformComponent.Scale = Vector3(sc, sc, 1)
 		pc:Launch(self, p.seq, p.target, look.ruid, look.spin)
 		self._T.projLog = (self._T.projLog or 0) + 1
 		if self._T.projLog <= 4 then log("[VRF] projectile launch " .. self.Entity.Name .. " seq=" .. tostring(p.seq)) end
@@ -224,6 +231,22 @@ script TowerPlayer extends AttackComponent
 			local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
 			if mgr ~= nil then mgr:ApplyJobProcs(p.procs, p.target, self.Entity) end
 		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 구성원(2·3번)은 조작 컴포넌트가 없어 기본으로 왼쪽을 본다: 아바타가 준비될 때쯤 오른쪽 보기 신호를 보낸다.
+		if isvalid(self.Entity.PlayerComponent) then return end
+		self:FaceRight()
+		_TimerService:SetTimerOnce(function() if isvalid(self.Entity) then self:FaceRight() end end, 0.3)
+		_TimerService:SetTimerOnce(function() if isvalid(self.Entity) then self:FaceRight() end end, 1.0)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FaceRight()
+		-- 아바타 방향을 오른쪽으로 (엔티티 반전 대신 사용해야 무기 잔상·이펙트 방향이 함께 맞는다).
+		if isvalid(self.Entity.PlayerComponent) then return end
+		self.Entity:SendEvent(ChangedLookAtEvent(1))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -394,6 +417,7 @@ script TowerPlayer extends AttackComponent
 		reset.ActionState = MapleAvatarBodyActionState.Stand
 		reset.needResetAction = true
 		self.Entity:SendEvent(reset)
+		self:FaceRight()
 	end
 
 	@ExecSpace("Multicast")
@@ -406,6 +430,7 @@ script TowerPlayer extends AttackComponent
 		if down then ev.ActionState = MapleAvatarBodyActionState.Dead end
 		ev.needResetAction = true
 		self.Entity:SendEvent(ev)
+		self:FaceRight()
 	end
 
 	@ExecSpace("ClientOnly")

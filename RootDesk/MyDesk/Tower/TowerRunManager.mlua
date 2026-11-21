@@ -88,7 +88,12 @@ script TowerRunManager extends Component
 	property number WeaponSpeedPerTier = 0.1
 	property number LowHpDmgRatio = 0.3
 	property number BulwarkHpRatio = 0.5
-	-- 보스 처치 후 거래 (DealTable): 천사(이로움·낮은 수치) / 악마(높은 수치·대가) / 상인(메소로 중간 수치)
+	-- 보스 처치 후 거래 (DealTable): 천사(이로움·낮은 수치) / 악마(높은 수치·대가) 중 하나 (상인은 제외)
+	-- 고른 뒤 구성원에게 나오는 이펙트
+	property string AngelDealFxRUID = "db2651303d6f41b4b762fb9bfda74b5a"
+	property string DevilDealFxRUID = "14169cb232eb415b82e8fbd777b80856"
+	-- 거래 이펙트를 보여 주는 시간(초): 이 시간 뒤 다음 진행
+	property number DealFxWait = 2.5
 	property string DealTableName = "DealTable"
 	-- 몬스터 처치 후 다음 몬스터 등장까지 대기(초)
 	property number NextSpawnDelay = 0.3
@@ -199,6 +204,10 @@ script TowerRunManager extends Component
 	property string JobWeapons = "Bishop:061712eadf7d4357a6c306dfd5368860:O,NightLord:c80eb7c8ad1f45988e6d74b1c95a0b13:O,Bowmaster:edde225a13754c149f7191fd8a2dac35:T,Viper:fe25f3973345486a836f8b9b539d268a:O"
 	-- 직업 위협 배율 (몬스터가 누구를 노릴지)
 	property string JobThreat = "Hero:1.0,Bishop:1.0,NightLord:1.0,Bowmaster:0.7,Viper:2.0"
+	-- 몬스터 공격 대상 위치 확률 (구성원 1·2·3번, %)
+	property number TargetWeight1 = 50
+	property number TargetWeight2 = 35
+	property number TargetWeight3 = 15
 	@Sync
 	property number EnhanceBonus = 0
 	@Sync
@@ -377,6 +386,18 @@ script TowerRunManager extends Component
 	property integer SpawnSeq = 0
 	@HideFromInspector
 	property integer SavedBestFloor = 0
+
+	-- 여신 제안: 대상은 서버에서 고정, 능력치 효과는 캐릭터별 적용.
+	property number GoddessSingleScale = 1.5
+	property number GoddessSingleChance = 0.5
+	@Sync
+	property string GoddessOffersJson = "{}"
+	@Sync
+	property integer GoddessOfferSeq = 0
+	@Sync
+	property string GoddessEffectsJson = "[]"
+	@Sync
+	property integer GoddessEffectsSeq = 0
 
 	@ExecSpace("ServerOnly")
 	method void OnBeginPlay()
@@ -925,8 +946,16 @@ script TowerRunManager extends Component
 			mates[i] = comp
 			if isvalid(comp) then
 				comp.TransformComponent.Position = pos
-				-- 구성원은 조작 컴포넌트가 없어 기본 방향(왼쪽)을 본다: 엔티티 전체를 좌우 반전해 몬스터 쪽을 보게 한다 (무기 잔상도 함께 뒤집힘)
-				comp.TransformComponent.Scale = Vector3(-1, 1, 1)
+				-- 구성원 방향은 엔티티를 뒤집지 않고 아바타에 오른쪽 보기 신호를 보내 맞춘다 (TowerPlayer.FaceRight). 뒤집으면 무기 잔상이 반대로 나온다
+				comp.TransformComponent.Scale = Vector3(1, 1, 1)
+				-- 무기 기본 잔상은 조작 컴포넌트의 바라보는 방향을 따른다: 구성원에게도 붙이고 오른쪽으로 둔다 (없으면 잔상이 왼쪽으로 나옴)
+				local pc = comp.PlayerControllerComponent
+				if not isvalid(pc) then pc = comp:AddComponent("PlayerControllerComponent") end
+				-- 켜 두면 상태 머신이 낙하(FALL) 자세로 바꾸므로 끄고, 방향값만 남긴다 (꺼져 있어도 잔상은 이 방향을 따름: 메이커 실측)
+				if isvalid(pc) then
+					pc.LookDirectionX = 1
+					pc.Enable = false
+				end
 				local tp = comp:GetComponent("script.TowerPlayer")
 				if tp ~= nil then tp.OwnerUserId = player.PlayerComponent.UserId end
 			end
@@ -1005,32 +1034,24 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
-	method Entity PickTarget(boolean front)
-		-- 몬스터 공격 대상: 쓰러지지 않은 캐릭터 중 위협이 높은 쪽. 지금은 거리만 반영(앞에 선 메인 1.5, 뒤의 동료 1.0).
-		-- 맨 앞 몬스터는 위협 1위를, 줄 선 몬스터는 위협 비율대로 무작위로 고른다.
-		local cands = {}
+	method Entity PickTarget(integer range)
+		-- 몬스터 공격 대상: 살아 있는 구성원을 앞(1번)부터 세어 사거리(1·2·3)만큼 안에서 위치별 확률로 고른다.
+		-- 위치 확률 1번 50% · 2번 35% · 3번 15% (사거리 안의 구성원끼리 다시 비율을 맞춘다).
+		local alive = {}
+		for _, e in ipairs(self:Actors()) do
+			if not self:IsDown(e) then table.insert(alive, e) end
+		end
+		if #alive == 0 then return nil end
+		local weights = { self.TargetWeight1, self.TargetWeight2, self.TargetWeight3 }
+		local n = math.min(math.max(1, range), #alive, 3)
 		local total = 0
-		for i, e in ipairs(self:Actors()) do
-			if not self:IsDown(e) then
-				local w = 1.0
-				if not self:IsCompanion(e) then w = 1.5 end
-				local h = self:HeroOf(e)
-				if h ~= nil then w = w * (tonumber(self:ListValue(self.JobThreat, h.JobId)) or 1) end
-				table.insert(cands, { e = e, w = w })
-				total = total + w
-			end
-		end
-		if #cands == 0 then return nil end
-		if front or #cands == 1 then
-			table.sort(cands, function(a, b) return a.w > b.w end)
-			return cands[1].e
-		end
+		for k = 1, n do total = total + weights[k] end
 		local r = _UtilLogic:RandomDouble() * total
-		for _, c in ipairs(cands) do
-			r = r - c.w
-			if r <= 0 then return c.e end
+		for k = 1, n do
+			r = r - weights[k]
+			if r <= 0 then return alive[k] end
 		end
-		return cands[#cands].e
+		return alive[n]
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1259,6 +1280,7 @@ script TowerRunManager extends Component
 					hitSound = ds:GetCell(i, "HitSoundRUID"),
 					dieSound = ds:GetCell(i, "DieSoundRUID"),
 					move = ds:GetCell(i, "MoveRUID") or "",
+					range = math.max(1, math.min(3, math.floor(tonumber(ds:GetCell(i, "AttackRange") or "1") or 1))),
 					-- MonsterTable Ranged = 1 이면 이 몬스터는 웨이브에서 항상 원거리
 					ranged = tonumber(ds:GetCell(i, "Ranged") or "0") == 1,
 				}
@@ -1482,8 +1504,10 @@ script TowerRunManager extends Component
 		for _, c in ipairs(self._T.curses or {}) do
 			if c.type == effType then total = total + c.value end
 		end
+		if effType == "MesoPct" then total = total + self:GoddessBonus(nil, effType) end
 		return total
 	end
+
 
 
 	@ExecSpace("ServerOnly")
@@ -1892,8 +1916,9 @@ script TowerRunManager extends Component
 		end
 		-- 히어로: 콤보당 직접 공격 피해·에픽 어드벤쳐 모든 피해
 		if self:IsHeroRun() and hero ~= nil then mul = mul * hero:DirectMul() end
-		return math.max(1, math.floor(self:PlayerHitDamage() * mul + 0.5))
+		return math.max(1, math.floor(self:ActorHitDamage(hero ~= nil and hero.Entity or self._T.player) * mul + 0.5))
 		end
+
 
 	@ExecSpace("ServerOnly")
 	method table RollJobProcs(Component hero)
@@ -2532,34 +2557,41 @@ script TowerRunManager extends Component
 		local armorMul = 1 + self:Bonus("ArmorPct") / 100
 		local atk = (self.BasePlayerAtk + self.LevelAtkBonus * (self.Level - 1)) * (1 + (account.AccountAtk or 0) / 100) + weapon
 		local hp = (self.BasePlayerMaxHp + self.LevelHpBonus * (self.Level - 1)) * (1 + (account.AccountHp or 0) / 100) + self:EquipStat("Cap") * armorMul
-		self.PlayerMaxHp = math.floor(hp * (1 + (self:Bonus("HpPct")) / 100) + 0.5)
+		self._T.goddessHpBase = hp
+		self.PlayerMaxHp = math.max(1, math.floor(hp * math.max(0.01, 1 + (self:Bonus("HpPct") + self:GoddessBonus(self._T.player, "HpPct")) / 100) + 0.5))
 		-- 돌파 '무기 공명'(무기 강화 단계당 공격력)·'활력'(최대 체력 비례 공격력)
-		local atkPct = self:Bonus("AtkPct") + self:Bonus("WeaponEnhAtk") * (self.EquipEnh["Weapon"] or 0)
-		self.PlayerAtk = math.floor(atk * (1 + atkPct / 100) + self.PlayerMaxHp * self:Bonus("HpToAtk") / 100 + 0.5)
+		self._T.goddessAtkBase = atk
+		self.PlayerAtk = self:ActorAtk(self._T.player)
 		self.Mastery = math.min(100, self.BaseMastery + self:Bonus("Mastery"))
 		self.PlayerAtkMin = math.max(1, math.floor(self.PlayerAtk * (0.2 + 0.8 * self.Mastery / 100) + 0.5))
 		local def = self.LevelDefBonus * (self.Level - 1) * (1 + (account.AccountDef or 0) / 100) + self:EquipStat("Coat") * armorMul
-		self.PlayerDef = math.floor(def * (1 + (self:Bonus("DefPct")) / 100) + 0.5)
-		self.CritRate = self:EquipStat("Glove") + self:Bonus("Crit")
+		self._T.goddessDefBase = def
+		self.PlayerDef = math.floor(self:ActorDefense(self._T.player) + 0.5)
+		self.CritRate = self:ActorCrit(self._T.player)
 		-- 공격 간격 = 1 / (무기 기본 공격 속도 × (1 + 공격 속도 보너스%))
 		self.WeaponSpeed = self.WeaponBaseSpeed + self.WeaponSpeedPerTier * ((self.EquipTier["Weapon"] or 1) - 1)
-		self.PlayerAttackInterval = 1 / (self.WeaponSpeed * (1 + self:Bonus("Speed") / 100))
+		self.PlayerAttackInterval = self:ActorInterval(self._T.player)
 		self.CritDmg = self.BaseCritDmg + self:EquipStat("Shoes") + self:Bonus("CritDmg")
 		self.Accuracy = self:EquipStat("Cape") + self:Bonus("Acc")
 		self.EnhanceBonus = self:Bonus("EnhRate")
-		if oldMax > 0 and self.PlayerMaxHp > oldMax then
+		if oldMax > 0 and self.PlayerMaxHp > oldMax and not self.PlayerDown then
 			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + (self.PlayerMaxHp - oldMax))
 		end
 		-- 동료는 메인과 같은 능력치 (최대 체력 증가분만큼 현재 체력도)
 		for i = 1, 2 do
 			local oldComp = self:MateMax(i)
-			self:SetMateMax(i, self.PlayerMaxHp)
-			if oldComp > 0 and self.PlayerMaxHp > oldComp and not self:MateDown(i) then
-				self:SetMateHp(i, math.min(self.PlayerMaxHp, self:MateHp(i) + (self.PlayerMaxHp - oldComp)))
+			local comp = self:Mate(i)
+			local maxHp = math.max(1, math.floor(hp * math.max(0.01, 1 + (self:Bonus("HpPct") + self:GoddessBonus(comp, "HpPct")) / 100) + 0.5))
+			self:SetMateMax(i, maxHp)
+			if oldComp > 0 and maxHp > oldComp and not self:MateDown(i) then
+				self:SetMateHp(i, math.min(maxHp, self:MateHp(i) + (maxHp - oldComp)))
 			end
+			self:SetMateHp(i, math.min(self:MateHp(i), maxHp))
 		end
+		self.PlayerHp = self.PlayerDown and 0 or math.min(self.PlayerHp, self.PlayerMaxHp)
 		for _, slot in ipairs(self._T.slots) do self.EquipCost[slot] = self:CalcEquipCost(slot) end
 	end
+
 
 	@ExecSpace("ServerOnly")
 	method void StartRun()
@@ -2642,6 +2674,7 @@ script TowerRunManager extends Component
 		self._T.undyingUsed = false
 		self._T.lastStandUsed = false
 		self._T.deal = {}
+		self:ResetGoddessEffects()
 		self._T.curses = {}
 		self.CurseText = ""
 		self._T.extraHitTimer = 0
@@ -2992,6 +3025,7 @@ script TowerRunManager extends Component
 		local mc = monster:GetComponent("script.TowerMonster")
 		if mc ~= nil then
 			mc.MoveRUID = info.move or ""
+			mc.AttackRange = info.range or 1
 			mc:ApplyLook(info.stand, info.attack, info.hit, info.die, info.hitSound, info.dieSound)
 			mc.SpeedMul = 1 + (_UtilLogic:RandomDouble() * 2 - 1) * self.WalkSpeedRand / 100
 			mc.SlotJitter = (_UtilLogic:RandomDouble() * 2 - 1) * self.SlotJitter
@@ -3138,7 +3172,9 @@ script TowerRunManager extends Component
 		local mc = m:GetComponent("script.TowerMonster")
 		if mc == nil or mc.IsDead then return end
 		-- 2인 편성: 쓰러지지 않은 캐릭터 중 위협이 높은 쪽을 노린다
-		local player = self:PickTarget(front)
+		local range = mc.AttackRange
+		if mc.IsRanged then range = 3 end
+		local player = self:PickTarget(range)
 		if not isvalid(player) then return end
 		local toComp = self:IsCompanion(player)
 		local missUid = self._T.player.PlayerComponent.UserId
@@ -3173,20 +3209,20 @@ script TowerRunManager extends Component
 		else
 			-- 방어력: 받는 피해 = 공격력 × (1 - 방어 / (방어 + 상수)), 치명타(치명적인)는 TowerMonster가 판정
 			-- 각인 '철벽': 체력 50% 이하일 때 방어력 증가
-			local def = self.PlayerDef
-			if self.PlayerHp < self.PlayerMaxHp * self.BulwarkHpRatio then def = def * (1 + self:Bonus("Bulwark") / 100) end
+			local def = self:ActorDefense(player)
+			if self:ActorHp(player) < self:ActorMaxHp(player) * self.BulwarkHpRatio then def = def * (1 + self:Bonus("Bulwark") / 100) end
 			local reduce = def / (def + self.DefConstant)
 			-- 직업 스킬 '철벽 자세': 받는 피해 감소
 			local reduceSum = self:Bonus("DmgReduce")
-			if self.PlayerHp >= self.PlayerMaxHp * 0.5 then reduceSum = reduceSum + self:Bonus("HighHpReduce") end
-			if self.PlayerHp <= self.PlayerMaxHp * 0.3 then reduceSum = reduceSum + self:Bonus("LowHpReduce") end
+			if self:ActorHp(player) >= self:ActorMaxHp(player) * 0.5 then reduceSum = reduceSum + self:Bonus("HighHpReduce") end
+			if self:ActorHp(player) <= self:ActorMaxHp(player) * 0.3 then reduceSum = reduceSum + self:Bonus("LowHpReduce") end
 			if front and self.MonsterElite then reduceSum = reduceSum + self:Bonus("EliteReduce") end
 			-- 직업 공용 전투(바이퍼 에너지·트랜스폼 등): 그 캐릭터만 받는 피해 감소 (합계 60% 상한)
 			local jc = player:GetComponent("script.JobCombat")
 			if jc ~= nil and jc.Active and self:HeroOf(player) == jc then reduceSum = math.min(math.max(reduceSum, 60), reduceSum + jc:SelfReduce()) end
 			local cut = math.max(0, 1 - reduceSum / 100)
 			-- 악마의 거래 대가: 받는 피해 증가
-			cut = cut * (1 + self:Bonus("DmgTaken") / 100)
+			cut = cut * (1 + (self:Bonus("DmgTaken") + self:GoddessBonus(player, "DmgTaken")) / 100)
 			-- 이 층 심볼: 받는 피해 감소
 			cut = cut * math.max(0, 1 - (self._T.symCut or 0) / 100)
 			local crit = 0
@@ -3204,6 +3240,7 @@ script TowerRunManager extends Component
 			end
 		end
 	end
+
 
 	@ExecSpace("ServerOnly")
 	method table SplashTargets(integer n)
@@ -3669,35 +3706,56 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void RollDeals()
-		-- 보스 처치: 천사·악마·상인 거래를 하나씩 뽑아 보여준다 (상인 가격은 층이 오를수록 비싸짐).
-		for _, kind in ipairs({ "Angel", "Devil", "Merchant" }) do
-			local list = self._T.deals[kind]
-			if #list > 0 then self.DealIds[kind] = list[_UtilLogic:RandomIntegerRange(1, #list)].id else self.DealIds[kind] = "" end
+		-- 보스 보상: 제안과 대상을 함께 추첨하고 선택할 때까지 그대로 유지한다.
+		local offers = {}
+		local living = {}
+		for _, actor in ipairs(self:Actors()) do
+			if not self:IsDown(actor) then table.insert(living, self:GoddessActorIndex(actor)) end
 		end
-		local m = self._T.dealById[self.DealIds["Merchant"] or ""]
+		for _, kind in ipairs({ "Angel", "Devil" }) do
+			local list = self._T.deals[kind] or {}
+			self.DealIds[kind] = ""
+			if #list > 0 then
+				local d = list[_UtilLogic:RandomIntegerRange(1, #list)]
+				local shared = false
+				for _, e in ipairs(d.effects) do
+					if e.type == "MesoPct" or e.type == "MesoGain" or e.type == "SkillPick" then shared = true end
+				end
+				local target = 0
+				if not shared and #living > 0 and _UtilLogic:RandomDouble() < self.GoddessSingleChance then target = living[_UtilLogic:RandomIntegerRange(1, #living)] end
+				offers[kind] = self:BuildGoddessOffer(d, target)
+				self.DealIds[kind] = d.id
+			end
+		end
+		self._T.goddessOffers = offers
+		self.GoddessOffersJson = _HttpService:JSONEncode(offers)
+		self.GoddessOfferSeq = self.GoddessOfferSeq + 1
+		self.DealIds["Merchant"] = ""
 		self.DealCost = 0
-		if m ~= nil then self.DealCost = math.max(1, math.floor(self:KillMeso() * m.costMul + 0.5)) end
 		self.RunState = "DEAL"
-		log("[VRF] deals angel=" .. tostring(self.DealIds["Angel"]) .. " devil=" .. tostring(self.DealIds["Devil"]) .. " merchant=" .. tostring(self.DealIds["Merchant"]) .. " cost=" .. tostring(self.DealCost))
+		log("[VRF] goddess offers seq=" .. tostring(self.GoddessOfferSeq) .. " " .. self.GoddessOffersJson)
 	end
 
 	@ExecSpace("Server")
 	method void RequestDeal(string kind)
-		-- 거래 선택 ("" = 아무것도 고르지 않기). 상인은 메소를 지불해야 한다.
+		-- 거래 선택 ("" = 아무것도 고르지 않기). 천사·악마만 받는다.
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		if self.RunState ~= "DEAL" then return end
 		if kind ~= "" then
 			local d = self._T.dealById[self.DealIds[kind] or ""]
-			if d == nil then return end
-			if kind == "Merchant" then
-				if self.Meso < self.DealCost then
-					self:SetEnhanceMsg("메소가 부족합니다")
-					return
-				end
-				self.Meso = self.Meso - self.DealCost
-			end
+			if d == nil or (kind ~= "Angel" and kind ~= "Devil") then return end
 			self:ApplyDeal(d)
+			self:PlayDealFx(kind)
+			-- 이펙트가 다음 선택창에 가려지지 않게 잠깐 보여 준 뒤 진행 (그동안 거래창은 닫힘)
+			self.RunState = "DEALFX"
+			_TimerService:SetTimerOnce(function()
+				if self.RunState == "DEALFX" then
+					self.RunState = "DEAL"
+					self:ContinueAfterReward()
+				end
+			end, self.DealFxWait)
+			return
 		else
 			log("[VRF] deal skipped")
 		end
@@ -3705,64 +3763,89 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
-	method void ApplyDeal(table d)
-		-- 거래 효과 적용: 즉시 효과(회복·체력 소모·스킬 카드 선택·메소)와 이번 판 능력치, 기간제 대가.
-		local healed = 0
-		for _, e in ipairs(d.effects) do
-			if e.type == "Heal" then
-				local before = self.PlayerHp
-				self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + math.floor(self.PlayerMaxHp * e.value / 100 + 0.5))
-				healed = healed + (self.PlayerHp - before)
-			elseif e.type == "HpCost" then
-				self.PlayerHp = math.max(1, self.PlayerHp - math.floor(self.PlayerHp * e.value / 100 + 0.5))
-			elseif e.type == "SkillPick" then
-				-- 스킬 카드 선택 횟수 (거래 뒤 ContinueAfterReward에서 카드가 나옴)
-				if self:HasSkillToLearn() then self.PendingPicks = self.PendingPicks + math.floor(e.value) end
-			elseif e.type == "MesoGain" then
-				local gain = math.floor(self:KillMeso() * e.value + 0.5)
-				self.Meso = self.Meso + gain
-				self.RunMeso = self.RunMeso + gain
-				self.MesoProcSeq = self.MesoProcSeq + 1
-			elseif e.type == "DmgTaken" then
-				table.insert(self._T.curses, { type = e.type, value = e.value, stages = d.stages })
-			else
-				self._T.deal[e.type] = (self._T.deal[e.type] or 0) + e.value
+	method void PlayDealFx(string kind)
+		-- 거래를 고른 뒤 천사/악마 이펙트를 한 번, 구성원 무리의 가운데(발 높이)에 보여준다.
+		local ruid = self.AngelDealFxRUID
+		if kind == "Devil" then ruid = self.DevilDealFxRUID end
+		if ruid == "" then return end
+		local sx, n, y, z, inst = 0, 0, 0, 0, nil
+		for _, e in ipairs(self:Actors()) do
+			if isvalid(e) then
+				local wp = e.TransformComponent.WorldPosition
+				sx = sx + wp.x
+				y = wp.y
+				z = wp.z
+				n = n + 1
+				if inst == nil then inst = e end
 			end
 		end
-		self:RecalcStats()
-		self.PlayerHp = math.min(self.PlayerHp, self.PlayerMaxHp)
-		self:UpdateCurseText()
-		if healed > 0 then
-			local pc = self:GetPlayerAttack()
-			if pc ~= nil then pc:ShowHeal(math.floor(healed)) end
+		if n == 0 then return end
+		self:ShowDealFx(ruid, inst, Vector3(sx / n, y, z))
+		log("[VRF] deal fx " .. kind .. " x=" .. string.format("%.2f", sx / n))
+	end
+
+	@ExecSpace("Multicast")
+	method void ShowDealFx(string ruid, Entity inst, Vector3 pos)
+		-- 거래 이펙트는 클라이언트에서 재생해야 화면에 나온다 (서버 재생은 보이지 않음: 메이커 실측).
+		_EffectService:PlayEffect(ruid, inst, pos, 0, Vector3(1, 1, 1), false, { FlipX = true })
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyDeal(table d)
+		-- 클라이언트가 보낸 대상·수치 대신 제안을 제시할 때 고정한 서버 값을 적용한다.
+		local offer = (self._T.goddessOffers or {})[d.kind]
+		if offer == nil or offer.id ~= d.id then return end
+		local targets = {}
+		for _, actor in ipairs(self:Actors()) do
+			if offer.target == 0 or self:GoddessActorIndex(actor) == offer.target then table.insert(targets, actor) end
 		end
-		log("[VRF] deal applied " .. d.id .. " hp=" .. tostring(self.PlayerHp) .. "/" .. tostring(self.PlayerMaxHp) .. " meso=" .. tostring(self.Meso) .. " curse='" .. self.CurseText .. "'")
+		local active = self._T.goddessEffects or {}
+		for _, e in ipairs(offer.effects) do
+			if e.type == "Heal" or e.type == "HpCost" then
+				for _, actor in ipairs(targets) do
+					if not self:IsDown(actor) then
+						if e.type == "Heal" then self:HealActor(actor, self:ActorMaxHp(actor) * e.value / 100)
+						else
+							local hp = math.max(1, self:ActorHp(actor) - math.floor(self:ActorHp(actor) * e.value / 100 + 0.5))
+							local i = self:MateIndex(actor)
+							if i > 0 then self:SetMateHp(i, hp) else self.PlayerHp = hp end
+						end
+					end
+				end
+			elseif e.type == "SkillPick" then
+				if self:HasSkillToLearn() then self.PendingPicks = self.PendingPicks + e.value end
+			elseif e.type == "MesoGain" then
+				self.Meso = self.Meso + e.value
+				self.RunMeso = self.RunMeso + e.value
+				self.MesoProcSeq = self.MesoProcSeq + 1
+			else
+				table.insert(active, { name = offer.name, type = e.type, value = e.value, bad = e.bad, target = offer.target, targetLabel = offer.targetLabel, left = e.left })
+			end
+		end
+		self._T.goddessEffects = active
+		self._T.goddessOffers = {}
+		self:RecalcStats()
+		self:SyncGoddessEffects()
+		log("[VRF] goddess applied id=" .. d.id .. " target=" .. offer.targetLabel .. " active=" .. tostring(#active))
 	end
 
 	@ExecSpace("ServerOnly")
 	method void TickCurses()
-		-- 스테이지를 하나 깰 때마다 기간제 대가의 남은 스테이지를 줄이고, 끝난 것은 지운다.
-		local curses = self._T.curses or {}
-		if #curses == 0 then return end
-		local left = {}
-		for _, c in ipairs(curses) do
-			c.stages = c.stages - 1
-			if c.stages > 0 then table.insert(left, c) end
+		-- 적용 후 완료한 웨이브부터 1회 차감. 이번 판 효과(left=0)는 유지한다.
+		local active = {}
+		local changed = false
+		for _, e in ipairs(self._T.goddessEffects or {}) do
+			local keep = true
+			if e.left > 0 then e.left = e.left - 1 changed = true keep = e.left > 0 end
+			if keep then table.insert(active, e) else log("[VRF] goddess expired " .. e.name .. " target=" .. e.targetLabel) end
 		end
-		self._T.curses = left
-		self:UpdateCurseText()
+		self._T.goddessEffects = active
+		if changed then self:RecalcStats() self:SyncGoddessEffects() end
 	end
 
 	@ExecSpace("ServerOnly")
 	method void UpdateCurseText()
-		-- 캐릭터 정보 탭에 보여줄 진행 중인 대가.
-		local parts = {}
-		for _, c in ipairs(self._T.curses or {}) do
-			if c.type == "DmgTaken" then
-				table.insert(parts, "받는 피해 " .. string.format("%.1f", 1 + c.value / 100) .. "배 (" .. tostring(c.stages) .. "스테이지)")
-			end
-		end
-		self.CurseText = table.concat(parts, ", ")
+		self:SyncGoddessEffects()
 	end
 
 	@ExecSpace("ServerOnly")
@@ -3890,7 +3973,7 @@ script TowerRunManager extends Component
 			return 0
 		end
 		-- 돌파 '선제 급소'(첫 타격 크리티컬)·'거인 급소'(강화 몬스터 크리티컬 데미지)
-		local critRate = self.CritRate
+		local critRate = self:ActorCrit(actor)
 		if not self._T.firstHitDone and self:Bonus("FirstCrit") > 0 then critRate = 100 end
 		local critDmg = self.CritDmg
 		if self.MonsterElite then critDmg = critDmg + self:Bonus("EliteCritDmg") end
@@ -3914,6 +3997,7 @@ script TowerRunManager extends Component
 		end
 		return wait
 	end
+
 
 	@ExecSpace("ServerOnly")
 	method void OnUpdate(number delta)
@@ -3983,7 +4067,7 @@ script TowerRunManager extends Component
 				if isvalid(comp) and not self:MateDown(i) and self.RunState == "FIGHT" then
 					timers[i] = (timers[i] or 0) - delta
 					if timers[i] <= 0 then
-						timers[i] = self.PlayerAttackInterval
+						timers[i] = self:ActorInterval(comp)
 						local wait = self:ActorAttack(comp, monster, false)
 						if wait > 0 then timers[i] = math.max(timers[i], wait) end
 					end
@@ -4119,5 +4203,138 @@ script TowerRunManager extends Component
             log("[VRF] account settlement exp=" .. tostring(data.exp) .. " level=" .. tostring(eng.AccountLevel))
         end
     end
+
+	@ExecSpace("ServerOnly")
+	method integer GoddessActorIndex(Entity actor)
+		if not isvalid(actor) or actor == self._T.player then return 1 end
+		return self:MateIndex(actor) + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method string GoddessActorLabel(integer index)
+		if index == 0 then return "파티 전체" end
+		local actor = self._T.player
+		if index > 1 then actor = self:Mate(index - 1) end
+		local h = isvalid(actor) and self:HeroOf(actor) or nil
+		local job = h ~= nil and h.JobId or self.JobId
+		local j = (self._T.jobById or {})[job]
+		return (j ~= nil and j.name or "캐릭터") .. " · " .. tostring(index) .. "번"
+	end
+
+	@ExecSpace("ServerOnly")
+	method number GoddessBonus(Entity actor, string effect)
+		local index = isvalid(actor) and self:GoddessActorIndex(actor) or 0
+		local total = 0
+		for _, e in ipairs(self._T.goddessEffects or {}) do
+			if e.type == effect and (e.target == 0 or e.target == index) then total = total + e.value end
+		end
+		return total
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorAtk(Entity actor)
+		local base = self._T.goddessAtkBase
+		if base == nil then return self.PlayerAtk end
+		local pct = self:Bonus("AtkPct") + self:Bonus("WeaponEnhAtk") * (self.EquipEnh["Weapon"] or 0) + self:GoddessBonus(actor, "AtkPct")
+		return math.max(1, math.floor(base * math.max(0.01, 1 + pct / 100) + self:ActorMaxHp(actor) * self:Bonus("HpToAtk") / 100 + 0.5))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorDefense(Entity actor)
+		local base = self._T.goddessDefBase
+		if base == nil then return self.PlayerDef end
+		return math.max(0, base * math.max(0, 1 + (self:Bonus("DefPct") + self:GoddessBonus(actor, "DefPct")) / 100))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorCrit(Entity actor)
+		return math.max(0, math.min(100, self:EquipStat("Glove") + self:Bonus("Crit") + self:GoddessBonus(actor, "Crit")))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorInterval(Entity actor)
+		return 1 / math.max(0.1, self.WeaponSpeed * (1 + (self:Bonus("Speed") + self:GoddessBonus(actor, "Speed")) / 100))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer ActorHitDamage(Entity actor)
+		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
+		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
+		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - (self:Bonus("DefIgnore") + (self._T.castDefIgnore or 0)) / 100)
+		local atk = self:ActorAtk(actor)
+		local minAtk = math.max(1, math.floor(atk * (0.2 + 0.8 * self.Mastery / 100) + 0.5))
+		local dmg = (minAtk + _UtilLogic:RandomDouble() * (atk - minAtk)) * (1 - monDef / (monDef + self.DefConstant))
+		local mul = 1
+		-- 직업 스킬 '투혼': 내 체력 50% 이하일 때 주는 피해 증가
+		if self:ActorHp(actor) < self:ActorMaxHp(actor) * 0.5 then mul = mul + self:Bonus("LowHpAtk") / 100 end
+		if self.MonsterHp <= self.MonsterMaxHp * self.LowHpDmgRatio then mul = mul + self:Bonus("LowHpDmg") / 100 end
+		if self.MonsterElite then mul = mul + self:Bonus("EliteDmg") / 100 end
+		-- 공용 패시브 돌파 '충만한 힘': 체력이 가득할 때 공격력 증가
+		if self:ActorHp(actor) >= self:ActorMaxHp(actor) then mul = mul + self:Bonus("FullHpAtk") / 100 end
+		-- 이 층 심볼: 주는 피해 증가
+		mul = mul + (self._T.symDmg or 0) / 100
+		return math.max(1, math.floor(dmg * mul + 0.5))
+	end
+
+
+	@ExecSpace("ServerOnly")
+	method string GoddessName(string id)
+		local names = { A_Heal = "회복의 축복", A_Atk = "용기의 축복", A_Def = "수호의 축복", A_Hp = "생명의 축복", A_Crit = "통찰의 축복", A_Meso = "풍요의 축복", A_Stone = "깨달음의 축복",
+			D_Heal = "재생의 계약", D_Atk = "금단의 힘", D_Hp = "불멸의 육체", D_Crit = "금단의 눈", D_Speed = "광기의 계약", D_Meso = "탐욕의 계약", D_Stone = "지식의 계약" }
+		return names[id] or "여신의 제안"
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean GoddessIsBad(string effect, number value)
+		return effect == "HpCost" or (effect == "DmgTaken" and value > 0) or (effect ~= "DmgTaken" and value < 0)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string GoddessEffectText(string effect, number value)
+		local names = { AtkPct = "공격력", DefPct = "방어력", HpPct = "최대 체력", Crit = "크리티컬 확률", Speed = "공격 속도", MesoPct = "메소 획득", DmgTaken = "받는 피해" }
+		local numberText = string.format("%g", math.abs(value))
+		if effect == "Heal" then return "최대 체력의 " .. numberText .. "% 회복" end
+		if effect == "HpCost" then return "현재 체력 " .. numberText .. "% 소모" end
+		if effect == "SkillPick" then return "스킬 카드 선택 +" .. numberText .. "회" end
+		if effect == "MesoGain" then return "메소 +" .. numberText end
+		return (names[effect] or effect) .. (value >= 0 and " +" or " -") .. numberText .. (effect == "Crit" and "%p" or "%")
+	end
+
+	@ExecSpace("ServerOnly")
+	method table BuildGoddessOffer(table deal, integer target)
+		local offer = { id = deal.id, kind = deal.kind, name = self:GoddessName(deal.id), target = target, targetLabel = self:GoddessActorLabel(target), scope = target == 0 and "전체 적용" or "무작위 1명", effects = {} }
+		for _, e in ipairs(deal.effects) do
+			local value = e.value
+			local bad = self:GoddessIsBad(e.type, value)
+			if target > 0 and not bad then value = value * self.GoddessSingleScale end
+			local instant = e.type == "Heal" or e.type == "HpCost" or e.type == "SkillPick" or e.type == "MesoGain"
+			if e.type == "MesoGain" then value = math.floor(self:KillMeso() * value + 0.5) end
+			if e.type == "SkillPick" then value = math.floor(value) end
+			local stages = e.type == "DmgTaken" and deal.stages or 0
+			table.insert(offer.effects, { type = e.type, value = value, bad = bad, instant = instant, left = stages, text = self:GoddessEffectText(e.type, value), duration = instant and "즉시 적용" or stages > 0 and ("다음 " .. tostring(stages) .. "웨이브") or "이번 판 동안" })
+		end
+		return offer
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncGoddessEffects()
+		local list = {}
+		local curses = {}
+		for _, e in ipairs(self._T.goddessEffects or {}) do
+			table.insert(list, { name = e.name, text = self:GoddessEffectText(e.type, e.value), bad = e.bad, targetLabel = e.targetLabel, left = e.left, duration = e.left > 0 and ("남은 " .. tostring(e.left) .. "웨이브") or "이번 판 동안" })
+			if e.bad then table.insert(curses, self:GoddessEffectText(e.type, e.value) .. " · " .. e.targetLabel .. (e.left > 0 and (" · " .. tostring(e.left) .. "웨이브") or "")) end
+		end
+		self.CurseText = table.concat(curses, " / ")
+		self.GoddessEffectsJson = #list == 0 and "[]" or _HttpService:JSONEncode(list)
+		self.GoddessEffectsSeq = self.GoddessEffectsSeq + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ResetGoddessEffects()
+		self._T.goddessEffects = {}
+		self._T.goddessOffers = {}
+		self.GoddessOffersJson = "{}"
+		self:SyncGoddessEffects()
+	end
 
 end

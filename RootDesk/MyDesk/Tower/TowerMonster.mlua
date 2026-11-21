@@ -8,6 +8,8 @@ script TowerMonster extends AttackComponent
 	property string DieRUID = ""
 	-- 이동 동작 (MonsterTable MoveRUID: 리소스 팩의 move 또는 fly). 없으면 대기 동작으로 이동
 	property string MoveRUID = ""
+	-- 공격 사거리 1·2·3: 앞에서부터 몇 번째 구성원까지 공격할 수 있는지 (원거리 자리면 3)
+	property integer AttackRange = 1
 	-- 피격 / 사망 사운드 (MonsterTable의 리소스 팩 _audio/Damage, _audio/Die)
 	property string HitSoundRUID = ""
 	property string DieSoundRUID = ""

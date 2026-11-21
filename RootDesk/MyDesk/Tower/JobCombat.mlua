@@ -769,7 +769,7 @@ script JobCombat extends Component
 		local mgr = self._T.mgr
 		local lv = 1
 		if id ~= "" then lv = self:LvMul(id) end
-		local base = mgr:PlayerHitDamage() * pct / 100 * lv
+		local base = mgr:ActorHitDamage(self.Entity) * pct / 100 * lv
 		local starPow = 0
 		local starCrit = 0
 		if id ~= "" then
@@ -778,7 +778,7 @@ script JobCombat extends Component
 		end
 		if self:On("V10") and self.Res >= 100 then bonusPct = bonusPct + (self._T.fullBonus or 0) end
 		local mul = (1 + (starPow + bonusPct) / 100) * (1 + self:ResAtkPct() / 100) * (1 + self:DefDownPct() / 100)
-		local critRate = mgr.CritRate + starCrit
+		local critRate = mgr:ActorCrit(self.Entity) + starCrit
 		if self._T.sureCrit then critRate = 100 end
 		local crit = _UtilLogic:RandomDouble() * 100 < critRate
 		if crit then mul = mul * (mgr.CritDmg + starCrit * 2) / 100 end

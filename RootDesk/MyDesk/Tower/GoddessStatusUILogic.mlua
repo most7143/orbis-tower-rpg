@@ -1,0 +1,188 @@
+@Logic
+script GoddessStatusUILogic extends Logic
+	@HideFromInspector
+	property table listeners = {}
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string path)
+		return _EntityService:GetEntityByPath("/ui/GoddessStatusUI/" .. path)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Listen(Entity entity, any evt, any fn)
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(evt, fn)
+		table.insert(self.listeners, { entity = entity, evt = evt, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		self.listeners = {}
+		self._T.groups = { Good = {}, Bad = {} }
+		self._T.openKind = ""
+		self._T.pinned = false
+		self._T.iconHover = ""
+		self._T.tipHover = false
+		for _, kind in ipairs({ "Good", "Bad" }) do
+			local key = kind
+			local e = self:E("Status/" .. key)
+			self:Listen(e, UITouchEnterEvent, function()
+				self._T.iconHover = key
+				if not self._T.pinned then self:OpenTooltip(key, false) end
+			end)
+			self:Listen(e, UITouchExitEvent, function()
+				if self._T.iconHover == key then self._T.iconHover = "" end
+				self._T.leaveTime = 0.18
+			end)
+			self:Listen(e, UITouchDownEvent, function() self:TouchSelect(key) end)
+		end
+		local tooltip = self:E("Tooltip")
+		self:Listen(tooltip, UITouchEnterEvent, function() self._T.tipHover = true end)
+		self:Listen(tooltip, UITouchExitEvent, function() self._T.tipHover = false self._T.leaveTime = 0.18 end)
+		self._T.outsideEvent = _InputService:ConnectEvent(ScreenTouchEvent, function(e)
+			if self._T.openKind == "" then return end
+			if self:Contains(self:E("Status/Good"), e.TouchPoint) or self:Contains(self:E("Status/Bad"), e.TouchPoint) or self:Contains(self:E("Tooltip"), e.TouchPoint) then return end
+			self:CloseTooltip()
+		end)
+		self._T.wheelEvent = _InputService:ConnectEvent(MouseScrollEvent, function(e)
+			if self._T.openKind == "" or not self:Contains(self:E("Tooltip"), _InputService:GetCursorPosition()) then return end
+			local list = self:E("Tooltip/List")
+			if not isvalid(list) or not list.Enable then return end
+			local scroll = list.ScrollLayoutGroupComponent
+			local rows = (self._T.groups or {})[self._T.openKind] or {}
+			local range = math.max(1, #rows * 116 - list.UITransformComponent.RectSize.y)
+			local pos = scroll:GetScrollNormalizedPosition().y
+			scroll:SetScrollNormalizedPosition(UITransformAxis.Vertical, math.max(0, math.min(1, pos - e.ScrollDelta * 140 / range)))
+		end)
+		local root = self:E("Status")
+		if isvalid(root) then root:SetEnable(false) end
+		self:CloseTooltip()
+		log("[VRF] goddess status HUD ready icons=64 tooltip=opaque-black sliced")
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean Contains(Entity e, Vector2 point)
+		if not isvalid(e) or not e.EnabledInHierarchy then return false end
+		local t = e.UITransformComponent
+		local p = _UILogic:ScreenToLocalUIPosition(point, t)
+		local size = t.RectSize
+		local pivot = t.Pivot
+		return p.x >= -size.x * pivot.x and p.x <= size.x * (1 - pivot.x) and p.y >= -size.y * pivot.y and p.y <= size.y * (1 - pivot.y)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void TouchSelect(string kind)
+		if self._T.pinned and self._T.openKind == kind then self:CloseTooltip()
+		else self:OpenTooltip(kind, true) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OpenTooltip(string kind, boolean pinned)
+		local root = self:E("Status")
+		if not isvalid(root) or not root.Enable then return end
+		self._T.openKind = kind
+		self._T.pinned = pinned
+		self._T.leaveTime = 0.18
+		self:RenderTooltip()
+		log("[VRF] goddess tooltip open kind=" .. kind .. " pinned=" .. tostring(pinned))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CloseTooltip()
+		self._T.openKind = ""
+		self._T.pinned = false
+		self._T.tipHover = false
+		local e = self:E("Tooltip")
+		if isvalid(e) then e:SetEnable(false) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string path, string value)
+		local e = self:E(path)
+		if isvalid(e) then e.TextGUIRendererComponent.Text = value end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RenderTooltip()
+		local kind = self._T.openKind
+		if kind == "" then return end
+		local rows = (self._T.groups or {})[kind] or {}
+		local count = #rows
+		local tip = self:E("Tooltip")
+		local list = self:E("Tooltip/List")
+		local empty = self:E("Tooltip/Empty")
+		if not isvalid(tip) or not isvalid(list) then return end
+		local height = count == 0 and 128 or math.min(560, 84 + count * 116)
+		tip.UITransformComponent.RectSize = Vector2(500, height)
+		list.UITransformComponent.RectSize = Vector2(468, height - 84)
+		list:SetEnable(count > 0)
+		if isvalid(empty) then empty:SetEnable(count == 0) end
+		self:SetText("Tooltip/Title", kind == "Good" and "좋은 효과" or "나쁜 효과")
+		for i = 1, 32 do
+			local p = "Tooltip/List/Row" .. tostring(i)
+			local row = self:E(p)
+			local data = rows[i]
+			if isvalid(row) then row:SetEnable(data ~= nil) end
+			if data ~= nil then
+				self:SetText(p .. "/Name", data.name)
+				self:SetText(p .. "/Value", data.text)
+				self:SetText(p .. "/Target", "대상  " .. data.targetLabel)
+				self:SetText(p .. "/Duration", data.duration)
+				local value = self:E(p .. "/Value")
+				if isvalid(value) then value.TextGUIRendererComponent.FontColor = kind == "Good" and Color(0.65, 0.91, 0.52, 1) or Color(1, 0.57, 0.59, 1) end
+			end
+		end
+		tip:SetEnable(true)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh(Component mgr)
+		local ok, data = pcall(function() return _HttpService:JSONDecode(mgr.GoddessEffectsJson) end)
+		if not ok or type(data) ~= "table" then return end
+		local groups = { Good = {}, Bad = {} }
+		for _, effect in ipairs(data) do
+			table.insert(groups[effect.bad and "Bad" or "Good"], effect)
+		end
+		self._T.groups = groups
+		self._T.json = mgr.GoddessEffectsJson
+		for _, kind in ipairs({ "Good", "Bad" }) do
+			local count = #groups[kind]
+			self:SetText("Status/" .. kind .. "/Count", tostring(count))
+			local icon = self:E("Status/" .. kind .. "/Icon")
+			if isvalid(icon) then icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, count > 0 and 1 or 0.45) end
+		end
+		if self._T.openKind ~= "" then self:RenderTooltip() end
+		log("[VRF] goddess status good=" .. tostring(#groups.Good) .. " bad=" .. tostring(#groups.Bad))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		local player = _UserService.LocalPlayer
+		local mgr = isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap:GetComponent("script.TowerRunManager") or nil
+		local show = mgr ~= nil and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		local status = self:E("Status")
+		if isvalid(status) and status.Enable ~= show then status:SetEnable(show) end
+		if not show then
+			if self._T.openKind ~= "" then self:CloseTooltip() end
+			if mgr == nil then self._T.manager = nil self._T.json = nil end
+			return
+		end
+		if self._T.manager ~= mgr then self._T.manager = mgr self._T.json = nil self:CloseTooltip() end
+		if self._T.json ~= mgr.GoddessEffectsJson then self:Refresh(mgr) end
+		if self._T.openKind ~= "" and not self._T.pinned and self._T.iconHover == "" and not self._T.tipHover then
+			self._T.leaveTime = (self._T.leaveTime or 0.18) - delta
+			if self._T.leaveTime <= 0 then self:CloseTooltip() end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		for _, rec in ipairs(self.listeners) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(rec.evt, rec.h) end
+		end
+		self.listeners = {}
+		if self._T.outsideEvent ~= nil then _InputService:DisconnectEvent(ScreenTouchEvent, self._T.outsideEvent) end
+		if self._T.wheelEvent ~= nil then _InputService:DisconnectEvent(MouseScrollEvent, self._T.wheelEvent) end
+		self:CloseTooltip()
+	end
+end

@@ -1,0 +1,51 @@
+{
+  "sourceRuid": "f45ee84873624667bf482f0a1a4d0f15",
+  "editedRuid": "aa92764c33bc49c49217895275b58d0e",
+  "file": "tooltip_plain_black.png",
+  "size": [
+    256,
+    144
+  ],
+  "contentColor": "#000000",
+  "contentAlpha": 255,
+  "outsideCornersAlpha": 0,
+  "borders": {
+    "left": 5,
+    "bottom": 12,
+    "right": 5,
+    "top": 12
+  },
+  "renderer": {
+    "Type": "Sliced",
+    "PreserveSprite": "None",
+    "Color": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "parts": [
+    {
+      "file": "tooltip_plain_top.png",
+      "width": 256,
+      "height": 12,
+      "sourceY": 0
+    },
+    {
+      "file": "tooltip_plain_middle.png",
+      "width": 256,
+      "height": 120,
+      "sourceY": 12
+    },
+    {
+      "file": "tooltip_plain_bottom.png",
+      "width": 256,
+      "height": 12,
+      "sourceY": 132
+    }
+  ],
+  "preview": "preview_plain_heights.png",
+  "note": "상단/하단 동일한 얇은 테두리, 내부 검정 alpha255. GoddessStatusUI Tooltip에 연결.",
+  "previousEditedRuid": "57cd3b6b155147ef96d642cc08259bc2"
+}

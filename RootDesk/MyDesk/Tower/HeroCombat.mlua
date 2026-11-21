@@ -790,13 +790,13 @@ script HeroCombat extends Component
 	method table Strike(string id, number pct, number bonusPct, boolean direct, boolean forceCrit)
 		-- 스킬 한 타: 공격력 × 계수 × 레벨 × (1+스킬 피해%) × 콤보·모든 피해 → 치명타. { dmg, crit }
 		local mgr = self._T.mgr
-		local base = mgr:PlayerHitDamage() * pct / 100 * self:LvMul(id)
+		local base = mgr:ActorHitDamage(self.Entity) * pct / 100 * self:LvMul(id)
 		local mul = (1 + (self:Star(id, "StarPower") + bonusPct) / 100) * (1 + self:AllDmgPct() / 100)
 		-- 콤보는 기본 공격력 증가라 모든 타격에 적용 (direct 인자는 호환용)
 		mul = mul * (1 + self:ComboDirectPct() / 100)
 		-- 자상 방어력 감소
 		mul = mul * (1 + self:DefDownPct() / 100)
-		local rate = mgr.CritRate + self:Star(id, "StarCrit")
+		local rate = mgr:ActorCrit(self.Entity) + self:Star(id, "StarCrit")
 		local critDmg = mgr.CritDmg + self:Star(id, "StarCrit") * 2
 		local crit = forceCrit or _UtilLogic:RandomDouble() * 100 < rate
 		if crit then mul = mul * critDmg / 100 end
@@ -2156,10 +2156,10 @@ script HeroCombat extends Component
 			if self:Has("H06", 4) then up = up + self.IncisingBurnUpPct end
 			pct = pct * self:LvMul("H06") * (1 + up / 100)
 			if self:Has("H06", 5) then
-				extra = math.min(hp * self.IncisingHpPct / 100, mgr.PlayerAtk * self.IncisingHpCapPct / 100)
+				extra = math.min(hp * self.IncisingHpPct / 100, mgr:ActorAtk(self.Entity) * self.IncisingHpCapPct / 100)
 			end
 		end
-		return math.max(1, math.floor((mgr.PlayerAtk * pct / 100 + extra) * (1 + self:AllDmgPct() / 100) * (1 + defDown / 100) + 0.5))
+		return math.max(1, math.floor((mgr:ActorAtk(self.Entity) * pct / 100 + extra) * (1 + self:AllDmgPct() / 100) * (1 + defDown / 100) + 0.5))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -2737,8 +2737,8 @@ script HeroCombat extends Component
 		local pct = sk.proc.pct
 		if enhanced then pct = pct * 1.5 end
 		local bonus = self:SwordDmgPct(enhanced)
-		local base = mgr:PlayerHitDamage() * pct / 100 * self:LvMul("H12") * (1 + bonus / 100) * (1 + self:AllDmgPct() / 100)
-		local rate = mgr.CritRate + self:Star("H12", "StarCrit")
+		local base = mgr:ActorHitDamage(self.Entity) * pct / 100 * self:LvMul("H12") * (1 + bonus / 100) * (1 + self:AllDmgPct() / 100)
+		local rate = mgr:ActorCrit(self.Entity) + self:Star("H12", "StarCrit")
 		local crit = _UtilLogic:RandomDouble() * 100 < rate
 		if crit then base = base * (mgr.CritDmg + self:Star("H12", "StarCrit") * 2) / 100 end
 		local dmg = math.max(1, math.floor(base + 0.5))
