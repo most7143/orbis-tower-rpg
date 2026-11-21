@@ -146,12 +146,20 @@ script WorkshopUILogic extends Logic
 		if d == nil then return "" end
 		local lines = {}
 		local base = math.floor(d.value * it.mul * 10 + 0.5) / 10
-		table.insert(lines, (string.gsub(d.label, "{v}", tostring(base))))
+		table.insert(lines, self:FillValue(d.label, base))
 		for _, s in ipairs(it.subs or {}) do
 			local label = self._T.subLabels[s[1]] or s[1]
-			table.insert(lines, "<color=#347F24>+ " .. (string.gsub(label, "{v}", tostring(s[2]))) .. "</color>")
+			table.insert(lines, "<color=#347F24>+ " .. self:FillValue(label, s[2]) .. "</color>")
 		end
 		return table.concat(lines, "\n")
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FillValue(string label, number v)
+		-- 문구의 {v} 자리에 수치 넣기.
+		local i = string.find(label, "{v}", 1, true)
+		if i == nil then return label end
+		return string.sub(label, 1, i - 1) .. tostring(v) .. string.sub(label, i + 3)
 	end
 
 	@ExecSpace("ClientOnly")

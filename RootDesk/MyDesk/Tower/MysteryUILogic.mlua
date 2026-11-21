@@ -1,0 +1,79 @@
+@Logic
+script MysteryUILogic extends Logic
+
+	-- 물음표 사건 화면 (MysteryUI.ui): 판 상태가 MYSTERY일 때 열린다. 받는다 / 지나친다.
+	property string RootPath = "/ui/MysteryUI"
+
+	@HideFromInspector
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 버튼 연결, 화면 숨기기.
+		self.handlers = {}
+		self:Bind("Win/Accept", true)
+		self:Bind("Win/Skip", false)
+		self._T.shown = nil
+		self._T.seq = -1
+		self:Show(false)
+		log("[VRF] MysteryUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(string sub, boolean accept)
+		-- 버튼 클릭 → 서버에 선택 전달.
+		local e = _EntityService:GetEntityByPath(self.RootPath .. "/" .. sub)
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(ButtonClickEvent, function()
+			_UISoundLogic:PlayClick()
+			local mgr = self:GetManager()
+			if mgr ~= nil and mgr.RunState == "MYSTERY" then mgr:RequestMystery(accept) end
+		end)
+		table.insert(self.handlers, { e = e, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 연결 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.e) then r.e:DisconnectEvent(ButtonClickEvent, r.h) end
+		end
+		self.handlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 판 진행 매니저.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(boolean on)
+		-- 화면 켜기/끄기.
+		if self._T.shown == on then return end
+		self._T.shown = on
+		for _, n in ipairs({ "Dim", "Win" }) do
+			local e = _EntityService:GetEntityByPath(self.RootPath .. "/" .. n)
+			if isvalid(e) then e:SetEnable(on) end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 물음표 상태에서만 보이고, 사건이 바뀌면 글을 채운다 (첫 줄 = 제목).
+		local mgr = self:GetManager()
+		local on = mgr ~= nil and mgr.RunState == "MYSTERY"
+		self:Show(on)
+		if not on or self._T.seq == mgr.MysterySeq then return end
+		self._T.seq = mgr.MysterySeq
+		local raw = string.gsub(mgr.MysteryText, "\\n", "\n")
+		local title, body = string.match(raw, "^([^\n]*)\n(.*)$")
+		local t = _EntityService:GetEntityByPath(self.RootPath .. "/Win/Title")
+		local b = _EntityService:GetEntityByPath(self.RootPath .. "/Win/Body/Text")
+		if isvalid(t) then t.TextGUIRendererComponent.Text = title or "물음표" end
+		if isvalid(b) then b.TextGUIRendererComponent.Text = body or raw end
+	end
+
+end

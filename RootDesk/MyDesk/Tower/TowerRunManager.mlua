@@ -122,6 +122,16 @@ script TowerRunManager extends Component
 	property number ShopRerollMul = 2
 	property number ShopRerollGrowth = 1.5
 	property number ShopSellRate = 0.5
+	-- 전투 스테이지 완료 보상 (설계 문서 2-14): 처치 메소 배수 / 여신의 깃털 / 주문서 / 스킬북 (최소~최대)
+	property string StageRewardNormal = "meso:3,feather:0-1,scroll:0-0,book:0-0"
+	property string StageRewardElite = "meso:8,feather:2-3,scroll:1-1,book:1-2"
+	-- 물음표 사건 (초안 3종): 지금 사건 Id·표시 문구 (클라이언트로)
+	@Sync
+	property string MysteryId = ""
+	@Sync
+	property string MysteryText = ""
+	@Sync
+	property integer MysterySeq = 0
 	property string DealTableName = "DealTable"
 	-- 몬스터 처치 후 다음 몬스터 등장까지 대기(초)
 	property number NextSpawnDelay = 0.3
@@ -3986,6 +3996,127 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method void GiveStageReward()
+		-- 전투 스테이지 완료 보상: 일반 = 메소 + 재화 조금, 정예 = 메소 + 재화 많이. 보스는 층 클리어 정산(StageClear)이 맡는다.
+		local spec = self.StageRewardNormal
+		if self.StageKind == "elite" then spec = self.StageRewardElite end
+		local got = {}
+		local function range(key)
+			for k, a, b in string.gmatch(spec, "(%a+):(%d+)%-?(%d*)") do
+				if k == key then
+					local lo = tonumber(a) or 0
+					local hi = tonumber(b) or lo
+					if hi < lo then hi = lo end
+					return _UtilLogic:RandomIntegerRange(lo, hi)
+				end
+			end
+			return 0
+		end
+		local mesoMul = range("meso")
+		if mesoMul > 0 then
+			local gain = math.floor(self:KillMeso() * mesoMul * (1 + self:Bonus("MesoPct") / 100) + 0.5)
+			self.Meso = self.Meso + gain
+			self.RunMeso = self.RunMeso + gain
+			self.MesoProcSeq = self.MesoProcSeq + 1
+			table.insert(got, "메소 +" .. tostring(gain))
+		end
+		local eng = self:GetEngrave()
+		local feather = range("feather")
+		if feather > 0 and eng ~= nil then
+			eng:AddFeathers(feather)
+			self.RunFeathers = self.RunFeathers + feather
+			table.insert(got, "깃털 +" .. tostring(feather))
+		end
+		local scroll = range("scroll")
+		for _ = 1, scroll do self:DropScrolls(true) end
+		if scroll > 0 then table.insert(got, "주문서") end
+		local book = range("book")
+		if book > 0 and eng ~= nil then
+			eng:AddSkillBooks(book)
+			self.RunBooks = self.RunBooks + book
+			table.insert(got, "스킬북 +" .. tostring(book))
+		end
+		if #got > 0 then self:SetEnhanceMsg("스테이지 보상: " .. table.concat(got, " · ")) end
+		log("[VRF] stage reward " .. self.StageKind .. " " .. table.concat(got, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OpenMystery()
+		-- 물음표 스테이지: 사건 하나를 무작위로 (초안 3종: 보물 상자 / 도박꾼 / 저주받은 제단).
+		local list = { "chest", "gamble", "altar" }
+		local id = list[_UtilLogic:RandomIntegerRange(1, #list)]
+		local text = ""
+		if id == "chest" then
+			text = "보물 상자\n낡은 상자가 놓여 있다.\n열면 메소나 여신의 깃털이 들어 있다."
+		elseif id == "gamble" then
+			local bet = math.floor(self.Meso / 2)
+			self._T.mysteryBet = bet
+			text = "도박꾼\n\"가진 메소의 절반을 걸어 보시겠소?\"\n" .. tostring(bet) .. " 메소를 걸고, 50% 확률로 두 배를 받는다."
+		else
+			text = "저주받은 제단\n최대 체력 -10%를 대가로\n돌파를 1번 고른다."
+		end
+		self.MysteryId = id
+		self.MysteryText = text
+		self.MysterySeq = self.MysterySeq + 1
+		self.RunState = "MYSTERY"
+		log("[VRF] mystery open " .. id)
+	end
+
+	@ExecSpace("Server")
+	method void RequestMystery(boolean accept)
+		-- 물음표 선택: 받기 / 지나치기. 결과를 알린 뒤 전투 포탈로 (제단은 돌파를 고른 뒤).
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		if self.RunState ~= "MYSTERY" then return end
+		local id = self.MysteryId
+		self.MysteryId = ""
+		if not accept then
+			self:SetEnhanceMsg("그냥 지나쳤다")
+			self:OfferRoute()
+			return
+		end
+		if id == "chest" then
+			if _UtilLogic:RandomDouble() < 0.5 then
+				local gain = math.floor(self:KillMeso() * 10 + 0.5)
+				self.Meso = self.Meso + gain
+				self.RunMeso = self.RunMeso + gain
+				self.MesoProcSeq = self.MesoProcSeq + 1
+				self:SetEnhanceMsg("보물 상자: 메소 +" .. tostring(gain))
+			else
+				local n = _UtilLogic:RandomIntegerRange(2, 4)
+				local eng = self:GetEngrave()
+				if eng ~= nil then eng:AddFeathers(n) end
+				self.RunFeathers = self.RunFeathers + n
+				self:SetEnhanceMsg("보물 상자: 여신의 깃털 +" .. tostring(n))
+			end
+		elseif id == "gamble" then
+			local bet = math.min(self._T.mysteryBet or 0, self.Meso)
+			if _UtilLogic:RandomDouble() < 0.5 then
+				self.Meso = self.Meso + bet
+				self.RunMeso = self.RunMeso + bet
+				self:SetEnhanceMsg("도박 성공! 메소 +" .. tostring(bet))
+			else
+				self.Meso = self.Meso - bet
+				self:SetEnhanceMsg("도박 실패... 메소 -" .. tostring(bet))
+			end
+		elseif id == "altar" then
+			self._T.runBonus = self._T.runBonus or {}
+			self._T.runBonus["HpPct"] = (self._T.runBonus["HpPct"] or 0) - 10
+			self:RecalcStats()
+			self.PlayerHp = math.min(self.PlayerHp, self.PlayerMaxHp)
+			for i = 1, 2 do self:SetMateHp(i, math.min(self:MateHp(i), self:MateMax(i))) end
+			self:SetEnhanceMsg("제단의 대가: 최대 체력 -10%")
+			if self:IsHeroRun() then
+				self.PendingPicks = 1
+				self:RollPartyBreaks()
+				return
+			end
+		end
+		log("[VRF] mystery result " .. id)
+		self:OfferRoute()
+	end
+
+	@ExecSpace("ServerOnly")
 	method void LoadAccessoryTables()
 		-- 장신구 12종 / 공통 등급 / 부가 옵션 표를 한 번만 읽는다.
 		if self._T.accDefs ~= nil then return end
@@ -4448,8 +4579,12 @@ script TowerRunManager extends Component
 			self._T.lastNonCombat = true
 			self._T.routePending = true
 			self:OpenWorkshop()
+		elseif choice == "mystery" then
+			self._T.lastNonCombat = true
+			self._T.routePending = true
+			self:OpenMystery()
 		else
-			-- 물음표: 다음 단계에서 구현 (지금은 안내 후 바로 다음 포탈)
+			-- 그 밖의 종류: 안내 후 바로 다음 포탈
 			self._T.lastNonCombat = true
 			self._T.routePending = true
 			self.RunState = "NONCOMBAT"
@@ -4726,6 +4861,7 @@ script TowerRunManager extends Component
 				self:DestroyMonster()
 				self:TickCurses()
 				local isBoss = self.StageKind == "boss" or self.Stage >= self.StagesPerFloor
+				if not isBoss then self:GiveStageReward() end
 				if self.StageLevelUp and not isBoss then self:DoLevelUp(1, 0) end
 				-- 3인 파티: 전투 스테이지가 끝날 때마다 돌파 1번 (직업당 1장)
 				if self:IsHeroRun() and not isBoss then self.PendingPicks = 1 end
