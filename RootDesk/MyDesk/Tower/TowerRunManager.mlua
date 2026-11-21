@@ -1561,7 +1561,7 @@ script TowerRunManager extends Component
 		-- 레벨업 카드: 최고 레벨이 아닌 스킬 중 서로 다른 최대 3개. 카드 내용(신규/별 옵션/돌파)은 이때 정해 보여 준다.
 		-- 스킬 직업 판(3인 파티): 카드 없이 자동 성장, 돌파만 고른다.
 		if self:IsHeroRun() then
-			self:AutoGrowRound()
+			self:RollPartyBreaks()
 			return
 		end
 		local pool = {}
@@ -1724,6 +1724,66 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method void RollPartyBreaks()
+		-- 파티 돌파 카드 3장: 구성원(직업)마다 장착 스킬의 남은 돌파 중 무작위 1장.
+		-- 고를 돌파가 없는 구성원 칸은 다른 구성원의 돌파로 채운다. 아무것도 없으면 넘어간다.
+		if self.PendingPicks <= 0 then
+			self:AfterRewards()
+			return
+		end
+		local pools = {}
+		for _, h in ipairs(self:Heroes()) do
+			local list = {}
+			for _, sk in ipairs(self._T.jobSkills[h.JobId] or {}) do
+				if h:Equipped(sk.id) then
+					for _, b in ipairs(self:RemainingBreaks(sk)) do table.insert(list, b) end
+				end
+			end
+			table.insert(pools, list)
+		end
+		local used = {}
+		local cards = {}
+		local function take(list)
+			local cands = {}
+			for _, b in ipairs(list) do
+				if not used[b.id] then table.insert(cands, b) end
+			end
+			if #cands == 0 then return nil end
+			local b = cands[_UtilLogic:RandomIntegerRange(1, #cands)]
+			used[b.id] = true
+			return b
+		end
+		for i = 1, 3 do cards[i] = take(pools[i] or {}) end
+		-- 빈 칸은 다른 구성원 돌파로 채움
+		local all = {}
+		for _, list in ipairs(pools) do
+			for _, b in ipairs(list) do table.insert(all, b) end
+		end
+		local count = 0
+		for i = 1, 3 do
+			if cards[i] == nil then cards[i] = take(all) end
+			if cards[i] ~= nil then count = count + 1 end
+		end
+		if count == 0 then
+			self.PendingPicks = 0
+			self._T.partyBreak = false
+			log("[VRF] party break none left")
+			self:AfterRewards()
+			return
+		end
+		for i = 1, 3 do
+			local key = tostring(i)
+			self.ChoiceIds[key] = cards[i] ~= nil and cards[i].id or ""
+			self.ChoiceOpts[key] = "option"
+		end
+		self.BreakSkill = ""
+		self._T.partyBreak = true
+		self.ChoiceSeq = self.ChoiceSeq + 1
+		self.RunState = "BREAK"
+		log("[VRF] party break choices " .. tostring(self.ChoiceIds["1"]) .. " " .. tostring(self.ChoiceIds["2"]) .. " " .. tostring(self.ChoiceIds["3"]))
+	end
+
+	@ExecSpace("ServerOnly")
 	method void ApplySkillOption(table sk, string effect, number value)
 		-- 옵션 적용: 스킬 전용 효과는 그 스킬에, 나머지는 판 전체 능력치에 더한다.
 		if self._T.localFx[effect] then
@@ -1808,7 +1868,8 @@ script TowerRunManager extends Component
 			-- 시작 기본 카드 1장은 빼고 레벨업 때 배운다 (각인 '선행 학습'으로 오른 시작 레벨만큼의 카드는 유지).
 			for _, h in ipairs(self:Heroes()) do h:BeginRun(self) end
 			self:LinkStatusOwner()
-			self.PendingPicks = math.max(0, self.PendingPicks - 1)
+			-- 3인 파티: 판 시작 카드 없음. 돌파는 전투 스테이지가 끝날 때마다 1번 (설계 문서 2-10)
+			self.PendingPicks = 0
 		else
 			for _, sk in ipairs(self:JobSkills()) do self.SkillLv[sk.id] = 0 end
 		end
@@ -1835,8 +1896,11 @@ script TowerRunManager extends Component
 		if id == "" then return end
 		if self.RunState == "BREAK" then
 			local b = self._T.breakById[id]
+			if b == nil then return end
+			-- 파티 돌파: 카드마다 스킬이 다르다 (돌파 옵션의 스킬)
 			local sk = self._T.skillById[self.BreakSkill]
-			if b == nil or sk == nil or b.skill ~= sk.id then return end
+			if self._T.partyBreak then sk = self._T.skillById[b.skill] end
+			if sk == nil or b.skill ~= sk.id then return end
 			if self._T.breakTaken[sk.id] == nil then self._T.breakTaken[sk.id] = {} end
 			if self._T.breakTaken[sk.id][b.id] then return end
 			self._T.breakTaken[sk.id][b.id] = true
@@ -1844,6 +1908,16 @@ script TowerRunManager extends Component
 			local prev = self.SkillBreaks[sk.id] or ""
 			if prev ~= "" then prev = prev .. "," end
 			self.SkillBreaks[sk.id] = prev .. b.id
+			if self._T.partyBreak then
+				self._T.partyBreak = false
+				self:UpdateSkillInfo(sk)
+				self:SetEnhanceMsg(sk.name .. " 돌파! [" .. b.name .. "]")
+				self:RecalcStats()
+				self.PendingPicks = math.max(0, self.PendingPicks - 1)
+				log("[VRF] party break " .. sk.id .. " " .. b.id .. " left=" .. tostring(self.PendingPicks))
+				if self.PendingPicks > 0 then self:RollPartyBreaks() else self:AfterRewards() end
+				return
+			end
 			if self._T.growBreak then
 				self.SkillLv[sk.id] = (self.SkillLv[sk.id] or 0) + 1
 				self:UpdateSkillInfo(sk)
@@ -1891,7 +1965,9 @@ script TowerRunManager extends Component
 		if (self.RunState ~= "CHOICE" and self.RunState ~= "BREAK") or self.Rerolls <= 0 then return end
 		self.Rerolls = self.Rerolls - 1
 		log("[VRF] reroll left=" .. tostring(self.Rerolls))
-		if self.RunState == "BREAK" then
+		if self.RunState == "BREAK" and self._T.partyBreak then
+			self:RollPartyBreaks()
+		elseif self.RunState == "BREAK" then
 			self:RollBreakChoices(self._T.skillById[self.BreakSkill])
 		else
 			self:RollChoices()
@@ -4372,6 +4448,8 @@ script TowerRunManager extends Component
 				self:TickCurses()
 				local isBoss = self.StageKind == "boss" or self.Stage >= self.StagesPerFloor
 				if self.StageLevelUp and not isBoss then self:DoLevelUp(1, 0) end
+				-- 3인 파티: 전투 스테이지가 끝날 때마다 돌파 1번 (직업당 1장)
+				if self:IsHeroRun() and not isBoss then self.PendingPicks = 1 end
 				if isBoss then
 					-- 보스 처치 = 층 클리어
 					self.Stage = 1

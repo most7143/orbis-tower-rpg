@@ -220,8 +220,15 @@
 - 화면 제목: "1층 이름  스테이지 N/10 (정예/보스)".
 - 코드: `Tower/TowerPortal.mlua`, `Models/Route/TowerPortal` 모델, `TowerRunManager`(OfferRoute·RequestPortal·TickWalk·LoadChosenStage 등), `TowerPlayer`(SetWalkPose·ClientWalkTo).
 
+### 2단계: 돌파 규칙 (2026-11-21, 메이커 실행 확인)
+
+- 판 시작 시 구성원 3명의 장착 스킬(5개씩)은 모두 배운 상태로 시작 (위력은 아웃게임 레벨). 판 시작 카드 없음.
+- 자동 별 강화 제거. 레벨업은 능력치만 올린다.
+- 전투 스테이지(1~9)가 끝날 때마다 돌파 1번: 카드 3장 = 구성원(직업)마다 장착 스킬의 남은 돌파 중 무작위 1장. 고를 돌파가 없는 구성원 칸은 다른 구성원 돌파로 채움. 다시 뽑기도 같은 규칙.
+- 돌파를 고르면 바로 갈림길 포탈로 넘어간다.
+- 코드: `TowerRunManager.RollPartyBreaks`, `RequestPick`(파티 돌파 분기), 각 전투 컴포넌트 `BeginRun`(SkillLv=1), `TarotLogic` 부제.
+
 ### 남은 단계
 
-2. 돌파 규칙 변경 (전투 스테이지마다 직업당 1장, 자동 별 강화 제거)
 3. 정비소·장신구·HUD
 4. 물음표 사건, 전투 보상 재화(일반·정예·보스)

@@ -166,7 +166,8 @@ script BishopCombat extends Component
 			if self._T.skills[id] ~= nil then
 				table.insert(self._T.equip, id)
 				self._T.ownLv[id] = data.lv[id] or 1
-				mgr.SkillLv[id] = 0
+				-- 판 안 자동 성장이 없으므로 장착 스킬은 처음부터 배운 상태 (위력은 아웃게임 레벨)
+				mgr.SkillLv[id] = 1
 			end
 		end
 		log("[VRF] bishop run equip=" .. table.concat(self._T.equip, ",") .. " holyLv=" .. tostring(self.HolyLv))
