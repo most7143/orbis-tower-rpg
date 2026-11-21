@@ -69,6 +69,14 @@ script TowerPlayer extends AttackComponent
 	end
 
 	@ExecSpace("ServerOnly")
+	method void DoCast(Entity target, table procs)
+		-- 스킬 단독 시전 (기본 공격 쿨타임과 별개): 기본 타격 없이 스킬 동작·효과만 적용한다.
+		self:DoAttack(target, 0, 0, 0, procs)
+		local p = self._T.pending[self.HitSeq]
+		if p ~= nil then p.skillOnly = true end
+	end
+
+	@ExecSpace("ServerOnly")
 	method void DoMiss(Entity target)
 		-- 명중 실패: 공격 모션만 하고, 공격 동작 시점에 몬스터 위에 MISS 표시.
 		if not isvalid(target) then return end
@@ -111,6 +119,10 @@ script TowerPlayer extends AttackComponent
 		if self._T.walkTimer ~= nil then _TimerService:ClearTimer(self._T.walkTimer) end
 		local sc = self.Entity.StateComponent
 		if isvalid(sc) then sc:ChangeState("MOVE") end
+		-- 상태 머신 MOVE만으로는 제자리 위치 이동이라 조작 컴포넌트가 서기 동작으로 되돌린다: 몸통 동작을 직접 걷기로 (구성원과 같은 방식)
+		self.ActionSeq = self.ActionSeq + 1
+		self:SetBodySelector(true)
+		self:SendBodyAction(MapleAvatarBodyActionState.Walk, true)
 		local last = _UtilLogic.ElapsedSeconds
 		local startAt = last
 		self._T.walkTimer = _TimerService:SetTimerRepeat(function()
@@ -122,12 +134,23 @@ script TowerPlayer extends AttackComponent
 				_TimerService:ClearTimer(self._T.walkTimer)
 				self._T.walkTimer = nil
 				if isvalid(sc) then sc:ChangeState("IDLE") end
+				self:SendBodyAction(MapleAvatarBodyActionState.Stand, true)
 				return
 			end
 			movement:SetWorldPosition(Vector2(math.min(targetX, wp.x + speed * dt), wp.y))
 			if isvalid(sc) and sc.CurrentStateName ~= "MOVE" then sc:ChangeState("MOVE") end
+			self:SendBodyAction(MapleAvatarBodyActionState.Walk, false)
 		end, 1 / 60)
 		log("[VRF] client walk to " .. string.format("%.2f", targetX))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SendBodyAction(MapleAvatarBodyActionState state, boolean reset)
+		-- 몸통 동작 지정 (reset=false면 같은 동작일 때 처음부터 다시 재생하지 않는다).
+		local ev = BodyActionStateChangeEvent()
+		ev.ActionState = state
+		ev.needResetAction = reset
+		self.Entity:SendEvent(ev)
 	end
 
 	@ExecSpace("ServerOnly")
@@ -186,8 +209,9 @@ script TowerPlayer extends AttackComponent
 			self:ShowMiss(p.target, self:Uid())
 			return
 		end
-		-- 원거리 직업(나이트로드·비숍): 발사체가 날아가 닿는 순간 타격
+		-- 원거리 직업(나이트로드·비숍): 발사체가 날아가 닿는 순간 타격 (스킬 단독 시전은 발사체 없이 스킬만)
 		local look = self:ProjectileLook()
+		if p.skillOnly then look = nil end
 		if look ~= nil and self:LaunchProjectile(p, look) then return end
 		self:ResolveHit(p)
 	end
@@ -265,7 +289,7 @@ script TowerPlayer extends AttackComponent
 		self.CurrentCritRate = p.critRate
 		self.CurrentCritDmg = p.critDmg
 		local pos = p.target.TransformComponent.WorldPosition
-		self:AttackFast(BoxShape(Vector2(pos.x, pos.y + 0.4), Vector2(1.2, 1.2), 0), "tower.player", nil)
+		if not p.skillOnly then self:AttackFast(BoxShape(Vector2(pos.x, pos.y + 0.4), Vector2(1.2, 1.2), 0), "tower.player", nil) end
 		if p.procs ~= nil and #p.procs > 0 then
 			local map = self.Entity.CurrentMap
 			local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil

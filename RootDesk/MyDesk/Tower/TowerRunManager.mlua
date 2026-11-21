@@ -408,6 +408,16 @@ script TowerRunManager extends Component
 	property number MonsterAtk = 0
 	@HideFromInspector
 	property number PlayerAttackTimer = 0
+	-- 기본 공격 규칙 (사용자 확정 2026-11-21): 기본 쿨타임 3초(공격 속도로 줄어듦).
+	-- 칸 전투: 몬스터 칸 1·2·3 (1칸 = MonsterPos.x, 칸 간격 CellWidth). 사거리 N = 몬스터 1~N칸 공격 (우리 편 서 있는 칸 무관).
+	-- 몬스터는 자기 사거리 칸에 도착해 멈추고, 사거리 N이면 우리 편 1~N번 중 위치 확률로 공격 (PickTarget).
+	property number AttackCooldown = 3
+	property number CellWidth = 1.0
+	property string JobRanges = "Hero:1,Viper:1,Bishop:2,NightLord:2,Bowmaster:3"
+	-- 기본 공격 동작 중에는 스킬 시전을 미룬다 (초)
+	property number BasicMotionTime = 0.5
+	-- 동작 없는 스킬(버프 등)을 연달아 쓸 때 최소 간격 (초)
+	property number SkillCastGap = 0.3
 	@HideFromInspector
 	property number MonsterAttackTimer = 0
 	-- 2인 편성 (솔로도 메인 + 동료). 동료 체력·쓰러짐은 HUD용으로 동기화한다.
@@ -2988,13 +2998,14 @@ script TowerRunManager extends Component
 		local monster = nil
 		local queue = self._T.queue or {}
 		if #queue > 0 then
-			-- 다음 맨 앞 = 근거리 몬스터 먼저, 없으면 가장 가까운 원거리
+			-- 다음 맨 앞 = 가장 가까운 칸(사거리가 짧은) 몬스터, 같은 칸이면 먼저 온 몬스터
 			local pick = 1
+			local best = 99
 			for qi, q in ipairs(queue) do
 				local qc = isvalid(q) and q:GetComponent("script.TowerMonster") or nil
-				if qc ~= nil and not qc.IsRanged then
+				if qc ~= nil and self:MonRange(qc) < best then
+					best = self:MonRange(qc)
 					pick = qi
-					break
 				end
 			end
 			monster = table.remove(queue, pick)
@@ -3100,8 +3111,7 @@ script TowerRunManager extends Component
 			mc.MaxHp = 0
 			local sprite = monster.SpriteRendererComponent
 			if isvalid(sprite) then sprite.OrderInLayer = 2 end
-			local slotX = self.MonsterPos.x
-			if mc.IsRanged then slotX = slotX + self.RangedOffset end
+			local slotX = self:CellX(self:MonRange(mc))
 			local dist = math.abs(monster.TransformComponent.Position.x - slotX)
 			walkTime = dist / math.max(0.1, self.MonsterWalkSpeed * mc.SpeedMul)
 			mc:WalkTo(slotX, self.MonsterWalkSpeed * mc.SpeedMul)
@@ -3127,9 +3137,7 @@ script TowerRunManager extends Component
 			local extra = self:ExtraStatusHero()
 			if extra ~= nil then extra:OnMonsterSpawn(self, monster, info.stand) end
 		end
-		self._T.mateAtk = { 0.5 + walkTime + 0.25, 0.5 + walkTime + 0.4 }
-		-- 걸어 들어오는 동안은 서로 공격하지 않는다
-		self.PlayerAttackTimer = 0.5 + walkTime
+		-- 우리 편 공격은 사거리·쿨타임으로 판단 (ActorTryAttack). 몬스터는 걸어 들어오는 동안 공격하지 않는다
 		self.MonsterAttackTimer = interval + walkTime
 		self.RunState = "FIGHT"
 		log("[VRF] " .. self.FloorTitle .. " wave left=" .. tostring(self._T.waveLeft) .. " queue=" .. tostring(#(self._T.queue or {})) .. " monster " .. self.MonsterLabel .. " lv=" .. tostring(info.level) .. " statLv=" .. string.format("%.1f", statLv) .. " (" .. info.type .. ") elite=" .. tostring(self.MonsterElite) .. " hp=" .. tostring(self.MonsterMaxHp) .. " atk=" .. tostring(self.MonsterAtk) .. " def=" .. tostring(def) .. " crit=" .. tostring(crit) .. " interval=" .. tostring(interval) .. " evade=" .. tostring(evade))
@@ -3298,42 +3306,35 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void LayoutWave()
-		-- 자리 배치: 근거리는 맨 앞 자리부터 MeleeGap 간격, 원거리는 그보다 RangedOffset 뒤에서 RangedGap 간격. 대기열은 근거리 → 원거리 순.
-		local melee = {}
-		local ranged = {}
+		-- 자리 배치: 몬스터마다 자기 사거리 칸(1·2·3)에 선다. 같은 칸은 MeleeGap 간격으로 조금씩 떨어져 서도 판정은 같은 칸.
+		-- 대기열 순서는 가까운 칸부터 (다음 맨 앞 후보 순).
+		local cells = { {}, {}, {} }
+		local qcells = { {}, {}, {} }
 		local front = self._T.monster
 		local fc = isvalid(front) and front:GetComponent("script.TowerMonster") or nil
-		if fc ~= nil and not fc.IsDead then
-			if fc.IsRanged then table.insert(ranged, front) else table.insert(melee, front) end
-		end
-		local qm = {}
-		local qr = {}
+		if fc ~= nil and not fc.IsDead then table.insert(cells[self:MonRange(fc)], front) end
 		for _, q in ipairs(self._T.queue or {}) do
 			local qc = isvalid(q) and q:GetComponent("script.TowerMonster") or nil
 			if qc ~= nil and not qc.IsDead then
-				if qc.IsRanged then
-					table.insert(ranged, q)
-					table.insert(qr, q)
-				else
-					table.insert(melee, q)
-					table.insert(qm, q)
-				end
+				local r = self:MonRange(qc)
+				table.insert(cells[r], q)
+				table.insert(qcells[r], q)
 			end
 		end
 		local queue = {}
-		for _, q in ipairs(qm) do table.insert(queue, q) end
-		for _, q in ipairs(qr) do table.insert(queue, q) end
-		self._T.queue = queue
-		for k, e in ipairs(melee) do
-			local c = e:GetComponent("script.TowerMonster")
-			local x = self.MonsterPos.x + self.MeleeGap * (k - 1)
-			if k > 1 then x = x + c.SlotJitter end
-			if math.abs(c.MoveTargetX - x) > 0.01 or (not c.Moving and math.abs(e.TransformComponent.Position.x - x) > 0.01) then c:WalkTo(x, self.MonsterWalkSpeed * c.SpeedMul) end
+		for r = 1, 3 do
+			for _, q in ipairs(qcells[r]) do table.insert(queue, q) end
 		end
-		for k, e in ipairs(ranged) do
-			local c = e:GetComponent("script.TowerMonster")
-			local x = self.MonsterPos.x + self.RangedOffset + self.RangedGap * (k - 1) + c.SlotJitter
-			if math.abs(c.MoveTargetX - x) > 0.01 or (not c.Moving and math.abs(e.TransformComponent.Position.x - x) > 0.01) then c:WalkTo(x, self.MonsterWalkSpeed * c.SpeedMul) end
+		self._T.queue = queue
+		for r = 1, 3 do
+			for k, e in ipairs(cells[r]) do
+				local c = e:GetComponent("script.TowerMonster")
+				local x = self:CellX(r) + self.MeleeGap * (k - 1)
+				if k > 1 then x = x + c.SlotJitter end
+				-- 닿지 않아 1칸으로 당겨진 맨 앞 몬스터는 그 자리에 둔다
+				if e == front and c.MoveTargetX < x - 0.01 and self:CellAt(c.MoveTargetX) < r then x = c.MoveTargetX end
+				if math.abs(c.MoveTargetX - x) > 0.01 or (not c.Moving and math.abs(e.TransformComponent.Position.x - x) > 0.01) then c:WalkTo(x, self.MonsterWalkSpeed * c.SpeedMul) end
+			end
 		end
 	end
 
@@ -3367,8 +3368,7 @@ script TowerRunManager extends Component
 		local mc = m:GetComponent("script.TowerMonster")
 		if mc == nil or mc.IsDead then return end
 		-- 2인 편성: 쓰러지지 않은 캐릭터 중 위협이 높은 쪽을 노린다
-		local range = mc.AttackRange
-		if mc.IsRanged then range = 3 end
+		local range = self:MonRange(mc)
 		local player = self:PickTarget(range)
 		if not isvalid(player) then return end
 		local toComp = self:IsCompanion(player)
@@ -4550,16 +4550,12 @@ script TowerRunManager extends Component
 
 	@ExecSpace("Server")
 	method void RequestPortal(integer index)
-		-- 포탈 선택: 나머지 포탈을 지우고 구성원들이 고른 포탈로 걸어간다.
+		-- 포탈 선택: 구성원들이 고른 포탈로 걸어간다 (다른 포탈은 그대로 두고 다음 스테이지에서 함께 지운다).
 		local player = self._T.player
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		if self.RunState ~= "ROUTE" then return end
 		local chosen = (self._T.portals or {})[index]
 		if chosen == nil then return end
-		for i, p in ipairs(self._T.portals) do
-			if i ~= index and isvalid(p.ent) then p.ent:Destroy() end
-		end
-		self._T.portals = { chosen }
 		self._T.routeChoice = chosen.kind
 		self._T.walk = { x = chosen.x, t = 0 }
 		self.RunState = "WALK"
@@ -4888,11 +4884,11 @@ script TowerRunManager extends Component
 			if self.RunState ~= "FIGHT" or not isvalid(self._T.monster) then return end
 
 			-- 메인(플레이어) 기본 공격: 쓰러져 있으면 쉰다
-			self.PlayerAttackTimer = self.PlayerAttackTimer - delta
-			if self.PlayerAttackTimer <= 0 and not self.PlayerDown then
-				self.PlayerAttackTimer = self.PlayerAttackInterval
-				local wait = self:ActorAttack(player, monster, true)
-				if wait > 0 then self.PlayerAttackTimer = math.max(self.PlayerAttackTimer, wait) end
+			self:PullIfUnreachable(monster)
+			-- 쿨타임은 몬스터가 걸어오는 동안에도 돈다. 닿으면 끝난 즉시 공격 (ActorTryAttack)
+			self.PlayerAttackTimer = math.max(0, self.PlayerAttackTimer - delta)
+			if not self.PlayerDown then
+				self.PlayerAttackTimer = self:ActorTryAttack(player, monster, self.PlayerAttackTimer, true)
 			end
 
 			-- 동료 기본 공격 (자기 히어로 전투 컴포넌트로 스킬을 고른다)
@@ -4906,12 +4902,8 @@ script TowerRunManager extends Component
 					if math.abs(cp.y - pp.y) > 0.01 then comp.TransformComponent.WorldPosition = Vector3(self.PlayerPos.x - self.CompanionGap * i, pp.y, cp.z) end
 				end
 				if isvalid(comp) and not self:MateDown(i) and self.RunState == "FIGHT" then
-					timers[i] = (timers[i] or 0) - delta
-					if timers[i] <= 0 then
-						timers[i] = self:ActorInterval(comp)
-						local wait = self:ActorAttack(comp, monster, false)
-						if wait > 0 then timers[i] = math.max(timers[i], wait) end
-					end
+					timers[i] = math.max(0, (timers[i] or 0) - delta)
+					timers[i] = self:ActorTryAttack(comp, monster, timers[i], false)
 				end
 			end
 			self._T.mateAtk = timers
@@ -5092,8 +5084,102 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method integer ActorRange(Entity actor)
+		-- 이 캐릭터의 공격 사거리 칸 수 (직업별 JobRanges, 1~3).
+		local hero = self:HeroOf(actor)
+		local job = hero ~= nil and hero.JobId or ""
+		local lv = 1
+		for entry in string.gmatch(self.JobRanges, "[^,]+") do
+			local k, v = string.match(entry, "([^:]+):(%d+)")
+			if k == job then lv = math.floor(tonumber(v) or 1) end
+		end
+		return math.max(1, math.min(3, lv))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number CellX(integer cell)
+		-- 몬스터 칸의 기준 위치 (1칸 = 맨 앞 자리).
+		return self.MonsterPos.x + self.CellWidth * (math.max(1, cell) - 1)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer CellAt(number x)
+		-- 위치 x가 몬스터 몇 칸인지 (칸 기준 위치 ±반 칸). 3칸보다 멀면 4 (아무도 닿지 않음).
+		local c = math.ceil((x - (self.MonsterPos.x + self.CellWidth * 0.5)) / self.CellWidth) + 1
+		return math.max(1, math.min(4, c))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer MonRange(Component mc)
+		-- 몬스터 사거리 칸 (데이터 AttackRange, 웨이브 원거리 자리는 최소 2칸). 이 칸에 도착해 멈춘다.
+		if mc == nil then return 1 end
+		local r = mc.AttackRange
+		if mc.IsRanged then r = math.max(r, 2) end
+		return math.max(1, math.min(3, r))
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanReach(Entity actor, Entity monster)
+		-- 공격 가능: 몬스터가 지금 서 있는(지나가는) 칸이 내 사거리 칸 수 이하.
+		if not isvalid(actor) or not isvalid(monster) then return false end
+		return self:CellAt(monster.TransformComponent.WorldPosition.x) <= self:ActorRange(actor)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PullIfUnreachable(Entity monster)
+		-- 맨 앞 몬스터가 자기 칸에 도착했는데 살아 있는 우리 편 누구의 사거리에도 닿지 않으면 1칸으로 다가오게 한다 (전투가 멈추지 않게).
+		local mc = isvalid(monster) and monster:GetComponent("script.TowerMonster") or nil
+		if mc == nil or mc.IsDead or mc.Moving or mc.KnockBack then return end
+		local cell = self:CellAt(monster.TransformComponent.WorldPosition.x)
+		if cell <= 1 then return end
+		for _, a in ipairs(self:Actors()) do
+			if not self:IsDown(a) and self:ActorRange(a) >= cell then return end
+		end
+		mc:WalkTo(self:CellX(1), self.MonsterWalkSpeed * mc.SpeedMul)
+		log("[VRF] front monster unreachable at cell " .. tostring(cell) .. " -> walk to cell 1")
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean ActorBusy(Entity actor)
+		-- 공격·스킬 동작 중인지.
+		local busy = self._T.busy or {}
+		return (busy[actor] or 0) > _UtilLogic.ElapsedSeconds
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetBusy(Entity actor, number sec)
+		-- 동작 시간 기록 (그동안 다른 공격·스킬을 시작하지 않는다).
+		if self._T.busy == nil then self._T.busy = {} end
+		self._T.busy[actor] = _UtilLogic.ElapsedSeconds + sec
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorTryAttack(Entity actor, Entity monster, number timer, boolean main)
+		-- 캐릭터 1명의 공격 차례: 쿨타임이 끝났고 닿으면 기본 공격, 아니면 마나·쿨타임이 되는 스킬을 따로 시전.
+		-- 돌려주는 값: 남은 기본 공격 쿨타임.
+		if self:ActorBusy(actor) or not self:CanReach(actor, monster) then return timer end
+		if timer <= 0 then
+			local wait = self:ActorAttack(actor, monster, main)
+			self:SetBusy(actor, math.max(self.BasicMotionTime, wait))
+			return math.max(self:ActorInterval(actor), wait)
+		end
+		if not self:IsHeroRun() then return timer end
+		local hero = self:HeroOf(actor)
+		if hero == nil then return timer end
+		local list = hero:RollSkillCasts(self)
+		if #list == 0 then return timer end
+		local pc = actor:GetComponent("script.TowerPlayer")
+		if pc == nil then return timer end
+		pc:DoCast(monster, list)
+		self:SetBusy(actor, math.max(self.SkillCastGap, hero:LastActionTime() + 0.05))
+		self._T.castLog = (self._T.castLog or 0) + 1
+		if self._T.castLog <= 12 then log("[VRF] skill cast " .. actor.Name .. " n=" .. tostring(#list) .. " basicCd=" .. string.format("%.2f", timer)) end
+		return timer
+	end
+
+	@ExecSpace("ServerOnly")
 	method number ActorInterval(Entity actor)
-		return 1 / math.max(0.1, self.WeaponSpeed * (1 + (self:Bonus("Speed") + self:GoddessBonus(actor, "Speed")) / 100))
+		return self.AttackCooldown / math.max(0.1, self.WeaponSpeed * (1 + (self:Bonus("Speed") + self:GoddessBonus(actor, "Speed")) / 100))
 	end
 
 	@ExecSpace("ServerOnly")

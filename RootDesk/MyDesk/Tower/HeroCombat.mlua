@@ -894,6 +894,23 @@ script HeroCombat extends Component
 		if self:On("H15") then table.insert(list, self:MakeRift()) end
 		-- 동작(액션)이 있는 스킬은 공격 1회에 하나만: 쿨타임형 → 마나형 → 확률형 순으로 먼저 걸린 하나.
 		-- 못 나간 쿨타임·마나 스킬은 자원을 쓰지 않고 다음 공격에 다시 노린다. (동작 없는 인스팅트·균열은 항상 동반)
+		self:PickActed(mgr, self:RunSkills(mgr), list)
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollSkillCasts(Component mgr)
+		-- 기본 공격과 별개로 시전할 스킬 (마나·쿨타임·사거리가 되면 계속 시전). 시전할 게 없으면 빈 목록.
+		self._T.mgr = mgr
+		local list = {}
+		self:PickActed(mgr, self:RunSkills(mgr), list)
+		if #list == 0 then return list end
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PickActed(Component mgr, table skills, table list)
+		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
 		local acted = false
 		-- 콤보 데스폴트 돌파 2: 최대 콤보이고 마나가 되면 다른 동작 스킬보다 먼저 시전 (쿨타임 없음)
 		if self:Has("H13", 2) and self.Combo >= self:ComboCap() then
@@ -946,6 +963,11 @@ script HeroCombat extends Component
 				table.insert(list, self:MakeCast(best))
 			end
 		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table FinishCasts(table list)
+		-- 시전 목록 마무리 (동작 시간 기록 등).
 		-- 콤보를 소비하지 않는 직접 공격 스킬(균열 포함)도 적중마다 확률로 콤보 +1
 		for _, r in ipairs(list) do
 			local direct = #(r.hitDmg or {}) > 0 and ((r.sk ~= nil and (r.sk.comboUse or 0) <= 0) or r.rift)

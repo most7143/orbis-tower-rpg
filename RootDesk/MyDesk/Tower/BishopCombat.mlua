@@ -687,6 +687,23 @@ script BishopCombat extends Component
 			table.insert(list, { hero = true, id = "B12light", sk = pray, hitDmg = { s.dmg }, hitCrit = { s.crit }, fx = pray.a.fx, fxScale = 1, mobFx = "", policy = "once",
 				hitSound = "", useSound = "", gap = 0.1, targets = 1, actionFrames = "", actionTime = 0, casterFx = "", delay = 0.15 })
 		end
+		self:PickActed(mgr, self:RunSkills(mgr), list)
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollSkillCasts(Component mgr)
+		-- 기본 공격과 별개로 시전할 스킬 (마나·쿨타임·사거리가 되면 계속 시전). 시전할 게 없으면 빈 목록.
+		self._T.mgr = mgr
+		local list = {}
+		self:PickActed(mgr, self:RunSkills(mgr), list)
+		if #list == 0 then return list end
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PickActed(Component mgr, table skills, table list)
+		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
 		local acted = false
 		-- 최우선 시전: 성수가 가득일 때 샤이닝 레이 돌파 4 '완전한 계시' / 디바인 퍼니시먼트 돌파 2 '완전한 심판'
 		if self.HolyWater >= self:HolyMax() then
@@ -726,6 +743,11 @@ script BishopCombat extends Component
 				table.insert(list, self:MakeCast(best))
 			end
 		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method table FinishCasts(table list)
+		-- 시전 목록 마무리 (동작 시간 기록 등).
 		self._T.lastActionTime = 0
 		for _, r in ipairs(list) do
 			if (r.actionFrames or "") ~= "" and (r.actionTime or 0) > self._T.lastActionTime then self._T.lastActionTime = r.actionTime end
