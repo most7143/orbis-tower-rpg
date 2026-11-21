@@ -24,6 +24,10 @@ script TowerPlayer extends AttackComponent
 	-- 2인 편성 동료(플레이어가 아닌 아바타)일 때: 연출·타격 요청을 주고받을 주인 플레이어 UserId
 	@Sync
 	property string OwnerUserId = ""
+	-- 원거리 기본 공격 발사체: 모델 Id, 직업별 그림(직업:RUID:초당 회전), 출발 위치(캐릭터 기준)
+	property string ProjectileModelId = "towerprojectile"
+	property string ProjectileLooks = "NightLord:598f25c8b05f4542a36f0ba339191246:900,Bishop:d393500fd23f4537a2dd1f65089fc4a1:0"
+	property Vector3 ProjectileOffset = Vector3(0.35, 0.45, 0)
 
 	method string Uid()
 		-- 이 캐릭터의 클라이언트 통신 대상: 플레이어면 자기 UserId, 동료면 주인 플레이어 UserId.
@@ -79,8 +83,26 @@ script TowerPlayer extends AttackComponent
 		self._T.pending[self.HitSeq] = { seq = self.HitSeq, target = target, miss = miss, damage = damage, critRate = critRate, critDmg = critDmg, t = _UtilLogic.ElapsedSeconds, timer = timeout }
 		local controller = self.Entity.PlayerControllerComponent
 		if isvalid(controller) then controller.LookDirectionX = 1 end
+		if not isvalid(self.Entity.PlayerComponent) and (actionFrames == nil or actionFrames == "") then self:MemberAttackState() end
 		self:PlayAttackMotion(self.HitSeq, actionFrames, actionTime, casterFx, self._T.castSounds or "", self:Uid())
 		self._T.castSounds = ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MemberAttackState()
+		-- 구성원(2·3번) 기본 공격: 상태 머신에 ATTACK 상태를 두고 전환한다 (아바타 공격 동작 + 무기 잔상). 잠시 뒤 IDLE로.
+		local sc = self.Entity.StateComponent
+		if not isvalid(sc) then return end
+		if not self._T.attackState then
+			sc:AddState("ATTACK")
+			self._T.attackState = true
+		end
+		sc:ChangeState("ATTACK")
+		self._T.atkSeq = (self._T.atkSeq or 0) + 1
+		local mySeq = self._T.atkSeq
+		_TimerService:SetTimerOnce(function()
+			if self._T.atkSeq == mySeq and isvalid(sc) and sc.CurrentStateName == "ATTACK" then sc:ChangeState("IDLE") end
+		end, 0.6)
 	end
 
 	@ExecSpace("Server")
@@ -122,6 +144,76 @@ script TowerPlayer extends AttackComponent
 			self:ShowMiss(p.target, self:Uid())
 			return
 		end
+		-- 원거리 직업(나이트로드·비숍): 발사체가 날아가 닿는 순간 타격
+		local look = self:ProjectileLook()
+		if look ~= nil and self:LaunchProjectile(p, look) then return end
+		self:ResolveHit(p)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table ProjectileLook()
+		-- 이 캐릭터의 원거리 기본 공격 그림 {ruid, spin} (근거리 직업이면 nil).
+		local job = ""
+		for _, n in ipairs({ "script.HeroCombat", "script.BishopCombat", "script.JobCombat" }) do
+			local c = self.Entity:GetComponent(n)
+			if c ~= nil and c.Active then job = c.JobId end
+		end
+		if job == "" then return nil end
+		for entry in string.gmatch(self.ProjectileLooks, "[^,]+") do
+			local j, ruid, spin = string.match(entry, "^([^:]+):([^:]+):?(.*)$")
+			if j == job then return { ruid = ruid, spin = tonumber(spin) or 0 } end
+		end
+		return nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean LaunchProjectile(table p, table look)
+		-- 발사체 생성: 캐릭터 앞에서 몬스터를 향해 날린다. 실패하면 false (바로 타격).
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) then return false end
+		local wp = self.Entity.TransformComponent.WorldPosition
+		local pos = Vector3(wp.x + self.ProjectileOffset.x, wp.y + self.ProjectileOffset.y, wp.z)
+		local proj = _SpawnService:SpawnByModelId(self.ProjectileModelId, "Proj", pos, map)
+		if not isvalid(proj) then return false end
+		local pc = proj:GetComponent("script.TowerProjectile")
+		if pc == nil then
+			proj:Destroy()
+			return false
+		end
+		local flying = self._T.flying or {}
+		flying[p.seq] = p
+		self._T.flying = flying
+		pc:Launch(self, p.seq, p.target, look.ruid, look.spin)
+		self._T.projLog = (self._T.projLog or 0) + 1
+		if self._T.projLog <= 4 then log("[VRF] projectile launch " .. self.Entity.Name .. " seq=" .. tostring(p.seq)) end
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyProjectileHit(integer seq)
+		-- 발사체가 닿았을 때: 그사이 대상이 쓰러졌으면 기본 타격은 버리고 스킬 타격만 다음 몬스터로 넘긴다.
+		local flying = self._T.flying or {}
+		local p = flying[seq]
+		flying[seq] = nil
+		self._T.flying = flying
+		if p == nil then return end
+		self._T.projHitLog = (self._T.projHitLog or 0) + 1
+		if self._T.projHitLog <= 4 then log("[VRF] projectile hit " .. self.Entity.Name .. " seq=" .. tostring(seq)) end
+		local tm = isvalid(p.target) and p.target:GetComponent("script.TowerMonster") or nil
+		if tm == nil or tm.IsDead then
+			if p.procs ~= nil and #p.procs > 0 then
+				local map = self.Entity.CurrentMap
+				local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
+				if mgr ~= nil and isvalid(mgr:HeroMonster()) then mgr:ApplyJobProcs(p.procs, mgr:HeroMonster(), self.Entity) end
+			end
+			return
+		end
+		self:ResolveHit(p)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ResolveHit(table p)
+		-- 타격 판정 (피격음·데미지) + 같이 나간 직업 스킬 적용.
 		self.CurrentDamage = p.damage
 		self.CurrentCritRate = p.critRate
 		self.CurrentCritDmg = p.critDmg
@@ -219,21 +311,9 @@ script TowerPlayer extends AttackComponent
 		if actionFrames ~= nil and actionFrames ~= "" then
 			self:PlayAction(actionFrames, actionTime)
 		elseif not isvalid(self.Entity.PlayerComponent) then
-			-- 동료(플레이어 컨트롤러 없음): 상태 머신 대신 몸통 공격 동작을 직접 다시 재생
+			-- 구성원(2·3번): 서버가 상태 머신 ATTACK으로 동작을 재생한다 (무기 잔상 포함). 스킬 동작이 끝난 뒤 선택기만 되살린다.
 			self.ActionSeq = self.ActionSeq + 1
 			self:SetBodySelector(true)
-			local ev = BodyActionStateChangeEvent()
-			ev.ActionState = MapleAvatarBodyActionState.Attack
-			ev.needResetAction = true
-			self.Entity:SendEvent(ev)
-			local mySeq = self.ActionSeq
-			_TimerService:SetTimerOnce(function()
-				if self.ActionSeq ~= mySeq then return end
-				local back = BodyActionStateChangeEvent()
-				back.ActionState = MapleAvatarBodyActionState.Stand
-				back.needResetAction = true
-				self.Entity:SendEvent(back)
-			end, 0.6)
 		elseif isvalid(sc) then
 			-- 스킬 동작 중이었으면 동작 선택기를 먼저 되살린다 (이전 스킬의 복구 타이머는 순번으로 무효화)
 			self.ActionSeq = self.ActionSeq + 1

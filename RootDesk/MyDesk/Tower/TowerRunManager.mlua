@@ -524,6 +524,55 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method void CleanupStrays(number delta)
+		-- 안전장치 (1초마다): 굳어 남는 몬스터 정리. 오래 남은 시체 제거, 앞줄·대기열 어디에도 없는 살아 있는 몬스터 제거, 체력 0인데 안 죽은 맨 앞 몬스터 처치.
+		self._T.strayTick = (self._T.strayTick or 0) - delta
+		if self._T.strayTick > 0 then return end
+		self._T.strayTick = 1
+		local now = _UtilLogic.ElapsedSeconds
+		local seen = self._T.straySeen or {}
+		local inQ = {}
+		for _, q in ipairs(self._T.queue or {}) do inQ[q] = true end
+		local front = self._T.monster
+		local alive = {}
+		for _, c in ipairs(self.Entity.Children) do
+			local tm = c:GetComponent("script.TowerMonster")
+			if tm ~= nil then
+				local key = c.Id
+				alive[key] = true
+				local bad = false
+				local limit = 2
+				if tm.IsDead then
+					bad = true
+					limit = 3
+				elseif c ~= front and not inQ[c] then
+					bad = true
+				end
+				if bad then
+					seen[key] = seen[key] or now
+					if now - seen[key] >= limit then
+						log_warning("[VRF] stray monster removed " .. c.Name .. " dead=" .. tostring(tm.IsDead))
+						seen[key] = nil
+						c:Destroy()
+					end
+				else
+					seen[key] = nil
+				end
+			end
+		end
+		for key, _ in pairs(seen) do
+			if not alive[key] then seen[key] = nil end
+		end
+		self._T.straySeen = seen
+		-- 맨 앞 몬스터 체력이 0인데 아직 싸우는 중이면 처치 처리
+		if isvalid(front) and self.MonsterHp <= 0 and self.RunState == "FIGHT" then
+			log_warning("[VRF] front monster hp 0 but alive -> kill")
+			self.MonsterHp = 1
+			self:ApplyMonsterDamage(1)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
 	method void DelayFrontAttack(number sec)
 		-- 넉백 (보우마스터): 맨 앞 몬스터의 다음 공격을 sec초 늦춘다.
 		self.MonsterAttackTimer = self.MonsterAttackTimer + sec
@@ -1207,6 +1256,7 @@ script TowerRunManager extends Component
 					die = ds:GetCell(i, "DieRUID"),
 					hitSound = ds:GetCell(i, "HitSoundRUID"),
 					dieSound = ds:GetCell(i, "DieSoundRUID"),
+					move = ds:GetCell(i, "MoveRUID") or "",
 					-- MonsterTable Ranged = 1 이면 이 몬스터는 웨이브에서 항상 원거리
 					ranged = tonumber(ds:GetCell(i, "Ranged") or "0") == 1,
 				}
@@ -2939,6 +2989,7 @@ script TowerRunManager extends Component
 		end
 		local mc = monster:GetComponent("script.TowerMonster")
 		if mc ~= nil then
+			mc.MoveRUID = info.move or ""
 			mc:ApplyLook(info.stand, info.attack, info.hit, info.die, info.hitSound, info.dieSound)
 			mc.SpeedMul = 1 + (_UtilLogic:RandomDouble() * 2 - 1) * self.WalkSpeedRand / 100
 			mc.SlotJitter = (_UtilLogic:RandomDouble() * 2 - 1) * self.SlotJitter
@@ -3264,26 +3315,19 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void GiveKillReward()
-		-- 처치 보상: 메소 + 경험치 (강화 몬스터는 3배), 경험치가 차면 레벨업.
+		-- 처치 보상: 메소 (강화 몬스터는 3배). 경험치는 없다 (레벨업은 스테이지 통과 때).
 		local rewardMul = 1
 		if self.MonsterElite then rewardMul = self.EliteRewardMul end
 		local mesoRate = self.MesoMinRate + _UtilLogic:RandomDouble() * (self.MesoMaxRate - self.MesoMinRate)
 		-- 이 층 심볼: 메소·경험치 증가
 		local symGain = 1 + (self._T.symGain or 0) / 100
 		local meso = math.max(1, math.floor(self:KillMeso() * rewardMul * mesoRate * (1 + self:Bonus("MesoPct") / 100) * symGain + 0.5))
-		local exp = math.floor(self.BaseExpReward * (self.ExpGrowth ^ (self:FloorInStage() - 1)) * rewardMul * (1 + self:Bonus("ExpPct") / 100) * symGain + 0.5)
 		self.Meso = self.Meso + meso
 		self.RunMeso = self.RunMeso + meso
 		-- 클라이언트 메소 드롭 연출 신호 (KillSeq 변화 감지)
 		self.LastKillMeso = meso
 		self.KillSeq = self.KillSeq + 1
-		-- 스테이지 레벨업 모드: 경험치 막대 = 웨이브 진행도 (레벨업은 스테이지 클리어 때)
-		if self.StageLevelUp then
-			self.Exp = math.max(0, (self._T.waveSize or 1) - (self._T.waveLeft or 0))
-			exp = 0
-		else
-			self.Exp = self.Exp + exp
-		end
+		-- 경험치 없음: 레벨업은 스테이지를 통과할 때만 (DoLevelUp)
 		-- 각인 '재생': 처치 시 최대 체력의 일부 회복
 		local killHeal = math.floor(self.PlayerMaxHp * self:Bonus("KillHeal") / 100 + 0.5)
 		if killHeal > 0 and self.PlayerHp < self.PlayerMaxHp then
@@ -3291,34 +3335,7 @@ script TowerRunManager extends Component
 			local pc = self:GetPlayerAttack()
 			if pc ~= nil then pc:ShowHeal(killHeal) end
 		end
-		local leveled = false
-		while not self.StageLevelUp and self.Exp >= self.ExpToNext do
-			self.Exp = self.Exp - self.ExpToNext
-			self.Level = self.Level + 1
-			self.ExpToNext = math.floor(self.BaseExpToNext * (self.ExpToNextGrowth ^ (self.Level - 1)) + 0.5)
-			leveled = true
-			-- 레벨업마다 스킬 카드 선택 1회 (다음 몬스터가 나오기 전에), 각인·은총 확률로 1회 더. 모든 스킬이 최고 레벨이면 없음
-			if self:HasSkillToLearn() then
-				self.PendingPicks = self.PendingPicks + 1
-				if _UtilLogic:RandomDouble() * 100 < self:Bonus("ExtraPick") then self.PendingPicks = self.PendingPicks + 1 end
-			end
-		end
-		if leveled then
-			self:RecalcStats()
-			-- 레벨업 시 체력 최대 회복
-			self:FullHealParty()
-			-- 메이플 레벨업 이펙트 (effect/basiceff.img/LevelUp_Fast)를 캐릭터에 붙여 재생
-			local player = self._T.player
-			if isvalid(player) then
-				_EffectService:PlayEffectAttached(self.LevelUpEffectRUID, player, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
-				if self.LevelUpSoundRUID ~= "" and isvalid(player.PlayerComponent) then
-					_SoundService:PlaySound(self.LevelUpSoundRUID, self.LevelUpSoundVolume, player.PlayerComponent.UserId)
-					log("[VRF] level up sound played")
-				end
-			end
-			log("[VRF] level up -> Lv" .. tostring(self.Level) .. " atk=" .. tostring(self.PlayerAtk) .. " maxHp=" .. tostring(self.PlayerMaxHp))
-		end
-		log("[VRF] reward meso+" .. tostring(meso) .. " exp+" .. tostring(exp) .. " total meso=" .. tostring(self.Meso) .. " picks=" .. tostring(self.PendingPicks))
+		log("[VRF] reward meso+" .. tostring(meso) .. " total meso=" .. tostring(self.Meso) .. " picks=" .. tostring(self.PendingPicks))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -3940,6 +3957,7 @@ script TowerRunManager extends Component
 			self._T.stuckTime = 0
 
 			self:TickSkills(delta)
+			self:CleanupStrays(delta)
 			if self.RunState ~= "FIGHT" or not isvalid(self._T.monster) then return end
 
 			-- 메인(플레이어) 기본 공격: 쓰러져 있으면 쉰다

@@ -6,6 +6,8 @@ script TowerMonster extends AttackComponent
 	property string AttackRUID = ""
 	property string HitRUID = ""
 	property string DieRUID = ""
+	-- 이동 동작 (MonsterTable MoveRUID: 리소스 팩의 move 또는 fly). 없으면 대기 동작으로 이동
+	property string MoveRUID = ""
 	-- 피격 / 사망 사운드 (MonsterTable의 리소스 팩 _audio/Damage, _audio/Die)
 	property string HitSoundRUID = ""
 	property string DieSoundRUID = ""
@@ -115,10 +117,18 @@ script TowerMonster extends AttackComponent
 	
 	@ExecSpace("ServerOnly")
 	method void WalkTo(number x, number speed)
-		-- 목표 X 위치까지 걸어간다 (웨이브 등장·대기열 한 칸 전진).
+		-- 목표 X 위치까지 걸어간다 (웨이브 등장·대기열 한 칸 전진). 이동 동작이 있으면 걷는 동안 재생한다.
 		self.MoveTargetX = x
 		self.MoveSpeed = speed
 		self.Moving = true
+		if self.AnimTimer <= 0 and not self.IsDead then self:SetClip(self:IdleClip(), 0) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method string IdleClip()
+		-- 다른 동작이 없을 때의 모습: 움직이는 중이면 이동 동작(있을 때), 아니면 대기 동작.
+		if self.Moving and self.MoveRUID ~= "" then return self.MoveRUID end
+		return self.StandRUID
 	end
 
 	@ExecSpace("ServerOnly")
@@ -177,6 +187,7 @@ script TowerMonster extends AttackComponent
 			if math.abs(dx) <= step then
 				tf.Position = Vector3(self.MoveTargetX, p.y, p.z)
 				self.Moving = false
+				if self.AnimTimer <= 0 then self:SetClip(self.StandRUID, 0) end
 				-- 넉백으로 밀려난 끝: 원래 자리로 걸어 돌아간다
 				if self.KnockBack then
 					self.KnockBack = false
@@ -190,7 +201,7 @@ script TowerMonster extends AttackComponent
 		end
 		if self.AnimTimer <= 0 then return end
 		self.AnimTimer = self.AnimTimer - delta
-		if self.AnimTimer <= 0 then self:SetClip(self.StandRUID, 0) end
+		if self.AnimTimer <= 0 then self:SetClip(self:IdleClip(), 0) end
 	end
 	
 	@ExecSpace("ServerOnly")

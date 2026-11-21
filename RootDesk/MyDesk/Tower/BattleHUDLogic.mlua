@@ -519,34 +519,19 @@ script BattleHUDLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void UpdateParty(Component mgr)
-		-- 하단 구성원 HUD: 구성원 1·2·3번 패널 + 레벨·경험치 줄. 전투 중(FIGHT·CLEAR)에만 보인다.
-		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Party")
+		-- 하단 구성원 HUD: 구성원 1·2·3번 패널 (경험치 없음, 레벨은 이름 옆). 전투 중(FIGHT·CLEAR)에만 보인다.
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Members")
 		if not isvalid(root) then return end
 		local show = mgr ~= nil and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
 		if root.Enable ~= show then root:SetEnable(show) end
 		if not show then return end
 		for k = 1, 3 do self:UpdateMember(mgr, k) end
-		-- 레벨·경험치
-		local lv = _EntityService:GetEntityByPath("/ui/BattleHUD/Party/Exp/Lv")
-		local lvText = "Lv." .. tostring(mgr.Level)
-		if isvalid(lv) and lv.TextGUIRendererComponent.Text ~= lvText then lv.TextGUIRendererComponent.Text = lvText end
-		local ratio = 0
-		if mgr.ExpToNext > 0 then ratio = math.max(0, math.min(1, mgr.Exp / mgr.ExpToNext)) end
-		local fill = _EntityService:GetEntityByPath("/ui/BattleHUD/Party/Exp/Fill")
-		if isvalid(fill) then
-			local w = 1836 * ratio
-			local sz = fill.UITransformComponent.RectSize
-			if math.abs(sz.x - w) > 0.5 then fill.UITransformComponent.RectSize = Vector2(w, sz.y) end
-		end
-		local et = _EntityService:GetEntityByPath("/ui/BattleHUD/Party/Exp/Text")
-		local label = "EXP " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. " (" .. string.format("%.1f", ratio * 100) .. "%)"
-		if isvalid(et) and et.TextGUIRendererComponent.Text ~= label then et.TextGUIRendererComponent.Text = label end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void UpdateMember(Component mgr, integer k)
 		-- 구성원 k번 패널: 번호·직업, 체력(숫자)·마나 막대, 자원·쓰러짐, 장착 스킬 5칸(배운 스킬만 아이콘·레벨·쿨타임).
-		local base = "/ui/BattleHUD/Party/P" .. tostring(k)
+		local base = "/ui/BattleHUD/Members/P" .. tostring(k)
 		local root = _EntityService:GetEntityByPath(base)
 		if not isvalid(root) then return end
 		local ent = nil
@@ -606,10 +591,10 @@ script BattleHUDLogic extends Logic
 			end
 		end
 		local names = { Hero = "히어로", Bishop = "비숍", NightLord = "나이트로드", Bowmaster = "보우마스터", Viper = "바이퍼" }
-		setText("Job", tostring(k) .. "  " .. (names[cc.JobId] or cc.JobId))
-		setBar("HpFill", hp / math.max(1, maxHp), 160)
+		setText("Job", tostring(k) .. "  " .. (names[cc.JobId] or cc.JobId) .. "  Lv." .. tostring(mgr.Level))
+		setBar("HpFill", hp / math.max(1, maxHp), 176)
 		setText("HpText", tostring(math.floor(hp)) .. " / " .. tostring(math.floor(maxHp)))
-		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax or 100), 160)
+		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax or 100), 176)
 		local state = ""
 		if down then
 			state = "<color=#E5484D>쓰러짐</color>"
@@ -652,9 +637,9 @@ script BattleHUDLogic extends Logic
 			end
 			local cd = get(slot .. "/Cd")
 			if isvalid(cd) then
-				local h = 66 * ratio
+				local h = 72 * ratio
 				local sz = cd.UITransformComponent.RectSize
-				if math.abs(sz.y - h) > 0.5 then cd.UITransformComponent.RectSize = Vector2(66, h) end
+				if math.abs(sz.y - h) > 0.5 then cd.UITransformComponent.RectSize = Vector2(72, h) end
 			end
 			setText(slot .. "/CdText", cdText)
 			local lvText = ""
