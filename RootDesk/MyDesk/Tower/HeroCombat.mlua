@@ -745,6 +745,9 @@ script HeroCombat extends Component
 	@ExecSpace("ServerOnly")
 	method void AddMana(number n)
 		-- 마나 획득 (최대 100).
+		-- 유물 '마나 획득량': 얻는 마나만 늘린다
+		local mgr = self._T.mgr
+		if n > 0 and mgr ~= nil then n = n * (1 + mgr:Bonus("RelicMana") / 100) end
 		self.Mana = math.min(self.ManaMax, self.Mana + n)
 	end
 
@@ -845,7 +848,7 @@ script HeroCombat extends Component
 		if sk.id == "H08" and self:Has("H08", 5) then cd = 6 end
 		-- 장신구 '미스틱 이어링' 등: 재사용 대기시간 감소
 		local mgr = self._T.mgr
-		if mgr ~= nil then cd = cd * math.max(0.2, 1 - mgr:AccessoryBonus(self.Entity, "CdReduce") / 100) end
+		if mgr ~= nil then cd = cd * math.max(0.2, 1 - (mgr:AccessoryBonus(self.Entity, "CdReduce") + mgr:Bonus("RelicCd")) / 100) end
 		return cd
 	end
 

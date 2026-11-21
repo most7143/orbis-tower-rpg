@@ -1,0 +1,243 @@
+@Logic
+script RelicUILogic extends Logic
+
+	-- 유물 화면 (RelicUI.ui, 성장창 3번 탭 — 심볼 대체). 계정 데이터(PlayerEngrave)의 TowerKeys·RelicData를 보여 준다.
+	-- 칸 선택 → 오른쪽 위 효과·강화 정보, [강화] = RequestRelicEnhance, [1개/10개 사용] = RequestRelicDraw.
+	property string RootPath = "/ui/RelicUI/Panel"
+	property string TableName = "RelicTable"
+	property integer MaxLv = 9
+	property string Rates = "100,85,70,55,45,35,25,20"
+	property string Costs = "2,3,4,5,7,9,11,13"
+	property integer FailStep = 10
+	property Color LockedTint = Color(0.70, 0.70, 0.70, 1)
+
+	@HideFromInspector
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 유물 표 읽기, 버튼 연결.
+		self._T.relics = {}
+		local t = _DataService:GetTable(self.TableName)
+		if t ~= nil then
+			for i = 1, t:GetRowCount() do
+				table.insert(self._T.relics, { id = t:GetCell(i, "Id"), name = t:GetCell(i, "Name"), effect = t:GetCell(i, "Effect"), base = tonumber(t:GetCell(i, "Base")) or 0, label = t:GetCell(i, "Label"), icon = t:GetCell(i, "IconRUID") })
+			end
+		end
+		self._T.rates = {}
+		for v in string.gmatch(self.Rates, "[^,]+") do table.insert(self._T.rates, tonumber(v) or 0) end
+		self._T.costs = {}
+		for v in string.gmatch(self.Costs, "[^,]+") do table.insert(self._T.costs, tonumber(v) or 1) end
+		self._T.sel = 1
+		self._T.open = false
+		self.handlers = {}
+		for i = 1, 24 do
+			local idx = i
+			self:Bind("Grid/Cell_" .. i, function() self:OnCell(idx) end)
+		end
+		self:Bind("Enhance", function() self:OnEnhance() end)
+		self:Bind("Draw1", function() self:OnDraw(1) end)
+		self:Bind("Draw10", function() self:OnDraw(10) end)
+		log("[VRF] RelicUILogic begin relics=" .. tostring(#self._T.relics))
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Find(string sub)
+		-- 화면 안 엔티티 찾기.
+		return _EntityService:GetEntityByPath(self.RootPath .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(string sub, any fn)
+		-- 버튼 클릭 연결 (해제 기록 포함).
+		local e = self:Find(sub)
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(ButtonClickEvent, function()
+			_UISoundLogic:PlayClick()
+			fn()
+		end)
+		table.insert(self.handlers, { entity = e, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 연결 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.entity) then r.entity:DisconnectEvent(ButtonClickEvent, r.h) end
+		end
+		self.handlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetEngrave()
+		-- 내 계정 데이터.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 성장창 3번 탭으로 열기.
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(true) end
+		self._T.open = true
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기.
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+		self._T.open = false
+	end
+
+	@ExecSpace("ClientOnly")
+	method table ParseState(string data)
+		-- "Id:레벨:개수:실패|..." → { Id = {lv, cnt, fail} }.
+		local st = {}
+		for entry in string.gmatch(data or "", "[^|]+") do
+			local id, lv, cnt, fail = string.match(entry, "^([^:]+):(%d+):(%d+):(%d+)$")
+			if id ~= nil then st[id] = { lv = tonumber(lv) or 0, cnt = tonumber(cnt) or 0, fail = tonumber(fail) or 0 } end
+		end
+		return st
+	end
+
+	@ExecSpace("ClientOnly")
+	method string EffectText(table r, integer lv)
+		-- 레벨별 효과 문구 (Lv1 × (1 + 0.25 × (레벨-1))).
+		local v = r.base * (1 + 0.25 * (lv - 1))
+		local s = ""
+		if math.abs(v - math.floor(v)) < 0.001 then s = tostring(math.floor(v)) else s = string.format("%.1f", v) end
+		-- string.gsub는 반환값 개수 문제(LEA-1103)가 있어 직접 바꾼다
+		local label = r.label or ""
+		local a, b = string.find(label, "{v}", 1, true)
+		if a == nil then return label end
+		return string.sub(label, 1, a - 1) .. s .. string.sub(label, b + 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string sub, string s)
+		-- 글자 바꾸기.
+		local e = self:Find(sub)
+		if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetIcon(Entity e, string ruid, boolean owned)
+		-- 아바타 아이템 아이콘 (thumbnail://), 미보유는 옅게.
+		if not isvalid(e) then return end
+		local spr = e.SpriteGUIRendererComponent
+		if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+		local want = "thumbnail://" .. ruid
+		if spr.ImageRUID.DataId ~= want then spr.ImageRUID = DataRef(want) end
+		local c = Color(1, 1, 1, 1)
+		if not owned then c = self.LockedTint end
+		spr.Color = c
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh(Component eng)
+		-- 칸·선택 유물·강화·뽑기 결과 다시 그리기.
+		local st = self:ParseState(eng.RelicData)
+		local ownedN = 0
+		local maxN = 0
+		for i, r in ipairs(self._T.relics) do
+			local s = st[r.id]
+			local owned = s ~= nil and s.lv > 0
+			if owned then ownedN = ownedN + 1 end
+			if owned and s.lv >= self.MaxLv then maxN = maxN + 1 end
+			local cell = self:Find("Grid/Cell_" .. i)
+			if isvalid(cell) then
+				self:SetIcon(self:Find("Grid/Cell_" .. i .. "/Icon"), r.icon, owned)
+				self:SetText("Grid/Cell_" .. i .. "/Lv", owned and (s.lv >= self.MaxLv and "MAX" or ("Lv." .. tostring(s.lv))) or "미보유")
+				self:SetText("Grid/Cell_" .. i .. "/Cnt", (owned and s.cnt > 0) and ("x" .. tostring(s.cnt)) or "")
+				_UIButtonLogic:SetSelected(cell, i == self._T.sel)
+			end
+		end
+		self:SetText("KeyBg/Count", tostring(eng.TowerKeys) .. "개")
+		self:SetText("Owned", "보유 " .. tostring(ownedN) .. " / " .. tostring(#self._T.relics))
+		-- 선택 유물
+		local r = self._T.relics[self._T.sel]
+		if r ~= nil then
+			local s = st[r.id] or { lv = 0, cnt = 0, fail = 0 }
+			self:SetIcon(self:Find("InfoIcon"), r.icon, s.lv > 0)
+			self:SetText("InfoName", r.name)
+			local lvText = "미보유 — 뽑기로 얻을 수 있습니다"
+			if s.lv >= self.MaxLv then lvText = "Lv." .. tostring(s.lv) .. " (최대)" elseif s.lv > 0 then lvText = "Lv." .. tostring(s.lv) .. " / " .. tostring(self.MaxLv) end
+			self:SetText("InfoLv", lvText)
+			self:SetText("EffNow", s.lv > 0 and self:EffectText(r, s.lv) or "-")
+			self:SetText("EffNext", (s.lv > 0 and s.lv < self.MaxLv) and self:EffectText(r, s.lv + 1) or (s.lv == 0 and self:EffectText(r, 1) or "-"))
+			self:SetText("Owned2", tostring(s.cnt) .. "개")
+			local canEnh = s.lv > 0 and s.lv < self.MaxLv
+			local cost = canEnh and (self._T.costs[s.lv] or 1) or 0
+			local rate = canEnh and math.min(100, (self._T.rates[s.lv] or 0) + s.fail * self.FailStep) or 0
+			self:SetText("Rate", canEnh and (tostring(math.floor(rate)) .. "%") or "-")
+			self:SetText("Cost", canEnh and (tostring(cost) .. "개") or "-")
+			self:SetText("Fail", canEnh and ("+" .. tostring(s.fail * self.FailStep) .. "%p") or "-")
+			local btn = self:Find("Enhance")
+			if isvalid(btn) then _UIButtonLogic:SetDisabled(btn, not canEnh or s.cnt < cost) end
+		end
+		-- 뽑기 버튼: 열쇠 부족 / 전부 만렙이면 비활성
+		local allMax = maxN >= #self._T.relics and #self._T.relics > 0
+		local d1 = self:Find("Draw1")
+		if isvalid(d1) then _UIButtonLogic:SetDisabled(d1, allMax or eng.TowerKeys < 1) end
+		local d10 = self:Find("Draw10")
+		if isvalid(d10) then _UIButtonLogic:SetDisabled(d10, allMax or eng.TowerKeys < 10) end
+		self:SetText("DrawHint", allMax and "모든 유물이 최대 레벨입니다" or "열쇠 1개로 1회 · 만렙 유물은 나오지 않음")
+		self:SetText("Msg", eng.RelicMsg or "")
+		-- 뽑기 결과
+		local got = {}
+		for id in string.gmatch(eng.RelicResult or "", "[^,]+") do table.insert(got, id) end
+		local byId = {}
+		for _, d in ipairs(self._T.relics) do byId[d.id] = d end
+		for k = 1, 10 do
+			local e = self:Find("Result/R" .. k)
+			local id = got[k]
+			if isvalid(e) then
+				e:SetEnable(id ~= nil and byId[id] ~= nil)
+				if id ~= nil and byId[id] ~= nil then self:SetIcon(e, byId[id].icon, true) end
+			end
+		end
+		self:SetText("ResultHead", #got > 0 and ("뽑기 결과 (" .. tostring(#got) .. "개)") or "뽑기 결과")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnCell(integer i)
+		-- 칸 선택.
+		self._T.sel = i
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEnhance()
+		-- 강화 요청.
+		local eng = self:GetEngrave()
+		local r = self._T.relics[self._T.sel]
+		if eng == nil or r == nil then return end
+		eng:RequestRelicEnhance(r.id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnDraw(integer n)
+		-- 뽑기 요청 (1개 / 10개).
+		local eng = self:GetEngrave()
+		if eng == nil or eng.TowerKeys < n then return end
+		eng:RequestRelicDraw(n)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있을 때 데이터·선택이 바뀌면 다시 그린다.
+		if not self._T.open then return end
+		local eng = self:GetEngrave()
+		if eng == nil then return end
+		local key = tostring(eng.RelicSeq) .. "|" .. tostring(eng.TowerKeys) .. "|" .. tostring(self._T.sel) .. "|" .. (eng.RelicMsg or "") .. "|" .. (eng.RelicResult or "")
+		if self._T.key ~= key then
+			self._T.key = key
+			self:Refresh(eng)
+		end
+	end
+
+end

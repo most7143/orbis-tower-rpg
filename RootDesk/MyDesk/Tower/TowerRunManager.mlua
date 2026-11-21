@@ -277,6 +277,10 @@ script TowerRunManager extends Component
 	@Sync
 	property integer StoneCost = 1
 	property integer StoneCostStart = 1
+	-- 층 클리어 시 탑의 열쇠 지급 확률(%) · 이번 판에 얻은 열쇠
+	property number KeyDropChance = 50
+	@Sync
+	property integer RunKeys = 0
 	property integer StoneCostStep = 1
 	property number StoneDropNormal = 3
 	property number StoneDropElite = 15
@@ -1503,7 +1507,7 @@ script TowerRunManager extends Component
 				local sk = { id = id, job = job, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Proc", pool = js:GetCell(i, "StarPool") or "", cooldown = tonumber(js:GetCell(i, "Cooldown")) or 0,
 					buffTime = tonumber(js:GetCell(i, "BuffTime")) or 0, effects = effects, proc = proc, breaks = {}, max = 30,
 					kind = js:GetCell(i, "SkillType") or "", mana = tonumber(js:GetCell(i, "Mana")) or 0, comboUse = tonumber(js:GetCell(i, "ComboUse")) or 0,
-					comboBonus = tonumber(js:GetCell(i, "ComboBonus")) or 0, bleed = tonumber(js:GetCell(i, "Bleed")) or 0 }
+					comboBonus = tonumber(js:GetCell(i, "ComboBonus")) or 0, bleed = tonumber(js:GetCell(i, "Bleed")) or 0, element = js:GetCell(i, "Element") or "" }
 				if self._T.jobSkills[job] == nil then self._T.jobSkills[job] = {} end
 				table.insert(self._T.jobSkills[job], sk)
 				self._T.skillById[id] = sk
@@ -1589,9 +1593,9 @@ script TowerRunManager extends Component
 		-- 미네르바의 은총
 		local grace = self._T.grace
 		if grace ~= nil and grace[effType] ~= nil then total = total + grace[effType] end
-		-- 심볼 3단계 영구 능력치
-		local sym = self._T.symbolPerm
-		if sym ~= nil and sym[effType] ~= nil then total = total + sym[effType] end
+		-- 유물 효과
+		local relic = self._T.relic
+		if relic ~= nil and relic[effType] ~= nil then total = total + relic[effType] end
 		-- 슬롯 강화 고유 효과
 		local slotBonus = self._T.slotBonus
 		if slotBonus ~= nil and slotBonus[effType] ~= nil then total = total + slotBonus[effType] end
@@ -2290,8 +2294,10 @@ script TowerRunManager extends Component
 		end
 		local pc = self:GetPlayerAttack()
 		for _, r in ipairs(procs) do
+			self._T.dmgCtx = self:DmgCtxOf(r)
 			if r.hero then
 				if hero ~= nil then hero:ApplyCast(self, r, target) end
+				self._T.dmgCtx = nil
 				continue
 			end
 			self:ApplyCastEffects(r, target)
@@ -2325,6 +2331,7 @@ script TowerRunManager extends Component
 			end
 			log("[VRF] job proc " .. r.name .. " dmg=" .. tostring(r.dmg) .. "x" .. tostring(r.hits) .. " heal=" .. tostring(r.heal) .. " freeze=" .. tostring(r.freeze) .. " meso=" .. tostring(r.meso))
 		end
+		self._T.dmgCtx = nil
 	end
 
 	@ExecSpace("ServerOnly")
@@ -2358,7 +2365,9 @@ script TowerRunManager extends Component
 			local pc = self:GetPlayerAttack()
 			if pc ~= nil and isvalid(self._T.monster) then pc:ShowProcDamage(self._T.monster, dmg, false) end
 			log("[VRF] burn tick dmg=" .. tostring(dmg))
+			self._T.dmgCtx = { dot = true, elem = true }
 			self:ApplyMonsterDamage(dmg)
+			self._T.dmgCtx = nil
 			if b.heal > 0 then self:HealPlayer(self.PlayerMaxHp * b.heal / 100) end
 			if self.RunState ~= "FIGHT" then return end
 		end
@@ -2790,9 +2799,10 @@ script TowerRunManager extends Component
 		self._T.engrave = {}
 		local engrave = self:GetEngrave()
 		if engrave ~= nil then self._T.engrave = engrave:BuildValues() end
-		-- 심볼 3단계: 모든 층 영구 능력치
+		-- 유물 (심볼 대체): 판 시작 시점 레벨로 고정
 		self._T.symbolPerm = {}
-		if engrave ~= nil then self._T.symbolPerm = engrave:SymbolPermValues() end
+		self._T.relic = {}
+		if engrave ~= nil then self._T.relic = engrave:RelicValues() end
 		-- 미네르바의 은총: 지금 프리셋 옵션 합계
 		self._T.grace = {}
 		if engrave ~= nil then self._T.grace = engrave:GraceValues() end
@@ -2815,6 +2825,7 @@ script TowerRunManager extends Component
 			end
 		end
 		self.RunFeathers = 0
+		self.RunKeys = 0
 		self.RunScrolls = 0
 		self.RunBooks = 0
 		local startLevel = 1 + math.floor(self:Bonus("StartLevel"))
@@ -2910,7 +2921,7 @@ script TowerRunManager extends Component
 		end
 		self:SpawnCompanion()
 		self._T.needEntry = true
-		self.SkillStone = 0
+		self.SkillStone = math.floor(self:Bonus("StartStone") + 0.5)
 		self.StoneCost = self.StoneCostStart
 		log("[VRF] run start stage=" .. tostring(self.StageNo) .. " floor=" .. tostring(self.Floor) .. " lv=" .. tostring(self.Level) .. " meso=" .. tostring(self.Meso) .. " rerolls=" .. tostring(self.Rerolls) .. " atk=" .. tostring(self.PlayerAtk) .. " hp=" .. tostring(self.PlayerHp))
 		-- 직업 선택 카드를 보여주고, 고르면(RequestPickJob) 스킬 카드 → 전투 시작
@@ -3000,6 +3011,7 @@ script TowerRunManager extends Component
 		self:SaveBestFloor()
 		if eng ~= nil then
 			eng:FlushGrace()
+			eng:FlushRelics()
 			eng:FlushSlots()
 			eng:FlushSkills()
 		end
@@ -3492,6 +3504,38 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method number RelicDamageBonus(Entity m)
+		-- 유물 피해 증가 합(%): 2·3칸/1칸 몬스터, 상태 이상 적, 지금 피해의 종류(단일·광역·지속·속성, _T.dmgCtx).
+		local total = 0
+		if isvalid(m) then
+			if self:CellAt(m.TransformComponent.WorldPosition.x) >= 2 then total = total + self:Bonus("FarDmg") else total = total + self:Bonus("NearDmg") end
+			local mc = m:GetComponent("script.TowerMonster")
+			local status = (m == self._T.monster and (self:IsStunned() or self._T.burn ~= nil or _UtilLogic.ElapsedSeconds < (self._T.vulnUntil or 0)))
+				or (mc ~= nil and (_UtilLogic.ElapsedSeconds < mc.SlowUntil or _UtilLogic.ElapsedSeconds < mc.StunUntil or _UtilLogic.ElapsedSeconds < mc.AtkDownUntil))
+			if status then total = total + self:Bonus("StatusDmg") end
+		end
+		local ctx = self._T.dmgCtx
+		if ctx ~= nil then
+			if ctx.aoe then total = total + self:Bonus("AoeDmg") elseif ctx.single then total = total + self:Bonus("SingleDmg") end
+			if ctx.dot then total = total + self:Bonus("DotDmg") end
+			if ctx.elem then total = total + self:Bonus("ElemDmg") end
+		end
+		return total
+	end
+
+	@ExecSpace("ServerOnly")
+	method table DmgCtxOf(table r)
+		-- 스킬 시전 결과의 피해 종류: 대상 2 이상 = 광역, 아니면 단일. 스킬 표 Element가 있으면 속성.
+		local targets = r.targets
+		if targets == nil and r.sk ~= nil and r.sk.proc ~= nil then targets = r.sk.proc.targets end
+		local aoe = (targets or 1) > 1
+		local id = r.sk ~= nil and r.sk.id or r.id
+		local base = id ~= nil and self._T.skillById[id] or nil
+		local elem = base ~= nil and (base.element or "") ~= "" and base.element ~= "출혈"
+		return { aoe = aoe, single = not aoe, elem = elem, dot = false }
+	end
+
+	@ExecSpace("ServerOnly")
 	method void ApplySplashDamage(Entity e, integer dmg, boolean crit, number yOff)
 		-- 대기열 몬스터가 범위 스킬에 맞음: 자기 체력 감소·피격 모션·숫자, 0이 되면 처치.
 		if not isvalid(e) then return end
@@ -3506,6 +3550,11 @@ script TowerRunManager extends Component
 			end
 			return
 		end
+		-- 유물: 대기열 몬스터가 맞는 범위 피해는 광역 (칸·상태 이상 보너스 포함)
+		local relicPct = self:RelicDamageBonus(e)
+		local ctx = self._T.dmgCtx
+		if ctx == nil or not ctx.aoe then relicPct = relicPct + self:Bonus("AoeDmg") end
+		if relicPct ~= 0 then dmg = math.max(1, math.floor(dmg * (1 + relicPct / 100) + 0.5)) end
 		mc.Hp = mc.Hp - dmg
 		local pc = self:GetPlayerAttack()
 		if pc ~= nil then pc:ShowProcDamageAt(e, dmg, crit, yOff) end
@@ -3618,6 +3667,7 @@ script TowerRunManager extends Component
 		if _UtilLogic.ElapsedSeconds < (self._T.vulnUntil or 0) then takenMul = takenMul + (self._T.vulnPct or 0) / 100 end
 		if self:IsStunned() then takenMul = takenMul + (self:Bonus("StunDmg") + (self._T.stunVuln or 0)) / 100 end
 		if self._T.burn ~= nil then takenMul = takenMul + self._T.burn.vuln / 100 end
+		takenMul = takenMul + self:RelicDamageBonus(self._T.monster) / 100
 		damage = math.floor(damage * takenMul + 0.5)
 		-- 처형: HP 20% 이하 몬스터는 확률로 즉시 처치
 		if self.MonsterHp - damage > 0 and self.MonsterHp <= self.MonsterMaxHp * self.ExecuteHpRatio and self:RollSkill("Execute") then
@@ -3668,7 +3718,8 @@ script TowerRunManager extends Component
 		self:DropScrolls(bossKilled)
 		if bossKilled then self:DropSkillBooks() end
 		if bossKilled then
-			self:RollFloorSymbol()
+			-- 층 클리어(보스 처치): 탑의 열쇠 확률 지급 (심볼은 유물로 대체되어 폐지)
+			if self.MonsterBoss then self:RollFloorKey() end
 			local bossHeal = self:Bonus("BossHeal")
 			if bossHeal > 0 then self:HealPlayer(self.PlayerMaxHp * bossHeal / 100) end
 		end
@@ -3780,6 +3831,7 @@ script TowerRunManager extends Component
 		self.ResultStarsNow = self.ResultStarsPrev
 		if eng ~= nil then
 			eng:FlushGrace()
+			eng:FlushRelics()
 			eng:FlushSlots()
 			eng:FlushSkills()
 		end
@@ -3891,18 +3943,25 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void UpdateFloorSymbol()
-		-- 지금 층 심볼 단계의 층 효과(주는 피해·받는 피해·메소/경험치)를 캐시한다.
-		local engrave = self:GetEngrave()
-		local tier = 0
-		local info = nil
-		if engrave ~= nil then
-			tier = engrave:SymbolTier(self.Floor)
-			if tier > 0 then info = engrave:SymbolTierInfo(tier) end
+		-- 심볼 폐지 (유물로 대체, 2026-11-21): 층 심볼 효과는 항상 0.
+		self.FloorSymbolTier = 0
+		self._T.symDmg = 0
+		self._T.symCut = 0
+		self._T.symGain = 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RollFloorKey()
+		-- 층 클리어 보상: KeyDropChance% 확률로 탑의 열쇠 1개 (계정에 바로 더하고 판이 끝날 때 저장).
+		if _UtilLogic:RandomDouble() * 100 >= self.KeyDropChance then
+			log("[VRF] floor key miss floor=" .. tostring(self.Floor))
+			return
 		end
-		self.FloorSymbolTier = tier
-		self._T.symDmg = info ~= nil and info.dmg or 0
-		self._T.symCut = info ~= nil and info.cut or 0
-		self._T.symGain = info ~= nil and info.gain or 0
+		local engrave = self:GetEngrave()
+		if engrave ~= nil then engrave:AddTowerKeys(1) end
+		self.RunKeys = self.RunKeys + 1
+		self:SetEnhanceMsg("탑의 열쇠 +1")
+		log("[VRF] floor key +1 floor=" .. tostring(self.Floor) .. " run=" .. tostring(self.RunKeys))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -4294,12 +4353,23 @@ script TowerRunManager extends Component
 		local list = self._T.accBySlot[slot] or {}
 		if #list == 0 then return nil end
 		local d = list[_UtilLogic:RandomIntegerRange(1, #list)]
+		-- 유물 '진열대 에픽 이상': 가장 낮은 등급 확률을 덜어 위 등급들에 비율대로 나눠 준다
+		local chances = {}
 		local sum = 0
-		for _, g in ipairs(self._T.accGrades) do sum = sum + g.chance end
+		for i, g in ipairs(self._T.accGrades) do
+			chances[i] = g.chance
+			sum = sum + g.chance
+		end
+		local shift = math.min(chances[1] or 0, self:Bonus("ShopEpic") * sum / 100)
+		if shift > 0 and #chances > 1 then
+			local upper = sum - chances[1]
+			chances[1] = chances[1] - shift
+			for i = 2, #chances do chances[i] = chances[i] + shift * (upper > 0 and self._T.accGrades[i].chance / upper or 1 / (#chances - 1)) end
+		end
 		local r = _UtilLogic:RandomDouble() * sum
 		local gr = self._T.accGrades[1]
-		for _, g in ipairs(self._T.accGrades) do
-			r = r - g.chance
+		for i, g in ipairs(self._T.accGrades) do
+			r = r - chances[i]
 			if r <= 0 then gr = g break end
 		end
 		local mul = gr.min
@@ -4777,7 +4847,7 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void DropSkillStone(boolean boss, boolean elite)
 		-- 처치 시 스킬석: 일반 3% / 정예 15% / 보스 100%.
-		local chance = self.StoneDropNormal
+		local chance = self.StoneDropNormal + self:Bonus("StoneDrop")
 		if boss then chance = self.StoneDropBoss elseif elite then chance = self.StoneDropElite end
 		if _UtilLogic:RandomDouble() * 100 < chance then
 			self.SkillStone = self.SkillStone + 1
@@ -4827,7 +4897,9 @@ script TowerRunManager extends Component
 		self.SkillStone = self.SkillStone - self.StoneCost
 		self.StoneCost = self.StoneCost + self.StoneCostStep
 		local picks = {}
-		for k = 1, math.min(2, #rest) do
+		local cardN = 2
+		if _UtilLogic:RandomDouble() * 100 < self:Bonus("Book3") then cardN = 3 end
+		for k = 1, math.min(cardN, #rest) do
 			local idx = _UtilLogic:RandomIntegerRange(1, #rest)
 			table.insert(picks, table.remove(rest, idx))
 		end
@@ -5271,6 +5343,13 @@ script TowerRunManager extends Component
 				local isBoss = self.StageKind == "boss" or self.Stage >= self.StagesPerFloor
 				self.SkillStone = self.SkillStone + 1
 				log("[VRF] skill stone stage clear total=" .. tostring(self.SkillStone))
+				-- 유물 '스테이지 클리어 회복': 살아 있는 구성원 최대 체력의 일부
+				local clearHeal = self:Bonus("ClearHeal")
+				if clearHeal > 0 then
+					for _, a in ipairs(self:Actors()) do
+						if not self:IsDown(a) then self:HealActor(a, self:ActorMaxHp(a) * clearHeal / 100) end
+					end
+				end
 				if not isBoss then self:GiveStageReward() end
 				if self.StageLevelUp and not isBoss then self:DoLevelUp(1, 0) end
 				-- 3인 파티: 전투 스테이지가 끝날 때마다 돌파 1번 (직업당 1장)

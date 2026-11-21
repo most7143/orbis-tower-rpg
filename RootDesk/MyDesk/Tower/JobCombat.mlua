@@ -470,7 +470,7 @@ script JobCombat extends Component
 		-- 쿨타임 (돌파 반영).
 		local cd = self:Params(sk).cd or 0
 		local mgr = self._T.mgr
-		if mgr ~= nil then cd = cd * math.max(0.2, 1 - mgr:AccessoryBonus(self.Entity, "CdReduce") / 100) end
+		if mgr ~= nil then cd = cd * math.max(0.2, 1 - (mgr:AccessoryBonus(self.Entity, "CdReduce") + mgr:Bonus("RelicCd")) / 100) end
 		return cd
 	end
 
@@ -502,6 +502,9 @@ script JobCombat extends Component
 	@ExecSpace("ServerOnly")
 	method void AddMana(number n)
 		-- 마나 증감.
+		-- 유물 '마나 획득량': 얻는 마나만 늘린다
+		local mgr = self._T.mgr
+		if n > 0 and mgr ~= nil then n = n * (1 + mgr:Bonus("RelicMana") / 100) end
 		self.Mana = math.max(0, math.min(self.ManaMax, self.Mana + n))
 	end
 

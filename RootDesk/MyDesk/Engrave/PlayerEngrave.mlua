@@ -62,6 +62,33 @@ script PlayerEngrave extends Component
 	property integer SymbolCount = 0
 
 	-- 미네르바의 은총: 여신의 깃털로 옵션 5줄 돌리기 (잠금 최대 4줄, 프리셋 3개). 키 OrbisGrace
+	-- 유물 (심볼 대체, 사용자 확정 2026-11-21): 탑의 열쇠로 뽑기(24종 중 무작위), 중복은 보유 개수로 쌓여 강화 재료.
+	-- 강화 Lv1→9: 단계별 확률·비용(보유 개수), 실패마다 +10%p (성공 시 초기화). 만렙이 되면 남은 개수만큼 열쇠 반환, 이후 뽑기에서 제외.
+	-- 예전 유물 시험판이 "OrbisRelic"에 다른 형식으로 저장해 둔 계정이 있어 새 키를 쓴다
+	property string RelicKey = "OrbisRelicV2"
+	property string RelicTableName = "RelicTable"
+	property integer RelicMaxLv = 9
+	property string RelicRates = "100,85,70,55,45,35,25,20"
+	property string RelicCosts = "2,3,4,5,7,9,11,13"
+	property integer RelicFailStep = 10
+	property integer RelicDrawCost = 1
+	@Sync
+	property boolean RelicLoaded = false
+	@Sync
+	property integer TowerKeys = 0
+	-- 보유 유물 "Id:레벨:보유개수:실패수|..." (레벨 0 = 미보유는 생략)
+	@Sync
+	property string RelicData = ""
+	-- 마지막 뽑기 결과 "Id,Id,..." (화면 표시용)
+	@Sync
+	property string RelicResult = ""
+	@Sync
+	property integer RelicSeq = 0
+	@Sync
+	property string RelicMsg = ""
+	property boolean RelicDirty = false
+	property number RelicRetryTimer = 0
+
 	property string GraceKey = "OrbisGrace"
 	property integer GraceSlots = 5
 	property integer GracePresetCount = 3
@@ -228,6 +255,8 @@ script PlayerEngrave extends Component
 		self:LoadSymbols()
 		self:LoadGraceTables()
 		self:LoadGrace()
+		self:LoadRelicTables()
+		self:LoadRelics()
 		self:LoadSlotTables()
 		self:LoadSlots()
 		self:LoadSkillTables()
@@ -262,6 +291,10 @@ script PlayerEngrave extends Component
 			self.SlotRetryTimer = self.SlotRetryTimer - delta
 			if self.SlotRetryTimer <= 0 then self:LoadSlots() end
 		end
+		if not self.RelicLoaded then
+			self.RelicRetryTimer = self.RelicRetryTimer - delta
+			if self.RelicRetryTimer <= 0 then self:LoadRelics() end
+		end
 		if not self.GraceLoaded then
 			self.GraceRetryTimer = self.GraceRetryTimer - delta
 			if self.GraceRetryTimer <= 0 then self:LoadGrace() end
@@ -289,6 +322,10 @@ script PlayerEngrave extends Component
 		if self.GraceLoaded and self.GraceDirty then
 			local code = ds:SetAndWait(self.GraceKey, self:EncodeGrace())
 			if code ~= 0 then log_warning("[VRF] grace final save failed code=" .. tostring(code)) end
+		end
+		if self.RelicLoaded and self.RelicDirty then
+			local code = ds:SetAndWait(self.RelicKey, self:EncodeRelics())
+			if code ~= 0 then log_warning("[VRF] relic final save failed code=" .. tostring(code)) end
 		end
 		if self.SkillLoaded and self.SkillDirty then
 			local code = ds:SetAndWait(self.SkillKey, self:EncodeSkills())
@@ -848,6 +885,195 @@ script PlayerEngrave extends Component
 			if r < 0 then return i end
 		end
 		return #list
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadRelicTables()
+		-- 유물 표 (RelicTable): 순서대로 24종.
+		self._T.relics = {}
+		self._T.relicById = {}
+		local t = _DataService:GetTable(self.RelicTableName)
+		if t == nil then
+			log_warning("[VRF] relic table missing")
+			return
+		end
+		for i = 1, t:GetRowCount() do
+			local r = { id = t:GetCell(i, "Id"), name = t:GetCell(i, "Name"), effect = t:GetCell(i, "Effect"), base = tonumber(t:GetCell(i, "Base")) or 0, label = t:GetCell(i, "Label"), icon = t:GetCell(i, "IconRUID") }
+			table.insert(self._T.relics, r)
+			self._T.relicById[r.id] = r
+		end
+		self._T.relicRates = {}
+		for v in string.gmatch(self.RelicRates, "[^,]+") do table.insert(self._T.relicRates, tonumber(v) or 0) end
+		self._T.relicCosts = {}
+		for v in string.gmatch(self.RelicCosts, "[^,]+") do table.insert(self._T.relicCosts, math.floor(tonumber(v) or 1)) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadRelics()
+		-- 저장된 유물: {"k":열쇠,"r":"Id:레벨:개수:실패|..."}
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local errorCode, raw = ds:GetAndWait(self.RelicKey)
+		local t = {}
+		if errorCode == 0 and raw ~= nil and raw ~= "" then
+			t = _HttpService:JSONDecode(raw) or {}
+		elseif errorCode ~= 0 and errorCode ~= 1000002 then
+			log_warning("[VRF] relic load failed code=" .. tostring(errorCode))
+			self.RelicRetryTimer = self.LoadRetryDelay
+			return
+		end
+		local keys = t["k"]
+		if type(keys) ~= "number" then keys = 0 end
+		self.TowerKeys = math.max(0, math.floor(keys))
+		self._T.relicState = {}
+		local data = t["r"]
+		if type(data) ~= "string" then data = "" end
+		for entry in string.gmatch(data, "[^|]+") do
+			local id, lv, cnt, fail = string.match(entry, "^([^:]+):(%d+):(%d+):(%d+)$")
+			if id ~= nil and self._T.relicById[id] ~= nil then
+				self._T.relicState[id] = { lv = math.min(self.RelicMaxLv, tonumber(lv) or 0), cnt = tonumber(cnt) or 0, fail = tonumber(fail) or 0 }
+			end
+		end
+		self:SyncRelics()
+		self.RelicLoaded = true
+		log("[VRF] relic loaded keys=" .. tostring(self.TowerKeys) .. " data=" .. self.RelicData)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncRelics()
+		-- 보유 유물 상태를 화면용 문자열로.
+		local parts = {}
+		for _, r in ipairs(self._T.relics or {}) do
+			local st = (self._T.relicState or {})[r.id]
+			if st ~= nil and st.lv > 0 then table.insert(parts, r.id .. ":" .. tostring(st.lv) .. ":" .. tostring(st.cnt) .. ":" .. tostring(st.fail)) end
+		end
+		self.RelicData = table.concat(parts, "|")
+		self.RelicSeq = self.RelicSeq + 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeRelics()
+		-- 저장 문자열.
+		return _HttpService:JSONEncode({ k = self.TowerKeys, r = self.RelicData })
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveRelics()
+		-- 유물 저장 (비동기).
+		if not self.RelicLoaded then return end
+		self.RelicDirty = true
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.RelicKey, self:EncodeRelics(), function(errorCode, key)
+			if errorCode == 0 then
+				self.RelicDirty = false
+			else
+				log_warning("[VRF] relic save failed code=" .. tostring(errorCode))
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddTowerKeys(integer n)
+		-- 탑의 열쇠 획득 (층 클리어 보상 등). 판이 끝날 때·나갈 때 저장.
+		if not self.RelicLoaded or n <= 0 then return end
+		self.TowerKeys = self.TowerKeys + n
+		self.RelicDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FlushRelics()
+		-- 바뀐 유물·열쇠가 있으면 저장.
+		if self.RelicLoaded and self.RelicDirty then self:SaveRelics() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number RelicValue(table r, integer lv)
+		-- 레벨별 효과: Lv1 값 × (1 + 0.25 × (레벨 - 1)) → Lv9 = 3배.
+		if lv <= 0 then return 0 end
+		return r.base * (1 + 0.25 * (lv - 1))
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RelicValues()
+		-- 판에 적용할 유물 효과 합계 {효과 = 값}.
+		local out = {}
+		for _, r in ipairs(self._T.relics or {}) do
+			local st = (self._T.relicState or {})[r.id]
+			if st ~= nil and st.lv > 0 then out[r.effect] = (out[r.effect] or 0) + self:RelicValue(r, st.lv) end
+		end
+		return out
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanEditRelic(string fromUserId)
+		-- 본인 + 불러오기 완료 + 로비에서만.
+		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.RelicLoaded then return false end
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	@ExecSpace("Server")
+	method void RequestRelicDraw(integer count)
+		-- 탑의 열쇠 뽑기 (1회 / 10회): 만렙이 아닌 유물 중 무작위. 처음이면 활성화(Lv1), 중복이면 보유 개수 +1.
+		if not self:CanEditRelic(senderUserId) then return end
+		if count ~= 1 and count ~= 10 then return end
+		local cost = self.RelicDrawCost * count
+		if self.TowerKeys < cost then return end
+		local pool = {}
+		for _, r in ipairs(self._T.relics or {}) do
+			local st = self._T.relicState[r.id]
+			if st == nil or st.lv < self.RelicMaxLv then table.insert(pool, r) end
+		end
+		if #pool == 0 then return end
+		self.TowerKeys = self.TowerKeys - cost
+		local got = {}
+		for k = 1, count do
+			local r = pool[_UtilLogic:RandomIntegerRange(1, #pool)]
+			local st = self._T.relicState[r.id]
+			if st == nil then
+				st = { lv = 0, cnt = 0, fail = 0 }
+				self._T.relicState[r.id] = st
+			end
+			if st.lv <= 0 then st.lv = 1 else st.cnt = st.cnt + 1 end
+			table.insert(got, r.id)
+		end
+		self.RelicResult = table.concat(got, ",")
+		self.RelicMsg = ""
+		self:SyncRelics()
+		self:SaveRelics()
+		log("[VRF] relic draw x" .. tostring(count) .. " keys=" .. tostring(self.TowerKeys) .. " got=" .. self.RelicResult)
+	end
+
+	@ExecSpace("Server")
+	method void RequestRelicEnhance(string id)
+		-- 유물 강화: 보유 개수를 비용으로 내고 확률(기본 + 실패 보정)로 +1. 만렙이 되면 남은 개수만큼 열쇠 반환.
+		if not self:CanEditRelic(senderUserId) then return end
+		local r = self._T.relicById[id]
+		local st = self._T.relicState[id]
+		if r == nil or st == nil or st.lv <= 0 or st.lv >= self.RelicMaxLv then return end
+		local cost = self._T.relicCosts[st.lv] or 1
+		if st.cnt < cost then return end
+		st.cnt = st.cnt - cost
+		local rate = math.min(100, (self._T.relicRates[st.lv] or 0) + st.fail * self.RelicFailStep)
+		if _UtilLogic:RandomDouble() * 100 < rate then
+			st.lv = st.lv + 1
+			st.fail = 0
+			self.RelicMsg = r.name .. " 강화 성공! Lv." .. tostring(st.lv)
+			if st.lv >= self.RelicMaxLv and st.cnt > 0 then
+				local back = st.cnt
+				st.cnt = 0
+				self.TowerKeys = self.TowerKeys + back
+				self.RelicMsg = r.name .. " 최대 레벨! 남은 " .. tostring(back) .. "개를 탑의 열쇠로 돌려받았습니다"
+			elseif st.lv >= self.RelicMaxLv then
+				self.RelicMsg = r.name .. " 최대 레벨!"
+			end
+		else
+			st.fail = st.fail + 1
+			self.RelicMsg = r.name .. " 강화 실패… 다음 확률 +" .. tostring(self.RelicFailStep) .. "%p"
+		end
+		self.RelicResult = ""
+		self:SyncRelics()
+		self:SaveRelics()
+		log("[VRF] relic enhance " .. id .. " rate=" .. tostring(rate) .. " -> lv" .. tostring(st.lv) .. " cnt=" .. tostring(st.cnt) .. " keys=" .. tostring(self.TowerKeys))
 	end
 
 	@ExecSpace("ServerOnly")

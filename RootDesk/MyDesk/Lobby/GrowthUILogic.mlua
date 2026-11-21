@@ -124,7 +124,7 @@ script GrowthUILogic extends Logic
 		-- 지금 탭의 기존 화면을 닫는다.
 		if self._T.tab == 1 then _SlotUILogic:Close() end
 		if self._T.tab == 2 then _EngraveUILogic:Close() end
-		if self._T.tab == 3 then _SymbolUILogic:Close() end
+		if self._T.tab == 3 then _RelicUILogic:Close() end
 		if self._T.tab == 4 then _GraceUILogic:Close() end
 		if self._T.tab == 5 then _HeroSkillUILogic:Close() end
 	end
@@ -149,8 +149,8 @@ script GrowthUILogic extends Logic
 			_EngraveUILogic:Open()
 			_EngraveUILogic.dimEntity:SetEnable(false)
 		elseif index == 3 then
-			_SymbolUILogic:Open()
-			_SymbolUILogic.dimEntity:SetEnable(false)
+			-- 3번 탭: 유물 (심볼 대체, 2026-11-21)
+			_RelicUILogic:Open()
 		elseif index == 4 then
 			_GraceUILogic:Open()
 			_GraceUILogic.dimEntity:SetEnable(false)
