@@ -7,6 +7,11 @@ script TowerPortal extends Component
 	property integer Index = 0
 	@Sync
 	property string Kind = ""
+	-- 머리 위 이름 높이·글자 크기 (엔티티 크기와 무관하게 보이는 값, 상인·마법의 서처럼 크기가 다른 오브젝트용)
+	@Sync
+	property number LabelY = 1.9
+	@Sync
+	property number LabelSize = 1.5
 
 	@HideFromInspector
 	property any touchHandler = nil
@@ -28,12 +33,13 @@ script TowerPortal extends Component
 		-- 머리 위 이름 모양 (글자 모양은 클라이언트에서 정해야 적용된다: 메이커 실측).
 		local text = self.Entity.TextRendererComponent
 		if not isvalid(text) then return end
-		text.FontSize = 1.5
+		local sc = math.max(0.1, self.Entity.TransformComponent.Scale.y)
+		text.FontSize = self.LabelSize / sc
 		text.FontColor = Color(1, 1, 1, 1)
 		text.OutlineWidth = 0.3
 		text.OutlineColor = Color(0, 0, 0, 1)
 		text.RectSize = Vector2(3, 0.6)
-		text.RectOffset = Vector2(0, 1.9)
+		text.RectOffset = Vector2(0, self.LabelY / sc)
 		text.SortingLayer = "MapLayer0"
 		text.OrderInLayer = 30
 	end
@@ -53,6 +59,12 @@ script TowerPortal extends Component
 		self:ApplyTouchArea()
 		self:ApplyLabelStyle()
 		self.touchHandler = self.Entity:ConnectEvent(TouchEvent, self.OnTouch)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSyncProperty(string name, any value)
+		-- 이름 높이·크기가 늦게 도착해도 다시 적용.
+		if name == "LabelY" or name == "LabelSize" then self:ApplyLabelStyle() end
 	end
 
 	@ExecSpace("ClientOnly")

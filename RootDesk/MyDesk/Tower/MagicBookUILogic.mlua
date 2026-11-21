@@ -1,0 +1,245 @@
+@Logic
+script MagicBookUILogic extends Logic
+
+	-- 마법의 서 화면 (MagicBookUI.ui): 판 상태가 BOOK일 때 열린다 (상점 스테이지에서 정비소 다음).
+	-- 직업 탭 → 장착 스킬 목록 → 스킬 선택 → 사용하기(스킬석) → 그 스킬의 돌파 2개 중 1개 선택 (돌파 카드 화면).
+	property string RootPath = "/ui/MagicBookUI"
+
+	@HideFromInspector
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 스킬 표 읽기, 버튼 연결, 화면 숨기기.
+		self._T.skills = {}
+		for _, name in ipairs({ "HeroSkillTable", "JobSkillTable" }) do
+			local t = _DataService:GetTable(name)
+			if t ~= nil then
+				for i = 1, t:GetRowCount() do
+					local id = t:GetCell(i, "SkillId")
+					if id ~= nil and id ~= "" and self._T.skills[id] == nil then
+						self._T.skills[id] = { name = t:GetCell(i, "Name") or id, icon = t:GetCell(i, "IconRUID") or "" }
+					end
+				end
+			end
+		end
+		self._T.tab = 1
+		self._T.sel = ""
+		self.handlers = {}
+		for i = 1, 3 do
+			local idx = i
+			self:Bind("Win/Tab" .. i, function() self:OnTab(idx) end)
+		end
+		for i = 1, 5 do
+			local idx = i
+			self:Bind("Win/Body/Row" .. i, function() self:OnRow(idx) end)
+		end
+		self:Bind("Win/Use", function() self:OnUse() end)
+		self:Bind("Win/Close", function() self:OnClose() end)
+		self._T.shown = nil
+		self:Show(false)
+		log("[VRF] MagicBookUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Find(string sub)
+		-- 화면 안 엔티티 찾기.
+		return _EntityService:GetEntityByPath(self.RootPath .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(string sub, any fn)
+		-- 버튼 클릭 연결 (해제 기록 포함).
+		local e = self:Find(sub)
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(ButtonClickEvent, function()
+			_UISoundLogic:PlayClick()
+			fn()
+		end)
+		table.insert(self.handlers, { entity = e, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 연결 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.entity) then r.entity:DisconnectEvent(ButtonClickEvent, r.h) end
+		end
+		self.handlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetManager()
+		-- 현재 맵의 판 진행 매니저.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(boolean on)
+		-- 화면 켜기/끄기. 열 때 첫 탭·선택 없음으로.
+		if self._T.shown == on then return end
+		self._T.shown = on
+		for _, n in ipairs({ "Dim", "Win" }) do
+			local e = self:Find(n)
+			if isvalid(e) then e:SetEnable(on) end
+		end
+		if on then
+			self._T.sel = ""
+			self._T.key = nil
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table Parse(string info)
+		-- "직업=스킬:얻은:남은,.../..." → { {job, skills = {{id, taken, remain}}} }.
+		local list = {}
+		for part in string.gmatch(info or "", "[^/]+") do
+			local job, rest = string.match(part, "^([^=]*)=?(.*)$")
+			local skills = {}
+			for entry in string.gmatch(rest or "", "[^,]+") do
+				local id, taken, remain = string.match(entry, "^([^:]+):(%d+):(%d+)$")
+				if id ~= nil then table.insert(skills, { id = id, taken = tonumber(taken) or 0, remain = tonumber(remain) or 0 }) end
+			end
+			table.insert(list, { job = job or "", skills = skills })
+		end
+		return list
+	end
+
+	@ExecSpace("ClientOnly")
+	method string JobName(string id)
+		-- 직업 표시 이름.
+		local names = { Hero = "히어로", Bishop = "비숍", NightLord = "나이트로드", Bowmaster = "보우마스터", Viper = "바이퍼" }
+		return names[id] or id
+	end
+
+	@ExecSpace("ClientOnly")
+	method table SelectedSkill(table members)
+		-- 지금 탭에서 고른 스킬 정보 (없으면 nil).
+		local m = members[self._T.tab]
+		if m == nil then return nil end
+		for _, s in ipairs(m.skills) do
+			if s.id == self._T.sel then return s end
+		end
+		return nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh(Component mgr)
+		-- 탭·스킬 목록·사용하기 버튼·보유 스킬석을 다시 그린다.
+		local members = self:Parse(mgr.BookInfo)
+		if self._T.tab > #members then self._T.tab = 1 end
+		local stone = self:Find("Win/Stone")
+		if isvalid(stone) then stone.TextGUIRendererComponent.Text = "스킬석 " .. tostring(mgr.SkillStone) .. "개" end
+		for i = 1, 3 do
+			local tab = self:Find("Win/Tab" .. i)
+			if isvalid(tab) then
+				local m = members[i]
+				tab:SetEnable(m ~= nil)
+				if m ~= nil then
+					tab.TextGUIRendererComponent.Text = tostring(i) .. "  " .. self:JobName(m.job)
+					_UIButtonLogic:SetSelected(tab, i == self._T.tab)
+				end
+			end
+		end
+		local cur = members[self._T.tab]
+		local skills = cur ~= nil and cur.skills or {}
+		for i = 1, 5 do
+			local row = self:Find("Win/Body/Row" .. i)
+			local s = skills[i]
+			if isvalid(row) then
+				row:SetEnable(s ~= nil)
+				if s ~= nil then
+					local def = self._T.skills[s.id] or { name = s.id, icon = "" }
+					local name = self:Find("Win/Body/Row" .. i .. "/Name")
+					if isvalid(name) then name.TextGUIRendererComponent.Text = def.name end
+					local brk = self:Find("Win/Body/Row" .. i .. "/Breaks")
+					if isvalid(brk) then
+						local txt = "돌파 " .. tostring(s.taken) .. " / " .. tostring(s.taken + s.remain)
+						if s.remain <= 0 then txt = txt .. "  (완료)" end
+						brk.TextGUIRendererComponent.Text = txt
+					end
+					local icon = self:Find("Win/Body/Row" .. i .. "/Icon")
+					if isvalid(icon) then
+						local spr = icon.SpriteGUIRendererComponent
+						if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+						if spr.ImageRUID.DataId ~= def.icon then spr.ImageRUID = DataRef(def.icon) end
+					end
+					_UIButtonLogic:SetSelected(row, s.id == self._T.sel)
+					_UIButtonLogic:SetDisabled(row, s.remain <= 0)
+				end
+			end
+		end
+		local empty = self:Find("Win/Body/Empty")
+		if isvalid(empty) then empty.TextGUIRendererComponent.Text = #skills == 0 and "장착한 스킬이 없습니다" or "" end
+		local sel = self:SelectedSkill(members)
+		local use = self:Find("Win/Use")
+		if isvalid(use) then
+			use.TextGUIRendererComponent.Text = "사용하기 · 스킬석 " .. tostring(mgr.StoneCost) .. "개"
+			_UIButtonLogic:SetDisabled(use, sel == nil or sel.remain <= 0 or mgr.SkillStone < mgr.StoneCost)
+		end
+		local desc = self:Find("Win/Desc")
+		if isvalid(desc) then
+			local txt = "스킬을 고르고 사용하기를 누르면 그 스킬의 돌파 2개 중 하나를 얻습니다"
+			if sel ~= nil and mgr.SkillStone < mgr.StoneCost then
+				txt = "<color=#FF6B6B>스킬석이 부족합니다</color> (필요 " .. tostring(mgr.StoneCost) .. "개)"
+			elseif sel ~= nil then
+				local def = self._T.skills[sel.id] or { name = sel.id }
+				txt = def.name .. " — 남은 돌파 " .. tostring(sel.remain) .. "개 중 무작위 " .. tostring(math.min(2, sel.remain)) .. "개를 보여 줍니다"
+			end
+			desc.TextGUIRendererComponent.Text = txt
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnTab(integer i)
+		-- 직업 탭 전환 (선택 스킬 해제).
+		self._T.tab = i
+		self._T.sel = ""
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnRow(integer i)
+		-- 스킬 선택.
+		local mgr = self:GetManager()
+		if mgr == nil then return end
+		local m = self:Parse(mgr.BookInfo)[self._T.tab]
+		local s = m ~= nil and m.skills[i] or nil
+		if s == nil or s.remain <= 0 then return end
+		self._T.sel = s.id
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUse()
+		-- 사용하기: 서버가 스킬석을 확인하고 돌파 카드 2장을 연다.
+		local mgr = self:GetManager()
+		if mgr == nil or self._T.sel == "" or mgr.SkillStone < mgr.StoneCost then return end
+		mgr:RequestBookUse(self._T.sel)
+		log("[VRF] book use clicked " .. self._T.sel)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnClose()
+		-- 닫기 → 다음 스테이지 포탈.
+		local mgr = self:GetManager()
+		if mgr ~= nil then mgr:RequestBookClose() end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- BOOK 상태에서만 보이고, 데이터·선택이 바뀌면 다시 그린다.
+		local mgr = self:GetManager()
+		local on = mgr ~= nil and mgr.RunState == "BOOK"
+		self:Show(on)
+		if not on then return end
+		local key = tostring(mgr.BookSeq) .. "|" .. tostring(mgr.SkillStone) .. "|" .. tostring(mgr.StoneCost) .. "|" .. tostring(self._T.tab) .. "|" .. self._T.sel
+		if self._T.key ~= key then
+			self._T.key = key
+			self:Refresh(mgr)
+		end
+	end
+
+end

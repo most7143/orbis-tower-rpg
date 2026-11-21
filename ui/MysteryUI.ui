@@ -1104,17 +1104,26 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "2a218c009982464f9c6f581e763ea6aa"
+                },
+                "PressedSprite": {
+                  "DataId": "3127fb2d53b14c6a94e8d0c7e309ac92"
+                },
+                "SelectedSprite": {
+                  "DataId": "ffd05f5bf0274527b1e5cb977f2c49fe"
+                },
+                "DisabledSprite": {
+                  "DataId": "db304db9f8de48278c56d7b13071f0d5"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
               "SortingLayer": "UI",
-              "Transition": 1,
-              "Enable": true
+              "Transition": 2,
+              "Enable": true,
+              "Selectable": false
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
@@ -1347,17 +1356,26 @@
               },
               "IgnoreMapLayerCheck": false,
               "ImageRUIDs": {
-                "HighlightedSprite": null,
-                "PressedSprite": null,
-                "SelectedSprite": null,
-                "DisabledSprite": null
+                "HighlightedSprite": {
+                  "DataId": "292e7807ec754ea19ff3c28ec4b10311"
+                },
+                "PressedSprite": {
+                  "DataId": "7e3db0c2c7944ba29d49c35222ad98b3"
+                },
+                "SelectedSprite": {
+                  "DataId": "8739b8a9b7e84759abd297cae38822dc"
+                },
+                "DisabledSprite": {
+                  "DataId": "b5179a32f5c54fabbd757a0d8a2fbe18"
+                }
               },
               "KeyCode": 0,
               "OrderInLayer": 0,
               "OverrideSorting": false,
               "SortingLayer": "UI",
-              "Transition": 1,
-              "Enable": true
+              "Transition": 2,
+              "Enable": true,
+              "Selectable": false
             },
             {
               "@type": "MOD.Core.TextGUIRendererComponent",
