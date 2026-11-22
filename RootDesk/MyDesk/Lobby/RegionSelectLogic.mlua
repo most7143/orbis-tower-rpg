@@ -546,6 +546,19 @@ script RegionSelectLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method string ClaimText(string msg)
+		-- 3번째 별 상자 수령 성공이면 다이아 안내를 덧붙인다 (실제 지급은 PlayerRoster가 1초 안에 함).
+		if self._T.claimTier ~= 3 or string.sub(msg, 1, string.len("보상 획득")) ~= "보상 획득" then return msg end
+		local dia = 300
+		local p = _UserService.LocalPlayer
+		if isvalid(p) then
+			local roster = p:GetComponent("script.PlayerRoster")
+			if roster ~= nil then dia = math.floor(roster:Cfg("SectionLastDia", 300)) end
+		end
+		return msg .. " · 다이아 +" .. tostring(dia)
+	end
+
+	@ExecSpace("ClientOnly")
 	method void Claim(integer tier)
 		-- 상자 수령 요청 (서버가 판정·지급). 응답이 올 때까지 다시 누를 수 없다.
 		if self._T.claiming then return end
@@ -554,6 +567,7 @@ script RegionSelectLogic extends Logic
 		local section = math.floor(((self._T.sel or 1) - 1) / self.SectionSize) + 1
 		self._T.claiming = true
 		self._T.claimSeq = eng.ClaimSeq
+		self._T.claimTier = tier
 		self._T.claimTimeout = 5
 		eng:RequestClaimSection(section, tier)
 		self:Refresh()
@@ -664,7 +678,7 @@ script RegionSelectLogic extends Logic
 			self._T.claimTimeout = (self._T.claimTimeout or 0) - delta
 			if eng ~= nil and eng.ClaimSeq ~= self._T.claimSeq then
 				self._T.claiming = false
-				self:Hint(eng.ClaimMsg)
+				self:Hint(self:ClaimText(eng.ClaimMsg))
 				self:Refresh()
 			elseif self._T.claimTimeout <= 0 then
 				self._T.claiming = false

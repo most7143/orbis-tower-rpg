@@ -4,6 +4,8 @@ script MagicBookUILogic extends Logic
 	-- 마법의 서 화면 (MagicBookUI.ui): 판 상태가 BOOK일 때 열린다 (상점 스테이지에서 정비소 다음).
 	-- 직업 탭 → 장착 스킬 목록 → 스킬 선택 → 사용하기(스킬석) → 그 스킬의 돌파 2개 중 1개 선택 (돌파 카드 화면).
 	property string RootPath = "/ui/MagicBookUI"
+	-- 4-G 보완: 구성원당 최대 줄 수 (칸 스킬 5 + 숨은 패시브 스킬 2)
+	property integer RowCount = 7
 
 	@HideFromInspector
 	property table handlers = {}
@@ -30,7 +32,7 @@ script MagicBookUILogic extends Logic
 			local idx = i
 			self:Bind("Win/Tab" .. i, function() self:OnTab(idx) end)
 		end
-		for i = 1, 5 do
+		for i = 1, self.RowCount do
 			local idx = i
 			self:Bind("Win/Body/Row" .. i, function() self:OnRow(idx) end)
 		end
@@ -145,7 +147,7 @@ script MagicBookUILogic extends Logic
 		end
 		local cur = members[self._T.tab]
 		local skills = cur ~= nil and cur.skills or {}
-		for i = 1, 5 do
+		for i = 1, self.RowCount do
 			local row = self:Find("Win/Body/Row" .. i)
 			local s = skills[i]
 			if isvalid(row) then

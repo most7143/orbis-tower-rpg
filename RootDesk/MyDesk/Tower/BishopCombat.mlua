@@ -85,6 +85,16 @@ script BishopCombat extends Component
 	property string StatusText = ""
 	@Sync
 	property string SlotInfo = ""
+	-- 4-C: 이번 판 캐릭터 레벨·차수 이름 (HUD 구성원 줄)
+	@Sync
+	property integer RunLevel = 0
+	@Sync
+	property string RunLabel = ""
+	-- 4-D: 궁극기 게이지 (5차 궁극기 칸이 있을 때만 충전)
+	@Sync
+	property number UltGauge = 0
+	@Sync
+	property number UltMax = 100
 
 	@ExecSpace("ServerOnly")
 	method void OnBeginPlay()
@@ -129,6 +139,16 @@ script BishopCombat extends Component
 		local t = self._T
 		t.equip = {}
 		t.ownLv = {}
+		t.slotOf = {}
+		t.pctMul = {}
+		t.tier = 0
+		t.ultId = nil
+		-- 4-E: 고유 패시브 숨은 장착(확률·위기 스킬)과 차수 강화
+		t.hidden = {}
+		t.pExtra = {}
+		self.RunLevel = 0
+		self.RunLabel = ""
+		self.UltGauge = 0
 		t.cd = {}
 		t.lastActionTime = 0
 		if t.summon ~= nil and (t.summon.serial or 0) ~= 0 then _EffectService:RemoveEffect(t.summon.serial) end
@@ -147,29 +167,38 @@ script BishopCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void BeginRun(Component mgr)
-		-- 판 시작: 성장창에서 장착한 비숍 스킬 5종(아웃게임 레벨 포함)을 레벨업 카드 후보로 정한다. 입장 직후에는 아무 스킬도 없다 (Lv.0).
-		-- 저장 정보가 없으면 (불러오기 전·테스트) 시작 지급 StartEquip을 Lv.1로 쓴다.
+		-- 4-C: 판 시작 — 캐릭터 차수의 칸 스킬(주력·보조·기술·하이퍼·궁극기)을 장착한다. 로비 장착·스킬 레벨은 읽지 않는다.
+		-- 칸 수치 덮어쓰기(쿨·마나·발동 방식)가 판마다 쌓이지 않게 스킬표를 다시 읽어 원래 값으로 되돌린다.
+		self:LoadSkills()
 		self:ClearState()
 		self._T.mgr = mgr
-		local eng = mgr:GetEngrave()
-		local data = nil
-		if eng ~= nil then data = eng:SkillRunDataFor("Bishop") end
-		if data == nil or not data.loaded or #data.equip == 0 then
-			data = { equip = {}, lv = {}, holyLv = 1 }
-			for id in string.gmatch(self.StartEquip, "[^,]+") do
-				table.insert(data.equip, id)
-				data.lv[id] = 1
+		local d = mgr:RunDataFor(self.JobId)
+		if d == nil then
+			-- 안전장치: 로스터 값이 없을 때만 예전 로비 장착 경로 (정상 판에서는 나오면 안 됨)
+			log_warning("[VRF] Bishop run data missing, legacy equip")
+			local eng = mgr:GetEngrave()
+			local data = nil
+			if eng ~= nil then data = eng:SkillRunDataFor("Bishop") end
+			if data == nil or not data.loaded or #data.equip == 0 then
+				data = { equip = {}, lv = {}, holyLv = 1 }
+				for id in string.gmatch(self.StartEquip, "[^,]+") do
+					table.insert(data.equip, id)
+					data.lv[id] = 1
+				end
 			end
-		end
-		self.HolyLv = data.holyLv or 1
-		for _, id in ipairs(data.equip) do
-			if self._T.skills[id] ~= nil then
-				table.insert(self._T.equip, id)
-				self._T.ownLv[id] = data.lv[id] or 1
-				-- 판 안 자동 성장이 없으므로 장착 스킬은 처음부터 배운 상태 (위력은 아웃게임 레벨)
-				mgr.SkillLv[id] = 1
+			self.HolyLv = data.holyLv or 1
+			for _, id in ipairs(data.equip) do
+				if self._T.skills[id] ~= nil then
+					table.insert(self._T.equip, id)
+					self._T.ownLv[id] = data.lv[id] or 1
+					mgr.SkillLv[id] = 1
+				end
 			end
+		else
+			self:ApplySlots(mgr, d)
 		end
+		-- 4-F: 돌파 저장 키(직업.칸) 등록
+		mgr:RegisterSlots(self.JobId, self._T.slotOf)
 		log("[VRF] bishop run equip=" .. table.concat(self._T.equip, ",") .. " holyLv=" .. tostring(self.HolyLv))
 		self.Active = true
 		self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
@@ -185,6 +214,94 @@ script BishopCombat extends Component
 		local tp = self.Entity:GetComponent("script.TowerPlayer")
 		if tp ~= nil and tp:Uid() ~= "" then self:PreloadFx(table.concat(list, "|"), tp:Uid()) end
 		log("[VRF] bishop run equip=" .. table.concat(self._T.equip, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplySlots(Component mgr, table d)
+		-- 4-C: 칸 순서(주력·보조·기술·하이퍼·궁극기 = HUD S1~S5)대로 현재 차수 칸 스킬을 장착하고 칸 수치(배율·쿨·마나·발동 방식)를 덮어쓴다.
+		local tier = math.max(1, math.floor(d.tier or 1))
+		self._T.tier = tier
+		self.RunLevel = math.floor(d.level or 0)
+		self.RunLabel = d.tierName or ""
+		-- 4-E: 고유 패시브(성수) 레벨·흡수 스킬·차수 강화 = CharPassiveTable
+		local p = mgr:PassiveOf(self.JobId, tier)
+		self.HolyLv = p.lv
+		self._T.pExtra = p.extra or {}
+		self.UltMax = mgr.UltGaugeMax
+		local pcts = {}
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "Ult" }) do
+			local id = (d.slots or {})[key] or ""
+			if id ~= "" and self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.slotOf[id] = key
+				local t = mgr:SlotTune(self.JobId, key, tier)
+				self._T.pctMul[id] = t.pctMul
+				local sk = self._T.skills[id]
+				if t.cdSec > 0 then sk.cooldown = t.cdSec end
+				if t.mana >= 0 then sk.mana = t.mana end
+				-- 하이퍼: 쿨타임마다 자동 시전 (헤븐즈 도어 Skill → Cooldown)
+				if t.triggerAs == "Cooldown" then sk.trigger = "Cooldown" end
+				-- 궁극기: 게이지가 차면 시전 (일반 시전 분기에서 빠짐, 마나 0)
+				if t.triggerAs == "Ult" then
+					sk.trigger = "Ult"
+					sk.mana = 0
+					self._T.ultId = id
+				end
+				mgr.SkillLv[id] = 1
+				table.insert(pcts, tostring(t.pctMul))
+			end
+		end
+		log("[VRF] slots run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " lv=" .. tostring(self.RunLevel) .. " equip=" .. table.concat(self._T.equip, ",") .. " pct=" .. table.concat(pcts, ",") .. " ult=" .. tostring(self._T.ultId or ""))
+		-- 4-E: 패시브가 흡수한 확률·위기 스킬을 숨은 장착으로 (HUD 칸에는 안 보임, 돌파 카드·마법의 서 대상)
+		local hidden = {}
+		for _, gid in ipairs(p.grants or {}) do
+			if self._T.skills[gid] ~= nil and not self:Equipped(gid) then
+				table.insert(self._T.equip, gid)
+				self._T.hidden[gid] = true
+				self._T.slotOf[gid] = "Passive"
+				mgr.SkillLv[gid] = 1
+				table.insert(hidden, gid)
+			end
+		end
+		local ex = {}
+		for k, v in pairs(self._T.pExtra) do if v then table.insert(ex, k) end end
+		log("[VRF] passive run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " passiveLv=" .. tostring(self.HolyLv) .. " hidden=" .. table.concat(hidden, ",") .. " extra=" .. table.concat(ex, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string SwapSlot(Component mgr, string slot, string newId)
+		-- 4-F 테스트(DebugSwapSlot): 판 중 진화 흉내 — 그 칸의 스킬을 newId로 바꾸고 칸 수치를 다시 덮어쓴다. 돌려주는 값: 이전 스킬 Id(없으면 "").
+		local sk = self._T.skills[newId]
+		if sk == nil then return "" end
+		local old = ""
+		for id, s in pairs(self._T.slotOf) do
+			if s == slot then old = id end
+		end
+		if old == "" or old == newId then return old end
+		for i, id in ipairs(self._T.equip) do
+			if id == old then self._T.equip[i] = newId end
+		end
+		self._T.slotOf[old] = nil
+		self._T.slotOf[newId] = slot
+		local t = mgr:SlotTune(self.JobId, slot, self._T.tier)
+		self._T.pctMul[newId] = t.pctMul
+		if t.cdSec > 0 then sk.cooldown = t.cdSec end
+		if t.mana >= 0 then sk.mana = t.mana end
+		if t.triggerAs == "Cooldown" then sk.trigger = "Cooldown" end
+		if self._T.ultId == old then
+			sk.trigger = "Ult"
+			sk.mana = 0
+			self._T.ultId = newId
+		end
+		mgr.SkillLv[newId] = 1
+		return old
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddUlt(number n)
+		-- 4-D: 궁극기 게이지 충전 (궁극기 칸이 있고 아직 가득이 아닐 때만).
+		if self._T.ultId == nil or n <= 0 or self.UltGauge >= self.UltMax then return end
+		self.UltGauge = math.min(self.UltMax, self.UltGauge + n)
 	end
 
 	@ExecSpace("Client")
@@ -266,9 +383,12 @@ script BishopCombat extends Component
 	@ExecSpace("ServerOnly")
 	method integer HolyMax()
 		-- 성수 최대치: 기본 5, 샤이닝 레이 돌파 3 '어드밴스드 성수' 10, 디바인 퍼니시먼트 돌파 5 15.
-		if self:Has("B15", 5) then return 15 end
-		if self:Has("B03", 3) then return 10 end
-		return self.HolyBaseMax
+		local m = self.HolyBaseMax
+		if self:Has("B15", 5) then m = 15
+		elseif self:Has("B03", 3) then m = 10 end
+		-- 4-E: 성수 5차 강화 '성수 최대 10'
+		if (self._T.pExtra or {}).HolyMax10 then m = math.max(m, 10) end
+		return m
 	end
 
 	@ExecSpace("ServerOnly")
@@ -321,8 +441,8 @@ script BishopCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method number LvMul(string id)
-		-- 아웃게임 스킬 레벨 배율: Lv.1 1배 → Lv.11 3배.
-		return 1 + ((self._T.ownLv[id] or 1) - 1) * 0.2
+		-- 4-C: 칸 표 위력 배율(CharSkillSlotTable PctMul). 아웃게임 스킬 레벨 배율은 쓰지 않는다.
+		return (self._T.pctMul or {})[id] or 1
 	end
 
 	@ExecSpace("ServerOnly")
@@ -640,7 +760,8 @@ script BishopCombat extends Component
 		local cd = sk.cooldown or 0
 		local cut = { B01 = { 1, 3 }, B02 = { 2, 3 }, B04 = { 4, 15 }, B06 = { 5, 6 }, B07 = { 4, 4 }, B10 = { 2, 18 }, B13 = { 2, 8 }, B14 = { 3, 3 }, B15 = { 2, 0 } }
 		local c = cut[sk.id]
-		if c ~= nil and self:Has(sk.id, c[1]) then cd = c[2] end
+		-- 돌파 쿨타임은 칸 표로 줄인 쿨타임보다 늘리지 않는다 (엔젤레이 칸 쿨 5 + 돌파 6 → 5)
+		if c ~= nil and self:Has(sk.id, c[1]) then cd = math.min(cd, c[2]) end
 		local mgr = self._T.mgr
 		if mgr ~= nil then cd = cd * math.max(0.2, 1 - (mgr:AccessoryBonus(self.Entity, "CdReduce") + mgr:Bonus("RelicCd")) / 100) end
 		return cd
@@ -651,6 +772,8 @@ script BishopCombat extends Component
 		-- 기본 공격 1회(명중): 마나·성수 획득 후 함께 시전할 비숍 스킬을 정한다. 동작 있는 스킬은 1개: 쿨타임형 → 마나형(비용 큰 것).
 		self._T.mgr = mgr
 		self:AddMana(self.ManaPerHit)
+		-- 4-D: 기본 공격 적중 → 궁극기 게이지
+		self:AddUlt(mgr.UltGaugeBasic)
 		local mon = mgr:HeroMonster()
 		self:RollHolyHits(1, mon)
 		local list = {}
@@ -678,6 +801,7 @@ script BishopCombat extends Component
 		if pray ~= nil and self:Learned("B12") and (self._T.cd.B12 or 0) <= 0 and not self:On("B12") and _UtilLogic:RandomDouble() * 100 < prayChance then
 			self._T.cd.B12 = self:Cooldown(pray)
 			self:StartPray(mgr, pray)
+			if (self._T.hidden or {}).B12 then log("[VRF] passive proc job=" .. self.JobId .. " id=B12") end
 		end
 		-- 프레이 지속 중: 기본 공격에 기도의 빛
 		if self:On("B12") and pray ~= nil then
@@ -706,7 +830,64 @@ script BishopCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void PickActed(Component mgr, table skills, table list)
-		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 궁극기(게이지 가득) → 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		-- 4-D: 궁극기 게이지가 가득이면 이번 차례 동작 스킬은 궁극기 1개 (마나 소모·쿨타임 기록 없음)
+		if self:TryUltCast(list, false) then return end
+		local uid = self._T.ultId
+		local n0 = #list
+		self:PickActedInner(mgr, skills, list)
+		-- 4-D: 궁극기가 아닌 스킬을 시전할 때마다 게이지
+		for i = n0 + 1, #list do
+			local r = list[i]
+			if r ~= nil and r.sk ~= nil and r.sk.id ~= uid then self:AddUlt(mgr.UltGaugeSkill) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean TryUltCast(table list, boolean free)
+		-- 4-D: 궁극기 게이지가 가득이면 궁극기를 list에 넣고 게이지 0 (마나 소모·쿨타임 기록 없음). 넣었으면 true.
+		local uid = self._T.ultId
+		if uid == nil or self.UltGauge < self.UltMax then return false end
+		local usk = self._T.skills[uid]
+		if usk == nil then return false end
+		self.UltGauge = 0
+		table.insert(list, self:MakeCast(usk))
+		log("[VRF] ult cast job=" .. self.JobId .. " id=" .. uid .. " free=" .. tostring(free))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollFreeCasts(Component mgr)
+		-- 4-D 보완(C안): 사거리에 닿지 않을 때도 시전하는 스킬 — 가득 찬 궁극기, 아니면 쿨타임형(자기 버프·하이퍼) 1개. 없으면 빈 목록.
+		self._T.mgr = mgr
+		local list = {}
+		if not self:TryUltCast(list, true) then
+			self:PickCooldownCast(mgr, self:RunSkills(mgr), list)
+			for _, r in ipairs(list) do
+				if r.sk ~= nil and r.sk.id ~= self._T.ultId then self:AddUlt(mgr.UltGaugeSkill) end
+			end
+		end
+		if #list == 0 then return list end
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean PickCooldownCast(Component mgr, table skills, table list)
+		-- 쿨타임형 스킬 1개 시전 (트라이엄프 페더는 깃털을 다 쓴 뒤). 돌려주는 값: 시전했는지.
+		for _, sk in ipairs(skills) do
+			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 and not (sk.id == "B05" and self.FeatherLeft > 0) then
+				self._T.cd[sk.id] = self:Cooldown(sk)
+				table.insert(list, self:MakeCast(sk))
+				if self._T.slotOf[sk.id] == "Hyper" then log("[VRF] hyper cast job=" .. self.JobId .. " id=" .. sk.id .. " mana=" .. tostring(math.floor(self.Mana))) end
+				return true
+			end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PickActedInner(Component mgr, table skills, table list)
+		-- PickActed 본체: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것) 중 1개.
 		local acted = false
 		-- 최우선 시전: 성수가 가득일 때 샤이닝 레이 돌파 4 '완전한 계시' / 디바인 퍼니시먼트 돌파 2 '완전한 심판'
 		if self.HolyWater >= self:HolyMax() then
@@ -723,15 +904,7 @@ script BishopCombat extends Component
 				end
 			end
 		end
-		for _, sk in ipairs(skills) do
-			if acted then break end
-			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 and not (sk.id == "B05" and self.FeatherLeft > 0) then
-				self._T.cd[sk.id] = self:Cooldown(sk)
-				table.insert(list, self:MakeCast(sk))
-				acted = true
-				break
-			end
-		end
+		if not acted then acted = self:PickCooldownCast(mgr, skills, list) end
 		if not acted then
 			local best = nil
 			for _, sk in ipairs(skills) do
@@ -1169,6 +1342,7 @@ script BishopCombat extends Component
 		if (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, low, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
 		self:Sfx(sk.a.useSound)
 		log("[VRF] bishop magic shell -> " .. low.Name .. " hp=" .. tostring(mgr:ActorHp(low)))
+		if (self._T.hidden or {}).B04 then log("[VRF] passive proc job=" .. self.JobId .. " id=B04") end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1184,10 +1358,15 @@ script BishopCombat extends Component
 		self.StatusText = table.concat(parts, "   ")
 		local mgr = self._T.mgr
 		local slots = {}
+		-- 4-C: 넷째 값 0(스킬 레벨 없음). 4-D: 궁극기 칸은 id:(최대−게이지):최대:U
 		for _, id in ipairs(self._T.equip or {}) do
 			local sk = self._T.skills[id]
-			if sk ~= nil and self:Learned(id) then
-				table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":" .. tostring(mgr ~= nil and (mgr.SkillLv[id] or 0) or 0))
+			if sk ~= nil and self:Learned(id) and not (self._T.hidden or {})[id] then
+				if id == self._T.ultId then
+					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
+				else
+					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
+				end
 			end
 		end
 		self.SlotInfo = table.concat(slots, "|")

@@ -5,6 +5,7 @@ script JobCombat extends Component
 	-- 스킬 15종과 돌파 75종은 Spec()·Breaks() 데이터로 정의하고, 데이터로 못 쓰는 돌파만 ID별 코드로 처리한다.
 	-- 고유 패시브 자원: 나이트로드 표식(몬스터마다), 보우마스터 강화 화살, 바이퍼 에너지.
 	-- 메인 캐릭터에 붙으면 판 시작 때 JobId를 편성 직업으로 바꾼 뒤 BeginRun을 부른다.
+	@Sync
 	property string JobId = "NightLord"
 	property number ManaStart = 30
 	property number ManaRegen = 5
@@ -45,6 +46,16 @@ script JobCombat extends Component
 	property string StatusText = ""
 	@Sync
 	property string SlotInfo = ""
+	-- 4-C: 이번 판 캐릭터 레벨·차수 이름 (HUD 구성원 줄)
+	@Sync
+	property integer RunLevel = 0
+	@Sync
+	property string RunLabel = ""
+	-- 4-D: 궁극기 게이지 (5차 궁극기 칸이 있을 때만 충전)
+	@Sync
+	property number UltGauge = 0
+	@Sync
+	property number UltMax = 100
 
 	@ExecSpace("ServerOnly")
 	method void OnBeginPlay()
@@ -199,6 +210,16 @@ script JobCombat extends Component
 		local t = self._T
 		t.equip = {}
 		t.ownLv = {}
+		t.slotOf = {}
+		t.pctMul = {}
+		t.tier = 0
+		t.ultId = nil
+		-- 4-E: 고유 패시브 숨은 장착(확률·위기 스킬)과 차수 강화
+		t.hidden = {}
+		t.pExtra = {}
+		self.RunLevel = 0
+		self.RunLabel = ""
+		self.UltGauge = 0
 		t.cd = {}
 		t.till = {}
 		t.lastActionTime = 0
@@ -221,35 +242,42 @@ script JobCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void BeginRun(Component mgr)
-		-- 판 시작: 성장창에서 장착한 이 직업 스킬 5종(아웃게임 레벨 포함)을 레벨업 카드 후보로. 입장 직후에는 Lv.0.
-		if self._T.loadedJob ~= self.JobId then
-			self._T.spec = nil
-			self:LoadSkills()
-		end
+		-- 4-C: 판 시작 — 캐릭터 차수의 칸 스킬(주력·보조·기술·하이퍼·궁극기)을 장착한다. 로비 장착·스킬 레벨은 읽지 않는다.
+		-- 직업이 바뀌었으면 spec 초기화. 칸 수치 덮어쓰기가 판마다 쌓이지 않게 스킬표는 매 판 다시 읽는다.
+		if self._T.loadedJob ~= self.JobId then self._T.spec = nil end
+		self:LoadSkills()
 		self:ClearState()
 		self._T.mgr = mgr
-		local eng = mgr:GetEngrave()
-		local data = nil
-		if eng ~= nil then data = eng:SkillRunDataFor(self.JobId) end
-		if data == nil or not data.loaded or #data.equip == 0 then
-			data = { equip = {}, lv = {}, passiveLv = 1 }
-			local ids = {}
-			for id, _ in pairs(self._T.skills) do table.insert(ids, id) end
-			table.sort(ids)
-			for k = 1, math.min(5, #ids) do
-				table.insert(data.equip, ids[k])
-				data.lv[ids[k]] = 1
+		local d = mgr:RunDataFor(self.JobId)
+		if d == nil then
+			-- 안전장치: 로스터 값이 없을 때만 예전 로비 장착 경로 (정상 판에서는 나오면 안 됨)
+			log_warning("[VRF] " .. self.JobId .. " run data missing, legacy equip")
+			local eng = mgr:GetEngrave()
+			local data = nil
+			if eng ~= nil then data = eng:SkillRunDataFor(self.JobId) end
+			if data == nil or not data.loaded or #data.equip == 0 then
+				data = { equip = {}, lv = {}, passiveLv = 1 }
+				local ids = {}
+				for id, _ in pairs(self._T.skills) do table.insert(ids, id) end
+				table.sort(ids)
+				for k = 1, math.min(5, #ids) do
+					table.insert(data.equip, ids[k])
+					data.lv[ids[k]] = 1
+				end
 			end
-		end
-		self.PassiveLv = data.passiveLv or 0
-		for _, id in ipairs(data.equip) do
-			if self._T.skills[id] ~= nil then
-				table.insert(self._T.equip, id)
-				self._T.ownLv[id] = data.lv[id] or 1
-				-- 판 안 자동 성장이 없으므로 장착 스킬은 처음부터 배운 상태 (위력은 아웃게임 레벨)
-				mgr.SkillLv[id] = 1
+			self.PassiveLv = data.passiveLv or 0
+			for _, id in ipairs(data.equip) do
+				if self._T.skills[id] ~= nil then
+					table.insert(self._T.equip, id)
+					self._T.ownLv[id] = data.lv[id] or 1
+					mgr.SkillLv[id] = 1
+				end
 			end
+		else
+			self:ApplySlots(mgr, d)
 		end
+		-- 4-F: 돌파 저장 키(직업.칸) 등록
+		mgr:RegisterSlots(self.JobId, self._T.slotOf)
 		self.Active = true
 		self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
 		self.Mana = self.ManaStart
@@ -264,6 +292,94 @@ script JobCombat extends Component
 		local uid = self:OwnerUid()
 		if uid ~= "" and #list > 0 then self:PreloadFx(table.concat(list, "|"), uid) end
 		log("[VRF] jobcombat run job=" .. self.JobId .. " equip=" .. table.concat(self._T.equip, ",") .. " passiveLv=" .. tostring(self.PassiveLv))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplySlots(Component mgr, table d)
+		-- 4-C: 칸 순서(주력·보조·기술·하이퍼·궁극기 = HUD S1~S5)대로 현재 차수 칸 스킬을 장착하고 칸 수치(배율·쿨·마나·발동 방식)를 덮어쓴다.
+		local tier = math.max(1, math.floor(d.tier or 1))
+		self._T.tier = tier
+		self.RunLevel = math.floor(d.level or 0)
+		self.RunLabel = d.tierName or ""
+		-- 4-E: 고유 패시브(표식·강화 화살·에너지) 레벨·흡수 스킬·차수 강화 = CharPassiveTable
+		local p = mgr:PassiveOf(self.JobId, tier)
+		self.PassiveLv = p.lv
+		self._T.pExtra = p.extra or {}
+		self.UltMax = mgr.UltGaugeMax
+		local pcts = {}
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "Ult" }) do
+			local id = (d.slots or {})[key] or ""
+			if id ~= "" and self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.slotOf[id] = key
+				local t = mgr:SlotTune(self.JobId, key, tier)
+				self._T.pctMul[id] = t.pctMul
+				local sk = self._T.skills[id]
+				if t.cdSec > 0 then sk.cooldown = t.cdSec end
+				if t.mana >= 0 then sk.mana = t.mana end
+				-- 하이퍼: 쿨타임마다 자동 시전 (스티뮬레이트는 Auto 그대로, 쿨만 40)
+				if t.triggerAs == "Cooldown" then sk.trigger = "Cooldown" end
+				-- 궁극기: 게이지가 차면 시전 (일반 시전 분기에서 빠짐, 마나 0)
+				if t.triggerAs == "Ult" then
+					sk.trigger = "Ult"
+					sk.mana = 0
+					self._T.ultId = id
+				end
+				mgr.SkillLv[id] = 1
+				table.insert(pcts, tostring(t.pctMul))
+			end
+		end
+		log("[VRF] slots run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " lv=" .. tostring(self.RunLevel) .. " equip=" .. table.concat(self._T.equip, ",") .. " pct=" .. table.concat(pcts, ",") .. " ult=" .. tostring(self._T.ultId or ""))
+		-- 4-E: 패시브가 흡수한 확률·위기 스킬을 숨은 장착으로 (HUD 칸에는 안 보임, 돌파 카드·마법의 서 대상)
+		local hidden = {}
+		for _, gid in ipairs(p.grants or {}) do
+			if self._T.skills[gid] ~= nil and not self:Equipped(gid) then
+				table.insert(self._T.equip, gid)
+				self._T.hidden[gid] = true
+				self._T.slotOf[gid] = "Passive"
+				mgr.SkillLv[gid] = 1
+				table.insert(hidden, gid)
+			end
+		end
+		local ex = {}
+		for k, v in pairs(self._T.pExtra) do if v then table.insert(ex, k) end end
+		log("[VRF] passive run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " passiveLv=" .. tostring(self.PassiveLv) .. " hidden=" .. table.concat(hidden, ",") .. " extra=" .. table.concat(ex, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string SwapSlot(Component mgr, string slot, string newId)
+		-- 4-F 테스트(DebugSwapSlot): 판 중 진화 흉내 — 그 칸의 스킬을 newId로 바꾸고 칸 수치를 다시 덮어쓴다. 돌려주는 값: 이전 스킬 Id(없으면 "").
+		local sk = self._T.skills[newId]
+		if sk == nil then return "" end
+		local old = ""
+		for id, s in pairs(self._T.slotOf) do
+			if s == slot then old = id end
+		end
+		if old == "" or old == newId then return old end
+		for i, id in ipairs(self._T.equip) do
+			if id == old then self._T.equip[i] = newId end
+		end
+		self._T.slotOf[old] = nil
+		self._T.slotOf[newId] = slot
+		local t = mgr:SlotTune(self.JobId, slot, self._T.tier)
+		self._T.pctMul[newId] = t.pctMul
+		if t.cdSec > 0 then sk.cooldown = t.cdSec end
+		if t.mana >= 0 then sk.mana = t.mana end
+		if t.triggerAs == "Cooldown" then sk.trigger = "Cooldown" end
+		if self._T.ultId == old then
+			sk.trigger = "Ult"
+			sk.mana = 0
+			self._T.ultId = newId
+		end
+		mgr.SkillLv[newId] = 1
+		return old
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddUlt(number n)
+		-- 4-D: 궁극기 게이지 충전 (궁극기 칸이 있고 아직 가득이 아닐 때만).
+		if self._T.ultId == nil or n <= 0 or self.UltGauge >= self.UltMax then return end
+		self.UltGauge = math.min(self.UltMax, self.UltGauge + n)
 	end
 
 	@ExecSpace("Client")
@@ -422,8 +538,9 @@ script JobCombat extends Component
 		for n = 1, 5 do
 			local b = brk[sk.id .. "_B" .. tostring(n)]
 			if b ~= nil and self:Has(sk.id, n) then
-				if b.cd ~= nil then p.cd = b.cd end
-				if b.mana ~= nil then p.mana = b.mana end
+				-- 돌파 쿨타임·마나는 칸 표로 줄인 값보다 늘리지 않는다 (쿼드러플 칸 쿨 5 + 돌파 6 → 5)
+				if b.cd ~= nil then p.cd = math.min(p.cd or b.cd, b.cd) end
+				if b.mana ~= nil then p.mana = math.min(p.mana or b.mana, b.mana) end
 				if b.hits ~= nil then p.hits = b.hits end
 				if b.targets ~= nil then p.targets = b.targets end
 				if b.recast ~= nil then p.recast = b.recast end
@@ -449,12 +566,19 @@ script JobCombat extends Component
 	@ExecSpace("ServerOnly")
 	method integer CalcResMax()
 		-- 고유 자원 최대치 (표식 5 / 강화 화살 10 / 에너지 100, 돌파로 증가).
+		local ex = self._T.pExtra or {}
 		if self.JobId == "NightLord" then
-			if self:Has("N15", 5) then return 8 end
-			return 5
+			local m = 5
+			if self:Has("N15", 5) then m = 8 end
+			-- 4-E: 표식 5차 강화 '표식 최대 8'
+			if ex.ResMax8 then m = math.max(m, 8) end
+			return m
 		elseif self.JobId == "Bowmaster" then
-			if self:Has("A12", 5) then return 15 end
-			return 10
+			local m = 10
+			if self:Has("A12", 5) then m = 15 end
+			-- 4-E: 강화 화살 5차 강화 '화살 최대 15'
+			if ex.ResMax15 then m = math.max(m, 15) end
+			return m
 		end
 		return 100
 	end
@@ -487,8 +611,8 @@ script JobCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method number LvMul(string id)
-		-- 아웃게임 스킬 레벨 배율: Lv.1 1배 → Lv.11 3배.
-		return 1 + ((self._T.ownLv[id] or 1) - 1) * 0.2
+		-- 4-C: 칸 표 위력 배율(CharSkillSlotTable PctMul). 아웃게임 스킬 레벨 배율은 쓰지 않는다.
+		return (self._T.pctMul or {})[id] or 1
 	end
 
 	@ExecSpace("ServerOnly")
@@ -925,10 +1049,17 @@ script JobCombat extends Component
 				if _UtilLogic:RandomDouble() * 100 < self.ResChance then self.Res = math.min(self.ResMax, self.Res + 1) end
 			end
 		elseif self.JobId == "Viper" then
-			local per = self.EnergyPerHit
-			if self:Flag("V12", "energyPlus") then per = 8 end
-			self:AddEnergy(per * hits)
+			self:AddEnergy(self:EnergyPerHitNow() * hits)
 		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer EnergyPerHitNow()
+		-- 바이퍼 타격당 에너지: 기본 EnergyPerHit(5), 하울링 피스트 돌파 5 '에너지 증폭' 8, 4-E 에너지 5차 강화 +3.
+		local per = self.EnergyPerHit
+		if self:Flag("V12", "energyPlus") then per = 8 end
+		if (self._T.pExtra or {}).EnergyPlus3 then per = per + 3 end
+		return per
 	end
 
 	@ExecSpace("ServerOnly")
@@ -951,6 +1082,8 @@ script JobCombat extends Component
 		-- 기본 공격 1회(명중): 마나·자원 후 함께 시전할 스킬을 정한다. 동작 있는 스킬은 1개: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
 		self._T.mgr = mgr
 		self:AddMana(self.ManaPerHit)
+		-- 4-D: 기본 공격 적중 → 궁극기 게이지
+		self:AddUlt(mgr.UltGaugeBasic)
 		local mon = mgr:HeroMonster()
 		self:GainRes(1, mon)
 		local list = {}
@@ -1009,6 +1142,7 @@ script JobCombat extends Component
 					if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
 					self:Sfx(sk.a.useSound)
 					log("[VRF] jobcombat instinct " .. sk.id)
+					if (self._T.hidden or {})[sk.id] then log("[VRF] passive proc job=" .. self.JobId .. " id=" .. sk.id) end
 				end
 				if self:On(sk.id) then
 					self._T.instCount = (self._T.instCount or 0) + 1
@@ -1039,25 +1173,75 @@ script JobCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void PickActed(Component mgr, table skills, table list)
-		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 궁극기(게이지 가득) → 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		-- 4-D: 궁극기 게이지가 가득이면 이번 차례 동작 스킬은 궁극기 1개 (마나 소모·쿨타임 기록 없음, 바이퍼 에너지는 있는 만큼)
+		if self:TryUltCast(list, false) then return end
+		local uid = self._T.ultId
+		local n0 = #list
+		self:PickActedInner(mgr, skills, list)
+		-- 4-D: 궁극기가 아닌 스킬을 시전할 때마다 게이지
+		for i = n0 + 1, #list do
+			local r = list[i]
+			if r ~= nil and r.sk ~= nil and r.sk.id ~= uid then self:AddUlt(mgr.UltGaugeSkill) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean TryUltCast(table list, boolean free)
+		-- 4-D: 궁극기 게이지가 가득이면 궁극기를 list에 넣고 게이지 0 (마나 소모·쿨타임 기록 없음, 바이퍼 에너지는 있는 만큼). 넣었으면 true.
+		local uid = self._T.ultId
+		if uid == nil or self.UltGauge < self.UltMax then return false end
+		local usk = self._T.skills[uid]
+		if usk == nil then return false end
+		self.UltGauge = 0
+		table.insert(list, self:MakeCast(usk))
+		log("[VRF] ult cast job=" .. self.JobId .. " id=" .. uid .. " res=" .. tostring(self.Res) .. " free=" .. tostring(free))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollFreeCasts(Component mgr)
+		-- 4-D 보완(C안): 사거리에 닿지 않을 때도 시전하는 스킬 — 가득 찬 궁극기, 아니면 쿨타임형(자기 버프·하이퍼) 1개. 없으면 빈 목록.
+		-- Auto형(쉐도우 파트너·스티뮬레이트 등)은 원래부터 TickAuto에서 사거리와 무관하게 돈다.
+		self._T.mgr = mgr
+		local list = {}
+		if not self:TryUltCast(list, true) then
+			self:PickCooldownCast(mgr, self:RunSkills(mgr), list)
+			for _, r in ipairs(list) do
+				if r.sk ~= nil and r.sk.id ~= self._T.ultId then self:AddUlt(mgr.UltGaugeSkill) end
+			end
+		end
+		if #list == 0 then return list end
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean PickCooldownCast(Component mgr, table skills, table list)
+		-- 쿨타임형 스킬 1개 시전. 돌려주는 값: 시전했는지.
+		for _, sk in ipairs(skills) do
+			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 then
+				self._T.cd[sk.id] = self:Cooldown(sk)
+				table.insert(list, self:MakeCast(sk))
+				if self._T.slotOf[sk.id] == "Hyper" then log("[VRF] hyper cast job=" .. self.JobId .. " id=" .. sk.id) end
+				return true
+			end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PickActedInner(Component mgr, table skills, table list)
+		-- PickActed 본체: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것) 중 1개.
 		local acted = false
 		-- 다크로드의 비전서 돌파 2 '완전한 비전': 약점 노출 중이면 최우선 (쿨타임 없음)
 		local arc = self._T.skills.N15
-		if arc ~= nil and self:Learned("N15") and self:Flag("N15", "arcanePriority") and self:On("expose") and self.Mana >= self:ManaCost(arc) then
+		if arc ~= nil and arc.trigger ~= "Ult" and self:Learned("N15") and self:Flag("N15", "arcanePriority") and self:On("expose") and self.Mana >= self:ManaCost(arc) then
 			self.Mana = self.Mana - self:ManaCost(arc)
 			table.insert(list, self:MakeCast(arc))
 			acted = true
 		end
 		local spec = self:Spec()
-		for _, sk in ipairs(skills) do
-			if acted then break end
-			if sk.trigger == "Cooldown" and (self._T.cd[sk.id] or 0) <= 0 then
-				self._T.cd[sk.id] = self:Cooldown(sk)
-				table.insert(list, self:MakeCast(sk))
-				acted = true
-				break
-			end
-		end
+		if not acted then acted = self:PickCooldownCast(mgr, skills, list) end
 		if not acted then
 			local best = nil
 			for _, sk in ipairs(skills) do
@@ -1469,6 +1653,9 @@ script JobCombat extends Component
 				if sk.trigger == "Auto" then
 					self._T.cd[sk.id] = p.cd
 					self:ApplyBuffSkill(mgr, { sk = sk, p = p })
+					if self._T.slotOf[sk.id] == "Hyper" then log("[VRF] hyper cast job=" .. self.JobId .. " id=" .. sk.id) end
+					-- 4-D: Auto 발동도 스킬 시전으로 게이지
+					if sk.id ~= self._T.ultId then self:AddUlt(mgr.UltGaugeSkill) end
 				elseif sk.trigger == "Guard" then
 					local low = hp < maxHp * (p.hpLine or 40) / 100 and not mgr:IsDown(self.Entity)
 					local who = self.Entity
@@ -1517,6 +1704,7 @@ script JobCombat extends Component
 		end
 		if (p.healPct or 0) > 0 then mgr:HealActor(who, mgr:ActorMaxHp(who) * p.healPct / 100) end
 		log("[VRF] jobcombat guard " .. sk.id .. " -> " .. who.Name)
+		if (self._T.hidden or {})[sk.id] then log("[VRF] passive proc job=" .. self.JobId .. " id=" .. sk.id) end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1600,15 +1788,20 @@ script JobCombat extends Component
 			if self:On("charged") then table.insert(parts, "<color=#FFE08A>충전 완료</color>") end
 		end
 		for id, sk in pairs(self._T.skills or {}) do
-			if sk.trigger ~= "Skill" and sk.trigger ~= "Guard" and self:On(id) then table.insert(parts, sk.name) end
+			if sk.trigger ~= "Skill" and sk.trigger ~= "Guard" and sk.trigger ~= "Ult" and self:On(id) then table.insert(parts, sk.name) end
 		end
 		if self:On("inv") then table.insert(parts, "<color=#C0C0FF>은신</color>") end
 		self.StatusText = table.concat(parts, "   ")
 		local slots = {}
+		-- 4-C: 넷째 값 0(스킬 레벨 없음). 4-D: 궁극기 칸은 id:(최대−게이지):최대:U
 		for _, id in ipairs(self._T.equip or {}) do
 			local sk = self._T.skills[id]
-			if sk ~= nil and self:Learned(id) then
-				table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":" .. tostring(mgr ~= nil and (mgr.SkillLv[id] or 0) or 0))
+			if sk ~= nil and self:Learned(id) and not (self._T.hidden or {})[id] then
+				if id == self._T.ultId then
+					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
+				else
+					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
+				end
 			end
 		end
 		self.SlotInfo = table.concat(slots, "|")

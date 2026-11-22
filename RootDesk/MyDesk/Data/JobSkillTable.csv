@@ -60,7 +60,7 @@ NightLord,N11,블리딩 톡신,f2622075598c4d3dbc98640be7eb34c9,Cooldown,HeroSta
 NightLord,N12,래피드 스로우,59669089f1b44a0f8b4a981275674168,Cooldown,HeroStar,표창,,,,30,8,HeroBuff,0,25,1,,,,,{cd}초마다 자동 발동. 지속 중 기본 공격 속도 +40%. 기본 공격마다 같은 대상에게 표창 2개 추가,0,0,0,0
 NightLord,N13,쉐도우 스피어,f8d19df09dab415aa3cfd6439ff96d4a,Instinct,HeroStar,표창,,,,15,10,HeroBuff,10,60,1,,,,,기본 공격이 맞으면 10% 확률로 발동. 지속 중 기본 공격에 그림자 창,0,0,0,0
 NightLord,N14,풍마수리검,459228cf9906473d91d0df063132f3dd,Skill,HeroStar,표창,,,,12,0,HeroStrike,0,250,1,,,,,마나 50 · 쿨타임 {cd}초. 대상에게 박혀 3초간 0.5초마다 공격,50,0,0,0
-NightLord,N15,다크로드의 비전서,459228cf9906473d91d0df063132f3dd,Skill,HeroStar,표창,,,,20,8,HeroStrike,0,35,24,,,,,"마나 100 · 쿨타임 {cd}초. 8초간 대상에게 1초마다 표창 3개, 끝에 폭발. 시전 중 받는 피해 -50%",100,0,0,0
+NightLord,N15,다크로드의 비전서,2e459dfac38b463790f45e7b93318dac,Skill,HeroStar,표창,,,,20,8,HeroStrike,0,35,24,,,,,"마나 100 · 쿨타임 {cd}초. 8초간 대상에게 1초마다 표창 3개, 끝에 폭발. 시전 중 받는 피해 -50%",100,0,0,0
 Bowmaster,A01,애로우 블로우,f62b353e3f704eb097e427b7fc97980e,Skill,HeroStar,화살,,,,5,0,HeroStrike,0,70,2,,,,,마나 8 · 쿨타임 {cd}초. 맞은 몬스터 둔화,8,0,0,0
 Bowmaster,A02,애로우 봄,04f7ad2ee0ff4a63ba809ccc6d875d01,Skill,HeroStar,화살,,,,5,0,HeroStrike,0,150,1,,,,,마나 10 · 쿨타임 {cd}초. 30% 확률로 기절 1초,10,0,0,0
 Bowmaster,A03,인플레임,04f7ad2ee0ff4a63ba809ccc6d875d01,Skill,HeroStar,화살,,,,6,0,HeroStrike,0,110,2,,,,,마나 15 · 쿨타임 {cd}초. 화상. 화상 걸린 몬스터에게 피해 +20%,15,0,0,0
@@ -76,7 +76,7 @@ Bowmaster,A12,퀴버 풀버스트,eb0e10236dcc40b2997ff4c17ba69796,Skill,HeroSta
 Bowmaster,A13,가이디드 애로우,6d20c4d30dfe4d8f9bf37965445f3ceb,Instinct,HeroStar,화살,,,,15,10,HeroBuff,10,70,1,,,,,기본 공격 적중 시 10% 확률. 지속 중 기본 공격마다 유도 화살,0,0,0,0
 Bowmaster,A14,실루엣 미라주,7699857037a048af9951c755e8d1f212,Skill,HeroStar,화살,,,,12,0,HeroStrike,0,120,3,,,,,마나 50 · 쿨타임 {cd}초. 3연사 후 잔상이 같은 대상을 한 번 더 공격. 맞은 몬스터 둔화,50,0,0,0
 Bowmaster,A15,잔영의 시,a54a44aadf0b4525b20ba6603cfa1d55,Skill,HeroStar,화살,,,,20,6,HeroStrike,0,120,12,,,,,"마나 100 · 쿨타임 {cd}초. 6초간 화면 전체에 화살 폭풍, 끝에 폭발. 시전 중 넉백 무효 몬스터도 둔화",100,0,0,0
-Viper,V01,서머솔트 킥,,Skill,HeroStar,권법,,,,5,0,HeroStrike,0,80,2,,,,,마나 8 · 쿨타임 {cd}초. 에너지 +5 추가,8,0,0,0
+Viper,V01,서머솔트 킥,c06426910ef343ee99dcc0d6ccf61e07,Skill,HeroStar,권법,,,,5,0,HeroStrike,0,80,2,,,,,마나 8 · 쿨타임 {cd}초. 에너지 +5 추가,8,0,0,0
 Viper,V02,백 스핀 블로우,d6b6b0bed15c4e41aae492922f2edfe7,Skill,HeroStar,권법,,,,5,0,HeroStrike,0,160,1,,,,,마나 10 · 쿨타임 {cd}초. 30% 확률로 기절 1초,10,0,0,0
 Viper,V03,스크류 펀치,c06426910ef343ee99dcc0d6ccf61e07,Skill,HeroStar,권법,,,,6,0,HeroStrike,0,70,4,,,,,마나 15 · 쿨타임 {cd}초. 마지막 타 끌어당김 (대기 몬스터 1마리),15,0,0,0
 Viper,V04,에너지 버스트,e22e5f4a9ac44089b63d3e1bbb170ff9,Skill,HeroStar,권법,,,,8,0,HeroStrike,0,200,1,,,,,마나 20 · 쿨타임 {cd}초. 에너지 전부 소비. 소비 50 이상이면 기절 1.5초,20,0,0,0

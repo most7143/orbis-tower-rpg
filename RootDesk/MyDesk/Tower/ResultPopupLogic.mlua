@@ -19,6 +19,7 @@ script ResultPopupLogic extends Logic
 	property string IconBook = "d0bb7509b8a54712ac2647d7ede2ad5f"
 	property string IconFeather = "804a3c5f7abe4ad48f6e428e112da0a5"
 	property string IconScroll = "d7d18132057f491181288c2b6038d32c"
+	property string IconDiamond = "81462aeb825b4660991cef05651271cf"
 
 	@HideFromInspector
 	property table handlers = {}
@@ -182,6 +183,7 @@ script ResultPopupLogic extends Logic
 		-- 전투 보상: 실제로 받은 것만
 		self:SetText("battleRewardsPlaque/battleRewardsTitle", "전투 보상", nil)
 		local items = {}
+		if mgr.RunDiamonds > 0 then table.insert(items, { icon = self.IconDiamond, name = "다이아", n = mgr.RunDiamonds }) end
 		if mgr.RunBooks > 0 then table.insert(items, { icon = self.IconBook, name = "스킬북", n = mgr.RunBooks }) end
 		if mgr.RunFeathers > 0 then table.insert(items, { icon = self.IconFeather, name = "깃털", n = mgr.RunFeathers }) end
 		if mgr.RunScrolls > 0 then table.insert(items, { icon = self.IconScroll, name = "주문서", n = mgr.RunScrolls }) end
@@ -191,6 +193,14 @@ script ResultPopupLogic extends Logic
 			self:Show(p, it ~= nil)
 			if it ~= nil then
 				self:SetImage(p .. "/Loot" .. tostring(k) .. "Icon", it.icon)
+				-- 다이아 스프라이트는 피벗이 가운데가 아니라 AspectOnly에서 위로 밀린다 → 다이아만 None (칸 재사용이라 매번 되돌림)
+				local iconEnt = self:E(p .. "/Loot" .. tostring(k) .. "Icon")
+				if isvalid(iconEnt) then
+					local spr = iconEnt.SpriteGUIRendererComponent
+					local want = PreserveSpriteType.AspectOnly
+					if it.icon == self.IconDiamond then want = PreserveSpriteType.None end
+					if spr.PreserveSprite ~= want then spr.PreserveSprite = want end
+				end
 				self:SetText(p .. "/Loot" .. tostring(k) .. "Count", "x" .. tostring(it.n), nil)
 				self:SetText(p .. "/Loot" .. tostring(k) .. "Name", it.name, nil)
 			end
@@ -201,6 +211,8 @@ script ResultPopupLogic extends Logic
 		self:SetText("retry/retryText", "다시 도전", nil)
 		self._T.accountBar = nil
 		self._T.revealT = 0
+		-- 늦게 도착한 Sync 값 반영용: 마지막으로 채운 키
+		self._T.fillKey = tostring(floor) .. ":" .. tostring(prev) .. ":" .. tostring(now) .. ":" .. tostring(clear)
 		log("[VRF] result fill floor=" .. tostring(floor) .. " clear=" .. tostring(clear) .. " prev=" .. tostring(prev) .. " now=" .. tostring(now) .. " loot=" .. tostring(#items))
 	end
 
@@ -254,6 +266,19 @@ script ResultPopupLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method string ClaimText(string msg)
+		-- 3번째 별 상자 수령 성공이면 다이아 안내를 덧붙인다 (실제 지급은 PlayerRoster가 1초 안에 함).
+		if self._T.claimTier ~= 3 or string.sub(msg, 1, string.len("보상 획득")) ~= "보상 획득" then return msg end
+		local dia = 300
+		local p = _UserService.LocalPlayer
+		if isvalid(p) then
+			local roster = p:GetComponent("script.PlayerRoster")
+			if roster ~= nil then dia = math.floor(roster:Cfg("SectionLastDia", 300)) end
+		end
+		return msg .. " · 다이아 +" .. tostring(dia)
+	end
+
+	@ExecSpace("ClientOnly")
 	method void Claim(integer tier)
 		-- 상자 수령 요청 (서버 판정·지급, 응답 전 중복 요청 막음).
 		if self._T.claiming then return end
@@ -261,6 +286,7 @@ script ResultPopupLogic extends Logic
 		if eng == nil or self._T.section == nil then return end
 		self._T.claiming = true
 		self._T.claimSeq = eng.ClaimSeq
+		self._T.claimTier = tier
 		self._T.claimTimeout = 5
 		eng:RequestClaimSection(self._T.section, tier)
 		self:FillSection()
@@ -313,6 +339,12 @@ script ResultPopupLogic extends Logic
 			end
 		end
 		if not show then return end
+		-- 결과 값(층·별·클리어)이 채운 뒤 바뀌었으면(늦은 Sync) 다시 채운다
+		local key = tostring(mgr.ResultFloor) .. ":" .. tostring(mgr.ResultStarsPrev) .. ":" .. tostring(mgr.ResultStarsNow) .. ":" .. tostring(mgr.IsStageClear)
+		if key ~= self._T.fillKey then
+			log("[VRF] result refill key=" .. key)
+			self:Fill(mgr)
+		end
 		-- 다시 도전 비용
 		local eng = self:Engrave()
 		local cost = eng ~= nil and eng.EnergyCost or 3
@@ -322,8 +354,12 @@ script ResultPopupLogic extends Logic
             if mgr.ResultAccountAfterLevel > mgr.ResultAccountBeforeLevel then accountLine = accountLine .. " → " .. tostring(mgr.ResultAccountAfterLevel) end
             if eng.AccountLevel >= 100 then accountLine = accountLine .. "  MAX" end
         end
+        -- 4-G 보완: 디버그 판은 계정 경험치·판 보상을 저장하지 않으므로 그 사실만 알린다
+        if mgr.ResultDebugRun then accountLine = "테스트 판: 저장 안 됨" end
         self:SetText("AccountExp/Value",accountLine,nil)
-        if eng ~= nil and mgr.ResultAccountSaved then
+        if mgr.ResultDebugRun then
+            self:SetText("AccountExp/Effect","계정 경험치·보상·기록을 저장하지 않았습니다",nil)
+        elseif eng ~= nil and mgr.ResultAccountSaved then
             local gainedLevels = mgr.ResultAccountAfterLevel - mgr.ResultAccountBeforeLevel
             local effectLine=eng.AccountLevel>=100 and "최고 레벨 달성" or (tostring(eng.AccountExp) .. " / " .. tostring(eng.AccountNeed) .. " EXP")
             if gainedLevels==1 then effectLine=_AccountRules:RewardText(mgr.ResultAccountAfterLevel)
@@ -364,7 +400,7 @@ script ResultPopupLogic extends Logic
 			self._T.claimTimeout = (self._T.claimTimeout or 0) - delta
 			if eng ~= nil and eng.ClaimSeq ~= self._T.claimSeq then
 				self._T.claiming = false
-				self:Message(eng.ClaimMsg)
+				self:Message(self:ClaimText(eng.ClaimMsg))
 				self:FillSection()
 			elseif self._T.claimTimeout <= 0 then
 				self._T.claiming = false

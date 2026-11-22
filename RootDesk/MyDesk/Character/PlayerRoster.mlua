@@ -1,0 +1,1673 @@
+@Component
+script PlayerRoster extends Component
+
+	-- 캐릭터(직업) 계정 데이터: 해금·레벨·차수·각성, 경험의 서·전직 카드·다이아. (저장 키 OrbisRosterV1)
+	-- 편성 원본은 1~5단계 동안 PlayerEngrave(MainJob/CompJob/Comp2Job)이며 여기서는 값을 바꾸고 SaveSkills()만 부른다.
+	property string RosterKey = "OrbisRosterV1"
+	property string LobbyMapName = "Lobby"
+	property number LoadRetryDelay = 10
+	property number SaveRetryDelay = 5
+
+	@Sync
+	property boolean RosterLoaded = false
+	@Sync
+	property integer Diamonds = 0
+	@Sync
+	property integer BookS = 0
+	@Sync
+	property integer BookM = 0
+	@Sync
+	property integer BookL = 0
+	@Sync
+	property integer CommonCards = 0
+	-- 3단계 뽑기 교환 포인트 (1단계는 저장만)
+	@Sync
+	property integer ExchangePoints = 0
+	-- 6단계 각성의 서 (1단계는 저장만)
+	@Sync
+	property integer AwakenBooks = 0
+	-- 6단계 각성의 돌 (1단계는 저장만)
+	@Sync
+	property integer AwakenStones = 0
+	-- 직업 전용 카드 "Hero:3,Bishop:1,..." (CharJobTable 순서)
+	@Sync
+	property string JobCards = ""
+	-- 캐릭터 "Job:해금:레벨:경험치:차수:각성레벨:각성경험치|..." (CharJobTable 순서)
+	@Sync
+	property string CharData = ""
+	-- 요청 처리마다 +1 (UI 갱신 신호)
+	@Sync
+	property integer RosterSeq = 0
+	-- 마지막 결과 코드
+	@Sync
+	property string RosterMsg = ""
+	-- 마지막 결과 상세 "동작:직업:값..."
+	@Sync
+	property string RosterResult = ""
+
+	-- 캐릭터 뽑기 (3단계)
+	-- 뽑기·교환 처리마다 +1 (뽑기 화면 갱신 신호)
+	@Sync
+	property integer GachaSeq = 0
+	-- 마지막 뽑기 결과 코드
+	@Sync
+	property string GachaMsg = ""
+	-- 마지막 뽑기 결과 상세 ("draw:10:S,M,..." / "exchange:Job:U")
+	@Sync
+	property string GachaResult = ""
+	-- 진행 중 픽업 BannerId ("" = 상시 통합)
+	@Sync
+	property string GachaBanner = ""
+	-- 누적 뽑기 횟수 (저장 gt)
+	@Sync
+	property integer GachaTotal = 0
+
+	@HideFromInspector
+	property boolean RosterDirty = false
+	@HideFromInspector
+	property number RosterRetryTimer = 0
+	@HideFromInspector
+	property number PartyCheckTimer = 0
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 표를 읽고 저장된 캐릭터 데이터를 불러온다.
+		self:LoadTables()
+		self:LoadRoster()
+		self.GachaBanner = self:ActiveBannerId()
+		log("[VRF] gacha banner " .. self.GachaBanner)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기 재시도, 저장 실패 재시도, 편성 자동 보정(1초마다).
+		if not self.RosterLoaded then
+			self.RosterRetryTimer = self.RosterRetryTimer - delta
+			if self.RosterRetryTimer <= 0 then self:LoadRoster() end
+			return
+		end
+		if self.RosterDirty and self._T.saveFailed == true then
+			self.RosterRetryTimer = self.RosterRetryTimer - delta
+			if self.RosterRetryTimer <= 0 then
+				self._T.saveFailed = false
+				self:SaveRoster()
+			end
+		end
+		self.PartyCheckTimer = self.PartyCheckTimer - delta
+		if self.PartyCheckTimer <= 0 then
+			self.PartyCheckTimer = 1
+			self:FixParty()
+			self:RefreshLobbyOutfit()
+			local bid = self:ActiveBannerId()
+			if bid ~= self.GachaBanner then
+				self.GachaBanner = bid
+				log("[VRF] gacha banner " .. bid)
+			end
+			self:CheckDiamondRewards()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 나갈 때 저장되지 않은 변경을 마지막으로 저장한다.
+		if self.RosterLoaded and self.RosterDirty then
+			local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+			local code = ds:SetAndWait(self.RosterKey, self:Encode())
+			if code ~= 0 then log_warning("[VRF] roster final save failed code=" .. tostring(code)) end
+		end
+	end
+
+	-- ───────────────────────── 표 읽기 (양쪽 공용) ─────────────────────────
+
+	method void LoadTables()
+		-- 캐릭터 표 5개를 읽어 self._T에 캐시한다. 서버·클라이언트 모두 사용.
+		self._T.jobs = {}
+		self._T.jobList = {}
+		self._T.tiers = {}
+		self._T.levels = {}
+		self._T.slots = {}
+		self._T.cfg = {}
+		self._T.outfits = {}
+		local jt = _DataService:GetTable("CharJobTable")
+		if jt ~= nil then
+			for i = 1, jt:GetRowCount() do
+				local id = jt:GetCell(i, "JobId")
+				if id ~= nil and id ~= "" then
+					local j = {
+						id = id, order = tonumber(jt:GetCell(i, "Order")) or i, group = jt:GetCell(i, "JobGroup") or "",
+						names = {},
+						baseAtk = tonumber(jt:GetCell(i, "BaseAtk")) or 0, baseHp = tonumber(jt:GetCell(i, "BaseHp")) or 0, baseDef = tonumber(jt:GetCell(i, "BaseDef")) or 0,
+						atkPerLv = tonumber(jt:GetCell(i, "AtkPerLv")) or 0, hpPerLv = tonumber(jt:GetCell(i, "HpPerLv")) or 0, defPerLv = tonumber(jt:GetCell(i, "DefPerLv")) or 0,
+						startUnlocked = (tonumber(jt:GetCell(i, "StartUnlocked")) or 0) == 1,
+						startCards = math.floor(tonumber(jt:GetCell(i, "StartCards")) or 0),
+						modelId = jt:GetCell(i, "ModelId") or "",
+						weaponFamily = jt:GetCell(i, "WeaponFamily") or "O",
+					}
+					for t = 1, 5 do j.names[t] = jt:GetCell(i, "Name" .. tostring(t)) or "" end
+					self._T.jobs[id] = j
+					table.insert(self._T.jobList, j)
+				end
+			end
+			table.sort(self._T.jobList, function(a, b) return a.order < b.order end)
+		else
+			log_warning("[VRF] roster CharJobTable missing")
+		end
+		local tt = _DataService:GetTable("CharTierTable")
+		if tt ~= nil then
+			for i = 1, tt:GetRowCount() do
+				local t = math.floor(tonumber(tt:GetCell(i, "Tier")) or i)
+				self._T.tiers[t] = {
+					startLevel = math.floor(tonumber(tt:GetCell(i, "StartLevel")) or 1),
+					capLevel = math.floor(tonumber(tt:GetCell(i, "CapLevel")) or 30),
+					promoteCards = math.floor(tonumber(tt:GetCell(i, "PromoteCards")) or 0),
+					statPct = tonumber(tt:GetCell(i, "StatPct")) or 0,
+				}
+			end
+		end
+		local lt = _DataService:GetTable("CharLevelTable")
+		if lt ~= nil then
+			for i = 1, lt:GetRowCount() do
+				local lv = math.floor(tonumber(lt:GetCell(i, "Level")) or i)
+				self._T.levels[lv] = { need = math.floor(tonumber(lt:GetCell(i, "NeedExp")) or 0), total = math.floor(tonumber(lt:GetCell(i, "TotalExp")) or 0) }
+			end
+		end
+		local st = _DataService:GetTable("CharSlotTable")
+		if st ~= nil then
+			for i = 1, st:GetRowCount() do
+				local job = st:GetCell(i, "JobId")
+				if job ~= nil and job ~= "" then
+					if self._T.slots[job] == nil then self._T.slots[job] = {} end
+					local s = { key = st:GetCell(i, "SlotKey") or "", name = st:GetCell(i, "SlotName") or "", order = tonumber(st:GetCell(i, "Order")) or i, ids = {} }
+					for t = 1, 5 do s.ids[t] = st:GetCell(i, "T" .. tostring(t)) or "" end
+					table.insert(self._T.slots[job], s)
+				end
+			end
+			for _, list in pairs(self._T.slots) do
+				table.sort(list, function(a, b) return a.order < b.order end)
+			end
+		end
+		local ct = _DataService:GetTable("CharConfig")
+		if ct ~= nil then
+			for i = 1, ct:GetRowCount() do
+				local k = ct:GetCell(i, "Key")
+				if k ~= nil and k ~= "" then self._T.cfg[k] = tonumber(ct:GetCell(i, "Value")) or 0 end
+			end
+		end
+		-- 차수 외형: outfits[job][tier] = { Cap = ruid, ... }
+		local outfitRows = 0
+		local ot = _DataService:GetTable("CharOutfitTable")
+		if ot ~= nil then
+			for i = 1, ot:GetRowCount() do
+				local job = ot:GetCell(i, "Job")
+				local tier = math.floor(tonumber(ot:GetCell(i, "Tier")) or 0)
+				local slot = ot:GetCell(i, "Slot")
+				local ruid = ot:GetCell(i, "RUID")
+				if job ~= nil and job ~= "" and tier > 0 and slot ~= nil and slot ~= "" and ruid ~= nil and ruid ~= "" then
+					if self._T.outfits[job] == nil then self._T.outfits[job] = {} end
+					if self._T.outfits[job][tier] == nil then self._T.outfits[job][tier] = {} end
+					self._T.outfits[job][tier][slot] = ruid
+					outfitRows = outfitRows + 1
+				end
+			end
+		else
+			log_warning("[VRF] roster CharOutfitTable missing")
+		end
+		-- 캐릭터 뽑기 확률표 (3단계)
+		self._T.gachaRows = {}
+		local gt = _DataService:GetTable("CharGachaTable")
+		if gt ~= nil then
+			for i = 1, gt:GetRowCount() do
+				local kind = gt:GetCell(i, "Kind")
+				if kind ~= nil and kind ~= "" then
+					table.insert(self._T.gachaRows, {
+						key = gt:GetCell(i, "Key") or "", kind = kind, rate = tonumber(gt:GetCell(i, "Rate")) or 0,
+						grade = math.floor(tonumber(gt:GetCell(i, "Grade")) or 1), name = gt:GetCell(i, "Name") or "",
+						short = gt:GetCell(i, "ShortName") or "", color = gt:GetCell(i, "ColorHex") or "#5C6675",
+					})
+				end
+			end
+		else
+			log_warning("[VRF] roster CharGachaTable missing")
+		end
+		-- 기간 픽업 (시각 계산은 서버 전용 함수에서)
+		self._T.banners = {}
+		local bt = _DataService:GetTable("CharBannerTable")
+		if bt ~= nil then
+			for i = 1, bt:GetRowCount() do
+				local id = bt:GetCell(i, "BannerId")
+				if id ~= nil and id ~= "" then
+					local job = bt:GetCell(i, "PickupJob") or ""
+					if self._T.jobs[job] == nil then
+						log_warning("[VRF] gacha banner " .. id .. " unknown job " .. job)
+					else
+						table.insert(self._T.banners, {
+							id = id, job = job, startText = bt:GetCell(i, "Start") or "", endText = bt:GetCell(i, "End") or "",
+							share = tonumber(bt:GetCell(i, "PickupShare")) or 50, title = bt:GetCell(i, "Title") or "",
+						})
+					end
+				end
+			end
+		else
+			log_warning("[VRF] roster CharBannerTable missing")
+		end
+		log("[VRF] roster tables jobs=" .. tostring(#self._T.jobList) .. " outfits=" .. tostring(outfitRows) .. " gacha=" .. tostring(#self._T.gachaRows) .. " banners=" .. tostring(#self._T.banners))
+	end
+
+	method void EnsureTables()
+		-- 표가 아직 없으면 읽는다 (클라이언트 미리보기용).
+		if self._T.jobList == nil then self:LoadTables() end
+	end
+
+	method number Cfg(string key, number fallback)
+		-- CharConfig 상수.
+		self:EnsureTables()
+		local v = self._T.cfg[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	method integer MaxTier()
+		-- 최대 차수.
+		return math.floor(self:Cfg("MaxTier", 5))
+	end
+
+	method integer MaxLevel()
+		-- 최대 레벨 (각성 전).
+		return math.floor(self:Cfg("MaxLevel", 30))
+	end
+
+	method integer StartLevel(integer tier)
+		-- 차수 시작 레벨.
+		self:EnsureTables()
+		local t = self._T.tiers[tier]
+		if t == nil then return 1 end
+		return t.startLevel
+	end
+
+	method integer CapLevel(integer tier)
+		-- 차수 최대 레벨.
+		self:EnsureTables()
+		local t = self._T.tiers[tier]
+		if t == nil then return self:MaxLevel() end
+		return t.capLevel
+	end
+
+	method integer PromoteCards(integer tier)
+		-- 그 차수로 올라갈 때 필요한 전용 카드 수.
+		self:EnsureTables()
+		local t = self._T.tiers[tier]
+		if t == nil then return 0 end
+		return t.promoteCards
+	end
+
+	method number StatPct(integer tier)
+		-- 그 차수의 레벨 스탯 보너스(%).
+		self:EnsureTables()
+		local t = self._T.tiers[tier]
+		if t == nil then return 0 end
+		return t.statPct
+	end
+
+	method integer TotalExp(integer level)
+		-- 레벨 1 경험치 0에서 그 레벨까지의 누적 경험치.
+		self:EnsureTables()
+		local l = self._T.levels[level]
+		if l == nil then return 0 end
+		return l.total
+	end
+
+	method integer NeedExp(integer level)
+		-- 그 레벨에서 다음 레벨까지 필요한 경험치 (최대 레벨은 0).
+		self:EnsureTables()
+		local l = self._T.levels[level]
+		if l == nil then return 0 end
+		return l.need
+	end
+
+	method string TierName(string jobId, integer tier)
+		-- 차수 이름 (예: Hero 2차 = 파이터).
+		self:EnsureTables()
+		local j = self._T.jobs[jobId]
+		if j == nil then return "" end
+		return j.names[tier] or ""
+	end
+
+	method table SlotsFor(string jobId, integer tier)
+		-- 그 차수에서 칸별 스킬 Id. { slots = {키=Id}, skills = {빈 값 제외, 칸 순서} }
+		self:EnsureTables()
+		local slots = {}
+		local skills = {}
+		for _, s in ipairs(self._T.slots[jobId] or {}) do
+			local id = s.ids[tier] or ""
+			slots[s.key] = id
+			if id ~= "" then table.insert(skills, id) end
+		end
+		return { slots = slots, skills = skills }
+	end
+
+	method table CharStat(string jobId, integer level, integer tier)
+		-- 능력치: round((기본 + 레벨당 × (레벨-1)) × (1 + 차수보너스/100)). UI도 같은 값을 쓴다.
+		self:EnsureTables()
+		local j = self._T.jobs[jobId]
+		if j == nil then return { atk = 0, hp = 0, def = 0 } end
+		local mul = 1 + self:StatPct(tier) / 100
+		local lv1 = level - 1
+		return {
+			atk = math.floor((j.baseAtk + j.atkPerLv * lv1) * mul + 0.5),
+			hp = math.floor((j.baseHp + j.hpPerLv * lv1) * mul + 0.5),
+			def = math.floor((j.baseDef + j.defPerLv * lv1) * mul + 0.5),
+		}
+	end
+
+	-- ───────────────────────── 순수 계산 (양쪽 공용) ─────────────────────────
+
+	method table Split(string s, string sep)
+		-- 구분자로 자른다 (string.gsub 사용 금지). 빈 조각도 유지.
+		local out = {}
+		if s == nil or s == "" then return out end
+		local start = 1
+		while true do
+			local a, b = string.find(s, sep, start, true)
+			if a == nil then
+				table.insert(out, string.sub(s, start))
+				break
+			end
+			table.insert(out, string.sub(s, start, a - 1))
+			start = b + 1
+		end
+		return out
+	end
+
+	method integer ToInt(any x)
+		-- 숫자로 바꾸고 음수는 0.
+		local n = math.floor(tonumber(x) or 0)
+		if n < 0 then n = 0 end
+		return n
+	end
+
+	method integer LevelFromTotal(integer total, integer cap)
+		-- 누적 경험치로 도달한 레벨 (cap 이하).
+		local lv = 1
+		for l = 1, cap do
+			if self:TotalExp(l) <= total then lv = l else break end
+		end
+		return lv
+	end
+
+	method table PlanBooksFor(integer level, integer exp, integer tier, integer haveS, integer haveM, integer haveL, integer targetLevel)
+		-- 목표 레벨까지 필요한 책 계산 (대→중→소로 넘치지 않게 채우고, 남으면 가장 작은 책 1권 추가).
+		local cap = self:CapLevel(tier)
+		local target = math.min(targetLevel, cap)
+		local cur = self:TotalExp(level) + exp
+		local r = self:TotalExp(target) - cur
+		local res = { s = 0, m = 0, l = 0, gain = 0, newLevel = level }
+		if r <= 0 then return res end
+		local expL = math.floor(self:Cfg("BookExpL", 2000))
+		local expM = math.floor(self:Cfg("BookExpM", 500))
+		local expS = math.floor(self:Cfg("BookExpS", 100))
+		local kL = math.min(haveL, r // expL)
+		r = r - kL * expL
+		local kM = math.min(haveM, r // expM)
+		r = r - kM * expM
+		local kS = math.min(haveS, r // expS)
+		r = r - kS * expS
+		if r > 0 then
+			if haveS - kS > 0 then kS = kS + 1
+			elseif haveM - kM > 0 then kM = kM + 1
+			elseif haveL - kL > 0 then kL = kL + 1 end
+		end
+		res.s = math.floor(kS)
+		res.m = math.floor(kM)
+		res.l = math.floor(kL)
+		local capTotal = self:TotalExp(cap)
+		local newTotal = math.min(cur + res.s * expS + res.m * expM + res.l * expL, capTotal)
+		res.gain = math.floor(newTotal - cur)
+		res.newLevel = self:LevelFromTotal(newTotal, cap)
+		return res
+	end
+
+	method table PlanBooks(string jobId, integer targetLevel)
+		-- 현재 Sync 값(CharData, 보유 책)으로 PlanBooksFor를 계산한다.
+		local c = self:ParseCharData(self.CharData)[jobId]
+		if c == nil then return { s = 0, m = 0, l = 0, gain = 0, newLevel = 1 } end
+		return self:PlanBooksFor(c.level, c.exp, c.tier, self.BookS, self.BookM, self.BookL, targetLevel)
+	end
+
+	method table ParseCharData(string data)
+		-- CharData 문자열 → { [job] = { unlocked, level, exp, tier, awkLv, awkExp } }
+		local out = {}
+		for _, entry in ipairs(self:Split(data, "|")) do
+			local f = self:Split(entry, ":")
+			if #f >= 5 and f[1] ~= "" then
+				out[f[1]] = {
+					unlocked = self:ToInt(f[2]) == 1, level = math.max(1, self:ToInt(f[3])), exp = self:ToInt(f[4]),
+					tier = math.max(1, self:ToInt(f[5])), awkLv = self:ToInt(f[6]), awkExp = self:ToInt(f[7]),
+				}
+			end
+		end
+		return out
+	end
+
+	method table ParseJobCards(string data)
+		-- JobCards 문자열 → { [job] = 장수 }
+		local out = {}
+		for _, entry in ipairs(self:Split(data, ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and f[1] ~= "" then out[f[1]] = self:ToInt(f[2]) end
+		end
+		return out
+	end
+
+	-- ───────────────────────── 불러오기·저장 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method table NewChar(boolean unlocked)
+		-- 기본 캐릭터 상태 (Lv1, 1차).
+		return { unlocked = unlocked, level = 1, exp = 0, tier = 1, awkLv = 0, awkExp = 0 }
+	end
+
+	@ExecSpace("ServerOnly")
+	method void NormalizeChar(table c)
+		-- 값 범위 보정: 차수 1~최대, 레벨은 차수 구간 안, 경험치 0 ≤ exp < NeedExp (차수 최대 레벨이면 0).
+		c.tier = math.max(1, math.min(self:MaxTier(), math.floor(c.tier)))
+		c.level = math.max(1, math.min(self:MaxLevel(), math.floor(c.level)))
+		c.level = math.max(self:StartLevel(c.tier), math.min(self:CapLevel(c.tier), c.level))
+		local need = self:NeedExp(c.level)
+		if c.level >= self:CapLevel(c.tier) or need <= 0 then
+			c.exp = 0
+		else
+			c.exp = math.max(0, math.min(need - 1, math.floor(c.exp)))
+		end
+		c.awkLv = math.max(0, math.floor(c.awkLv or 0))
+		c.awkExp = math.max(0, math.floor(c.awkExp or 0))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadRoster()
+		-- DataStorage에서 불러온다. 실패하면 재시도하며 그동안 저장하지 않는다.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.RosterKey)
+		if code == 0 and raw ~= nil and raw ~= "" then
+			local gifted = self:Decode(raw)
+			if not gifted then self:ApplyFirstGift() end
+		elseif code == 1000002 or (code == 0 and (raw == nil or raw == "")) then
+			self._T.extra = {}
+			self._T.extraKeys = {}
+			self._T.unknownChars = {}
+			self._T.unknownCards = {}
+			self:ApplyFirstGift()
+		else
+			log_warning("[VRF] roster load failed code=" .. tostring(code))
+			self.RosterRetryTimer = self.LoadRetryDelay
+			self.RosterLoaded = false
+			return
+		end
+		self.RosterLoaded = true
+		self:SyncRoster()
+		if self._T.giftedNow == true then
+			self._T.giftedNow = false
+			self:SaveRoster()
+		end
+		log("[VRF] roster loaded " .. self:Encode())
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyFirstGift()
+		-- 첫 지급: 시작 해금 직업 Lv1, 전용 카드, 다이아·경험의 서·공용 카드.
+		self._T.chars = {}
+		self._T.cards = {}
+		for _, j in ipairs(self._T.jobList or {}) do
+			self._T.chars[j.id] = self:NewChar(j.startUnlocked)
+			self._T.cards[j.id] = j.startCards
+		end
+		self.Diamonds = math.floor(self:Cfg("StartDiamonds", 0))
+		self.BookS = math.floor(self:Cfg("StartBookS", 0))
+		self.BookM = math.floor(self:Cfg("StartBookM", 0))
+		self.BookL = math.floor(self:Cfg("StartBookL", 0))
+		self.CommonCards = math.floor(self:Cfg("StartCommonCards", 0))
+		self.ExchangePoints = 0
+		self.AwakenBooks = 0
+		self.AwakenStones = 0
+		self.GachaTotal = 0
+		self._T.rewardFloor = 0
+		self._T.rewardSections = {}
+		self._T.gift = true
+		self._T.giftedNow = true
+		log("[VRF] roster first gift")
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Decode(string raw)
+		-- 저장 문자열을 읽는다. 첫 지급 완료(gift) 여부를 돌려준다. 모르는 키는 extra에 보관.
+		self._T.chars = {}
+		self._T.cards = {}
+		self._T.extra = {}
+		self._T.extraKeys = {}
+		self._T.unknownChars = {}
+		self._T.unknownCards = {}
+		self._T.gift = false
+		local kv = {}
+		for _, part in ipairs(self:Split(raw, ";")) do
+			local eq, _ = string.find(part, "=", 1, true)
+			if eq ~= nil then
+				local k = string.sub(part, 1, eq - 1)
+				local v = string.sub(part, eq + 1)
+				if k == "v" or k == "dia" or k == "book" or k == "cc" or k == "pt" or k == "awk" or k == "jc" or k == "ch" or k == "gift" or k == "gt" or k == "rf" or k == "rs" then
+					kv[k] = v
+				elseif k ~= "" then
+					if self._T.extra[k] == nil then table.insert(self._T.extraKeys, k) end
+					self._T.extra[k] = v
+				end
+			end
+		end
+		self.Diamonds = self:ToInt(kv["dia"])
+		local book = self:Split(kv["book"] or "", ",")
+		self.BookS = self:ToInt(book[1])
+		self.BookM = self:ToInt(book[2])
+		self.BookL = self:ToInt(book[3])
+		self.CommonCards = self:ToInt(kv["cc"])
+		self.ExchangePoints = self:ToInt(kv["pt"])
+		local awk = self:Split(kv["awk"] or "", ",")
+		self.AwakenBooks = self:ToInt(awk[1])
+		self.AwakenStones = self:ToInt(awk[2])
+		for _, entry in ipairs(self:Split(kv["jc"] or "", ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and f[1] ~= "" then
+				if self._T.jobs[f[1]] ~= nil then
+					self._T.cards[f[1]] = self:ToInt(f[2])
+				else
+					table.insert(self._T.unknownCards, entry)
+				end
+			end
+		end
+		for _, entry in ipairs(self:Split(kv["ch"] or "", "|")) do
+			local f = self:Split(entry, ":")
+			if #f >= 5 and f[1] ~= "" then
+				if self._T.jobs[f[1]] ~= nil then
+					local c = { unlocked = self:ToInt(f[2]) == 1, level = self:ToInt(f[3]), exp = self:ToInt(f[4]), tier = self:ToInt(f[5]), awkLv = self:ToInt(f[6]), awkExp = self:ToInt(f[7]) }
+					self:NormalizeChar(c)
+					self._T.chars[f[1]] = c
+				else
+					table.insert(self._T.unknownChars, entry)
+				end
+			end
+		end
+		-- 표에 있는데 저장에 없는 직업은 미해금 Lv1 1차 (첫 지급 전이면 아래 ApplyFirstGift가 덮어쓴다)
+		for _, j in ipairs(self._T.jobList or {}) do
+			if self._T.chars[j.id] == nil then self._T.chars[j.id] = self:NewChar(false) end
+			if self._T.cards[j.id] == nil then self._T.cards[j.id] = 0 end
+		end
+		self.GachaTotal = self:ToInt(kv["gt"])
+		self._T.rewardFloor = self:ToInt(kv["rf"])
+		self._T.rewardSections = {}
+		for _, sec in ipairs(self:Split(kv["rs"] or "", ",")) do
+			local n = self:ToInt(sec)
+			if n > 0 then self._T.rewardSections[n] = true end
+		end
+		self._T.gift = self:ToInt(kv["gift"]) == 1
+		return self._T.gift
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeCards()
+		-- 전용 카드 문자열 (표 순서 + 모르는 직업 원문).
+		local parts = {}
+		for _, j in ipairs(self._T.jobList or {}) do
+			table.insert(parts, j.id .. ":" .. tostring(math.floor((self._T.cards or {})[j.id] or 0)))
+		end
+		for _, e in ipairs(self._T.unknownCards or {}) do table.insert(parts, e) end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeChars(boolean withUnknown)
+		-- 캐릭터 문자열 (표 순서, 저장용이면 모르는 직업 원문도).
+		local parts = {}
+		for _, j in ipairs(self._T.jobList or {}) do
+			local c = (self._T.chars or {})[j.id] or self:NewChar(false)
+			local u = 0
+			if c.unlocked then u = 1 end
+			table.insert(parts, j.id .. ":" .. tostring(u) .. ":" .. tostring(math.floor(c.level)) .. ":" .. tostring(math.floor(c.exp)) .. ":" .. tostring(math.floor(c.tier)) .. ":" .. tostring(math.floor(c.awkLv)) .. ":" .. tostring(math.floor(c.awkExp)))
+		end
+		if withUnknown then
+			for _, e in ipairs(self._T.unknownChars or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, "|")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 문자열 "v=1;dia=..;book=s,m,l;cc=..;pt=..;awk=a,b;jc=..;ch=..;gift=1" + 모르는 키.
+		local parts = {
+			"v=1",
+			"dia=" .. tostring(self.Diamonds),
+			"book=" .. tostring(self.BookS) .. "," .. tostring(self.BookM) .. "," .. tostring(self.BookL),
+			"cc=" .. tostring(self.CommonCards),
+			"pt=" .. tostring(self.ExchangePoints),
+			"awk=" .. tostring(self.AwakenBooks) .. "," .. tostring(self.AwakenStones),
+			"jc=" .. self:EncodeCards(),
+			"ch=" .. self:EncodeChars(true),
+		}
+		if self._T.gift == true then table.insert(parts, "gift=1") end
+		table.insert(parts, "gt=" .. tostring(self.GachaTotal))
+		table.insert(parts, "rf=" .. tostring(math.floor(self._T.rewardFloor or 0)))
+		table.insert(parts, "rs=" .. self:EncodeSections())
+		for _, k in ipairs(self._T.extraKeys or {}) do
+			table.insert(parts, k .. "=" .. tostring(self._T.extra[k]))
+		end
+		return table.concat(parts, ";")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeSections()
+		-- 별 상자 다이아를 받은 구간 목록 "1,2,..." (오름차순).
+		local list = {}
+		for sec, on in pairs(self._T.rewardSections or {}) do
+			if on then table.insert(list, math.floor(sec)) end
+		end
+		table.sort(list)
+		local parts = {}
+		for _, n in ipairs(list) do table.insert(parts, tostring(n)) end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncRoster()
+		-- 서버 상태를 Sync 문자열로 다시 쓴다.
+		self.JobCards = self:EncodeCards()
+		self.CharData = self:EncodeChars(false)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveRoster()
+		-- 비동기 저장. 불러오기 전에는 절대 저장하지 않는다.
+		if not self.RosterLoaded then return end
+		self:SyncRoster()
+		self.RosterDirty = true
+		self._T.saveGen = (self._T.saveGen or 0) + 1
+		local gen = self._T.saveGen
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.RosterKey, self:Encode(), function(errorCode, key)
+			if errorCode == 0 then
+				if gen == self._T.saveGen then self.RosterDirty = false end
+			else
+				log_warning("[VRF] roster save failed code=" .. tostring(errorCode))
+				self._T.saveFailed = true
+				self.RosterRetryTimer = self.SaveRetryDelay
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Reply(string code, string result)
+		-- 처리 결과를 Sync 값에 쓰고 로그를 남긴 뒤 코드를 돌려준다.
+		self.RosterSeq = self.RosterSeq + 1
+		self.RosterMsg = code
+		self.RosterResult = result
+		log("[VRF] roster reply " .. code .. " " .. result)
+		return code
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanEditRoster(string fromUserId)
+		-- 본인 요청 + 불러오기 완료 + 로비에 있을 때만.
+		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.RosterLoaded then return false end
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	-- ───────────────────────── 레벨업 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method integer AddExp(string jobId, integer gain)
+		-- 경험치 반영 (차수 최대 레벨을 넘는 경험치는 버린다). 실제 반영량을 돌려준다.
+		local c = self._T.chars[jobId]
+		if c == nil or gain <= 0 then return 0 end
+		local cap = self:CapLevel(c.tier)
+		local capTotal = self:TotalExp(cap)
+		local cur = self:TotalExp(c.level) + c.exp
+		local new = math.min(cur + gain, capTotal)
+		if new < cur then new = cur end
+		c.level = self:LevelFromTotal(new, cap)
+		c.exp = math.floor(new - self:TotalExp(c.level))
+		return math.floor(new - cur)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string CheckGrowable(string jobId)
+		-- 레벨업 공통 검사. 통과하면 "" 반환.
+		if not self.RosterLoaded then return "err_notready" end
+		local c = self._T.chars[jobId]
+		if self._T.jobs[jobId] == nil or c == nil then return "err_job" end
+		if not c.unlocked then return "err_locked" end
+		if c.level >= self:CapLevel(c.tier) then
+			if c.tier >= self:MaxTier() then return "err_max" end
+			return "err_cap"
+		end
+		return ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoUseBooks(string jobId, integer s, integer m, integer l)
+		-- 경험의 서 직접 사용: 대→중→소 한 권씩, 차수 최대 레벨에 닿으면 남은 책은 소모하지 않는다.
+		local err = self:CheckGrowable(jobId)
+		if err ~= "" then return self:Reply(err, "level:" .. jobId) end
+		s = math.max(0, math.floor(s))
+		m = math.max(0, math.floor(m))
+		l = math.max(0, math.floor(l))
+		if s + m + l == 0 or s > self.BookS or m > self.BookM or l > self.BookL then
+			return self:Reply("err_books", "level:" .. jobId)
+		end
+		local c = self._T.chars[jobId]
+		local before = c.level
+		local cap = self:CapLevel(c.tier)
+		local usedS, usedM, usedL = 0, 0, 0
+		local plan = { { n = l, exp = math.floor(self:Cfg("BookExpL", 2000)), kind = "l" }, { n = m, exp = math.floor(self:Cfg("BookExpM", 500)), kind = "m" }, { n = s, exp = math.floor(self:Cfg("BookExpS", 100)), kind = "s" } }
+		for _, p in ipairs(plan) do
+			for i = 1, p.n do
+				if c.level >= cap then break end
+				self:AddExp(jobId, p.exp)
+				if p.kind == "l" then usedL = usedL + 1 elseif p.kind == "m" then usedM = usedM + 1 else usedS = usedS + 1 end
+			end
+		end
+		self.BookS = self.BookS - usedS
+		self.BookM = self.BookM - usedM
+		self.BookL = self.BookL - usedL
+		self:SaveRoster()
+		log("[VRF] roster books job=" .. jobId .. " used=" .. tostring(usedS) .. "," .. tostring(usedM) .. "," .. tostring(usedL) .. " lv " .. tostring(before) .. "->" .. tostring(c.level) .. " exp=" .. tostring(c.exp))
+		return self:Reply("ok_level", "level:" .. jobId .. ":" .. tostring(before) .. ":" .. tostring(c.level))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoLevelTo(string jobId, integer targetLevel)
+		-- 목표 레벨까지 책을 자동 계산해 사용한다.
+		local err = self:CheckGrowable(jobId)
+		if err ~= "" then return self:Reply(err, "level:" .. jobId) end
+		local c = self._T.chars[jobId]
+		if targetLevel <= c.level then return self:Reply("err_level", "level:" .. jobId) end
+		local plan = self:PlanBooksFor(c.level, c.exp, c.tier, self.BookS, self.BookM, self.BookL, targetLevel)
+		if plan.s + plan.m + plan.l == 0 then return self:Reply("err_books", "level:" .. jobId) end
+		local before = c.level
+		self.BookS = self.BookS - plan.s
+		self.BookM = self.BookM - plan.m
+		self.BookL = self.BookL - plan.l
+		self:AddExp(jobId, plan.gain)
+		self:SaveRoster()
+		log("[VRF] roster books job=" .. jobId .. " used=" .. tostring(plan.s) .. "," .. tostring(plan.m) .. "," .. tostring(plan.l) .. " lv " .. tostring(before) .. "->" .. tostring(c.level) .. " exp=" .. tostring(c.exp))
+		local target = math.min(targetLevel, self:CapLevel(c.tier))
+		return self:Reply("ok_level", "level:" .. jobId .. ":" .. tostring(before) .. ":" .. tostring(c.level) .. ":" .. tostring(target))
+	end
+
+	-- ───────────────────────── 전직·해금 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method string DoPromote(string jobId, boolean useCommon)
+		-- 전직: 차수 최대 레벨에서 전용 카드(부족분은 useCommon일 때 공용 카드 1:1)로 다음 차수.
+		if not self.RosterLoaded then return self:Reply("err_notready", "promote:" .. jobId) end
+		local c = self._T.chars[jobId]
+		if self._T.jobs[jobId] == nil or c == nil then return self:Reply("err_job", "promote:" .. jobId) end
+		if not c.unlocked then return self:Reply("err_locked", "promote:" .. jobId) end
+		if c.tier >= self:MaxTier() then return self:Reply("err_max", "promote:" .. jobId) end
+		if c.level < self:CapLevel(c.tier) then return self:Reply("err_level", "promote:" .. jobId) end
+		local need = self:PromoteCards(c.tier + 1)
+		local have = self._T.cards[jobId] or 0
+		local useJob, useCc = 0, 0
+		if have >= need then
+			useJob = need
+		elseif useCommon and have + self.CommonCards >= need then
+			useJob = have
+			useCc = need - have
+		else
+			return self:Reply("err_cards", "promote:" .. jobId)
+		end
+		local before = c.tier
+		self._T.cards[jobId] = have - useJob
+		self.CommonCards = self.CommonCards - useCc
+		c.tier = c.tier + 1
+		c.exp = 0
+		self:NormalizeChar(c)
+		self:SaveRoster()
+		log("[VRF] roster promote job=" .. jobId .. " tier " .. tostring(before) .. "->" .. tostring(c.tier) .. " job=" .. tostring(useJob) .. " common=" .. tostring(useCc))
+		return self:Reply("ok_promote", "promote:" .. jobId .. ":" .. tostring(c.tier) .. ":" .. tostring(useJob) .. ":" .. tostring(useCc))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string GiveJobCard(string jobId, integer n)
+		-- 직업 카드 지급 (3단계 뽑기). 미해금이면 1장으로 해금하고 나머지는 적립.
+		if not self.RosterLoaded or n <= 0 then return "" end
+		local c = self._T.chars[jobId]
+		if self._T.jobs[jobId] == nil or c == nil then return "" end
+		local result = "card"
+		local rest = n
+		if not c.unlocked then
+			self._T.chars[jobId] = self:NewChar(true)
+			rest = n - 1
+			result = "unlock"
+		end
+		self._T.cards[jobId] = (self._T.cards[jobId] or 0) + rest
+		self:SaveRoster()
+		log("[VRF] roster card job=" .. jobId .. " n=" .. tostring(n) .. " result=" .. result)
+		return result
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoUnlockWithCommon(string jobId)
+		-- 공용 전직 카드 1장으로 미해금 직업 해금.
+		if not self.RosterLoaded then return self:Reply("err_notready", "unlock:" .. jobId) end
+		local c = self._T.chars[jobId]
+		if self._T.jobs[jobId] == nil or c == nil then return self:Reply("err_job", "unlock:" .. jobId) end
+		if c.unlocked then return self:Reply("err_unlocked", "unlock:" .. jobId) end
+		if self.CommonCards < 1 then return self:Reply("err_cards", "unlock:" .. jobId) end
+		self.CommonCards = self.CommonCards - 1
+		self._T.chars[jobId] = self:NewChar(true)
+		self:SaveRoster()
+		log("[VRF] roster unlock job=" .. jobId .. " common=1")
+		return self:Reply("ok_unlock", "unlock:" .. jobId)
+	end
+
+	-- ───────────────────────── 재화 (다른 단계가 호출) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void GiveDiamonds(integer n)
+		-- 다이아 지급.
+		if not self.RosterLoaded or n <= 0 then return end
+		self.Diamonds = self.Diamonds + n
+		self:SaveRoster()
+		log("[VRF] roster dia +" .. tostring(n) .. " = " .. tostring(self.Diamonds))
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean SpendDiamonds(integer n)
+		-- 다이아 사용. 부족하면 false.
+		if not self.RosterLoaded or n < 0 or self.Diamonds < n then return false end
+		self.Diamonds = self.Diamonds - n
+		self:SaveRoster()
+		log("[VRF] roster dia -" .. tostring(n) .. " = " .. tostring(self.Diamonds))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void GiveBooks(integer s, integer m, integer l)
+		-- 경험의 서 지급 (음수 무시).
+		if not self.RosterLoaded then return end
+		self.BookS = self.BookS + math.max(0, s)
+		self.BookM = self.BookM + math.max(0, m)
+		self.BookL = self.BookL + math.max(0, l)
+		self:SaveRoster()
+		log("[VRF] roster books + " .. tostring(s) .. "," .. tostring(m) .. "," .. tostring(l))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void GiveCommonCard(integer n)
+		-- 공용 전직 카드 지급.
+		if not self.RosterLoaded or n <= 0 then return end
+		self.CommonCards = self.CommonCards + n
+		self:SaveRoster()
+		log("[VRF] roster common +" .. tostring(n) .. " = " .. tostring(self.CommonCards))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void GiveExchangePoints(integer n)
+		-- 뽑기 교환 포인트 지급 (3단계).
+		if not self.RosterLoaded or n <= 0 then return end
+		self.ExchangePoints = self.ExchangePoints + n
+		self:SaveRoster()
+		log("[VRF] roster pt +" .. tostring(n) .. " = " .. tostring(self.ExchangePoints))
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean SpendExchangePoints(integer n)
+		-- 뽑기 교환 포인트 사용 (3단계).
+		if not self.RosterLoaded or n < 0 or self.ExchangePoints < n then return false end
+		self.ExchangePoints = self.ExchangePoints - n
+		self:SaveRoster()
+		log("[VRF] roster pt -" .. tostring(n) .. " = " .. tostring(self.ExchangePoints))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean IsUnlocked(string jobId)
+		-- 해금 여부.
+		local c = (self._T.chars or {})[jobId]
+		return c ~= nil and c.unlocked == true
+	end
+
+	@ExecSpace("ServerOnly")
+	method table GetChar(string jobId)
+		-- 캐릭터 상태 복사본.
+		local c = (self._T.chars or {})[jobId]
+		if c == nil then return nil end
+		return { unlocked = c.unlocked, level = c.level, exp = c.exp, tier = c.tier, awkLv = c.awkLv, awkExp = c.awkExp }
+	end
+
+	-- ───────────────────────── 편성 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method string DoSetParty(string j1, string j2, string j3)
+		-- 편성 저장: PlayerEngrave의 MainJob/CompJob/Comp2Job을 바꾸고 SaveSkills()를 부른다.
+		local res = "party:" .. j1 .. "," .. j2 .. "," .. j3
+		if not self.RosterLoaded then return self:Reply("err_notready", res) end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.SkillLoaded then return self:Reply("err_party", res) end
+		if j1 == j2 or j1 == j3 or j2 == j3 then return self:Reply("err_party", res) end
+		for _, j in ipairs({ j1, j2, j3 }) do
+			if self._T.jobs[j] == nil or not self:IsUnlocked(j) then return self:Reply("err_party", res) end
+		end
+		eng.MainJob = j1
+		eng.CompJob = j2
+		eng.Comp2Job = j3
+		eng:SaveSkills()
+		log("[VRF] roster party " .. j1 .. "," .. j2 .. "," .. j3)
+		return self:Reply("ok_party", res)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table FixedJobs(table cur)
+		-- 편성 3칸 보정(표에 없음·잠김·중복 → 표 순서의 해금된 미사용 직업). 반환 { jobs = {a,b,c}, changed = boolean }. 저장하지 않는다.
+		local out = { cur[1] or "", cur[2] or "", cur[3] or "" }
+		local used = {}
+		local bad = {}
+		for i = 1, 3 do
+			local j = out[i]
+			if self._T.jobs[j] ~= nil and self:IsUnlocked(j) and not used[j] then
+				used[j] = true
+			else
+				bad[i] = true
+			end
+		end
+		local changed = false
+		for i = 1, 3 do
+			if bad[i] then
+				for _, job in ipairs(self._T.jobList or {}) do
+					if self:IsUnlocked(job.id) and not used[job.id] then
+						out[i] = job.id
+						used[job.id] = true
+						changed = true
+						break
+					end
+				end
+			end
+		end
+		return { jobs = out, changed = changed }
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FixParty()
+		-- 로비에서만: 편성에 미해금·중복 직업이 있으면 해금 직업(표 순서)으로 바꾼다.
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.SkillLoaded then return end
+		local fx = self:FixedJobs({ eng.MainJob, eng.CompJob, eng.Comp2Job })
+		if not fx.changed then return end
+		local cur = fx.jobs
+		eng.MainJob = cur[1]
+		eng.CompJob = cur[2]
+		eng.Comp2Job = cur[3]
+		eng:SaveSkills()
+		log("[VRF] roster party fixed " .. cur[1] .. "," .. cur[2] .. "," .. cur[3])
+	end
+
+	-- ───────────────────────── 차수 외형 (2단계) ─────────────────────────
+
+	method table OutfitFor(string jobId, integer tier)
+		-- 그 직업·차수의 외형 세트 { Cap = ruid, ..., family = "T"/"O" }. 클라이언트 미리보기도 사용.
+		self:EnsureTables()
+		local out = {}
+		local byTier = (self._T.outfits or {})[jobId]
+		local set = nil
+		if byTier ~= nil then set = byTier[tier] end
+		if set ~= nil then
+			for k, v in pairs(set) do out[k] = v end
+		end
+		local j = self._T.jobs[jobId]
+		out.family = "O"
+		if j ~= nil and j.weaponFamily ~= nil and j.weaponFamily ~= "" then out.family = j.weaponFamily end
+		return out
+	end
+
+	method table OutfitSlots()
+		-- 외형 표가 다루는 아바타 부위 이름 (MapleAvatarItemCategory 이름과 같음).
+		return { "Cap", "Coat", "Pants", "Longcoat", "Glove", "Shoes", "Cape", "OneHandedWeapon", "TwoHandedWeapon" }
+	end
+
+	method any OutfitCategory(string slot)
+		-- 부위 이름 → MapleAvatarItemCategory 값.
+		if slot == "Cap" then return MapleAvatarItemCategory.Cap end
+		if slot == "Coat" then return MapleAvatarItemCategory.Coat end
+		if slot == "Pants" then return MapleAvatarItemCategory.Pants end
+		if slot == "Longcoat" then return MapleAvatarItemCategory.Longcoat end
+		if slot == "Glove" then return MapleAvatarItemCategory.Glove end
+		if slot == "Shoes" then return MapleAvatarItemCategory.Shoes end
+		if slot == "Cape" then return MapleAvatarItemCategory.Cape end
+		if slot == "OneHandedWeapon" then return MapleAvatarItemCategory.OneHandedWeapon end
+		if slot == "TwoHandedWeapon" then return MapleAvatarItemCategory.TwoHandedWeapon end
+		if slot == "SubWeapon" then return MapleAvatarItemCategory.SubWeapon end
+		return nil
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyOutfit(Entity target, string jobId, integer tier)
+		-- 대상 아바타에 차수 세트를 입힌다. 9개 부위를 모두 설정(세트에 없으면 "")하고 몸·머리·얼굴은 건드리지 않는다.
+		if not isvalid(target) or not isvalid(target.CostumeManagerComponent) then return end
+		local cm = target.CostumeManagerComponent
+		local set = self:OutfitFor(jobId, tier)
+		local n = 0
+		for _, slot in ipairs(self:OutfitSlots()) do
+			local ruid = set[slot] or ""
+			cm:SetEquip(self:OutfitCategory(slot), ruid)
+			if ruid ~= "" then n = n + 1 end
+		end
+		cm:SetEquip(MapleAvatarItemCategory.SubWeapon, "")
+		local attacker = target:GetComponent("script.TowerPlayer")
+		if attacker ~= nil then attacker.WeaponFamily = set.family end
+		log("[VRF] outfit job=" .. jobId .. " tier=" .. tostring(tier) .. " target=" .. target.Name .. " n=" .. tostring(n))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyOutfitForJob(Entity target, string jobId)
+		-- 저장된 현재 차수로 ApplyOutfit (잠긴 직업은 1차).
+		local c = (self._T.chars or {})[jobId]
+		local tier = 1
+		if c ~= nil and c.unlocked then tier = c.tier end
+		self:ApplyOutfit(target, jobId, tier)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RefreshLobbyOutfit()
+		-- 로비에서 1번 편성 직업·차수가 바뀌면 플레이어 외형을 다시 입힌다. 로비를 떠나면 기록을 지워 돌아올 때 새로 입힌다.
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then
+			self._T.lobbyOutfitKey = ""
+			return
+		end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.SkillLoaded then return end
+		local job = eng.MainJob
+		local c = (self._T.chars or {})[job]
+		local tier = 1
+		if c ~= nil and c.unlocked then tier = c.tier end
+		local key = job .. ":" .. tostring(tier)
+		if key ~= self._T.lobbyOutfitKey then
+			self:ApplyOutfitForJob(self.Entity, job)
+			self._T.lobbyOutfitKey = key
+		end
+	end
+
+	-- ───────────────────────── 판 전달 (4단계에서 사용) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method table CharRunData(string jobId)
+		-- 판에 넘길 캐릭터 값 (능력치·칸별 스킬).
+		local c = (self._T.chars or {})[jobId]
+		if c == nil then
+			return { loaded = self.RosterLoaded, unlocked = false, jobId = jobId, level = 1, tier = 1, tierName = "", atk = 0, hp = 0, def = 0, awakenLv = 0, slots = {}, skills = {} }
+		end
+		local st = self:CharStat(jobId, c.level, c.tier)
+		local sl = self:SlotsFor(jobId, c.tier)
+		return {
+			loaded = self.RosterLoaded, unlocked = c.unlocked, jobId = jobId,
+			level = c.level, tier = c.tier, tierName = self:TierName(jobId, c.tier),
+			atk = st.atk, hp = st.hp, def = st.def,
+			awakenLv = c.awkLv,
+			slots = sl.slots, skills = sl.skills,
+		}
+	end
+
+	@ExecSpace("ServerOnly")
+	method table PartyRunData()
+		-- PlayerEngrave 편성 순서대로 CharRunData 3개.
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		local jobs = { "Hero", "Bishop", "NightLord" }
+		if eng ~= nil then jobs = { eng.MainJob, eng.CompJob, eng.Comp2Job } end
+		local out = {}
+		for _, j in ipairs(jobs) do table.insert(out, self:CharRunData(j)) end
+		return out
+	end
+
+	@ExecSpace("ServerOnly")
+	method any RunPartyData()
+		-- 판 시작용 편성 3명: PlayerEngrave 편성을 FixParty와 같은 규칙(표에 없음·잠김·중복 → 표 순서의 해금된 미사용 직업)으로 보정한 CharRunData 3개.
+		-- 탑에서도 동작하며 PlayerEngrave에는 쓰지 않는다(저장 없음). 반환 { list = {CharRunData×3}, fixed = boolean, jobs = "a,b,c" } / 불러오기 전이면 nil
+		if not self.RosterLoaded then return nil end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		local cur = { "Hero", "Bishop", "NightLord" }
+		if eng ~= nil then cur = { eng.MainJob, eng.CompJob, eng.Comp2Job } end
+		local fx = self:FixedJobs(cur)
+		local list = {}
+		for _, j in ipairs(fx.jobs) do table.insert(list, self:CharRunData(j)) end
+		return { list = list, fixed = fx.changed, jobs = table.concat(fx.jobs, ",") }
+	end
+
+	-- ───────────────────────── 캐릭터 뽑기 (3단계) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method number KstToUtcElapsed(string text)
+		-- "YYYY-MM-DD HH:MM"(한국 시간) → UtcNow.Elapsed와 같은 단위의 값. 형식이 틀리면 -1.
+		local y = tonumber(string.sub(text, 1, 4))
+		local mo = tonumber(string.sub(text, 6, 7))
+		local d = tonumber(string.sub(text, 9, 10))
+		local h = tonumber(string.sub(text, 12, 13))
+		local mi = tonumber(string.sub(text, 15, 16))
+		if y == nil or mo == nil or d == nil or h == nil or mi == nil then return -1 end
+		local day = DateTime(2000, 1, 2, 0, 0, 0).Elapsed - DateTime(2000, 1, 1, 0, 0, 0).Elapsed
+		local hour = day / 24
+		return DateTime(math.floor(y), math.floor(mo), math.floor(d), math.floor(h), math.floor(mi), 0).Elapsed - self:Cfg("KstOffsetHours", 9) * hour
+	end
+
+	@ExecSpace("ServerOnly")
+	method string ActiveBannerId()
+		-- 진행 중 픽업 Id ("" = 없음). 테스트 강제값이 있으면 그것("none"이면 "").
+		if self._T.forceBanner ~= nil then
+			if self._T.forceBanner == "none" then return "" end
+			return self._T.forceBanner
+		end
+		local now = DateTime.UtcNow.Elapsed
+		for _, b in ipairs(self._T.banners or {}) do
+			local st = self:KstToUtcElapsed(b.startText)
+			local en = self:KstToUtcElapsed(b.endText)
+			if st >= 0 and en > st and now >= st and now < en and self._T.jobs[b.job] ~= nil then return b.id end
+		end
+		return ""
+	end
+
+	method any BannerInfo(string bannerId)
+		-- 픽업 정보 { id, job, title, startText, endText, share } 또는 nil. 클라이언트 표시도 사용.
+		self:EnsureTables()
+		if bannerId == nil or bannerId == "" then return nil end
+		for _, b in ipairs(self._T.banners or {}) do
+			if b.id == bannerId then return b end
+		end
+		return nil
+	end
+
+	method table GachaRates(string bannerId)
+		-- 펼친 확률표(합 100): { { kind, job, rate, grade, name, short, color }, ... }. J 행은 직업별로 펼친다.
+		self:EnsureTables()
+		local rows = self._T.gachaRows or {}
+		local sum = 0
+		for _, r in ipairs(rows) do sum = sum + r.rate end
+		local out = {}
+		if sum <= 0 then return out end
+		if math.abs(sum - 100) > 0.001 then log_warning("[VRF] gacha rate sum=" .. tostring(sum)) end
+		local banner = self:BannerInfo(bannerId)
+		local jobs = self._T.jobList or {}
+		for _, r in ipairs(rows) do
+			local rate = r.rate * 100 / sum
+			if r.kind == "J" then
+				local n = #jobs
+				for _, j in ipairs(jobs) do
+					local jr = rate / math.max(1, n)
+					if banner ~= nil then
+						if n <= 1 then
+							jr = rate
+						elseif j.id == banner.job then
+							jr = rate * banner.share / 100
+						else
+							jr = rate * (1 - banner.share / 100) / (n - 1)
+						end
+					end
+					table.insert(out, { kind = "J", job = j.id, rate = jr, grade = r.grade, name = r.name, short = r.short, color = r.color })
+				end
+			else
+				table.insert(out, { kind = r.kind, job = "", rate = rate, grade = r.grade, name = r.name, short = r.short, color = r.color })
+			end
+		end
+		return out
+	end
+
+	@ExecSpace("ServerOnly")
+	method string RollKind(table rates, boolean cardOnly)
+		-- 확률표에서 하나를 고른다 (cardOnly면 J·C만). 반환 "S"/"M"/"L"/"C"/"J.Hero"
+		local total = 0
+		for _, r in ipairs(rates) do
+			if not cardOnly or r.kind == "J" or r.kind == "C" then total = total + r.rate end
+		end
+		if total <= 0 then return "S" end
+		local x = _UtilLogic:RandomDouble() * total
+		local last = nil
+		for _, r in ipairs(rates) do
+			if not cardOnly or r.kind == "J" or r.kind == "C" then
+				last = r
+				x = x - r.rate
+				if x < 0 then break end
+			end
+		end
+		if last == nil then return "S" end
+		if last.kind == "J" then return "J." .. last.job end
+		return last.kind
+	end
+
+	method boolean IsCardToken(string t)
+		-- 직업 카드(전용·공용) 결과인지.
+		local head = string.sub(t, 1, 2)
+		return t == "C" or head == "J." or head == "U." or head == "X."
+	end
+
+	@ExecSpace("ServerOnly")
+	method table MakeDrawList(table rates, integer count, boolean useForced)
+		-- 결과 목록(강제 목록 우선) + 10회 보장 적용.
+		local list = {}
+		for i = 1, count do
+			local forced = nil
+			if useForced and self._T.forceNext ~= nil and #self._T.forceNext > 0 then forced = table.remove(self._T.forceNext, 1) end
+			if forced ~= nil and forced ~= "" then table.insert(list, forced) else table.insert(list, self:RollKind(rates, false)) end
+		end
+		if useForced and self._T.forceNext ~= nil and #self._T.forceNext == 0 then self._T.forceNext = nil end
+		if count == 10 then
+			local hasCard = false
+			for _, t in ipairs(list) do
+				if self:IsCardToken(t) then hasCard = true end
+			end
+			if not hasCard then
+				list[10] = self:RollKind(rates, true)
+				if useForced then log("[VRF] gacha guarantee " .. list[10]) end
+			end
+		end
+		return list
+	end
+
+	@ExecSpace("ServerOnly")
+	method string ApplyJobCard(string jobId)
+		-- 전용 카드 1장 적용 (저장하지 않음): 잠김 → 해금 "U", 5차 완료 → 포인트 "X", 그 외 적립 "J".
+		local c = self._T.chars[jobId]
+		if c == nil or not c.unlocked then
+			self._T.chars[jobId] = self:NewChar(true)
+			return "U"
+		end
+		if c.tier >= self:MaxTier() then
+			self.ExchangePoints = self.ExchangePoints + math.floor(self:Cfg("MaxedCardPoints", 10))
+			return "X"
+		end
+		self._T.cards[jobId] = (self._T.cards[jobId] or 0) + 1
+		return "J"
+	end
+
+	@ExecSpace("ServerOnly")
+	method string GachaReply(string code, string result)
+		-- 뽑기 결과를 별도 Sync 값에 쓴다 (캐릭터 화면 RosterSeq와 섞지 않음).
+		self.GachaSeq = self.GachaSeq + 1
+		self.GachaMsg = code
+		self.GachaResult = result
+		log("[VRF] gacha reply " .. code .. " " .. result)
+		return code
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoGachaDraw(integer count)
+		-- 캐릭터 뽑기 1회·10회. 저장은 한 번만.
+		local res = "draw:" .. tostring(count)
+		if not self.RosterLoaded then return self:GachaReply("err_notready", res) end
+		if count ~= 1 and count ~= 10 then return self:GachaReply("err_count", res) end
+		local cost = math.floor(self:Cfg("GachaCost", 100))
+		if count == 10 then cost = math.floor(self:Cfg("GachaTenCost", 1000)) end
+		if self.Diamonds < cost then return self:GachaReply("err_dia", res) end
+		local rates = self:GachaRates(self.GachaBanner)
+		local list = self:MakeDrawList(rates, count, true)
+		self.Diamonds = self.Diamonds - cost
+		local tokens = {}
+		for _, t in ipairs(list) do
+			if t == "S" then
+				self.BookS = self.BookS + 1
+				table.insert(tokens, t)
+			elseif t == "M" then
+				self.BookM = self.BookM + 1
+				table.insert(tokens, t)
+			elseif t == "L" then
+				self.BookL = self.BookL + 1
+				table.insert(tokens, t)
+			elseif t == "C" then
+				self.CommonCards = self.CommonCards + 1
+				table.insert(tokens, t)
+			elseif string.sub(t, 1, 2) == "J." and self._T.jobs[string.sub(t, 3)] ~= nil then
+				local job = string.sub(t, 3)
+				table.insert(tokens, self:ApplyJobCard(job) .. "." .. job)
+			else
+				log_warning("[VRF] gacha unknown token " .. t .. " → S")
+				self.BookS = self.BookS + 1
+				table.insert(tokens, "S")
+			end
+		end
+		self.ExchangePoints = self.ExchangePoints + count * math.floor(self:Cfg("GachaPointPerDraw", 1))
+		self.GachaTotal = self.GachaTotal + count
+		self:SaveRoster()
+		local joined = table.concat(tokens, ",")
+		log("[VRF] gacha draw x" .. tostring(count) .. " banner=" .. self.GachaBanner .. " dia=" .. tostring(self.Diamonds) .. " pt=" .. tostring(self.ExchangePoints) .. " tokens=" .. joined)
+		return self:GachaReply("ok_draw", "draw:" .. tostring(count) .. ":" .. joined)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoExchange(string jobId)
+		-- 교환 포인트 30점 → 원하는 직업 전용 카드 1장.
+		local res = "exchange:" .. jobId
+		if not self.RosterLoaded then return self:GachaReply("err_notready", res) end
+		if self._T.jobs[jobId] == nil then return self:GachaReply("err_job", res) end
+		local c = self._T.chars[jobId]
+		if c ~= nil and c.unlocked and c.tier >= self:MaxTier() then return self:GachaReply("err_max", res) end
+		local cost = math.floor(self:Cfg("ExchangeCost", 30))
+		if self.ExchangePoints < cost then return self:GachaReply("err_points", res) end
+		self.ExchangePoints = self.ExchangePoints - cost
+		local t = self:ApplyJobCard(jobId)
+		self:SaveRoster()
+		log("[VRF] gacha exchange job=" .. jobId .. " result=" .. t .. " pt=" .. tostring(self.ExchangePoints))
+		return self:GachaReply("ok_exchange", "exchange:" .. jobId .. ":" .. t)
+	end
+
+	-- ───────────────────────── 다이아 보상 (3단계) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method integer FirstClearDia(integer floor)
+		-- 층 첫 클리어 다이아 = FirstClearDiaBase + FirstClearDiaPerFloor × 층.
+		return math.floor(self:Cfg("FirstClearDiaBase", 20) + self:Cfg("FirstClearDiaPerFloor", 2) * floor)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer GrantFirstClearDiamonds(integer clearedFloor)
+		-- rf < clearedFloor면 (rf+1 ~ clearedFloor) 층 몫을 한꺼번에 지급하고 rf = clearedFloor. 지급액 반환.
+		if not self.RosterLoaded then return 0 end
+		local rf = math.floor(self._T.rewardFloor or 0)
+		if clearedFloor <= rf then return 0 end
+		local total = 0
+		for f = rf + 1, clearedFloor do total = total + self:FirstClearDia(f) end
+		self.Diamonds = self.Diamonds + total
+		self._T.rewardFloor = clearedFloor
+		self:SaveRoster()
+		log("[VRF] dia first clear floors " .. tostring(rf + 1) .. "-" .. tostring(clearedFloor) .. " +" .. tostring(total) .. " total=" .. tostring(self.Diamonds))
+		return total
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer GrantSectionDiamonds(string sectionData)
+		-- "구간:비트,..."에서 마지막 상자 비트가 켜진 구간 중 아직 안 받은 구간마다 다이아 지급. 지급액 반환.
+		if not self.RosterLoaded then return 0 end
+		if self._T.rewardSections == nil then self._T.rewardSections = {} end
+		local bit = 1 << (math.floor(self:Cfg("SectionLastTier", 3)) - 1)
+		local per = math.floor(self:Cfg("SectionLastDia", 300))
+		local total = 0
+		for _, entry in ipairs(self:Split(sectionData or "", ",")) do
+			local f = self:Split(entry, ":")
+			local sec = self:ToInt(f[1])
+			local bits = self:ToInt(f[2])
+			if sec > 0 and (bits & bit) ~= 0 and not self._T.rewardSections[sec] then
+				self._T.rewardSections[sec] = true
+				total = total + per
+				log("[VRF] dia section s=" .. tostring(sec) .. " +" .. tostring(per) .. " total=" .. tostring(self.Diamonds + total))
+			end
+		end
+		if total > 0 then
+			self.Diamonds = self.Diamonds + total
+			self:SaveRoster()
+		end
+		return total
+	end
+
+	@ExecSpace("ServerOnly")
+	method void CheckDiamondRewards()
+		-- 1초마다(맵 상관없이): PlayerEngrave를 읽기만 해서 첫 클리어·별 상자 다이아를 지급한다.
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil then return end
+		if eng.Loaded then self:GrantFirstClearDiamonds(eng.ClearedFloor) end
+		if eng.StarLoaded then self:GrantSectionDiamonds(eng.SectionData) end
+	end
+
+	-- ───────────────────────── 클라이언트 요청 ─────────────────────────
+
+	@ExecSpace("Server")
+	method void RequestGachaDraw(integer count)
+		-- 클라이언트 요청: 캐릭터 뽑기 1회·10회.
+		if not self:CanEditRoster(senderUserId) then self:GachaReply("err_lobby", "draw:" .. tostring(count)) return end
+		self:DoGachaDraw(count)
+	end
+
+	@ExecSpace("Server")
+	method void RequestExchange(string jobId)
+		-- 클라이언트 요청: 교환 포인트로 직업 전용 카드.
+		if not self:CanEditRoster(senderUserId) then self:GachaReply("err_lobby", "exchange:" .. jobId) return end
+		self:DoExchange(jobId)
+	end
+
+
+	@ExecSpace("Server")
+	method void RequestUseBooks(string jobId, integer s, integer m, integer l)
+		-- 클라이언트 요청: 경험의 서 직접 사용.
+		if not self:CanEditRoster(senderUserId) then self:Reply("err_lobby", "level:" .. jobId) return end
+		self:DoUseBooks(jobId, s, m, l)
+	end
+
+	@ExecSpace("Server")
+	method void RequestLevelTo(string jobId, integer targetLevel)
+		-- 클라이언트 요청: 목표 레벨까지 자동.
+		if not self:CanEditRoster(senderUserId) then self:Reply("err_lobby", "level:" .. jobId) return end
+		self:DoLevelTo(jobId, targetLevel)
+	end
+
+	@ExecSpace("Server")
+	method void RequestPromote(string jobId, boolean useCommon)
+		-- 클라이언트 요청: 전직.
+		if not self:CanEditRoster(senderUserId) then self:Reply("err_lobby", "promote:" .. jobId) return end
+		self:DoPromote(jobId, useCommon)
+	end
+
+	@ExecSpace("Server")
+	method void RequestUnlockWithCommon(string jobId)
+		-- 클라이언트 요청: 공용 카드로 해금.
+		if not self:CanEditRoster(senderUserId) then self:Reply("err_lobby", "unlock:" .. jobId) return end
+		self:DoUnlockWithCommon(jobId)
+	end
+
+	@ExecSpace("Server")
+	method void RequestSetParty(string j1, string j2, string j3)
+		-- 클라이언트 요청: 편성 저장.
+		if not self:CanEditRoster(senderUserId) then self:Reply("err_lobby", "party:" .. j1 .. "," .. j2 .. "," .. j3) return end
+		self:DoSetParty(j1, j2, j3)
+	end
+
+	-- ───────────────────────── 테스트 전용 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void DebugGrant(integer dia, integer s, integer m, integer l, integer common)
+		-- 테스트: 재화 지급 후 저장.
+		if not self.RosterLoaded then return end
+		self.Diamonds = math.max(0, self.Diamonds + dia)
+		self.BookS = math.max(0, self.BookS + s)
+		self.BookM = math.max(0, self.BookM + m)
+		self.BookL = math.max(0, self.BookL + l)
+		self.CommonCards = math.max(0, self.CommonCards + common)
+		self:SaveRoster()
+		log("[VRF] roster debug grant dia=" .. tostring(dia) .. " books=" .. tostring(s) .. "," .. tostring(m) .. "," .. tostring(l) .. " common=" .. tostring(common))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetCurrency(integer dia, integer s, integer m, integer l, integer common)
+		-- 테스트: 재화를 절대값으로 설정 (음수는 0) 후 저장.
+		if not self.RosterLoaded then return end
+		self.Diamonds = math.max(0, dia)
+		self.BookS = math.max(0, s)
+		self.BookM = math.max(0, m)
+		self.BookL = math.max(0, l)
+		self.CommonCards = math.max(0, common)
+		self:SaveRoster()
+		log("[VRF] roster debug currency dia=" .. tostring(self.Diamonds) .. " books=" .. tostring(self.BookS) .. "," .. tostring(self.BookM) .. "," .. tostring(self.BookL) .. " common=" .. tostring(self.CommonCards))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetChar(string jobId, integer unlocked, integer level, integer tier)
+		-- 테스트: 캐릭터 상태 강제 설정 (경험치 0, 범위 보정).
+		if not self.RosterLoaded or self._T.jobs[jobId] == nil then return end
+		local c = { unlocked = unlocked == 1, level = level, exp = 0, tier = tier, awkLv = 0, awkExp = 0 }
+		self:NormalizeChar(c)
+		self._T.chars[jobId] = c
+		self:SaveRoster()
+		log("[VRF] roster debug char " .. jobId .. " u=" .. tostring(unlocked) .. " lv=" .. tostring(c.level) .. " tier=" .. tostring(c.tier))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetCards(string jobId, integer n)
+		-- 테스트: 전용 카드 수 설정.
+		if not self.RosterLoaded or self._T.jobs[jobId] == nil then return end
+		self._T.cards[jobId] = math.max(0, n)
+		self:SaveRoster()
+		log("[VRF] roster debug cards " .. jobId .. "=" .. tostring(n))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugReset()
+		-- 테스트: 첫 지급 상태로 되돌리고 저장 (모르는 키는 유지).
+		if not self.RosterLoaded then return end
+		-- 다이아 보상 기록(rf·rs)은 유지한다 (테스트 중 소급 지급이 다시 일어나지 않게)
+		local keepFloor = self._T.rewardFloor or 0
+		local keepSections = self._T.rewardSections or {}
+		self:ApplyFirstGift()
+		self._T.rewardFloor = keepFloor
+		self._T.rewardSections = keepSections
+		self._T.giftedNow = false
+		self:SaveRoster()
+		log("[VRF] roster debug reset")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGachaSim(integer n, string bannerId)
+		-- 테스트: 시뮬레이션 예약. 메이커 스크립트 문맥은 매우 느려서 다음 틱 타이머(일반 실행 문맥)에서 돌린다. 결과는 로그.
+		_TimerService:SetTimerOnce(function() self:RunGachaSim(n, bannerId) end, 0.05)
+		log("[VRF] gacha sim scheduled n=" .. tostring(n) .. " banner=" .. bannerId)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RunGachaSim(integer n, string bannerId)
+		-- 상태를 바꾸지 않고 n회 굴려 종류·직업별 비율, 10회 묶음 보장 위반 수·묶음당 카드 수를 로그.
+		-- (RollKind·MakeDrawList와 같은 규칙을 지역 함수로 돌린다)
+		local rates = self:GachaRates(bannerId)
+		local banner = self:BannerInfo(bannerId)
+		local all, cardTotal = 0, 0
+		for _, r in ipairs(rates) do
+			all = all + r.rate
+			if r.kind == "J" or r.kind == "C" then cardTotal = cardTotal + r.rate end
+		end
+		local function roll(cardOnly)
+			local total = all
+			if cardOnly then total = cardTotal end
+			local x = _UtilLogic:RandomDouble() * total
+			local last = nil
+			for _, r in ipairs(rates) do
+				if not cardOnly or r.kind == "J" or r.kind == "C" then
+					last = r
+					x = x - r.rate
+					if x < 0 then break end
+				end
+			end
+			if last == nil then return "S" end
+			if last.kind == "J" then return "J." .. last.job end
+			return last.kind
+		end
+		local function isCard(t)
+			local head = string.sub(t, 1, 2)
+			return t == "C" or head == "J."
+		end
+		local cnt = { S = 0, M = 0, L = 0, J = 0, C = 0 }
+		local byJob = {}
+		for i = 1, n do
+			local t = roll(false)
+			if string.sub(t, 1, 2) == "J." then
+				cnt.J = cnt.J + 1
+				local job = string.sub(t, 3)
+				byJob[job] = (byJob[job] or 0) + 1
+			else
+				cnt[t] = (cnt[t] or 0) + 1
+			end
+		end
+		local function pct(v) return tostring(math.floor(v * 1000 / math.max(1, n) + 0.5) / 10) end
+		local pick = "-"
+		local others = {}
+		for _, j in ipairs(self._T.jobList or {}) do
+			local v = pct(byJob[j.id] or 0)
+			if banner ~= nil and j.id == banner.job then pick = v else table.insert(others, v) end
+		end
+		local tens = n // 10
+		local violations = 0
+		local cards = 0
+		for k = 1, tens do
+			local list = {}
+			local c = 0
+			for i = 1, 10 do
+				local t = roll(false)
+				list[i] = t
+				if isCard(t) then c = c + 1 end
+			end
+			if c == 0 then
+				list[10] = roll(true)
+				if isCard(list[10]) then c = 1 end
+			end
+			if c == 0 then violations = violations + 1 end
+			cards = cards + c
+		end
+		log("[VRF] gacha sim n=" .. tostring(n) .. " banner=" .. bannerId .. " S=" .. pct(cnt.S) .. " M=" .. pct(cnt.M) .. " L=" .. pct(cnt.L) .. " J=" .. pct(cnt.J) .. " C=" .. pct(cnt.C)
+			.. " pick=" .. pick .. " other=" .. table.concat(others, ",") .. " ten=" .. tostring(tens) .. " violations=" .. tostring(violations)
+			.. " cardsPerTen=" .. tostring(math.floor(cards * 100 / math.max(1, tens) + 0.5) / 100))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetBanner(string id)
+		-- 테스트: 픽업 강제 ("none" = 강제 상시, "" = 자동으로 되돌림).
+		if id == "" then self._T.forceBanner = nil else self._T.forceBanner = id end
+		self.GachaBanner = self:ActiveBannerId()
+		log("[VRF] gacha banner " .. self.GachaBanner .. " (debug " .. id .. ")")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugForceNext(string kinds)
+		-- 테스트: 다음 뽑기 결과 고정 ("J.Hero,S,..."). 쓴 만큼 앞에서 소비.
+		local list = {}
+		for _, t in ipairs(self:Split(kinds, ",")) do
+			if t ~= "" then table.insert(list, t) end
+		end
+		if #list == 0 then self._T.forceNext = nil else self._T.forceNext = list end
+		log("[VRF] gacha force next " .. kinds)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetPoints(integer n)
+		-- 테스트: 교환 포인트 설정 후 저장.
+		if not self.RosterLoaded then return end
+		self.ExchangePoints = math.max(0, n)
+		self:SaveRoster()
+		log("[VRF] gacha debug points " .. tostring(self.ExchangePoints))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetRewardMarks(integer floor, string sections)
+		-- 테스트: 다이아 보상 기록 rf·rs 설정 후 저장.
+		if not self.RosterLoaded then return end
+		self._T.rewardFloor = math.max(0, floor)
+		self._T.rewardSections = {}
+		for _, sec in ipairs(self:Split(sections, ",")) do
+			local v = self:ToInt(sec)
+			if v > 0 then self._T.rewardSections[v] = true end
+		end
+		self:SaveRoster()
+		log("[VRF] dia debug marks rf=" .. tostring(self._T.rewardFloor) .. " rs=" .. self:EncodeSections())
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer DebugCheckSection(string sectionData)
+		-- 테스트: 별 상자 다이아 확인을 주어진 문자열로 실행.
+		local n = self:GrantSectionDiamonds(sectionData)
+		log("[VRF] dia debug section " .. sectionData .. " +" .. tostring(n))
+		return n
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DebugDump()
+		-- 테스트: 저장 문자열 출력.
+		local s = self:Encode()
+		log("[VRF] roster dump " .. s)
+		return s
+	end
+
+end

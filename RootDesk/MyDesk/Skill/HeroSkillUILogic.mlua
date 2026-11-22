@@ -256,7 +256,8 @@ script HeroSkillUILogic extends Logic
 			if party[k] == job then party[k] = party[slot] end
 		end
 		party[slot] = job
-		eng:RequestSetFormation(party[1], party[2], party[3])
+		local roster = _UserService.LocalPlayer:GetComponent("script.PlayerRoster")
+		if roster ~= nil then roster:RequestSetParty(party[1], party[2], party[3]) else eng:RequestSetFormation(party[1], party[2], party[3]) end
 	end
 
 	@ExecSpace("ClientOnly")

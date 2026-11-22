@@ -1,0 +1,682 @@
+@Logic
+script CharGachaUILogic extends Logic
+
+	-- 로비 캐릭터 뽑기 화면 (CharGachaUI.ui): 왼쪽 픽업·교환 포인트, 오른쪽 뽑기 결과 10칸과 1회·10회 버튼, 확률·교환 창.
+	-- 확률은 PlayerRoster:GachaRates로 계산하고(하드코딩 없음), 뽑기·교환은 Request* 서버 요청, 결과는 GachaSeq/GachaMsg/GachaResult로 받는다.
+	property string RootPath = "/ui/CharGachaUI/Root"
+	property string LobbyMapName = "Lobby"
+	property number RevealInterval = 0.12
+	property number SingleDelay = 0.3
+	property number BusyTimeout = 5
+	property number MsgDuration = 2.5
+	property Color TextColor = Color(0.14, 0.17, 0.21, 1)
+	property Color SubColor = Color(0.36, 0.40, 0.46, 1)
+	property Color GoodColor = Color(0.20, 0.48, 0.12, 1)
+	property Color BadColor = Color(0.78, 0.20, 0.20, 1)
+	property Color PointColor = Color(0.15, 0.45, 0.75, 1)
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 버튼 연결·상태 테마 지정. 처음에는 닫힌 상태.
+		self.clickHandlers = {}
+		self._T.open = false
+		self._T.clock = 0
+		self._T.lastSeq = -1
+		self._T.sig = ""
+		self._T.pendingAt = nil
+		self._T.msgUntil = nil
+		self._T.reveal = nil
+		self._T.exSel = ""
+		self._T.ents = {}
+		self:LoadJobs()
+		local roles = { ["Result/BtnOne"] = "action", ["Result/BtnTen"] = "action", ["Banner/BtnExchange"] = "action", ["Modal/Exchange/Body/BtnOk"] = "action", ["Banner/BtnRates"] = "button", ["Close"] = "close", ["Modal/Rate/Close"] = "close", ["Modal/Exchange/Close"] = "close" }
+		for rel, role in pairs(roles) do _UIButtonLogic:UseTheme(self:E(rel), role) end
+		for n = 1, 5 do
+			local index = n
+			local card = self:E("Modal/Exchange/Body/Job" .. tostring(n))
+			_UIButtonLogic:UseTheme(card, "card")
+			self:Bind(card, function() self:OnExchangeJob(index) end)
+		end
+		self:Bind(self:E("Result/BtnOne"), function() self:OnDraw(1) end)
+		self:Bind(self:E("Result/BtnTen"), function() self:OnDraw(10) end)
+		self:Bind(self:E("Banner/BtnRates"), function() self:ShowRates() end)
+		self:Bind(self:E("Banner/BtnExchange"), function() self:OpenExchange() end)
+		self:Bind(self:E("Modal/Exchange/Body/BtnOk"), function() self:OnExchangeOk() end)
+		self:Bind(self:E("Close"), function() self:Close() end)
+		self:Bind(self:E("Modal/Rate/Close"), function() self:CloseModal() end)
+		self:Bind(self:E("Modal/Exchange/Close"), function() self:CloseModal() end)
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+		log("[VRF] CharGachaUILogic begin jobs=" .. tostring(#self._T.jobs))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있을 때만: 로비 이탈 시 닫기, 결과 처리, 공개 연출, 대기 시간 초과, 값 변화 반영, 문구 숨김.
+		if not self._T.open then return end
+		self._T.clock = self._T.clock + delta
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then
+			self:Close()
+			return
+		end
+		if self._T.msgUntil ~= nil and self._T.clock >= self._T.msgUntil then
+			self._T.msgUntil = nil
+			self:SetText("Result/Msg", "", nil)
+		end
+		local roster = self:Roster()
+		if roster == nil then return end
+		if roster.GachaSeq ~= self._T.lastSeq then
+			self._T.lastSeq = roster.GachaSeq
+			self:HandleResult(roster)
+			return
+		end
+		if self._T.reveal ~= nil then
+			self:TickReveal(roster, delta)
+			return
+		end
+		if self._T.pendingAt ~= nil and self._T.clock - self._T.pendingAt >= self.BusyTimeout then
+			self._T.pendingAt = nil
+			self:ShowMsg("응답이 없습니다. 다시 시도해 주세요", self.BadColor)
+			self:Refresh()
+			return
+		end
+		if self:Signature(roster) ~= self._T.sig then self:Refresh() end
+	end
+
+	-- ───────────────────────── 열기·닫기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [캐릭터 뽑기] 버튼: 화면을 열고 결과 칸을 비운다.
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if not isvalid(root) then return end
+		root:SetEnable(true)
+		self._T.open = true
+		self._T.pendingAt = nil
+		self._T.msgUntil = nil
+		self._T.reveal = nil
+		self:SetShown("Modal", false)
+		self:SetText("Result/Msg", "", nil)
+		self:ClearCells()
+		local roster = self:Roster()
+		local banner = ""
+		if roster ~= nil then
+			self._T.lastSeq = roster.GachaSeq
+			banner = roster.GachaBanner
+		else
+			self._T.lastSeq = -1
+		end
+		self:Refresh()
+		log("[VRF] chargacha open banner=" .. banner)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기 (연출 중이어도 화면만 닫는다. 서버 지급은 이미 끝남).
+		local wasOpen = self._T.open
+		self._T.open = false
+		self._T.pendingAt = nil
+		self._T.reveal = nil
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+		if wasOpen then log("[VRF] chargacha close") end
+	end
+
+	-- ───────────────────────── 도우미 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string rel)
+		-- Root 기준 경로의 엔티티 (캐시).
+		local e = self._T.ents[rel]
+		if e ~= nil and isvalid(e) then return e end
+		e = _EntityService:GetEntityByPath(self.RootPath .. "/" .. rel)
+		self._T.ents[rel] = e
+		return e
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결: 숨김·비활성 버튼은 입력을 무시한다.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e)
+			if not entity.EnabledInHierarchy or not entity.ButtonComponent.Enable then return end
+			_UISoundLogic:PlayClick()
+			fn(e)
+		end)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method any Roster()
+		-- 로컬 플레이어의 PlayerRoster (없으면 nil).
+		local p = _UserService.LocalPlayer
+		if not isvalid(p) then return nil end
+		return p:GetComponent("script.PlayerRoster")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadJobs()
+		-- 직업 목록(CharJobTable 순서)과 직업 아이콘(4차 주력기 스킬 아이콘)을 읽는다.
+		self._T.jobs = {}
+		local icons = {}
+		local ht = _DataService:GetTable("HeroSkillTable")
+		if ht ~= nil then
+			for i = 1, ht:GetRowCount() do
+				local id = ht:GetCell(i, "SkillId")
+				if id ~= nil and id ~= "" then icons[id] = ht:GetCell(i, "IconRUID") or "" end
+			end
+		end
+		local mainT4 = {}
+		local st = _DataService:GetTable("CharSlotTable")
+		if st ~= nil then
+			for i = 1, st:GetRowCount() do
+				if st:GetCell(i, "SlotKey") == "Main" then mainT4[st:GetCell(i, "JobId") or ""] = st:GetCell(i, "T4") or "" end
+			end
+		end
+		local jt = _DataService:GetTable("CharJobTable")
+		if jt == nil then return end
+		for i = 1, jt:GetRowCount() do
+			local id = jt:GetCell(i, "JobId")
+			if id ~= nil and id ~= "" then
+				table.insert(self._T.jobs, {
+					id = id, order = tonumber(jt:GetCell(i, "Order")) or i, group = jt:GetCell(i, "JobGroup") or "",
+					name4 = jt:GetCell(i, "Name4") or id, icon = icons[mainT4[id] or ""] or "",
+				})
+			end
+		end
+		table.sort(self._T.jobs, function(a, b) return a.order < b.order end)
+		if #self._T.jobs > 5 then log_warning("[VRF] chargacha jobs over 5 — 교환 창은 앞 5개만 표시") end
+	end
+
+	@ExecSpace("ClientOnly")
+	method any JobById(string id)
+		-- 직업 정보.
+		for _, j in ipairs(self._T.jobs or {}) do
+			if j.id == id then return j end
+		end
+		return nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Comma(integer n)
+		-- 천 단위 쉼표.
+		local s = tostring(math.floor(n))
+		local neg = ""
+		if string.sub(s, 1, 1) == "-" then
+			neg = "-"
+			s = string.sub(s, 2)
+		end
+		local out = ""
+		while string.len(s) > 3 do
+			out = "," .. string.sub(s, -3) .. out
+			s = string.sub(s, 1, string.len(s) - 3)
+		end
+		return neg .. s .. out
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Pct(number v)
+		-- 확률 표기: 소수 첫째 자리, ".0"은 뺀다 (6%, 1.5%).
+		local x = math.floor(v * 10 + 0.5)
+		if x % 10 == 0 then return tostring(x // 10) .. "%" end
+		return tostring(x // 10) .. "." .. tostring(x % 10) .. "%"
+	end
+
+	@ExecSpace("ClientOnly")
+	method Color HexColor(string hex)
+		-- "#RRGGBB" 또는 "RRGGBB" → Color (FromHexCode는 "#"이 있어야 색을 읽는다).
+		local h = hex or ""
+		if string.sub(h, 1, 1) == "#" then h = string.sub(h, 2) end
+		if string.len(h) < 6 then return self.SubColor end
+		return Color.FromHexCode("#" .. h)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string rel, string s, any color)
+		-- 글자 (색이 주어지면 색도).
+		local e = self:E(rel)
+		if not isvalid(e) or not isvalid(e.TextGUIRendererComponent) then return end
+		e.TextGUIRendererComponent.Text = s
+		if color ~= nil then e.TextGUIRendererComponent.FontColor = color end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetShown(string rel, boolean shown)
+		-- 엔티티 표시.
+		local e = self:E(rel)
+		if isvalid(e) and e.Enable ~= shown then e:SetEnable(shown) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetButton(string rel, boolean enabled)
+		-- 버튼 활성/비활성 (비활성은 상태 이미지 + 입력 차단).
+		local e = self:E(rel)
+		if isvalid(e) then _UIButtonLogic:SetDisabled(e, not enabled) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetIcon(string rel, string ruid)
+		-- 아이콘 이미지.
+		local e = self:E(rel)
+		if isvalid(e) and isvalid(e.SpriteGUIRendererComponent) then e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowMsg(string s, Color color)
+		-- 결과 문구 (2.5초 뒤 숨김).
+		self:SetText("Result/Msg", s, color)
+		self._T.msgUntil = self._T.clock + self.MsgDuration
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Signature(any roster)
+		-- 화면에 영향을 주는 값을 이어 붙인 문자열.
+		return tostring(roster.RosterLoaded) .. "|" .. tostring(roster.Diamonds) .. "|" .. tostring(roster.ExchangePoints) .. "|" .. roster.GachaBanner .. "|" .. roster.CharData .. "|" .. roster.JobCards
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsBusy()
+		-- 요청 대기 또는 공개 연출 중.
+		return self._T.pendingAt ~= nil or self._T.reveal ~= nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method table CharOf(any roster, string jobId)
+		-- 캐릭터 상태 (없으면 잠긴 Lv1 1차).
+		local c = roster:ParseCharData(roster.CharData)[jobId]
+		if c == nil then return { unlocked = false, level = 1, exp = 0, tier = 1 } end
+		return c
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsMaxed(any roster, string jobId)
+		-- 해금 + 5차 완료 (교환 불가, 뽑으면 포인트로 바뀜).
+		local c = self:CharOf(roster, jobId)
+		return c.unlocked and c.tier >= roster:MaxTier()
+	end
+
+	@ExecSpace("ClientOnly")
+	method table RateInfo(any roster)
+		-- 현재 배너 확률 요약 { rows, pick, pickRate, otherRate, jobRate, jobTotal }.
+		local rows = roster:GachaRates(roster.GachaBanner)
+		local banner = roster:BannerInfo(roster.GachaBanner)
+		local info = { rows = rows, banner = banner, pickRate = 0, otherRate = 0, jobRate = 0, jobTotal = 0 }
+		for _, r in ipairs(rows) do
+			if r.kind == "J" then
+				info.jobTotal = info.jobTotal + r.rate
+				info.jobRate = r.rate
+				if banner ~= nil and r.job == banner.job then info.pickRate = r.rate else info.otherRate = r.rate end
+			end
+		end
+		return info
+	end
+
+	@ExecSpace("ClientOnly")
+	method string PeriodText(string a, string b)
+		-- "YYYY-MM-DD HH:MM" 두 개 → "M월 D일 HH:MM ~ M월 D일 HH:MM (한국 시간)" (문자열 자르기만).
+		local function one(t)
+			local mo = math.floor(tonumber(string.sub(t, 6, 7)) or 0)
+			local d = math.floor(tonumber(string.sub(t, 9, 10)) or 0)
+			return tostring(mo) .. "월 " .. tostring(d) .. "일 " .. string.sub(t, 12, 16)
+		end
+		return one(a) .. " ~ " .. one(b) .. " (한국 시간)"
+	end
+
+	-- ───────────────────────── 그리기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 다이아·배너·교환 포인트·버튼 활성을 Sync 값으로 다시 그린다.
+		local roster = self:Roster()
+		if roster == nil then return end
+		self._T.sig = self:Signature(roster)
+		local busy = self:IsBusy() or not roster.RosterLoaded
+		self:SetText("DiaText", self:Comma(roster.Diamonds), nil)
+		local info = self:RateInfo(roster)
+		local b = info.banner
+		if b ~= nil then
+			local j = self:JobById(b.job)
+			self:SetText("Banner/Tag", "기간 픽업", nil)
+			self:SetText("Banner/Title", b.title, nil)
+			self:SetText("Banner/Period", self:PeriodText(b.startText, b.endText), nil)
+			self:SetShown("Banner/IconBox", true)
+			self:SetShown("Banner/AllJobs", false)
+			if j ~= nil then
+				self:SetIcon("Banner/IconBox/Icon", j.icon)
+				self:SetText("Banner/JobName", j.name4 .. " · " .. j.group, nil)
+			end
+			self:SetText("Banner/Desc", "픽업 직업 전용 카드 " .. self:Pct(info.pickRate) .. " (다른 직업 각 " .. self:Pct(info.otherRate) .. ")\n10회 뽑기는 직업 카드 1장 이상 보장\n뽑기 1회마다 교환 포인트 " .. tostring(math.floor(roster:Cfg("GachaPointPerDraw", 1))) .. "점", nil)
+		else
+			self:SetText("Banner/Tag", "상시 뽑기", nil)
+			self:SetText("Banner/Title", "통합 뽑기", nil)
+			self:SetText("Banner/Period", "언제나 뽑을 수 있습니다", nil)
+			self:SetShown("Banner/IconBox", false)
+			self:SetText("Banner/JobName", "", nil)
+			-- 상시: 아이콘 자리에 직업 이름 목록 (3개씩 줄바꿈, 최대 4줄)
+			local lines = { "모든 직업이 같은 확률로 나옵니다" }
+			local cur = ""
+			local n = 0
+			for _, jj in ipairs(self._T.jobs or {}) do
+				cur = (n == 0) and jj.name4 or (cur .. " · " .. jj.name4)
+				n = n + 1
+				if n == 3 then table.insert(lines, cur) cur = "" n = 0 end
+			end
+			if n > 0 then table.insert(lines, cur) end
+			while #lines > 4 do table.remove(lines) end
+			self:SetText("Banner/AllJobs", table.concat(lines, "\n"), nil)
+			self:SetShown("Banner/AllJobs", true)
+			self:SetText("Banner/Desc", "직업 전용 카드는 모든 직업이 같은 확률 (각 " .. self:Pct(info.jobRate) .. ")\n10회 뽑기는 직업 카드 1장 이상 보장\n뽑기 1회마다 교환 포인트 " .. tostring(math.floor(roster:Cfg("GachaPointPerDraw", 1))) .. "점", nil)
+		end
+		local exCost = math.floor(roster:Cfg("ExchangeCost", 30))
+		local pt = roster.ExchangePoints
+		local ptColor = self.TextColor
+		if pt >= exCost then ptColor = self.GoodColor end
+		self:SetText("Banner/PointBox/Text", "교환 포인트 " .. tostring(pt) .. " / " .. tostring(exCost), ptColor)
+		self:SetText("Banner/PointBox/Sub", tostring(exCost) .. "점으로 원하는 직업 전용 카드 1장", nil)
+		local one = math.floor(roster:Cfg("GachaCost", 100))
+		local ten = math.floor(roster:Cfg("GachaTenCost", 1000))
+		self:SetText("Result/BtnOne", "1회 뽑기 · 다이아 " .. self:Comma(one), nil)
+		self:SetText("Result/BtnTen", "10회 뽑기 · 다이아 " .. self:Comma(ten), nil)
+		self:SetButton("Result/BtnOne", roster.Diamonds >= one and not busy)
+		self:SetButton("Result/BtnTen", roster.Diamonds >= ten and not busy)
+		self:SetButton("Banner/BtnExchange", pt >= exCost and not busy)
+		self:SetButton("Banner/BtnRates", true)
+		local ex = self:E("Modal/Exchange")
+		if isvalid(ex) and ex.EnabledInHierarchy then self:RefreshExchange(roster) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ClearCells()
+		-- 결과 칸 모두 끄고 안내 문구 표시.
+		for n = 1, 10 do self:SetShown("Result/Cell" .. tostring(n), false) end
+		self:SetShown("Result/Empty", true)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void FillCell(any roster, integer n, string token, table rows)
+		-- 결과 칸 하나: 토큰 → 띠 색·아이콘/글자·이름·꼬리표.
+		local rel = "Result/Cell" .. tostring(n)
+		local kind = string.sub(token, 1, 1)
+		local job = ""
+		if string.len(token) > 2 and string.sub(token, 2, 2) == "." then job = string.sub(token, 3) end
+		local rowKind = kind
+		if kind == "U" or kind == "X" then rowKind = "J" end
+		local row = nil
+		for _, r in ipairs(rows) do
+			if r.kind == rowKind and row == nil then row = r end
+		end
+		local color = self.SubColor
+		if row ~= nil then color = self:HexColor(row.color) end
+		local bar = self:E(rel .. "/Bar")
+		if isvalid(bar) then bar.SpriteGUIRendererComponent.Color = color end
+		if rowKind == "J" then
+			local j = self:JobById(job)
+			local name4 = job
+			if j ~= nil then
+				name4 = j.name4
+				self:SetIcon(rel .. "/Icon", j.icon)
+			end
+			self:SetShown(rel .. "/Icon", true)
+			self:SetShown(rel .. "/Label", false)
+			self:SetText(rel .. "/Name", name4 .. "\n전용 카드", self.TextColor)
+		else
+			self:SetShown(rel .. "/Icon", false)
+			self:SetShown(rel .. "/Label", true)
+			local label = "경험의 서\n(" .. ((row ~= nil and row.short) or "?") .. ")"
+			local name = (row ~= nil and row.name) or token
+			if kind == "C" then
+				label = "공용\n카드"
+			end
+			self:SetText(rel .. "/Label", label, color)
+			self:SetText(rel .. "/Name", name, self.TextColor)
+		end
+		if kind == "U" then
+			self:SetText(rel .. "/Tag", "해금!", self.GoodColor)
+		elseif kind == "X" then
+			self:SetText(rel .. "/Tag", "+" .. tostring(math.floor(roster:Cfg("MaxedCardPoints", 10))) .. " 포인트", self.PointColor)
+		else
+			self:SetText(rel .. "/Tag", "", nil)
+		end
+		self:SetShown(rel, true)
+	end
+
+	-- ───────────────────────── 뽑기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnDraw(integer count)
+		-- 1회·10회 뽑기 요청.
+		local roster = self:Roster()
+		if roster == nil or self:IsBusy() then return end
+		roster:RequestGachaDraw(count)
+		self._T.pendingAt = self._T.clock
+		log("[VRF] chargacha request draw " .. tostring(count))
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void HandleResult(any roster)
+		-- GachaMsg·GachaResult → 공개 연출 또는 문구.
+		local code = roster.GachaMsg
+		local result = roster.GachaResult
+		local f = roster:Split(result, ":")
+		log("[VRF] chargacha result " .. code .. " " .. result)
+		if code == "ok_draw" then
+			local tokens = roster:Split(f[3] or "", ",")
+			self._T.pendingAt = nil
+			self:SetShown("Result/Empty", false)
+			for n = 1, 10 do self:SetShown("Result/Cell" .. tostring(n), false) end
+			local cell1 = self:E("Result/Cell1")
+			if isvalid(cell1) then
+				if #tokens == 1 then cell1.UITransformComponent.anchoredPosition = Vector2(0, 60) else cell1.UITransformComponent.anchoredPosition = Vector2(-440, 200) end
+			end
+			local first = self.RevealInterval
+			if #tokens == 1 then first = self.SingleDelay end
+			self._T.reveal = { tokens = tokens, index = 0, timer = first, rows = roster:GachaRates(roster.GachaBanner) }
+			self:SetText("Result/Msg", "", nil)
+			self:Refresh()
+			return
+		end
+		self._T.pendingAt = nil
+		if code == "ok_exchange" then
+			self:CloseModal()
+			local j = self:JobById(f[2] or "")
+			local name = (j ~= nil and j.name4) or (f[2] or "")
+			if f[3] == "U" then self:ShowMsg(name .. " 해금!", self.GoodColor) else self:ShowMsg(name .. " 전용 카드를 받았습니다", self.GoodColor) end
+		else
+			local msg = "잘못된 요청입니다"
+			if code == "err_notready" then msg = "캐릭터 정보를 불러오는 중입니다"
+			elseif code == "err_lobby" then msg = "로비에서만 할 수 있습니다"
+			elseif code == "err_count" then msg = "잘못된 요청입니다"
+			elseif code == "err_dia" then msg = "다이아가 부족합니다"
+			elseif code == "err_points" then msg = "교환 포인트가 부족합니다"
+			elseif code == "err_job" then msg = "알 수 없는 직업입니다"
+			elseif code == "err_max" then msg = "이미 5차를 마친 직업입니다" end
+			self:ShowMsg(msg, self.BadColor)
+		end
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void TickReveal(any roster, number delta)
+		-- 칸을 순서대로 켠다 (1회는 SingleDelay 뒤, 10회는 RevealInterval마다). 끝나면 요약 문구.
+		local rv = self._T.reveal
+		rv.timer = rv.timer - delta
+		if rv.timer > 0 then return end
+		rv.index = rv.index + 1
+		if rv.index <= #rv.tokens then
+			local t = rv.tokens[rv.index]
+			self:FillCell(roster, rv.index, t, rv.rows)
+			log("[VRF] chargacha reveal i=" .. tostring(rv.index) .. " " .. t)
+			rv.timer = self.RevealInterval
+			return
+		end
+		self._T.reveal = nil
+		local unlocked = {}
+		for _, t in ipairs(rv.tokens) do
+			if string.sub(t, 1, 2) == "U." then
+				local j = self:JobById(string.sub(t, 3))
+				table.insert(unlocked, ((j ~= nil and j.name4) or string.sub(t, 3)) .. " 해금!")
+			end
+		end
+		if #unlocked > 0 then self:ShowMsg(table.concat(unlocked, " "), self.GoodColor) else self:SetText("Result/Msg", "", nil) end
+		self:Refresh()
+	end
+
+	-- ───────────────────────── 확률 창 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void ShowRates()
+		-- 확률 정보 창 (본문은 GachaRates 계산값).
+		local roster = self:Roster()
+		if roster == nil then return end
+		local info = self:RateInfo(roster)
+		local lines = {}
+		local jobDone = false
+		for _, r in ipairs(info.rows) do
+			if r.kind == "J" then
+				if not jobDone then
+					jobDone = true
+					table.insert(lines, r.name .. "  " .. self:Pct(info.jobTotal))
+					if info.banner ~= nil then
+						local pj = self:JobById(info.banner.job)
+						table.insert(lines, "   · " .. ((pj ~= nil and pj.name4) or info.banner.job) .. " (픽업)  " .. self:Pct(info.pickRate))
+						local others = {}
+						for _, j in ipairs(self._T.jobs) do
+							if j.id ~= info.banner.job then table.insert(others, j.name4) end
+						end
+						table.insert(lines, "   · " .. table.concat(others, " · ") .. "  각 " .. self:Pct(info.otherRate))
+					else
+						table.insert(lines, "   · 모든 직업  각 " .. self:Pct(info.jobRate))
+					end
+				end
+			else
+				table.insert(lines, r.name .. "  " .. self:Pct(r.rate))
+			end
+		end
+		local exCost = math.floor(roster:Cfg("ExchangeCost", 30))
+		table.insert(lines, "")
+		table.insert(lines, "· 10회 뽑기에 직업 카드(전용·공용)가 하나도 없으면 마지막 칸을 직업 카드로 바꿔 줍니다.")
+		table.insert(lines, "· 처음 얻는 전용 카드는 그 직업을 해금합니다.")
+		table.insert(lines, "· 뽑기 1회마다 교환 포인트 " .. tostring(math.floor(roster:Cfg("GachaPointPerDraw", 1))) .. "점. " .. tostring(exCost) .. "점으로 원하는 직업 전용 카드 1장을 받습니다.")
+		table.insert(lines, "· 5차를 마친 직업의 전용 카드는 교환 포인트 " .. tostring(math.floor(roster:Cfg("MaxedCardPoints", 10))) .. "점으로 바뀝니다.")
+		self:SetText("Modal/Rate/Body/Text", table.concat(lines, "\n"), self.TextColor)
+		self:SetShown("Modal", true)
+		self:SetShown("Modal/Exchange", false)
+		self:SetShown("Modal/Rate", true)
+		log("[VRF] chargacha rates banner=" .. roster.GachaBanner)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CloseModal()
+		-- 확률·교환 창 닫기 (Dim 클릭은 입력만 막는다).
+		self:SetShown("Modal/Rate", false)
+		self:SetShown("Modal/Exchange", false)
+		self:SetShown("Modal", false)
+	end
+
+	-- ───────────────────────── 교환 창 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OpenExchange()
+		-- 교환 창: 기본 선택 = 픽업 직업 → 첫 잠긴 직업 → 1번.
+		local roster = self:Roster()
+		if roster == nil then return end
+		local sel = ""
+		local b = roster:BannerInfo(roster.GachaBanner)
+		if b ~= nil and self:JobById(b.job) ~= nil then sel = b.job end
+		if sel == "" then
+			for _, j in ipairs(self._T.jobs) do
+				if sel == "" and not self:CharOf(roster, j.id).unlocked then sel = j.id end
+			end
+		end
+		if sel == "" and #self._T.jobs > 0 then sel = self._T.jobs[1].id end
+		self._T.exSel = sel
+		self:SetShown("Modal", true)
+		self:SetShown("Modal/Rate", false)
+		self:SetShown("Modal/Exchange", true)
+		self:RefreshExchange(roster)
+		log("[VRF] chargacha exchange open sel=" .. sel)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnExchangeJob(integer n)
+		-- 교환 대상 직업 선택.
+		local j = self._T.jobs[n]
+		local roster = self:Roster()
+		if j == nil or roster == nil then return end
+		self._T.exSel = j.id
+		self:RefreshExchange(roster)
+		log("[VRF] chargacha exchange select " .. j.id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshExchange(any roster)
+		-- 교환 창 직업 카드·안내·교환 버튼.
+		local cards = roster:ParseJobCards(roster.JobCards)
+		local exCost = math.floor(roster:Cfg("ExchangeCost", 30))
+		for n = 1, 5 do
+			local j = self._T.jobs[n]
+			local rel = "Modal/Exchange/Body/Job" .. tostring(n)
+			self:SetShown(rel, j ~= nil)
+			if j ~= nil then
+				local c = self:CharOf(roster, j.id)
+				self:SetIcon(rel .. "/Icon", j.icon)
+				self:SetText(rel .. "/Name", j.name4, nil)
+				if not c.unlocked then
+					self:SetText(rel .. "/Sub", "잠김 → 해금", nil)
+				elseif self:IsMaxed(roster, j.id) then
+					self:SetText(rel .. "/Sub", "5차 완료", nil)
+				else
+					self:SetText(rel .. "/Sub", "전용 카드 " .. tostring(cards[j.id] or 0) .. "장", nil)
+				end
+				_UIButtonLogic:SetSelected(self:E(rel), j.id == self._T.exSel)
+			end
+		end
+		local sj = self:JobById(self._T.exSel)
+		local maxed = sj == nil or self:IsMaxed(roster, self._T.exSel)
+		if sj ~= nil then
+			local second = "보유 전용 카드 " .. tostring(cards[sj.id] or 0) .. "장"
+			local color = self.TextColor
+			if not self:CharOf(roster, sj.id).unlocked then second = "잠긴 직업은 이 카드로 바로 해금됩니다" end
+			if maxed then
+				second = "5차를 마친 직업은 교환할 수 없습니다"
+				color = self.BadColor
+			end
+			self:SetText("Modal/Exchange/Body/Info", sj.name4 .. " 전용 전직 카드 1장 — 교환 포인트 " .. tostring(exCost) .. " 사용", self.TextColor)
+			self:SetText("Modal/Exchange/Body/Info2", second, color)   -- 5차 완료면 빨강, 아니면 일반색
+		else
+			self:SetText("Modal/Exchange/Body/Info", "", nil)
+			self:SetText("Modal/Exchange/Body/Info2", "", nil)
+		end
+		self:SetText("Modal/Exchange/Body/BtnOk", "교환 (포인트 " .. tostring(exCost) .. ")", nil)
+		self:SetButton("Modal/Exchange/Body/BtnOk", roster.ExchangePoints >= exCost and not maxed and not self:IsBusy())
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnExchangeOk()
+		-- 교환 요청.
+		local roster = self:Roster()
+		if roster == nil or self:IsBusy() or self._T.exSel == "" then return end
+		if self:IsMaxed(roster, self._T.exSel) then return end
+		roster:RequestExchange(self._T.exSel)
+		self._T.pendingAt = self._T.clock
+		log("[VRF] chargacha request exchange " .. self._T.exSel)
+		self:Refresh()
+	end
+
+end

@@ -1,0 +1,701 @@
+@Logic
+script CharacterUILogic extends Logic
+
+	-- 로비 캐릭터 화면 (CharacterUI.ui): 왼쪽 직업 목록, 오른쪽 상세(미리보기·능력치·레벨업·전직), 위쪽 편성 3칸·재화.
+	-- 계산은 PlayerRoster의 실행 공간 지정 없는 함수(CharStat·PlanBooksFor·CapLevel 등)를 그대로 쓰고, 변경은 Request* 서버 요청으로만 한다.
+	property string RootPath = "/ui/CharacterUI/Root"
+	property string LobbyMapName = "Lobby"
+	property integer MaxJobCards = 5
+	property number BusyTimeout = 3
+	property number MsgDuration = 2.5
+	property Color TextColor = Color(0.14, 0.17, 0.21, 1)
+	property Color SubColor = Color(0.36, 0.40, 0.46, 1)
+	property Color GoodColor = Color(0.20, 0.48, 0.12, 1)
+	property Color BadColor = Color(0.78, 0.20, 0.20, 1)
+	-- 미리보기에서 두손 무기 대기 자세(stand2)를 쓰는 직업 (쉼표 구분)
+	property string PreviewStand2Jobs = "Hero"
+	-- 잠긴 직업 미리보기 아바타 밝기 (부위별 색)
+	property number PreviewLockedBrightness = 0.45
+
+	@HideFromInspector
+	property table clickHandlers = {}
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 버튼 연결·상태 테마 지정. 처음에는 닫힌 상태.
+		self.clickHandlers = {}
+		self._T.open = false
+		self._T.clock = 0
+		self._T.sel = ""
+		self._T.lastSeq = -1
+		self._T.sig = ""
+		self._T.pendingAt = nil
+		self._T.msgUntil = nil
+		self._T.ents = {}
+		self:LoadJobs()
+		for n = 1, self.MaxJobCards do
+			local index = n
+			local card = self:E("List/Job" .. tostring(n))
+			_UIButtonLogic:UseTheme(card, "card")
+			self:Bind(card, function() self:OnJobCard(index) end)
+		end
+		for k = 1, 3 do
+			local slot = k
+			local b = self:E("Party" .. tostring(k))
+			_UIButtonLogic:UseTheme(b, "button")
+			self:Bind(b, function() self:OnParty(slot) end)
+		end
+		local roles = { BtnLv1 = "button", BtnLvMax = "action", BtnPromote = "action", BtnPromoteCommon = "button", BtnUnlock = "action" }
+		for name, role in pairs(roles) do _UIButtonLogic:UseTheme(self:E("Detail/" .. name), role) end
+		_UIButtonLogic:UseTheme(self:E("Close"), "close")
+		self:Bind(self:E("Detail/BtnLv1"), function() self:OnLevel(false) end)
+		self:Bind(self:E("Detail/BtnLvMax"), function() self:OnLevel(true) end)
+		self:Bind(self:E("Detail/BtnPromote"), function() self:OnPromote(false) end)
+		self:Bind(self:E("Detail/BtnPromoteCommon"), function() self:OnPromote(true) end)
+		self:Bind(self:E("Detail/BtnUnlock"), function() self:OnUnlock() end)
+		self:Bind(self:E("Close"), function() self:Close() end)
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+		log("[VRF] CharacterUILogic begin jobs=" .. tostring(#self._T.jobs))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 이벤트 해제.
+		for _, rec in ipairs(self.clickHandlers) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
+		end
+		self.clickHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있을 때만: 로비 이탈 시 닫기, 결과(RosterSeq) 처리, 값 변화 반영, 연타 방지 해제, 문구 숨김.
+		if not self._T.open then return end
+		self._T.clock = self._T.clock + delta
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then
+			self:Close()
+			return
+		end
+		if self._T.msgUntil ~= nil and self._T.clock >= self._T.msgUntil then
+			self._T.msgUntil = nil
+			self:SetText("Detail/Msg", "", nil)
+		end
+		local roster = self:Roster()
+		if roster == nil then return end
+		if roster.RosterSeq ~= self._T.lastSeq then
+			local first = self._T.lastSeq < 0
+			self._T.lastSeq = roster.RosterSeq
+			self._T.pendingAt = nil
+			if not first then self:HandleResult(roster) end
+			self:Refresh()
+			return
+		end
+		if self._T.pendingAt ~= nil and self._T.clock - self._T.pendingAt >= self.BusyTimeout then
+			self._T.pendingAt = nil
+			self:Refresh()
+			return
+		end
+		if self:Signature(roster) ~= self._T.sig then self:Refresh() end
+	end
+
+	-- ───────────────────────── 열기·닫기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 로비 [캐릭터] 버튼: 화면을 열고 1번 편성 직업(또는 마지막 선택)을 보여 준다.
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if not isvalid(root) then return end
+		root:SetEnable(true)
+		self._T.open = true
+		self._T.pendingAt = nil
+		self._T.msgUntil = nil
+		self:SetText("Detail/Msg", "", nil)
+		local roster = self:Roster()
+		if roster ~= nil then self._T.lastSeq = roster.RosterSeq else self._T.lastSeq = -1 end
+		if self._T.sel == "" or self:JobById(self._T.sel) == nil then
+			local eng = self:Engrave()
+			if eng ~= nil and self:JobById(eng.MainJob) ~= nil then self._T.sel = eng.MainJob
+			elseif #self._T.jobs > 0 then self._T.sel = self._T.jobs[1].id end
+		end
+		self:Refresh()
+		log("[VRF] charui open sel=" .. tostring(self._T.sel))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기.
+		local wasOpen = self._T.open
+		self._T.open = false
+		self._T.pendingAt = nil
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+		if wasOpen then log("[VRF] charui close") end
+	end
+
+	-- ───────────────────────── 도우미 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string rel)
+		-- Root 기준 경로의 엔티티 (캐시).
+		local e = self._T.ents[rel]
+		if e ~= nil and isvalid(e) then return e end
+		e = _EntityService:GetEntityByPath(self.RootPath .. "/" .. rel)
+		self._T.ents[rel] = e
+		return e
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(Entity entity, any fn)
+		-- 버튼 클릭 연결: 숨김·비활성 버튼은 입력을 무시한다.
+		if not isvalid(entity) then return end
+		local h = entity:ConnectEvent(ButtonClickEvent, function(e)
+			if not entity.EnabledInHierarchy or not entity.ButtonComponent.Enable then return end
+			_UISoundLogic:PlayClick()
+			fn(e)
+		end)
+		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method any Roster()
+		-- 로컬 플레이어의 PlayerRoster (없으면 nil).
+		local p = _UserService.LocalPlayer
+		if not isvalid(p) then return nil end
+		return p:GetComponent("script.PlayerRoster")
+	end
+
+	@ExecSpace("ClientOnly")
+	method any Engrave()
+		-- 로컬 플레이어의 PlayerEngrave (편성 원본, 읽기 전용).
+		local p = _UserService.LocalPlayer
+		if not isvalid(p) then return nil end
+		return p:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadJobs()
+		-- 직업 목록(CharJobTable 순서)과 직업 아이콘(4차 주력기 스킬 아이콘)을 읽는다.
+		self._T.jobs = {}
+		local icons = {}
+		local ht = _DataService:GetTable("HeroSkillTable")
+		if ht ~= nil then
+			for i = 1, ht:GetRowCount() do
+				local id = ht:GetCell(i, "SkillId")
+				if id ~= nil and id ~= "" then icons[id] = ht:GetCell(i, "IconRUID") or "" end
+			end
+		end
+		local mainT4 = {}
+		local st = _DataService:GetTable("CharSlotTable")
+		if st ~= nil then
+			for i = 1, st:GetRowCount() do
+				if st:GetCell(i, "SlotKey") == "Main" then mainT4[st:GetCell(i, "JobId") or ""] = st:GetCell(i, "T4") or "" end
+			end
+		end
+		local jt = _DataService:GetTable("CharJobTable")
+		if jt == nil then return end
+		for i = 1, jt:GetRowCount() do
+			local id = jt:GetCell(i, "JobId")
+			if id ~= nil and id ~= "" then
+				table.insert(self._T.jobs, {
+					id = id, order = tonumber(jt:GetCell(i, "Order")) or i, group = jt:GetCell(i, "JobGroup") or "",
+					name4 = jt:GetCell(i, "Name4") or id, icon = icons[mainT4[id] or ""] or "",
+				})
+			end
+		end
+		table.sort(self._T.jobs, function(a, b) return a.order < b.order end)
+		if #self._T.jobs > self.MaxJobCards then log_warning("[VRF] charui jobs over " .. tostring(self.MaxJobCards) .. " — 앞 " .. tostring(self.MaxJobCards) .. "개만 표시") end
+	end
+
+	@ExecSpace("ClientOnly")
+	method any JobById(string id)
+		-- 직업 정보.
+		for _, j in ipairs(self._T.jobs or {}) do
+			if j.id == id then return j end
+		end
+		return nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Comma(integer n)
+		-- 천 단위 쉼표.
+		local s = tostring(math.floor(n))
+		local neg = ""
+		if string.sub(s, 1, 1) == "-" then
+			neg = "-"
+			s = string.sub(s, 2)
+		end
+		local out = ""
+		while string.len(s) > 3 do
+			out = "," .. string.sub(s, -3) .. out
+			s = string.sub(s, 1, string.len(s) - 3)
+		end
+		return neg .. s .. out
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Euro(string word)
+		-- 받침에 따라 "으로"/"로" (마지막 한글 글자 기준, ㄹ 받침은 "로").
+		local last = -1
+		local i = 1
+		local len = string.len(word)
+		while i <= len do
+			local c = string.byte(word, i)
+			if c >= 0xE0 and c < 0xF0 and i + 2 <= len then
+				local cp = (c - 0xE0) * 4096 + (string.byte(word, i + 1) - 0x80) * 64 + (string.byte(word, i + 2) - 0x80)
+				if cp >= 0xAC00 and cp <= 0xD7A3 then last = cp end
+				i = i + 3
+			elseif c >= 0xC0 and c < 0xE0 then
+				i = i + 2
+			elseif c >= 0xF0 then
+				i = i + 4
+			else
+				i = i + 1
+			end
+		end
+		if last < 0 then return "로" end
+		local jong = (last - 0xAC00) % 28
+		if jong == 0 or jong == 8 then return "로" end
+		return "으로"
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string rel, string s, any color)
+		-- 글자 (색이 주어지면 색도).
+		local e = self:E(rel)
+		if not isvalid(e) or not isvalid(e.TextGUIRendererComponent) then return end
+		e.TextGUIRendererComponent.Text = s
+		if color ~= nil then e.TextGUIRendererComponent.FontColor = color end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetShown(string rel, boolean shown)
+		-- 엔티티 표시.
+		local e = self:E(rel)
+		if isvalid(e) and e.Enable ~= shown then e:SetEnable(shown) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetButton(string rel, boolean enabled)
+		-- 버튼 활성/비활성 (비활성은 상태 이미지 + 입력 차단).
+		local e = self:E(rel)
+		if isvalid(e) then _UIButtonLogic:SetDisabled(e, not enabled) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowMsg(string s, Color color)
+		-- 결과 문구 (2.5초 뒤 숨김).
+		self:SetText("Detail/Msg", s, color)
+		self._T.msgUntil = self._T.clock + self.MsgDuration
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Signature(any roster)
+		-- 화면에 영향을 주는 값을 이어 붙인 문자열 (다른 경로의 변경 감지).
+		local eng = self:Engrave()
+		local party = ""
+		if eng ~= nil then party = eng.MainJob .. "," .. eng.CompJob .. "," .. eng.Comp2Job .. "," .. tostring(eng.SkillLoaded) end
+		return tostring(roster.RosterLoaded) .. "|" .. roster.CharData .. "|" .. roster.JobCards .. "|" .. tostring(roster.BookS) .. "," .. tostring(roster.BookM) .. "," .. tostring(roster.BookL)
+			.. "|" .. tostring(roster.CommonCards) .. "|" .. tostring(roster.Diamonds) .. "|" .. party
+	end
+
+	@ExecSpace("ClientOnly")
+	method table CharOf(table chars, string jobId)
+		-- 캐릭터 상태 (없으면 잠긴 Lv1 1차).
+		local c = chars[jobId]
+		if c == nil then return { unlocked = false, level = 1, exp = 0, tier = 1, awkLv = 0, awkExp = 0 } end
+		if not c.unlocked then return { unlocked = false, level = 1, exp = 0, tier = 1, awkLv = 0, awkExp = 0 } end
+		return c
+	end
+
+	@ExecSpace("ClientOnly")
+	method table Party()
+		-- 현재 편성 {1번, 2번, 3번}.
+		local eng = self:Engrave()
+		if eng == nil then return { "", "", "" } end
+		return { eng.MainJob, eng.CompJob, eng.Comp2Job }
+	end
+
+	-- ───────────────────────── 그리기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 목록·편성·재화·상세를 Sync 값으로 다시 그린다.
+		local roster = self:Roster()
+		if roster == nil then return end
+		self._T.sig = self:Signature(roster)
+		local loaded = roster.RosterLoaded
+		local chars = roster:ParseCharData(roster.CharData)
+		local cards = roster:ParseJobCards(roster.JobCards)
+		local party = self:Party()
+		local busy = self._T.pendingAt ~= nil or not loaded
+		-- 위쪽 띠: 편성·재화
+		local names = {}
+		for k = 1, 3 do
+			local pj = self:JobById(party[k])
+			names[k] = tostring(k) .. " " .. ((pj ~= nil and pj.name4) or party[k])
+		end
+		self:SetText("PartyText", "편성  " .. names[1] .. " · " .. names[2] .. " · " .. names[3], nil)
+		self:SetText("Currency", "다이아 " .. self:Comma(roster.Diamonds) .. " · 공용 카드 " .. tostring(roster.CommonCards), nil)
+		-- 직업 카드
+		for n = 1, self.MaxJobCards do
+			local j = self._T.jobs[n]
+			local cardRel = "List/Job" .. tostring(n)
+			self:SetShown(cardRel, j ~= nil)
+			if j ~= nil then
+				local c = self:CharOf(chars, j.id)
+				local tier = c.tier
+				self:SetText(cardRel .. "/Name", roster:TierName(j.id, tier), nil)
+				if c.unlocked then
+					self:SetText(cardRel .. "/Sub", j.group .. " · Lv." .. tostring(c.level) .. " · " .. tostring(tier) .. "차", nil)
+				else
+					self:SetText(cardRel .. "/Sub", j.group .. " · 잠김", nil)
+				end
+				self:SetText(cardRel .. "/Cards", "전용 카드 " .. tostring(cards[j.id] or 0) .. "장", nil)
+				local icon = self:E(cardRel .. "/Icon")
+				if isvalid(icon) then
+					icon.SpriteGUIRendererComponent.ImageRUID = DataRef(j.icon)
+					if c.unlocked then icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1) else icon.SpriteGUIRendererComponent.Color = Color(0.70, 0.70, 0.70, 1) end
+				end
+				self:SetShown(cardRel .. "/Lock", not c.unlocked)
+				local slot = 0
+				for k = 1, 3 do
+					if party[k] == j.id then slot = k end
+				end
+				self:SetShown(cardRel .. "/PartyMark", slot > 0)
+				if slot > 0 then self:SetText(cardRel .. "/PartyMark/Num", tostring(slot), nil) end
+				_UIButtonLogic:SetSelected(self:E(cardRel), j.id == self._T.sel)
+			end
+		end
+		-- 편성 버튼
+		local sc = self:CharOf(chars, self._T.sel)
+		for k = 1, 3 do
+			local rel = "Party" .. tostring(k)
+			self:SetButton(rel, sc.unlocked and not busy)
+			_UIButtonLogic:SetSelected(self:E(rel), party[k] == self._T.sel)
+		end
+		self:RefreshDetail(roster, chars, cards, busy)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshDetail(any roster, table chars, table cards, boolean busy)
+		-- 오른쪽 상세: 이름·레벨·경험치·능력치·경험의 서·미리보기·전직.
+		local job = self._T.sel
+		local j = self:JobById(job)
+		if j == nil then return end
+		local c = self:CharOf(chars, job)
+		local level = c.level
+		local tier = c.tier
+		local cap = roster:CapLevel(tier)
+		local maxTier = roster:MaxTier()
+		local tierName = roster:TierName(job, tier)
+		local tierLabel = tierName .. " (" .. tostring(tier) .. "차)"
+		if tier >= maxTier then tierLabel = tierName end
+		self:SetText("Detail/Group", j.group .. " · " .. j.name4 .. " 계열", nil)
+		self:SetText("Detail/TierName", tierLabel, nil)
+		self:SetText("Detail/PreviewName", tierLabel, nil)
+		local atMax = tier >= maxTier and level >= roster:MaxLevel()
+		if atMax then
+			self:SetText("Detail/LevelText", "Lv." .. tostring(level) .. " (최고)", nil)
+		else
+			self:SetText("Detail/LevelText", "Lv." .. tostring(level) .. "  /  관문 Lv." .. tostring(cap), nil)
+		end
+		-- 경험치 막대 (폭 < 24면 숨김: 슬라이스 경계 보호)
+		local need = roster:NeedExp(level)
+		local width = 840
+		if level < cap and need > 0 then width = math.floor(840 * c.exp / need) end
+		local fill = self:E("Detail/ExpFill")
+		if isvalid(fill) then
+			fill.UITransformComponent.RectSize = Vector2(math.max(24, width), 28)
+			if fill.Enable ~= (width >= 24) then fill:SetEnable(width >= 24) end
+		end
+		if atMax then
+			self:SetText("Detail/ExpText", "최고 레벨·최고 차수입니다", nil)
+		elseif level >= cap then
+			self:SetText("Detail/ExpText", "관문 도달 — 전직하면 계속 성장합니다", nil)
+		else
+			self:SetText("Detail/ExpText", "경험치 " .. self:Comma(c.exp) .. " / " .. self:Comma(need), nil)
+		end
+		-- 능력치
+		local st = roster:CharStat(job, level, tier)
+		self:SetText("Detail/StatAtk", "공격력  " .. tostring(st.atk), nil)
+		self:SetText("Detail/StatHp", "체력  " .. tostring(st.hp), nil)
+		self:SetText("Detail/StatDef", "방어력  " .. tostring(st.def), nil)
+		local pctNow = math.floor(roster:StatPct(tier) + 0.5)
+		if tier >= maxTier then
+			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%", nil)
+		else
+			local pctNext = math.floor(roster:StatPct(tier + 1) + 0.5)
+			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%\n전직하면 +" .. tostring(pctNext) .. "%", nil)
+		end
+		-- 경험의 서
+		local have = { roster.BookS, roster.BookM, roster.BookL }
+		local per = { math.floor(roster:Cfg("BookExpS", 100)), math.floor(roster:Cfg("BookExpM", 500)), math.floor(roster:Cfg("BookExpL", 2000)) }
+		for k = 1, 3 do
+			local color = self.SubColor
+			if have[k] <= 0 then color = self.BadColor end
+			self:SetText("Detail/Book" .. tostring(k) .. "/Count", self:Comma(have[k]) .. "권 · 권당 " .. self:Comma(per[k]), color)
+		end
+		-- 레벨업 미리보기·버튼
+		local canOne = false
+		local canMax = false
+		local maxLabel = "최대 레벨업"
+		if not c.unlocked then
+			self:SetText("Detail/PreviewOne", "잠긴 직업입니다", self.SubColor)
+			self:SetText("Detail/PreviewMax", "", nil)
+		elseif atMax then
+			self:SetText("Detail/PreviewOne", "최고 레벨입니다", self.SubColor)
+			self:SetText("Detail/PreviewMax", "", nil)
+		elseif level >= cap then
+			self:SetText("Detail/PreviewOne", "관문 도달 — 전직이 필요합니다", self.SubColor)
+			self:SetText("Detail/PreviewMax", "", nil)
+		else
+			local one = roster:PlanBooksFor(level, c.exp, tier, have[1], have[2], have[3], level + 1)
+			local mx = roster:PlanBooksFor(level, c.exp, tier, have[1], have[2], have[3], cap)
+			canOne = one.s + one.m + one.l > 0
+			canMax = mx.s + mx.m + mx.l > 0
+			self:SetText("Detail/PreviewOne", self:PlanLine("1레벨업", level, level + 1, one, per), self.TextColor)
+			self:SetText("Detail/PreviewMax", self:PlanLine("최대", level, cap, mx, per), self.TextColor)
+			if canMax then maxLabel = "최대 레벨업 (Lv." .. tostring(mx.newLevel) .. ")" end
+		end
+		self:SetText("Detail/BtnLvMax", maxLabel, nil)
+		self:SetButton("Detail/BtnLv1", canOne and not busy)
+		self:SetButton("Detail/BtnLvMax", canMax and not busy)
+		-- 전직·해금
+		local jobCards = cards[job] or 0
+		local cc = roster.CommonCards
+		if not c.unlocked then
+			self:SetText("Detail/PromoteTitle", "잠긴 직업 — 캐릭터 뽑기에서 전용 카드를 얻으면 해금됩니다", nil)
+			self:SetText("Detail/PromoteInfo", "공용 카드 " .. tostring(cc) .. "장 보유", self.TextColor)
+			self:SetText("Detail/PromoteNote", "공용 전직 카드 1장으로 바로 해금할 수도 있습니다", nil)
+			self:SetShown("Detail/BtnPromote", false)
+			self:SetShown("Detail/BtnPromoteCommon", false)
+			self:SetShown("Detail/BtnUnlock", true)
+			self:SetButton("Detail/BtnUnlock", cc >= 1 and not busy)
+		elseif tier >= maxTier then
+			if atMax then
+				self:SetText("Detail/PromoteTitle", "최고 차수 달성", nil)
+			else
+				self:SetText("Detail/PromoteTitle", "최고 차수 (" .. tostring(maxTier) .. "차)", nil)
+			end
+			self:SetText("Detail/PromoteInfo", "", nil)
+			self:SetText("Detail/PromoteNote", "", nil)
+			self:SetShown("Detail/BtnPromote", false)
+			self:SetShown("Detail/BtnPromoteCommon", false)
+			self:SetShown("Detail/BtnUnlock", false)
+		else
+			local nextTier = tier + 1
+			local needCards = roster:PromoteCards(nextTier)
+			local nextName = roster:TierName(job, nextTier)
+			local nextLabel = nextName .. " (" .. tostring(nextTier) .. "차)"
+			if nextTier >= maxTier then nextLabel = nextName end
+			self:SetText("Detail/PromoteTitle", "전직 — 다음 차수: " .. nextLabel, nil)
+			local atCap = level >= cap
+			local ok = atCap and jobCards + cc >= needCards
+			local infoColor = self.BadColor
+			if ok then infoColor = self.GoodColor end
+			self:SetText("Detail/PromoteInfo", "필요 레벨 Lv." .. tostring(cap) .. " (현재 " .. tostring(level) .. ") · 전용 카드 " .. tostring(jobCards) .. " / " .. tostring(needCards) .. "장 · 공용 카드 " .. tostring(cc) .. "장", infoColor)
+			self:SetText("Detail/PromoteNote", "전직하면 같은 레벨에서 다음 차수가 시작되고 능력치 보너스가 오릅니다", nil)
+			self:SetShown("Detail/BtnUnlock", false)
+			self:SetShown("Detail/BtnPromote", true)
+			self:SetShown("Detail/BtnPromoteCommon", true)
+			local canJob = atCap and jobCards >= needCards
+			local canCommon = atCap and jobCards < needCards and jobCards + cc >= needCards
+			if canCommon then
+				self:SetText("Detail/BtnPromoteCommon", "공용 카드로 전직 (" .. tostring(needCards - jobCards) .. "장)", nil)
+			else
+				self:SetText("Detail/BtnPromoteCommon", "공용 카드로 전직", nil)
+			end
+			self:SetButton("Detail/BtnPromote", canJob and not busy)
+			self:SetButton("Detail/BtnPromoteCommon", canCommon and not busy)
+		end
+		self:ShowPreview(roster, job, tier, c.unlocked)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string PlanLine(string label, integer level, integer target, table plan, table per)
+		-- 레벨업 미리보기 한 줄. 책이 없으면 안내, 모자라면 (책 부족), 관문을 넘는 경험치는 사라진다고 표시.
+		if plan.s + plan.m + plan.l == 0 then return "경험의 서가 없습니다" end
+		local reach = "Lv." .. tostring(level) .. " → " .. tostring(plan.newLevel)
+		if plan.newLevel < target then reach = "Lv." .. tostring(level) .. " → Lv." .. tostring(plan.newLevel) .. " (책 부족)" end
+		local line = label .. "  " .. reach .. "  ·  소 " .. tostring(plan.s) .. " · 중 " .. tostring(plan.m) .. " · 대 " .. tostring(plan.l)
+		local over = plan.s * per[1] + plan.m * per[2] + plan.l * per[3] - plan.gain
+		if over > 0 then line = line .. "  (사라지는 경험치: " .. self:Comma(over) .. ")" end
+		return line
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowPreview(any roster, string job, integer tier, boolean unlocked)
+		-- 미리보기 아바타: 선택 직업·차수 세트를 입힌다 (잠긴 직업은 1차 세트 + 어두운 덮개). 아바타 엔티티가 없으면 이름만 둔다.
+		local av = self:E("Detail/Avatar")
+		if not isvalid(av) or not av.Enable then return end
+		-- 잠긴 직업: 미리보기 칸에 어두운 덮개 + 자물쇠, 이름은 흰 글자.
+		-- UI 아바타는 다른 UI보다 항상 위에 그려져 덮개로 어두워지지 않으므로 부위별 색(SetAvatarPartColor)으로 어둡게 한다.
+		self:SetShown("Detail/PreviewDim", not unlocked)
+		local ar = av.AvatarGUIRendererComponent
+		if isvalid(ar) then
+			local v = 1
+			if not unlocked then v = self.PreviewLockedBrightness end
+			for _, c in ipairs({ MapleAvatarItemCategory.Body, MapleAvatarItemCategory.Head, MapleAvatarItemCategory.Hair, MapleAvatarItemCategory.Face, MapleAvatarItemCategory.Cap, MapleAvatarItemCategory.Coat, MapleAvatarItemCategory.Pants, MapleAvatarItemCategory.Longcoat, MapleAvatarItemCategory.Glove, MapleAvatarItemCategory.Shoes, MapleAvatarItemCategory.Cape, MapleAvatarItemCategory.OneHandedWeapon, MapleAvatarItemCategory.TwoHandedWeapon, MapleAvatarItemCategory.SubWeapon }) do
+				ar:SetAvatarPartColor(c, v, v, v, 1)
+			end
+		end
+		local pn = self:E("Detail/PreviewName")
+		if isvalid(pn) and isvalid(pn.TextGUIRendererComponent) then
+			if unlocked then pn.TextGUIRendererComponent.FontColor = self.TextColor else pn.TextGUIRendererComponent.FontColor = Color(1, 1, 1, 1) end
+		end
+		local cm = av.CostumeManagerComponent
+		if not isvalid(cm) then return end
+		local key = job .. ":" .. tostring(tier) .. ":" .. tostring(unlocked)
+		if self._T.previewKey == key then return end
+		self._T.previewKey = key
+		local set = roster:OutfitFor(job, tier)
+		for _, slot in ipairs(roster:OutfitSlots()) do
+			cm:SetEquip(roster:OutfitCategory(slot), set[slot] or "")
+		end
+		cm:SetEquip(MapleAvatarItemCategory.SubWeapon, "")
+		local stand = "stand1"
+		for _, sj in ipairs(roster:Split(self.PreviewStand2Jobs, ",")) do
+			if sj == job then stand = "stand2" end
+		end
+		av:SendEvent(BodyActionTypeChangeEvent(true, stand))
+		log("[VRF] charui preview job=" .. job .. " tier=" .. tostring(tier) .. " stand=" .. stand)
+	end
+
+	-- ───────────────────────── 입력 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnJobCard(integer n)
+		-- 직업 선택.
+		local j = self._T.jobs[n]
+		if j == nil then return end
+		self._T.sel = j.id
+		log("[VRF] charui select " .. j.id)
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void MarkPending(string action, string args)
+		-- 요청 전송 기록: 결과가 오거나 3초가 지날 때까지 실행 버튼 비활성.
+		local roster = self:Roster()
+		if roster ~= nil then self._T.lastSeq = roster.RosterSeq end
+		self._T.pendingAt = self._T.clock
+		log("[VRF] charui request " .. action .. " " .. args)
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnLevel(boolean toMax)
+		-- 1레벨업 / 최대 레벨업(관문까지).
+		local roster = self:Roster()
+		if roster == nil or self._T.pendingAt ~= nil then return end
+		local c = self:CharOf(roster:ParseCharData(roster.CharData), self._T.sel)
+		if not c.unlocked then return end
+		local target = c.level + 1
+		if toMax then target = roster:CapLevel(c.tier) end
+		roster:RequestLevelTo(self._T.sel, target)
+		self:MarkPending("level", self._T.sel .. " " .. tostring(target))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnPromote(boolean useCommon)
+		-- 전직 (useCommon: 부족한 전용 카드를 공용 카드로).
+		local roster = self:Roster()
+		if roster == nil or self._T.pendingAt ~= nil then return end
+		roster:RequestPromote(self._T.sel, useCommon)
+		self:MarkPending("promote", self._T.sel .. " " .. tostring(useCommon))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUnlock()
+		-- 공용 카드 1장으로 해금.
+		local roster = self:Roster()
+		if roster == nil or self._T.pendingAt ~= nil then return end
+		roster:RequestUnlockWithCommon(self._T.sel)
+		self:MarkPending("unlock", self._T.sel)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnParty(integer k)
+		-- 선택 직업을 k번 자리에 넣는다 (다른 자리에 있으면 서로 바꿈).
+		local roster = self:Roster()
+		if roster == nil or self._T.pendingAt ~= nil then return end
+		local job = self._T.sel
+		local c = self:CharOf(roster:ParseCharData(roster.CharData), job)
+		if not c.unlocked then return end
+		local party = self:Party()
+		if party[k] == job then return end
+		for i = 1, 3 do
+			if i ~= k and party[i] == job then party[i] = party[k] end
+		end
+		party[k] = job
+		roster:RequestSetParty(party[1], party[2], party[3])
+		self:MarkPending("party", party[1] .. "," .. party[2] .. "," .. party[3])
+	end
+
+	-- ───────────────────────── 결과 문구 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void HandleResult(any roster)
+		-- RosterMsg·RosterResult → 한국어 결과 문구.
+		local code = roster.RosterMsg
+		local result = roster.RosterResult
+		local f = roster:Split(result, ":")
+		local action = f[1] or ""
+		local job = f[2] or ""
+		local msg = ""
+		local good = string.sub(code, 1, 3) == "ok_"
+		if code == "ok_level" then
+			local a = f[3] or "?"
+			local b = f[4] or "?"
+			msg = "Lv." .. a .. " → Lv." .. b .. " 달성!"
+			if f[5] ~= nil and f[5] ~= "" and (tonumber(f[4]) or 0) < (tonumber(f[5]) or 0) then msg = "경험의 서가 부족해 Lv." .. b .. "까지 올렸습니다" end
+		elseif code == "ok_promote" then
+			local name = roster:TierName(job, math.floor(tonumber(f[3]) or 1))
+			msg = name .. self:Euro(name) .. " 전직했습니다!"
+			local used = math.floor(tonumber(f[5]) or 0)
+			if used > 0 then msg = msg .. " (공용 카드 " .. tostring(used) .. "장 사용)" end
+		elseif code == "ok_unlock" then
+			msg = roster:TierName(job, 4) .. " 해금!"
+		elseif code == "ok_party" then
+			msg = "편성을 저장했습니다"
+		elseif code == "err_notready" then
+			msg = "캐릭터 정보를 불러오는 중입니다"
+		elseif code == "err_lobby" then
+			msg = "로비에서만 할 수 있습니다"
+		elseif code == "err_job" then
+			msg = "알 수 없는 직업입니다"
+		elseif code == "err_locked" then
+			msg = "잠긴 직업입니다"
+		elseif code == "err_unlocked" then
+			msg = "이미 해금된 직업입니다"
+		elseif code == "err_cap" then
+			msg = "관문 레벨입니다. 전직하면 계속 성장합니다"
+		elseif code == "err_max" then
+			msg = "최고 레벨·최고 차수입니다"
+		elseif code == "err_books" then
+			msg = "경험의 서가 부족합니다"
+		elseif code == "err_level" then
+			if action == "promote" then
+				local c = self:CharOf(roster:ParseCharData(roster.CharData), job)
+				msg = "전직 레벨(Lv." .. tostring(roster:CapLevel(c.tier)) .. ")에 도달해야 합니다"
+			else
+				msg = "이미 목표 레벨입니다"
+			end
+		elseif code == "err_cards" then
+			if action == "unlock" then msg = "공용 전직 카드가 부족합니다" else msg = "전직 카드가 부족합니다" end
+		elseif code == "err_party" then
+			msg = "편성할 수 없습니다 (중복 또는 잠긴 직업)"
+		end
+		if msg ~= "" then
+			local color = self.BadColor
+			if good then color = self.GoodColor end
+			self:ShowMsg(msg, color)
+		end
+		log("[VRF] charui result " .. code .. " " .. result)
+	end
+
+end

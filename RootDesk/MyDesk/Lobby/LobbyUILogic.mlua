@@ -5,10 +5,11 @@ script LobbyUILogic extends Logic
 	property Entity lobbyRoot = "ca754c14-c243-4e89-86e1-a8347b0f7fa8"
 	property ButtonComponent btnPlay = "3b66162e-0c74-4b1f-acff-4e28c727a7ee"
 	property ButtonComponent btnGrowth = "ff27894c-fbae-495e-8c32-71484ee63a3d"
+	-- 업적 자리 → 캐릭터 화면(2단계)
 	property ButtonComponent btnAchieve = "84cac690-1c03-4705-9def-ab603706aab0"
 	-- 테스트용: 스킬 이펙트 테스트 맵 입장
 	property ButtonComponent btnSkillTest = "7b5ace19-dcae-41ea-9748-ae12ee4e3205"
-	-- 스킬 뽑기 화면
+	-- 캐릭터 뽑기 화면 (3단계, 옛 스킬 뽑기 진입은 끊음 — 스킬 뽑기 삭제는 6단계)
 	property ButtonComponent btnGacha = "e5b66d96-8849-405a-9d82-a3656a2f7e30"
 	property TextGUIRendererComponent noticeText = "d93951f9-f2bd-464b-a3a1-97ca120a9d6c"
 	property TextGUIRendererComponent energyCountText = "fe688efc-922b-435d-bacc-8650a93b1f75"
@@ -72,8 +73,8 @@ script LobbyUILogic extends Logic
 			if isvalid(row) then self:Bind(row.ButtonComponent, function() self:SelectFloor(index) end) end
 		end
 		self:Bind(self.btnGrowth, function() _GrowthUILogic:Open() end)
-		self:Bind(self.btnGacha, function() _GachaUILogic:Open() end)
-		self:Bind(self.btnAchieve, function() self:ShowNotice("업적은 준비 중입니다") end)
+		self:Bind(self.btnGacha, function() _CharGachaUILogic:Open() end)
+		self:Bind(self.btnAchieve, function() _CharacterUILogic:Open() end)
 		self:Bind(self.btnSkillTest, function() self:OnSkillTest() end)
 		-- 버튼 상태 연출 (호버·눌림·비활성: 글자색, 눌림 시 아이콘·글자 2px 아래로)
 		self._T.menu = {}

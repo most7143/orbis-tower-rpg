@@ -763,8 +763,8 @@ script MainPanelLogic extends Logic
 		if self.SelectedTab == 1 and isvalid(self.infoText) then
 			local speed = 0
 			if mgr.PlayerAttackInterval > 0 then speed = 1 / mgr.PlayerAttackInterval end
-			local info = "레벨        Lv." .. tostring(mgr.Level) .. "\n"
-				.. "경험치      " .. tostring(mgr.Exp) .. " / " .. tostring(mgr.ExpToNext) .. "\n"
+			-- 4단계: 판 안 레벨 없음 (Level = 메인 캐릭터 레벨)
+			local info = "레벨        Lv." .. tostring(mgr.Level) .. " (메인)\n"
 				.. "메소        " .. tostring(mgr.Meso) .. "\n"
 				.. "직업        " .. _TarotLogic:GetJobLabel(mgr) .. "\n\n"
 				.. "공격력      " .. tostring(math.floor(mgr.PlayerAtkMin)) .. " ~ " .. tostring(math.floor(mgr.PlayerAtk)) .. "\n"

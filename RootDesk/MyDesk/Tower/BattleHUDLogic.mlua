@@ -633,7 +633,18 @@ script BattleHUDLogic extends Logic
 			end
 		end
 		local names = { Hero = "히어로", Bishop = "비숍", NightLord = "나이트로드", Bowmaster = "보우마스터", Viper = "바이퍼" }
-		setText("Job", tostring(k) .. "  " .. (names[cc.JobId] or cc.JobId) .. "  Lv." .. tostring(mgr.Level))
+		-- 4-B 보완·4-C: 구성원마다 자기 차수 이름·캐릭터 레벨 (전투 컴포넌트 RunLabel/RunLevel → 매니저 PartyLevels → 메인 레벨 순)
+		local label = (cc.RunLabel ~= nil and cc.RunLabel ~= "") and cc.RunLabel or (names[cc.JobId] or cc.JobId)
+		local lv = cc.RunLevel or 0
+		if lv <= 0 then
+			local idx = 0
+			for v in string.gmatch(mgr.PartyLevels or "", "[^,]+") do
+				idx = idx + 1
+				if idx == k then lv = tonumber(v) or 0 end
+			end
+		end
+		if lv <= 0 then lv = mgr.Level end
+		setText("Job", tostring(k) .. "  " .. label .. "  Lv." .. tostring(lv))
 		setBar("HpFill", hp / math.max(1, maxHp), 176)
 		setText("HpText", tostring(math.floor(hp)) .. " / " .. tostring(math.floor(maxHp)))
 		setBar("MpFill", cc.Mana / math.max(1, cc.ManaMax or 100), 176)
@@ -654,8 +665,9 @@ script BattleHUDLogic extends Logic
 		setText("State", state)
 		local list = {}
 		for entry in string.gmatch(cc.SlotInfo or "", "[^|]+") do
-			local id, left, max, lv = string.match(entry, "^([^:]+):([^:]+):([^:]+):?([^:]*)$")
-			if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0, lv = tonumber(lv) or 0 }) end
+			local id, left, max, lvRaw = string.match(entry, "^([^:]+):([^:]+):([^:]+):?([^:]*)$")
+			-- 4-D: 넷째 값 "U" = 궁극기 게이지 칸 (left = 최대 − 게이지)
+			if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0, lv = tonumber(lvRaw) or 0, ult = lvRaw == "U" }) end
 		end
 		for i = 1, 5 do
 			local slot = "S" .. tostring(i)
@@ -673,7 +685,14 @@ script BattleHUDLogic extends Logic
 			end
 			local ratio = 0
 			local cdText = ""
-			if info ~= nil and info.max > 0 and info.left > 0 then
+			if info ~= nil and info.ult then
+				-- 궁극기: 차오를수록 덮개가 줄어든다. 글자는 충전 %, 가득이면 빈 글자
+				if info.max > 0 and info.left > 0 then
+					ratio = info.left / info.max
+					-- 4-D 보완(U1): 소수 오차(58/100×100 = 57.999…)로 1 낮게 보이지 않게 아주 작은 값을 더해 내림
+					cdText = tostring(math.floor((info.max - info.left) / info.max * 100 + 0.0001)) .. "%"
+				end
+			elseif info ~= nil and info.max > 0 and info.left > 0 then
 				ratio = info.left / info.max
 				cdText = tostring(math.ceil(info.left))
 			end

@@ -233,6 +233,16 @@ script HeroCombat extends Component
 	-- 오른쪽 아래 스킬 슬롯 표시용: 장착 순서대로 "스킬id:남은쿨타임:쿨타임|..." (0.2초마다)
 	@Sync
 	property string SlotInfo = ""
+	-- 4-C: 이번 판 캐릭터 레벨·차수 이름 (HUD 구성원 줄)
+	@Sync
+	property integer RunLevel = 0
+	@Sync
+	property string RunLabel = ""
+	-- 4-D: 궁극기 게이지 (5차 궁극기 칸이 있을 때만 충전)
+	@Sync
+	property number UltGauge = 0
+	@Sync
+	property number UltMax = 100
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
@@ -503,6 +513,16 @@ script HeroCombat extends Component
 		t.noAutoBuff = false
 		t.equip = {}
 		t.ownLv = {}
+		t.slotOf = {}
+		t.pctMul = {}
+		t.tier = 0
+		t.ultId = nil
+		-- 4-E: 고유 패시브 숨은 장착(확률·위기 스킬)과 차수 강화
+		t.hidden = {}
+		t.pExtra = {}
+		self.RunLevel = 0
+		self.RunLabel = ""
+		self.UltGauge = 0
 		t.cd = {}
 		t.till = {}
 		t.bleed = {}
@@ -533,22 +553,31 @@ script HeroCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void BeginRun(Component mgr)
-		-- 히어로를 고른 순간: 장착 스킬 5종(아웃게임 레벨 포함)을 이번 판 레벨업 카드 후보로 정한다.
-		-- 입장 직후에는 아무 스킬도 없다 (Lv.0). 레벨업 카드의 '습득'으로 하나씩 배운다.
+		-- 4-C: 판 시작 — 캐릭터 차수의 칸 스킬(주력·보조·기술·하이퍼·궁극기)을 장착한다. 로비 장착·스킬 레벨은 읽지 않는다.
+		-- 칸 수치 덮어쓰기(쿨·마나·발동 방식)가 판마다 쌓이지 않게 스킬표를 다시 읽어 원래 값으로 되돌린다.
+		self:LoadSkills()
 		self:ClearState()
 		self._T.mgr = mgr
-		local eng = mgr:GetEngrave()
-		local data = { equip = {}, lv = {}, comboLv = 0 }
-		if eng ~= nil then data = eng:SkillRunData() end
-		self.ComboLv = data.comboLv or 0
-		for _, id in ipairs(data.equip) do
-			if self._T.skills[id] ~= nil then
-				table.insert(self._T.equip, id)
-				self._T.ownLv[id] = data.lv[id] or 1
-				-- 판 안 자동 성장이 없으므로 장착 스킬은 처음부터 배운 상태 (위력은 아웃게임 레벨)
-				mgr.SkillLv[id] = 1
+		local d = mgr:RunDataFor(self.JobId)
+		if d == nil then
+			-- 안전장치: 로스터 값이 없을 때만 예전 로비 장착 경로 (정상 판에서는 나오면 안 됨)
+			log_warning("[VRF] Hero run data missing, legacy equip")
+			local eng = mgr:GetEngrave()
+			local data = { equip = {}, lv = {}, comboLv = 0 }
+			if eng ~= nil then data = eng:SkillRunData() end
+			self.ComboLv = data.comboLv or 0
+			for _, id in ipairs(data.equip) do
+				if self._T.skills[id] ~= nil then
+					table.insert(self._T.equip, id)
+					self._T.ownLv[id] = data.lv[id] or 1
+					mgr.SkillLv[id] = 1
+				end
 			end
+		else
+			self:ApplySlots(mgr, d)
 		end
+		-- 4-F: 돌파 저장 키(직업.칸) 등록
+		mgr:RegisterSlots(self.JobId, self._T.slotOf)
 		self.Active = true
         self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
 		self.Mana = self.ManaStart
@@ -592,6 +621,95 @@ script HeroCombat extends Component
 		self:PreloadFx(table.concat(list, "|"))
 		self._T.lastBasic = _UtilLogic.ElapsedSeconds
 		log("[VRF] hero run equip=" .. table.concat(self._T.equip, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplySlots(Component mgr, table d)
+		-- 4-C: 칸 순서(주력·보조·기술·하이퍼·궁극기 = HUD S1~S5)대로 현재 차수 칸 스킬을 장착하고 칸 수치(배율·쿨·마나·발동 방식)를 덮어쓴다.
+		local tier = math.max(1, math.floor(d.tier or 1))
+		self._T.tier = tier
+		self.RunLevel = math.floor(d.level or 0)
+		self.RunLabel = d.tierName or ""
+		-- 4-E: 고유 패시브(콤보 어택) 레벨·흡수 스킬·차수 강화 = CharPassiveTable
+		local p = mgr:PassiveOf(self.JobId, tier)
+		self.ComboLv = p.lv
+		self._T.pExtra = p.extra or {}
+		self.UltMax = mgr.UltGaugeMax
+		local pcts = {}
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "Ult" }) do
+			local id = (d.slots or {})[key] or ""
+			if id ~= "" and self._T.skills[id] ~= nil then
+				table.insert(self._T.equip, id)
+				self._T.slotOf[id] = key
+				local t = mgr:SlotTune(self.JobId, key, tier)
+				self._T.pctMul[id] = t.pctMul
+				local sk = self._T.skills[id]
+				if t.cdSec > 0 then sk.cooldown = t.cdSec end
+				if t.mana >= 0 then sk.mana = t.mana end
+				-- 하이퍼: 쿨타임마다 자동 시전
+				if t.triggerAs == "Cooldown" then sk.trigger = "Cooldown" end
+				-- 궁극기: 게이지가 차면 시전 (일반 시전 분기에서 빠짐, 마나 0)
+				if t.triggerAs == "Ult" then
+					sk.trigger = "Ult"
+					sk.mana = 0
+					self._T.ultId = id
+				end
+				-- 하이퍼·궁극기·패시브도 SkillLv 1이어야 Learned()가 true
+				mgr.SkillLv[id] = 1
+				table.insert(pcts, tostring(t.pctMul))
+			end
+		end
+		log("[VRF] slots run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " lv=" .. tostring(self.RunLevel) .. " equip=" .. table.concat(self._T.equip, ",") .. " pct=" .. table.concat(pcts, ",") .. " ult=" .. tostring(self._T.ultId or ""))
+		-- 4-E: 패시브가 흡수한 확률·위기 스킬을 숨은 장착으로 (HUD 칸에는 안 보임, 돌파 카드·마법의 서 대상)
+		local hidden = {}
+		for _, gid in ipairs(p.grants or {}) do
+			if self._T.skills[gid] ~= nil and not self:Equipped(gid) then
+				table.insert(self._T.equip, gid)
+				self._T.hidden[gid] = true
+				self._T.slotOf[gid] = "Passive"
+				mgr.SkillLv[gid] = 1
+				table.insert(hidden, gid)
+			end
+		end
+		local ex = {}
+		for k, v in pairs(self._T.pExtra) do if v then table.insert(ex, k) end end
+		log("[VRF] passive run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " passiveLv=" .. tostring(self.ComboLv) .. " hidden=" .. table.concat(hidden, ",") .. " extra=" .. table.concat(ex, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string SwapSlot(Component mgr, string slot, string newId)
+		-- 4-F 테스트(DebugSwapSlot): 판 중 진화 흉내 — 그 칸의 스킬을 newId로 바꾸고 칸 수치를 다시 덮어쓴다. 돌려주는 값: 이전 스킬 Id(없으면 "").
+		local sk = self._T.skills[newId]
+		if sk == nil then return "" end
+		local old = ""
+		for id, s in pairs(self._T.slotOf) do
+			if s == slot then old = id end
+		end
+		if old == "" or old == newId then return old end
+		for i, id in ipairs(self._T.equip) do
+			if id == old then self._T.equip[i] = newId end
+		end
+		self._T.slotOf[old] = nil
+		self._T.slotOf[newId] = slot
+		local t = mgr:SlotTune(self.JobId, slot, self._T.tier)
+		self._T.pctMul[newId] = t.pctMul
+		if t.cdSec > 0 then sk.cooldown = t.cdSec end
+		if t.mana >= 0 then sk.mana = t.mana end
+		if t.triggerAs == "Cooldown" then sk.trigger = "Cooldown" end
+		if self._T.ultId == old then
+			sk.trigger = "Ult"
+			sk.mana = 0
+			self._T.ultId = newId
+		end
+		mgr.SkillLv[newId] = 1
+		return old
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddUlt(number n)
+		-- 4-D: 궁극기 게이지 충전 (궁극기 칸이 있고 아직 가득이 아닐 때만).
+		if self._T.ultId == nil or n <= 0 or self.UltGauge >= self.UltMax then return end
+		self.UltGauge = math.min(self.UltMax, self.UltGauge + n)
 	end
 
 	@ExecSpace("Client")
@@ -674,8 +792,8 @@ script HeroCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method number LvMul(string id)
-		-- 아웃게임 스킬 레벨 배율: Lv.1 1배 → Lv.11 3배.
-		return 1 + ((self._T.ownLv[id] or 1) - 1) * 0.2
+		-- 4-C: 칸 표 위력 배율(CharSkillSlotTable PctMul). 아웃게임 스킬 레벨 배율은 쓰지 않는다.
+		return (self._T.pctMul or {})[id] or 1
 	end
 
 	@ExecSpace("ServerOnly")
@@ -703,9 +821,12 @@ script HeroCombat extends Component
 	@ExecSpace("ServerOnly")
 	method integer ComboCap()
 		-- 지금 판의 콤보 최대치: 기본 5, 코마 돌파 3 '어드밴스드 콤보'면 10.
-		if self:Has("H13", 5) then return self.ComboSuperMax end
-		if self:Has("H04", 3) then return self.ComboMax end
-		return self.ComboBaseMax
+		local cap = self.ComboBaseMax
+		if self:Has("H13", 5) then cap = self.ComboSuperMax
+		elseif self:Has("H04", 3) then cap = self.ComboMax end
+		-- 4-E: 콤보 어택 4차 강화 '콤보 최대 10' (데스폴트 돌파 15가 더 크면 그쪽)
+		if (self._T.pExtra or {}).ComboCap10 then cap = math.max(cap, self.ComboMax) end
+		return cap
 	end
 
 	@ExecSpace("ServerOnly")
@@ -715,6 +836,8 @@ script HeroCombat extends Component
 		local chance = self.ComboGainChance
 		-- 인레이지 돌파 3 '투지의 격류': 지속 중 콤보 획득 확률 +50% (30% → 45%)
 		if self:On("H05") and self:Has("H05", 3) then chance = chance * (1 + self.InrageComboChancePct / 100) end
+		-- 4-E: 콤보 어택 5차 강화 '콤보 획득 확률 +50%' (30 → 45%)
+		if (self._T.pExtra or {}).ComboGain50 then chance = chance * 1.5 end
 		return _UtilLogic:RandomDouble() * 100 < chance
 	end
 
@@ -845,7 +968,7 @@ script HeroCombat extends Component
 		-- 패닉 '날렵함': 쿨타임 4초
 		if sk.id == "H03" and self:Has("H03", 4) then cd = 4 end
 		-- 레이징 블로우 '날렵함': 쿨타임 6초
-		if sk.id == "H08" and self:Has("H08", 5) then cd = 6 end
+		if sk.id == "H08" and self:Has("H08", 5) then cd = math.min(cd, 6) end
 		-- 장신구 '미스틱 이어링' 등: 재사용 대기시간 감소
 		local mgr = self._T.mgr
 		if mgr ~= nil then cd = cd * math.max(0.2, 1 - (mgr:AccessoryBonus(self.Entity, "CdReduce") + mgr:Bonus("RelicCd")) / 100) end
@@ -881,6 +1004,8 @@ script HeroCombat extends Component
 			if isvalid(mon) then self:AddBleed(1, "H05", mon) end
 		end
 		self:EpicCdCut(1)
+		-- 4-D: 기본 공격 적중 → 궁극기 게이지
+		self:AddUlt(mgr.UltGaugeBasic)
 		local mana = self.ManaPerHit
 		if self:On("H13w") then mana = 5 end
 		self:AddMana(mana)
@@ -892,6 +1017,7 @@ script HeroCombat extends Component
 			if sk.trigger == "Instinct" and not self:On("H15") and (self._T.cd[sk.id] or 0) <= 0 then
 				self._T.cd[sk.id] = self:Cooldown(sk)
 				table.insert(list, self:MakeCast(sk))
+				if (self._T.hidden or {})[sk.id] then log("[VRF] passive proc job=" .. self.JobId .. " id=" .. sk.id) end
 			end
 		end
 		if self:On("H15") then table.insert(list, self:MakeRift()) end
@@ -913,7 +1039,65 @@ script HeroCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void PickActed(Component mgr, table skills, table list)
-		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		-- 동작(액션)이 있는 스킬 1개를 골라 list에 넣는다: 궁극기(게이지 가득) → 우선 시전 → 쿨타임형 → 마나형(비용 큰 것).
+		-- 4-D: 궁극기 게이지가 가득이면 이번 차례 동작 스킬은 궁극기 1개 (마나 소모·쿨타임 기록 없음)
+		if self:TryUltCast(list, false) then return end
+		local uid = self._T.ultId
+		local n0 = #list
+		self:PickActedInner(mgr, skills, list)
+		-- 4-D: 궁극기가 아닌 스킬을 시전할 때마다 게이지
+		for i = n0 + 1, #list do
+			local r = list[i]
+			if r ~= nil and r.sk ~= nil and r.sk.id ~= uid then self:AddUlt(mgr.UltGaugeSkill) end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean TryUltCast(table list, boolean free)
+		-- 4-D: 궁극기 게이지가 가득이면 궁극기를 list에 넣고 게이지 0 (마나 소모·쿨타임 기록 없음). 넣었으면 true.
+		local uid = self._T.ultId
+		if uid == nil or self.UltGauge < self.UltMax then return false end
+		local usk = self._T.skills[uid]
+		if usk == nil then return false end
+		self.UltGauge = 0
+		table.insert(list, self:MakeCast(usk))
+		log("[VRF] ult cast job=" .. self.JobId .. " id=" .. uid .. " free=" .. tostring(free))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method table RollFreeCasts(Component mgr)
+		-- 4-D 보완(C안): 사거리에 닿지 않을 때도 시전하는 스킬 — 가득 찬 궁극기, 아니면 쿨타임형(자기 버프·하이퍼) 1개. 없으면 빈 목록.
+		self._T.mgr = mgr
+		local list = {}
+		if not self:TryUltCast(list, true) then
+			self:PickCooldownCast(mgr, self:RunSkills(mgr), list)
+			for _, r in ipairs(list) do
+				if r.sk ~= nil and r.sk.id ~= self._T.ultId then self:AddUlt(mgr.UltGaugeSkill) end
+			end
+		end
+		if #list == 0 then return list end
+		return self:FinishCasts(list)
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean PickCooldownCast(Component mgr, table skills, table list)
+		-- 쿨타임형 스킬 1개 시전 (인레이지는 따로 자동). 돌려주는 값: 동작이 있는 시전이었는지.
+		-- 4-G 보완: 발할라는 충전이 남아 있어도 쿨타임이 끝나면 다시 시전해 충전을 최대치로 채운다 (돌파 5 '1회 발동'만 예전처럼 충전을 쓴 뒤).
+		for _, sk in ipairs(skills) do
+			if sk.trigger == "Cooldown" and sk.id ~= "H05" and (self._T.cd[sk.id] or 0) <= 0 and not (sk.id == "H10" and self._T.valCharge > 0 and self:Has("H10", 5)) then
+				self._T.cd[sk.id] = self:Cooldown(sk)
+				table.insert(list, self:MakeCast(sk))
+				if self._T.slotOf[sk.id] == "Hyper" then log("[VRF] hyper cast job=" .. self.JobId .. " id=" .. sk.id) end
+				return self:HasAction(sk) and not (sk.id == "H10" and self:Has("H10", 5))
+			end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void PickActedInner(Component mgr, table skills, table list)
+		-- PickActed 본체: 우선 시전 → 쿨타임형 → 마나형(비용 큰 것) 중 1개.
 		local acted = false
 		-- 콤보 데스폴트 돌파 2: 최대 콤보이고 마나가 되면 다른 동작 스킬보다 먼저 시전 (쿨타임 없음)
 		if self:Has("H13", 2) and self.Combo >= self:ComboCap() then
@@ -941,15 +1125,7 @@ script HeroCombat extends Component
 				end
 			end
 		end
-		for _, sk in ipairs(skills) do
-			if acted then break end
-			if sk.trigger == "Cooldown" and sk.id ~= "H05" and (self._T.cd[sk.id] or 0) <= 0 and not (sk.id == "H10" and self._T.valCharge > 0) then
-				self._T.cd[sk.id] = self:Cooldown(sk)
-				table.insert(list, self:MakeCast(sk))
-				acted = self:HasAction(sk) and not (sk.id == "H10" and self:Has("H10", 5))
-				break
-			end
-		end
+		if not acted then acted = self:PickCooldownCast(mgr, skills, list) end
 		-- 공격 스킬(Skill): 마나 + 쿨타임. 쿨타임이 끝났고 마나가 되는 스킬 중 마나 비용이 큰(강한) 것부터 하나.
 		if not acted then
 			local best = nil
@@ -1335,10 +1511,10 @@ script HeroCombat extends Component
 			end
 			log("[VRF] coma stage=" .. tostring(stage) .. " used=" .. tostring(used))
 		elseif id == "H10" then
-			-- 발할라: 충전. 쿨타임은 충전을 다 쓴 뒤부터
+			-- 발할라: 충전을 최대치로 새로 채움. 4-G 보완: 쿨타임은 시전 순간부터 (돌파 5 '1회 발동'만 충전을 다 쓴 뒤부터)
 			local n = self.ValhallaCharges
 			if self:Has(id, 2) then n = self.ValhallaChargesUp end
-			self._T.cd.H10 = 0
+			self._T.cd.H10 = self:Has(id, 5) and 0 or self:Cooldown(sk)
 			if self:Has(id, 5) then
 				-- 돌파 5: 동작 없이 1회 충전, 피해 = 충전량 배수
 				self._T.valCharge = 1
@@ -1581,7 +1757,7 @@ script HeroCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void UseValhalla(table r)
-		-- 발할라 충전 1회로 추가타 예약. 돌파 3은 50% 확률로 충전을 쓰지 않음. 다 쓰면 쿨타임 시작.
+		-- 발할라 충전 1회로 추가타 예약. 돌파 3은 50% 확률로 충전을 쓰지 않음. (돌파 5는 다 쓰면 쿨타임 시작, 그 밖은 시전 순간부터 쿨타임)
 		if (self._T.valCharge or 0) <= 0 then return end
 		local sk = self._T.skills["H10"]
 		if sk == nil then return end
@@ -1591,7 +1767,7 @@ script HeroCombat extends Component
 			bleed = self:Has("H10", 4) }
 		local refund = self:Has("H10", 3) and _UtilLogic:RandomDouble() * 100 < self.ValhallaRefundChance
 		if not refund then self._T.valCharge = self._T.valCharge - 1 end
-		if self._T.valCharge <= 0 then self._T.cd.H10 = self:Cooldown(sk) end
+		if self._T.valCharge <= 0 and self:Has("H10", 5) then self._T.cd.H10 = self:Cooldown(sk) end
 		log("[VRF] valhalla use dmg=" .. tostring(hit.dmg) .. " left=" .. tostring(self._T.valCharge) .. " refund=" .. tostring(refund) .. " combo=" .. tostring(r.valhalla.combo) .. " bleed=" .. tostring(r.valhalla.bleed))
 	end
 
@@ -2933,11 +3109,17 @@ script HeroCombat extends Component
 		if instCd > 0 and not self:On("H15") and self:Learned("H15") then table.insert(parts, "<color=#8A8AA0>인스팅트 대기 " .. tostring(math.ceil(instCd)) .. "초</color>") end
 		self.StatusText = table.concat(parts, "   ")
 		local slots = {}
-		-- 스킬 칸: 이번 판에 배운 스킬만 (id:남은 쿨:최대 쿨:레벨)
-		local mgr = self._T.mgr
+		-- 스킬 칸: 칸 순서 (id:남은 쿨:최대 쿨:0). 4-C부터 스킬 레벨 없음(넷째 값 0).
+		-- 4-D: 궁극기 칸은 id:(최대−게이지):최대:U → HUD가 쿨 덮개를 게이지로 쓴다
 		for _, id in ipairs(self._T.equip or {}) do
 			local sk = self._T.skills[id]
-			if sk ~= nil and self:Learned(id) then table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":" .. tostring(mgr ~= nil and (mgr.SkillLv[id] or 0) or 0)) end
+			if sk ~= nil and self:Learned(id) and not (self._T.hidden or {})[id] then
+				if id == self._T.ultId then
+					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
+				else
+					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
+				end
+			end
 		end
 		self.SlotInfo = table.concat(slots, "|")
 	end
