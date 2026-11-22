@@ -922,9 +922,10 @@ script JobCombat extends Component
 		end
 		if self:On("V10") and self.Res >= 100 then bonusPct = bonusPct + (self._T.fullBonus or 0) end
 		local mul = (1 + (starPow + bonusPct) / 100) * (1 + self:ResAtkPct() / 100) * (1 + self:DefDownPct() / 100)
-		-- 5-F: 망토 잠재능력 칸 스킬 피해 + 무기 잠재능력 스킬 피해 (기본 공격·패시브 추가타 id "" 는 제외)
+		-- 5-F: 망토 잠재능력 칸 스킬 피해 + 스킬 피해 (기본 공격·패시브 추가타 id "" 는 제외)
+		-- 스킬 피해 = AccessoryBonus(SkillDmg) = 장신구 스킬 피해 + 잠재능력 SkillDmg 합계 (히어로·비숍과 같은 경로, 잠재능력은 그 안에 이미 포함되어 중복 없음)
 		if id ~= "" then
-			mul = mul * (1 + self:SlotPotPct(id) / 100) * (1 + mgr:PotBonus(self.Entity, "SkillDmg") / 100)
+			mul = mul * (1 + self:SlotPotPct(id) / 100) * (1 + mgr:AccessoryBonus(self.Entity, "SkillDmg") / 100)
 		end
 		local critRate = mgr:ActorCrit(self.Entity) + starCrit
 		if self._T.sureCrit then critRate = 100 end

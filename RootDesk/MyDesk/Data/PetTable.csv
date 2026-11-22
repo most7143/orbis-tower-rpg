@@ -1,0 +1,24 @@
+﻿Id,Grade,GradeName,Name,PackId,IconRUID,StandRUID,MoveRUID,Atk1,Atk10,EffectKey,Eff1,Eff10,Desc
+P01,1,레어,갈색고양이,item/pet/5000000.img,1d15c3aac6124884ac9e903a2c655988,7cc485b82d7b4e559b728d59f05f6027,dc35c40c75f94eb69ab6329f4226e660,1,5,HpPct,3,10,최대 체력 +{v}%
+P02,1,레어,분홍색토끼,item/pet/5000002.img,111c7c57e031492aa5a7d1ca6bdb8b18,8d5591ad46f1406591182b739ad4ad60,ad8ada3b74524f71bb581a860e73d2ef,1,5,DefPct,3,10,방어력 +{v}%
+P03,1,레어,디노 걸,item/pet/5000010.img,61ae9bf928ae46f1b1cb5f177f9fcc4a,b54f747738b4494291b9cef50cc29d70,a7e2d6b75288418fbd3f7c0e6065f6b5,1,5,Evade,1,5,회피율 +{v}%p
+P04,1,레어,허스키,item/pet/5000006.img,1adc109541d94a519324d28999b150c4,9eec9872f9be41fc8f9da099c796ca3f,a34c1cd3198b46ec8f8103d283b822a8,1,5,Crit,1,5,치명타 확률 +{v}%p
+P05,1,레어,검은색돼지,item/pet/5000007.img,458c48fa38ea47fcb2f477d9b1a10bf1,2aa6ffae2afb40d7a89b5f69df549502,49d16c225d104561a8e5d891e95b3db4,1,5,DmgReduce,1,4,받는 피해 -{v}%
+P06,2,에픽,유니콘 티엘,item/pet/5000089.img,e4a62e53da1542aba3ac163269589829,a5966b57a93c4336988793216a44985d,d51e9cba100b4ff19c6e7c6db2a5796a,2,8,MainDmg,4,15,주력기 피해 +{v}%
+P07,2,에픽,주니어 산초,item/pet/5000216.img,5e7fe0cc9e31440797cd0ecc2bcfd5fc,ab27c855984341aa919879080e5afd6c,cc12640094ed4d13a6506c68b4b41a1d,2,8,UltDmg,5,20,궁극기 피해 +{v}%
+P08,2,에픽,고슴도치,item/pet/5000043.img,e18b1f99ad524c03920124881e99deac,c0f86415b1b641ea8040944d310c91c8,3f78e66d03234299a484edcb98d44ddd,2,8,UltGainPct,3,12,궁극기 충전량 +{v}%
+P09,2,에픽,다람쥐 핑크,item/pet/5000277.img,c2f3ddf2134643fdbad73af9037b5e92,1f28bc78374f40048c2aa4910d1b7406,56354f6b45264096ab08794e4efd5a02,2,8,SkillDmg,3,12,스킬 피해 +{v}%
+P10,2,에픽,핑크 루티,item/pet/5000293.img,f2d7be6939ac454f8455f07295b23cd9,f0d0ccea7d06451b84d457d82c8ee364,68819333ba7e4a4a85088ce875c9ddf2,2,8,CritDmg,4,15,치명타 피해 +{v}%
+P11,3,유니크,블러디퀸,item/pet/5000309.img,3c24cfd9d3ec4a508b07d1796b91fe03,572072e269464a5a9389ec05481afbaa,bed3a504849440aaa4b4efaefa5bfef8,3,12,LifestealPct,0.5,2,입힌 피해의 {v}% 체력 흡수
+P12,3,유니크,반반,item/pet/5000310.img,d895808871e94025926e9176d24aa18b,beb7575b215741c889deafb8addb0c79,18ee9dbc219a4b86b14393dc2e9ba74c,3,12,BossDmg,5,20,보스 피해 +{v}%
+P13,3,유니크,피에르,item/pet/5000311.img,7eb78a76077044b19600addb8950253a,ec9106df151c4011a4c466955547e6c9,d92b36c587e64be8a06f9dcd461d41d2,3,12,EliteDmg,5,20,정예 피해 +{v}%
+P14,3,유니크,다크소울,item/pet/5000217.img,24c0bb290dd7447ea722cdd914bc5396,ac058a7d0f314b079e6c4d89285ea47a,99da59c61ca646938aac989fddf2b5e2,3,12,CdReduce,2,8,스킬 재사용 대기시간 -{v}%
+P15,3,유니크,말랑 핑크빈,item/pet/5000201.img,27c7990c3e604df985fefec32b152c9b,57a41f6949d944c5b6ba6c70bbb783a2,5a8b7bbdae864248beae10d692bd50e1,3,12,Speed,3,12,공격 속도 +{v}%
+P16,4,레전더리,초용,item/pet/5002161.img,db0d03df842f4a8ca161f3d488266635,23475552543c4b8fbed5cb713763b384,7a2bf9583d0943d8b7fd42d9a1efb2a5,5,18,StartBreak,1,2,판 시작 시 돌파 {v}회 (10레벨 2회)
+P17,4,레전더리,마족 메투스,item/pet/5000228.img,3ff970f58d154576a6478779727f194d,cf7d8596266d4130a3319cbbd4eae84d,e2d6ba50db5e43ffb03f55b7757a1b75,5,18,StoneGainPct,10,40,스킬석 획득량 +{v}%
+P18,4,레전더리,세레나,item/pet/5000963.img,e973f57fa7e34d3eb2c5ad763d615c44,4ea506b39455437894562ba4ff382983,8304a085d21c42ba81afba099b753454,5,18,ClearHealPct,20,80,스테이지 클리어 회복량 +{v}%
+P19,4,레전더리,은하,item/pet/5002200.img,d28d206c2b6f44ec852b29c80f3bf717,dfad4c06a98e46a399b9d767ba6a31f1,71ccc6e8b1954753b870d30a2bcf92cc,5,18,ShopDiscount,5,20,판 안 상점 가격 -{v}%
+P20,4,레전더리,눈냥냥,item/pet/5002226.img,b0e23511e40b4207a9cceb4f99bcaee2,d87d4588f398460c8af08f3a0dbcaa31,71cd376675c7422098aaf57bd056d13a,5,18,MesoGainPct,10,40,판 안 메소 획득량 +{v}%
+P21,5,초월,쁘띠 초롱,item/pet/5002199.img,5d78bafeb39644adbf630a48d0ffa103,256dd8041179474b992115bc1bc4cf3b,5e5146fdec98474cb71359c6902da326,10,30,BreakChoice,1,1,돌파 선택지 +{v}개
+P22,5,초월,쁘띠 데스,item/pet/5002358.img,df316170f27a4d0eac7d29bc860bd04e,83934970c2994fb9834cad041309c8d1,663d6a26c0c242539fc0b4dbf80e2a2c,10,30,ReviveHpPct,30,100,판마다 1회 부활 (체력 {v}%로)
+P23,5,초월,쁘띠 포니,item/pet/5002428.img,654c59766bf54e88aebbfd719ceb85a0,c5e969d891824539b5a38a2017e216da,ca73162d38ed4cba8111fa4a6fb30f85,10,30,UltGainMul,2,2,궁극기 충전 속도 {v}배

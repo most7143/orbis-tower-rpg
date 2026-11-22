@@ -1,0 +1,813 @@
+@Component
+script PlayerPet extends Component
+
+	-- 펫 계정 데이터(저장 키 OrbisPetV1): 보유 펫·레벨, 펫 뽑기 레벨·경험치, 펫 뽑기권, 장착 칸(최대 3, 펫 총레벨로 해금).
+	-- 로비 요청: 뽑기(1·10회), 다이아로 뽑기권 구매(PlayerRoster:SpendDiamonds), 장착·해제. 층 첫 클리어·별 구간 상자 뽑기권 소급(CheckPetRewards).
+	-- 판에는 PetRunData()로 보유 공격력% 합과 장착 펫 특수 효과를 넘긴다(P-C에서 사용).
+	property string PetKey = "OrbisPetV1"
+	property string LobbyMapName = "Lobby"
+	property number LoadRetryDelay = 10
+	property number SaveRetryDelay = 5
+
+	@Sync
+	property boolean PetLoaded = false
+	-- 펫 뽑기권 수
+	@Sync
+	property integer PetTickets = 0
+	-- 펫 뽑기 레벨 (1~10)
+	@Sync
+	property integer PetGachaLevel = 1
+	-- 현재 레벨에서 쌓인 뽑기 경험치 (다음 레벨 필요 횟수는 PetGachaTable NeedDraws)
+	@Sync
+	property integer PetGachaExp = 0
+	-- 누적 뽑기 횟수
+	@Sync
+	property integer PetDrawTotal = 0
+	-- 보유 펫 "P01:3,P07:1" (PetTable 순서, 보유한 것만)
+	@Sync
+	property string PetData = ""
+	-- 장착 칸 "P01,,P07" (칸 순서, 빈 칸은 빈 문자열, 항상 MaxSlots개)
+	@Sync
+	property string PetEquip = ""
+	-- 해금된 장착 칸 수 (1~3)
+	@Sync
+	property integer PetSlots = 1
+	-- 요청 처리마다 +1 (UI 갱신 신호)
+	@Sync
+	property integer PetSeq = 0
+	-- 마지막 결과 코드 (ok / err_*) — 한국어 변환은 UI(P-B)에서
+	@Sync
+	property string PetMsg = ""
+	-- 마지막 결과 상세
+	@Sync
+	property string PetResult = ""
+
+	@HideFromInspector
+	property boolean PetDirty = false
+	@HideFromInspector
+	property number PetRetryTimer = 0
+	@HideFromInspector
+	property number RewardTimer = 0
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 표를 읽고 저장된 펫 데이터를 불러온다.
+		self:LoadTables()
+		self:LoadPet()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기 재시도, 저장 실패 재시도, 1초마다 뽑기권 보상 확인.
+		if not self.PetLoaded then
+			self.PetRetryTimer = self.PetRetryTimer - delta
+			if self.PetRetryTimer <= 0 then self:LoadPet() end
+			return
+		end
+		if self.PetDirty and self._T.saveFailed == true then
+			self.PetRetryTimer = self.PetRetryTimer - delta
+			if self.PetRetryTimer <= 0 then
+				self._T.saveFailed = false
+				self:SavePet()
+			end
+		end
+		self.RewardTimer = self.RewardTimer - delta
+		if self.RewardTimer <= 0 then
+			self.RewardTimer = 1
+			self:CheckPetRewards()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 나갈 때 저장되지 않은 변경을 마지막으로 저장한다.
+		if self.PetLoaded and self.PetDirty then
+			local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+			local code = ds:SetAndWait(self.PetKey, self:Encode())
+			if code ~= 0 and code ~= true then log_warning("[VRF] pet final save failed code=" .. tostring(code)) end
+		end
+	end
+
+	-- ───────────────────────── 표 읽기 (양쪽 공용) ─────────────────────────
+
+	method void LoadTables()
+		-- PetTable / PetGachaTable / PetConfig를 self._T에 캐시한다.
+		self._T.pets = {}
+		self._T.petMap = {}
+		self._T.byGrade = {}
+		local pt = _DataService:GetTable("PetTable")
+		if pt ~= nil then
+			for i = 1, pt:GetRowCount() do
+				local id = pt:GetCell(i, "Id")
+				if id ~= nil and id ~= "" then
+					local p = {
+						id = id, grade = math.max(1, math.floor(tonumber(pt:GetCell(i, "Grade")) or 1)),
+						gradeName = pt:GetCell(i, "GradeName") or "", name = pt:GetCell(i, "Name") or id,
+						pack = pt:GetCell(i, "PackId") or "", icon = pt:GetCell(i, "IconRUID") or "",
+						stand = pt:GetCell(i, "StandRUID") or "", move = pt:GetCell(i, "MoveRUID") or "",
+						atk1 = tonumber(pt:GetCell(i, "Atk1")) or 0, atk10 = tonumber(pt:GetCell(i, "Atk10")) or 0,
+						effKey = pt:GetCell(i, "EffectKey") or "", eff1 = tonumber(pt:GetCell(i, "Eff1")) or 0,
+						eff10 = tonumber(pt:GetCell(i, "Eff10")) or 0, desc = pt:GetCell(i, "Desc") or "",
+					}
+					table.insert(self._T.pets, p)
+					self._T.petMap[id] = p
+					if self._T.byGrade[p.grade] == nil then self._T.byGrade[p.grade] = {} end
+					table.insert(self._T.byGrade[p.grade], p)
+				end
+			end
+		else
+			log_warning("[VRF] pet PetTable missing")
+		end
+		self._T.gacha = {}
+		self._T.maxGachaLv = 1
+		local gt = _DataService:GetTable("PetGachaTable")
+		if gt ~= nil then
+			for i = 1, gt:GetRowCount() do
+				local lv = math.floor(tonumber(gt:GetCell(i, "Level")) or i)
+				self._T.gacha[lv] = {
+					rates = { tonumber(gt:GetCell(i, "Rare")) or 0, tonumber(gt:GetCell(i, "Epic")) or 0, tonumber(gt:GetCell(i, "Unique")) or 0, tonumber(gt:GetCell(i, "Legend")) or 0, tonumber(gt:GetCell(i, "Trans")) or 0 },
+					need = math.max(0, math.floor(tonumber(gt:GetCell(i, "NeedDraws")) or 0)),
+				}
+				if lv > self._T.maxGachaLv then self._T.maxGachaLv = lv end
+			end
+		else
+			log_warning("[VRF] pet PetGachaTable missing")
+		end
+		self._T.cfg = {}
+		local cf = _DataService:GetTable("PetConfig")
+		if cf ~= nil then
+			for i = 1, cf:GetRowCount() do
+				local k = cf:GetCell(i, "Key")
+				if k ~= nil and k ~= "" then self._T.cfg[k] = tonumber(cf:GetCell(i, "Value")) or 0 end
+			end
+		else
+			log_warning("[VRF] pet PetConfig missing")
+		end
+		log("[VRF] pet tables pets=" .. tostring(#self._T.pets) .. " gachaLv=" .. tostring(self._T.maxGachaLv) .. " cfgTicket1=" .. tostring(self._T.cfg["TicketPrice1"]))
+	end
+
+	method void EnsureTables()
+		-- 표가 아직 없으면 읽는다 (클라이언트용).
+		if self._T.pets == nil then self:LoadTables() end
+	end
+
+	method number Cfg(string key, number fallback)
+		-- PetConfig 상수.
+		self:EnsureTables()
+		local v = self._T.cfg[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	method integer MaxSlots()
+		-- 장착 칸 최대 수.
+		return math.max(1, math.floor(self:Cfg("MaxSlots", 3)))
+	end
+
+	method integer MaxPetLevel()
+		-- 펫 최대 레벨.
+		return math.max(1, math.floor(self:Cfg("MaxPetLevel", 10)))
+	end
+
+	method table PetList()
+		-- PetTable 행 목록 (표 순서). 행 = { id, grade, gradeName, name, pack, icon, stand, move, atk1, atk10, effKey, eff1, eff10, desc }.
+		self:EnsureTables()
+		return self._T.pets
+	end
+
+	method any PetInfo(string petId)
+		-- PetTable 행 (없으면 nil).
+		self:EnsureTables()
+		return self._T.petMap[petId]
+	end
+
+	method any GachaInfo(integer level)
+		-- PetGachaTable 행 { rates = {레어, 에픽, 유니크, 레전더리, 초월}, need } (없으면 nil).
+		self:EnsureTables()
+		return self._T.gacha[level]
+	end
+
+	method integer MaxGachaLevel()
+		-- 뽑기 최대 레벨.
+		self:EnsureTables()
+		return self._T.maxGachaLv
+	end
+
+	-- ───────────────────────── 순수 계산 (양쪽 공용) ─────────────────────────
+
+	method table Split(string s, string sep)
+		-- 구분자로 자른다 (string.gsub 사용 금지). 빈 조각도 유지.
+		local out = {}
+		if s == nil or s == "" then return out end
+		local start = 1
+		while true do
+			local a, b = string.find(s, sep, start, true)
+			if a == nil then
+				table.insert(out, string.sub(s, start))
+				break
+			end
+			table.insert(out, string.sub(s, start, a - 1))
+			start = b + 1
+		end
+		return out
+	end
+
+	method integer ToInt(any x)
+		-- 정수로 바꾸고 음수는 0.
+		local n = math.floor(tonumber(x) or 0)
+		if n < 0 then n = 0 end
+		return n
+	end
+
+	method string NumStr(number n)
+		-- 소수 둘째 자리까지, 정수면 소수점 없이.
+		local r = math.floor(n * 100 + 0.5) / 100
+		if r == math.floor(r) then return tostring(math.floor(r)) end
+		return tostring(r)
+	end
+
+	method number LevelValue(number v1, number v10, integer level)
+		-- 1레벨·10레벨 값 사이 직선 보간 (소수 둘째 자리 반올림).
+		local maxLv = self:MaxPetLevel()
+		local lv = math.max(1, math.min(maxLv, level))
+		local v = v1
+		if maxLv > 1 then v = v1 + (v10 - v1) * (lv - 1) / (maxLv - 1) end
+		return math.floor(v * 100 + 0.5) / 100
+	end
+
+	method number PetAtk(string petId, integer level)
+		-- 그 펫·레벨의 보유 공격력%.
+		local p = self:PetInfo(petId)
+		if p == nil then return 0 end
+		return self:LevelValue(p.atk1, p.atk10, level)
+	end
+
+	method number PetEffect(string petId, integer level)
+		-- 그 펫·레벨의 특수 효과 수치.
+		local p = self:PetInfo(petId)
+		if p == nil then return 0 end
+		return self:LevelValue(p.eff1, p.eff10, level)
+	end
+
+	method string PetDesc(string petId, integer level)
+		-- 특수 효과 설명 ({v} 치환, string.gsub 금지).
+		local p = self:PetInfo(petId)
+		if p == nil then return "" end
+		local v = self:NumStr(self:PetEffect(petId, level))
+		local a, b = string.find(p.desc, "{v}", 1, true)
+		if a == nil then return p.desc end
+		return string.sub(p.desc, 1, a - 1) .. v .. string.sub(p.desc, b + 1)
+	end
+
+	method table ParseOwned(string data)
+		-- PetData "P01:3,P07:1" → { [펫 Id] = 레벨 }
+		local out = {}
+		for _, entry in ipairs(self:Split(data, ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and f[1] ~= "" then out[f[1]] = math.max(1, self:ToInt(f[2])) end
+		end
+		return out
+	end
+
+	method table ParseEquip(string data)
+		-- PetEquip "P01,,P07" → { [칸] = 펫 Id 또는 "" } (MaxSlots개)
+		local out = {}
+		local f = self:Split(data, ",")
+		for i = 1, self:MaxSlots() do out[i] = f[i] or "" end
+		return out
+	end
+
+	method integer TotalLevelOf(table owned)
+		-- 보유 펫 레벨 합 (표에 있는 펫만).
+		local sum = 0
+		for id, lv in pairs(owned) do
+			if self:PetInfo(id) ~= nil then sum = sum + lv end
+		end
+		return sum
+	end
+
+	method integer SlotsForTotal(integer total)
+		-- 펫 총레벨 → 해금 칸 수 (Slot2TotalLv / Slot3TotalLv).
+		local n = 1
+		if total >= math.floor(self:Cfg("Slot2TotalLv", 30)) then n = 2 end
+		if total >= math.floor(self:Cfg("Slot3TotalLv", 60)) then n = 3 end
+		return math.min(n, self:MaxSlots())
+	end
+
+	method number OwnedAtkSum(table owned)
+		-- 보유 펫 공격력% 합 (장착 무관).
+		local sum = 0
+		for id, lv in pairs(owned) do sum = sum + self:PetAtk(id, lv) end
+		return math.floor(sum * 100 + 0.5) / 100
+	end
+
+	method integer RollGrade(integer gachaLevel)
+		-- 그 뽑기 레벨 확률로 등급(1~5)을 뽑는다. 그 등급에 펫이 없으면 아래 등급으로.
+		self:EnsureTables()
+		local g = self._T.gacha[gachaLevel] or self._T.gacha[1]
+		local grade = 1
+		if g ~= nil then
+			local total = 0
+			for _, r in ipairs(g.rates) do total = total + r end
+			local x = _UtilLogic:RandomDouble() * total
+			for i, r in ipairs(g.rates) do
+				x = x - r
+				if x < 0 then
+					grade = i
+					break
+				end
+			end
+		end
+		while grade > 1 and (self._T.byGrade[grade] == nil or #self._T.byGrade[grade] == 0) do grade = grade - 1 end
+		return grade
+	end
+
+	method any RollPet(integer gachaLevel)
+		-- 등급을 뽑고 그 등급 안에서 균등하게 펫 하나 (표가 비면 nil).
+		self:EnsureTables()
+		local list = self._T.byGrade[self:RollGrade(gachaLevel)]
+		if list == nil or #list == 0 then return nil end
+		return list[_UtilLogic:RandomIntegerRange(1, #list)]
+	end
+
+	-- ───────────────────────── 불러오기·저장 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void ResetState()
+		-- 서버 상태를 빈 값으로.
+		self._T.owned = {}
+		self._T.unknownPets = {}
+		self._T.equip = {}
+		for i = 1, self:MaxSlots() do self._T.equip[i] = "" end
+		self._T.tickets = 0
+		self._T.gl = 1
+		self._T.ge = 0
+		self._T.gt = 0
+		self._T.gift = false
+		self._T.bf = 0
+		self._T.bs = {}
+		self._T.extra = {}
+		self._T.extraKeys = {}
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadPet()
+		-- OrbisPetV1을 불러온다. 없으면 첫 지급(뽑기권). 실패하면 재시도하며 그동안 저장하지 않는다.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.PetKey)
+		local needSave = false
+		if code == 0 and raw ~= nil and raw ~= "" then
+			self:Decode(raw)
+		elseif code == 1000002 or (code == 0 and (raw == nil or raw == "")) then
+			self:ResetState()
+		else
+			log_warning("[VRF] pet load failed code=" .. tostring(code))
+			self.PetRetryTimer = self.LoadRetryDelay
+			self.PetLoaded = false
+			return
+		end
+		if not self._T.gift then
+			self._T.tickets = self._T.tickets + math.floor(self:Cfg("StartTickets", 10))
+			self._T.gift = true
+			needSave = true
+			log("[VRF] pet first gift tickets=" .. tostring(self._T.tickets))
+		end
+		self.PetLoaded = true
+		self:SyncPet()
+		if needSave then self:SavePet() end
+		log("[VRF] pet loaded " .. self:Encode())
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Decode(string raw)
+		-- 저장 문자열을 읽는다. 모르는 키·펫은 원문 보관. 읽는 동안 보상 확인을 멈춘다.
+		self._T.decoding = true
+		self:ResetState()
+		local kv = {}
+		for _, part in ipairs(self:Split(raw, ";")) do
+			local eq, _ = string.find(part, "=", 1, true)
+			if eq ~= nil then
+				local k = string.sub(part, 1, eq - 1)
+				local v = string.sub(part, eq + 1)
+				if k == "v" or k == "gift" or k == "t" or k == "gl" or k == "ge" or k == "gt" or k == "p" or k == "eq" or k == "bf" or k == "bs" then
+					kv[k] = v
+				elseif k ~= "" then
+					if self._T.extra[k] == nil then table.insert(self._T.extraKeys, k) end
+					self._T.extra[k] = v
+				end
+			end
+		end
+		self._T.gift = self:ToInt(kv["gift"]) == 1
+		self._T.tickets = self:ToInt(kv["t"])
+		self._T.gl = math.max(1, math.min(self:MaxGachaLevel(), self:ToInt(kv["gl"])))
+		self._T.ge = self:ToInt(kv["ge"])
+		self._T.gt = self:ToInt(kv["gt"])
+		local maxLv = self:MaxPetLevel()
+		for _, entry in ipairs(self:Split(kv["p"] or "", ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and self:PetInfo(f[1]) ~= nil then
+				self._T.owned[f[1]] = math.max(1, math.min(maxLv, self:ToInt(f[2])))
+			elseif entry ~= "" then
+				table.insert(self._T.unknownPets, entry)
+			end
+		end
+		local eqList = self:Split(kv["eq"] or "", ",")
+		for i = 1, self:MaxSlots() do
+			local id = eqList[i] or ""
+			if id ~= "" and self._T.owned[id] ~= nil then self._T.equip[i] = id else self._T.equip[i] = "" end
+		end
+		self._T.bf = self:ToInt(kv["bf"])
+		for _, sec in ipairs(self:Split(kv["bs"] or "", ",")) do
+			local n = self:ToInt(sec)
+			if n > 0 then self._T.bs[n] = true end
+		end
+		self:FixEquip()
+		self._T.decoding = false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FixEquip()
+		-- 해금되지 않은 칸·보유하지 않은 펫·중복 장착을 비운다.
+		local slots = self:SlotsForTotal(self:TotalLevelOf(self._T.owned))
+		local seen = {}
+		for i = 1, self:MaxSlots() do
+			local id = self._T.equip[i] or ""
+			if i > slots or id == "" or self._T.owned[id] == nil or seen[id] then
+				self._T.equip[i] = ""
+			else
+				seen[id] = true
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeOwned(boolean withUnknown)
+		-- 보유 펫 "P01:3,..." (표 순서, 저장용이면 모르는 펫 원문도).
+		local parts = {}
+		for _, p in ipairs(self._T.pets or {}) do
+			local lv = (self._T.owned or {})[p.id]
+			if lv ~= nil then table.insert(parts, p.id .. ":" .. tostring(math.floor(lv))) end
+		end
+		if withUnknown then
+			for _, e in ipairs(self._T.unknownPets or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeEquip()
+		-- 장착 칸 "P01,,P07".
+		local parts = {}
+		for i = 1, self:MaxSlots() do table.insert(parts, (self._T.equip or {})[i] or "") end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeSections()
+		-- 뽑기권을 받은 별 구간 "1,2,..." (오름차순).
+		local list = {}
+		for sec, on in pairs(self._T.bs or {}) do
+			if on then table.insert(list, math.floor(sec)) end
+		end
+		table.sort(list)
+		local parts = {}
+		for _, n in ipairs(list) do table.insert(parts, tostring(n)) end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 문자열 "v=1;gift=1;t=뽑기권;gl=뽑기레벨;ge=경험치;gt=누적;p=보유;eq=장착;bf=첫클리어층;bs=별구간" + 모르는 키.
+		local parts = { "v=1" }
+		if self._T.gift == true then table.insert(parts, "gift=1") end
+		table.insert(parts, "t=" .. tostring(math.floor(self._T.tickets or 0)))
+		table.insert(parts, "gl=" .. tostring(math.floor(self._T.gl or 1)))
+		table.insert(parts, "ge=" .. tostring(math.floor(self._T.ge or 0)))
+		table.insert(parts, "gt=" .. tostring(math.floor(self._T.gt or 0)))
+		table.insert(parts, "p=" .. self:EncodeOwned(true))
+		table.insert(parts, "eq=" .. self:EncodeEquip())
+		table.insert(parts, "bf=" .. tostring(math.floor(self._T.bf or 0)))
+		table.insert(parts, "bs=" .. self:EncodeSections())
+		for _, k in ipairs(self._T.extraKeys or {}) do
+			table.insert(parts, k .. "=" .. tostring(self._T.extra[k]))
+		end
+		return table.concat(parts, ";")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncPet()
+		-- 서버 상태를 Sync 값으로 다시 쓴다.
+		self.PetTickets = math.floor(self._T.tickets or 0)
+		self.PetGachaLevel = math.floor(self._T.gl or 1)
+		self.PetGachaExp = math.floor(self._T.ge or 0)
+		self.PetDrawTotal = math.floor(self._T.gt or 0)
+		self.PetData = self:EncodeOwned(false)
+		self.PetEquip = self:EncodeEquip()
+		self.PetSlots = self:SlotsForTotal(self:TotalLevelOf(self._T.owned or {}))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SavePet()
+		-- 비동기 저장. 불러오기 전에는 절대 저장하지 않는다.
+		if not self.PetLoaded then return end
+		self:SyncPet()
+		self.PetDirty = true
+		self._T.saveGen = (self._T.saveGen or 0) + 1
+		local gen = self._T.saveGen
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.PetKey, self:Encode(), function(errorCode, key)
+			if errorCode == 0 then
+				if gen == self._T.saveGen then self.PetDirty = false end
+			else
+				log_warning("[VRF] pet save failed code=" .. tostring(errorCode))
+				self._T.saveFailed = true
+				self.PetRetryTimer = self.SaveRetryDelay
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Reply(string code, string result)
+		-- 처리 결과를 Sync 값에 쓰고 로그를 남긴 뒤 코드를 돌려준다.
+		self.PetSeq = self.PetSeq + 1
+		self.PetMsg = code
+		self.PetResult = result
+		log("[VRF] pet reply " .. code .. " " .. result)
+		return code
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean InLobby()
+		-- 로비 맵에 있는지.
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	-- ───────────────────────── 로비 요청 ─────────────────────────
+
+	@ExecSpace("Server")
+	method void RequestPetDraw(integer n)
+		-- 클라이언트 요청: 펫 뽑기 1회·10회 (로비 전용, 뽑기권 n장).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		self:DoDraw(n)
+	end
+
+	@ExecSpace("Server")
+	method void RequestBuyPetTicket(integer n)
+		-- 클라이언트 요청: 다이아로 뽑기권 1장·10장 구매 (로비 전용).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		self:DoBuyTicket(n)
+	end
+
+	@ExecSpace("Server")
+	method void RequestPetEquip(integer slot, string petId)
+		-- 클라이언트 요청: 칸에 펫 장착 (petId 빈 문자열 = 해제, 로비 전용). 다른 칸에 장착된 펫이면 그 칸에서 옮긴다.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		self:DoEquip(slot, petId)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoDraw(integer n)
+		-- 뽑기 본체. 1회 뽑기를 n번 반복: 매번 현재 뽑기 레벨 확률로 등급 → 등급 안 균등 펫, 경험치 +1, 도중 레벨업이면 다음 뽑기부터 새 확률.
+		-- 신규 = 보유(1레벨), 중복 = 레벨 +1, 최대 레벨 중복 = 뽑기권 MaxDupRefund장 환급. 저장은 한 번.
+		local res = "draw:" .. tostring(n)
+		if not self.PetLoaded then return self:Reply("err_notready", res) end
+		if not self:InLobby() then return self:Reply("err_lobby", res) end
+		if n ~= 1 and n ~= 10 then return self:Reply("err_arg", res) end
+		if #(self._T.pets or {}) == 0 then return self:Reply("err_arg", res) end
+		if (self._T.tickets or 0) < n then return self:Reply("err_ticket", res) end
+		self._T.tickets = self._T.tickets - n
+		local glBefore = self._T.gl
+		local maxLv = self:MaxPetLevel()
+		local refund = math.floor(self:Cfg("MaxDupRefund", 1))
+		local tokens = {}
+		for i = 1, n do
+			local p = self:RollPet(self._T.gl)
+			if p ~= nil then
+				local cur = self._T.owned[p.id]
+				if cur == nil then
+					self._T.owned[p.id] = 1
+					table.insert(tokens, p.id .. ".N")
+				elseif cur < maxLv then
+					self._T.owned[p.id] = cur + 1
+					table.insert(tokens, p.id .. ".U" .. tostring(cur + 1))
+				else
+					self._T.tickets = self._T.tickets + refund
+					table.insert(tokens, p.id .. ".M")
+				end
+			end
+			self._T.gt = self._T.gt + 1
+			self:AddGachaExp(1)
+		end
+		self:SavePet()
+		local joined = table.concat(tokens, ",")
+		log("[VRF] pet draw x" .. tostring(n) .. " gl=" .. tostring(glBefore) .. "->" .. tostring(self._T.gl) .. " ge=" .. tostring(self._T.ge) .. " t=" .. tostring(self._T.tickets)
+			.. " slots=" .. tostring(self.PetSlots) .. " tokens=" .. joined)
+		return self:Reply("ok", res .. ":" .. joined .. ":" .. tostring(glBefore) .. ":" .. tostring(self._T.gl))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddGachaExp(integer n)
+		-- 뽑기 경험치를 더하고, 필요 횟수에 닿으면 레벨업(남은 경험치 이월). 최대 레벨이면 경험치만 누적.
+		self._T.ge = (self._T.ge or 0) + n
+		while self._T.gl < self:MaxGachaLevel() do
+			local info = self:GachaInfo(self._T.gl)
+			local need = 0
+			if info ~= nil then need = info.need end
+			if need <= 0 or self._T.ge < need then break end
+			self._T.ge = self._T.ge - need
+			self._T.gl = self._T.gl + 1
+			log("[VRF] pet gacha level up -> " .. tostring(self._T.gl))
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoBuyTicket(integer n)
+		-- 다이아 구매 본체. PlayerRoster:SpendDiamonds(가격)가 성공할 때만 지급·저장.
+		local res = "buy:" .. tostring(n)
+		if not self.PetLoaded then return self:Reply("err_notready", res) end
+		if not self:InLobby() then return self:Reply("err_lobby", res) end
+		if n ~= 1 and n ~= 10 then return self:Reply("err_arg", res) end
+		local cost = math.floor(self:Cfg("TicketPrice1", 50))
+		if n == 10 then cost = math.floor(self:Cfg("TicketPrice10", 450)) end
+		---@type PlayerRoster
+		local roster = self.Entity:GetComponent("script.PlayerRoster")
+		if roster == nil then return self:Reply("err_arg", res) end
+		if not roster:SpendDiamonds(cost) then return self:Reply("err_dia", res) end
+		self._T.tickets = (self._T.tickets or 0) + n
+		self:SavePet()
+		log("[VRF] pet buy x" .. tostring(n) .. " cost=" .. tostring(cost) .. " t=" .. tostring(self._T.tickets) .. " dia=" .. tostring(roster.Diamonds))
+		return self:Reply("ok", res)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoEquip(integer slot, string petId)
+		-- 장착 본체. 해금 칸만, 보유 펫만. 같은 펫이 다른 칸에 있으면 그 칸을 비우고 옮긴다. petId "" = 해제.
+		local res = "equip:" .. tostring(slot) .. ":" .. petId
+		if not self.PetLoaded then return self:Reply("err_notready", res) end
+		if not self:InLobby() then return self:Reply("err_lobby", res) end
+		if slot < 1 or slot > self:MaxSlots() then return self:Reply("err_arg", res) end
+		if slot > self:SlotsForTotal(self:TotalLevelOf(self._T.owned)) then return self:Reply("err_locked", res) end
+		if petId ~= "" then
+			if self:PetInfo(petId) == nil then return self:Reply("err_arg", res) end
+			if self._T.owned[petId] == nil then return self:Reply("err_notown", res) end
+			for i = 1, self:MaxSlots() do
+				if i ~= slot and self._T.equip[i] == petId then self._T.equip[i] = "" end
+			end
+		end
+		self._T.equip[slot] = petId
+		self:SavePet()
+		log("[VRF] pet equip s" .. tostring(slot) .. "=" .. petId .. " eq=" .. self:EncodeEquip())
+		return self:Reply("ok", res)
+	end
+
+	-- ───────────────────────── 보상 소급 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void CheckPetRewards()
+		-- 1초마다(맵 상관없이): PlayerEngrave를 읽기만 해서 층 첫 클리어(FirstClearEvery 배수 층마다 FirstClearTickets장)·별 구간 마지막 상자(SectionTickets장) 뽑기권을 소급 지급한다.
+		if not self.PetLoaded or self._T.decoding == true then return end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil then return end
+		local changed = false
+		if eng.Loaded then
+			local cleared = math.floor(eng.ClearedFloor or 0)
+			local bf = math.floor(self._T.bf or 0)
+			if cleared > bf then
+				local every = math.max(1, math.floor(self:Cfg("FirstClearEvery", 10)))
+				local per = math.floor(self:Cfg("FirstClearTickets", 3))
+				local n = 0
+				for f = bf + 1, cleared do
+					if f % every == 0 then n = n + per end
+				end
+				self._T.bf = cleared
+				self._T.tickets = (self._T.tickets or 0) + n
+				changed = true
+				log("[VRF] pet ticket first clear floors " .. tostring(bf + 1) .. "-" .. tostring(cleared) .. " +" .. tostring(n))
+			end
+		end
+		if eng.StarLoaded then
+			local bit = 1 << (math.max(1, math.floor(self:Cfg("SectionLastTier", 3))) - 1)
+			local per = math.floor(self:Cfg("SectionTickets", 5))
+			for _, entry in ipairs(self:Split(eng.SectionData or "", ",")) do
+				local f = self:Split(entry, ":")
+				local sec = self:ToInt(f[1])
+				local bits = self:ToInt(f[2])
+				if sec > 0 and (bits & bit) ~= 0 and not self._T.bs[sec] then
+					self._T.bs[sec] = true
+					self._T.tickets = (self._T.tickets or 0) + per
+					changed = true
+					log("[VRF] pet ticket section s=" .. tostring(sec) .. " +" .. tostring(per))
+				end
+			end
+		end
+		if changed then self:SavePet() end
+	end
+
+	-- ───────────────────────── 판 반영 (P-C에서 사용) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method table PetRunData()
+		-- 판 시작 시 반영할 펫 값. { atkPct = 보유 펫 공격력% 합, effects = { { slot, id, key, value } ... }(장착 칸 순서), eff = { [효과 키] = 합 }, pets = { { slot, id, stand, move } ... } }.
+		local data = { atkPct = 0, effects = {}, eff = {}, pets = {} }
+		if not self.PetLoaded then return data end
+		data.atkPct = self:OwnedAtkSum(self._T.owned)
+		local slots = self:SlotsForTotal(self:TotalLevelOf(self._T.owned))
+		for i = 1, slots do
+			local id = self._T.equip[i] or ""
+			local p = self:PetInfo(id)
+			local lv = self._T.owned[id]
+			if p ~= nil and lv ~= nil then
+				local v = self:PetEffect(id, lv)
+				table.insert(data.effects, { slot = i, id = id, key = p.effKey, value = v })
+				data.eff[p.effKey] = (data.eff[p.effKey] or 0) + v
+				table.insert(data.pets, { slot = i, id = id, stand = p.stand, move = p.move })
+			end
+		end
+		return data
+	end
+
+	-- ───────────────────────── 테스트 전용 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void DebugGiveTickets(integer n)
+		-- 테스트: 뽑기권 지급(음수면 감소, 0 미만 없음) 후 저장.
+		if not self.PetLoaded then return end
+		self._T.tickets = math.max(0, (self._T.tickets or 0) + n)
+		self:SavePet()
+		log("[VRF] pet debug tickets " .. tostring(n) .. " t=" .. tostring(self._T.tickets))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetPet(string petId, integer level)
+		-- 테스트: 펫 레벨 설정 (0이면 보유 해제) 후 저장.
+		if not self.PetLoaded or self:PetInfo(petId) == nil then return end
+		if level <= 0 then self._T.owned[petId] = nil else self._T.owned[petId] = math.min(self:MaxPetLevel(), level) end
+		self:FixEquip()
+		self:SavePet()
+		log("[VRF] pet debug set " .. petId .. "=" .. tostring(level) .. " p=" .. self:EncodeOwned(false) .. " slots=" .. tostring(self.PetSlots))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetGacha(integer level, integer exp)
+		-- 테스트: 뽑기 레벨·경험치 설정 후 저장.
+		if not self.PetLoaded then return end
+		self._T.gl = math.max(1, math.min(self:MaxGachaLevel(), level))
+		self._T.ge = math.max(0, exp)
+		self:SavePet()
+		log("[VRF] pet debug gacha gl=" .. tostring(self._T.gl) .. " ge=" .. tostring(self._T.ge))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugPetSim(integer n, integer gachaLevel)
+		-- 테스트: 그 뽑기 레벨 확률로 n회 등급만 뽑아 비율(%) 로그 (저장·보유 변화 없음).
+		self:EnsureTables()
+		local cnt = { 0, 0, 0, 0, 0 }
+		local m = math.max(1, n)
+		for i = 1, m do
+			local g = self:RollGrade(gachaLevel)
+			cnt[g] = cnt[g] + 1
+		end
+		local info = self:GachaInfo(gachaLevel)
+		local parts = {}
+		for g = 1, 5 do
+			local tableRate = 0
+			if info ~= nil then tableRate = info.rates[g] end
+			table.insert(parts, tostring(g) .. "=" .. tostring(math.floor(cnt[g] * 10000 / m + 0.5) / 100) .. "(" .. tostring(tableRate) .. ")")
+		end
+		log("[VRF] pet sim gl=" .. tostring(gachaLevel) .. " n=" .. tostring(m) .. " " .. table.concat(parts, " "))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DebugPetDump()
+		-- 테스트: 저장 문자열 출력.
+		local s = self:Encode()
+		log("[VRF] pet dump " .. s)
+		return s
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugPetRestore(string raw)
+		-- 테스트: DebugPetDump로 받아 둔 저장 문자열을 되살려 저장 (테스트 전 값 복원용).
+		if not self.PetLoaded or raw == nil or raw == "" then return end
+		self:Decode(raw)
+		self:SavePet()
+		log("[VRF] pet debug restore ok=" .. tostring(self:Encode() == raw))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugPetDelete()
+		-- 테스트 전용: 저장 키를 지워(빈 문자열) 원래 키가 없던 계정 상태로 되돌린다. 메모리 상태도 비우고 다시 불러오지 않는다(저장 금지).
+		if not self.PetLoaded then return end
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code = ds:SetAndWait(self.PetKey, "")
+		self._T.saveGen = (self._T.saveGen or 0) + 1
+		self.PetDirty = false
+		self.PetLoaded = false
+		self.PetRetryTimer = 99999
+		log("[VRF] pet debug delete code=" .. tostring(code))
+	end
+end

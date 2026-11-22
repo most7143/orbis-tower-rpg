@@ -1,0 +1,646 @@
+@Logic
+script PetUILogic extends Logic
+
+	-- 펫 화면 (PetUI.ui, 성장창 5번 탭). 계정 데이터는 PlayerPet(서버 동기화 값)을 읽기만 하고 요청은 PlayerPet의 Request* RPC로 보낸다.
+	-- 왼쪽 위: 장착 칸 3개 / 왼쪽 아래: 등급별 펫 23칸 / 오른쪽 위: 선택 펫 상세·장착/해제 / 오른쪽 아래: 뽑기 레벨·경험치·확률·뽑기권·구매·뽑기 / 결과 팝업.
+	property string RootPath = "/ui/PetUI/Panel"
+	property string LockText = "펫 총레벨 "
+	property number RequestTimeout = 8
+	property Color LockedIconTint = Color(0.62, 0.66, 0.72, 1)
+
+	@HideFromInspector
+	property table handlers = {}
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 버튼 연결, 고정 표시(아이콘·등급 색) 준비. 처음에는 닫힌 상태.
+		self.handlers = {}
+		self._T.open = false
+		self._T.sel = 1
+		self._T.slotSel = 0
+		self._T.busy = false
+		self._T.key = nil
+		self._T.msg = ""
+		self._T.cells = {}
+		self._T.ready = false
+		for i = 1, 23 do
+			local idx = i
+			self:Bind(self:CellPath(i), function() self:OnCell(idx) end)
+		end
+		for s = 1, 3 do
+			local slot = s
+			self:Bind("SlotBg/Slot" .. tostring(s), function() self:OnSlot(slot) end)
+		end
+		self:Bind("DetailBg/Equip", function() self:OnEquip() end)
+		self:Bind("GachaBg/Draw1", function() self:OnDraw(1) end)
+		self:Bind("GachaBg/Draw10", function() self:OnDraw(10) end)
+		self:Bind("GachaBg/Buy1", function() self:OnBuy(1) end)
+		self:Bind("GachaBg/Buy10", function() self:OnBuy(10) end)
+		self:Bind("GachaBg/Rates", function() self:ShowRateTip() end)
+		self:Bind("Result/Box/Ok", function() self:CloseResult() end)
+		local rates = self:Find("GachaBg/Rates")
+		if isvalid(rates) then _TooltipLogic:Register(rates, function() self:ShowRateTip() end) end
+		log("[VRF] PetUILogic begin")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 버튼 연결 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.entity) then r.entity:DisconnectEvent(ButtonClickEvent, r.h) end
+		end
+		self.handlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Find(string sub)
+		-- 화면 안 엔티티 찾기.
+		return _EntityService:GetEntityByPath(self.RootPath .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string CellPath(integer i)
+		-- 칸 번호 → 경로 (Row1: 1~5, Row2: 6~10, Row3: 11~15, Row4: 16~20, Row5: 21~23).
+		local row = math.min(5, math.floor((i - 1) / 5) + 1)
+		return "ListBg/Row" .. tostring(row) .. "/Cell_" .. tostring(i)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(string sub, any fn)
+		-- 버튼 클릭 연결. 비활성·요청 중 입력은 무시한다.
+		local e = self:Find(sub)
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(ButtonClickEvent, function()
+			if not e.EnabledInHierarchy or not e.ButtonComponent.Enable then return end
+			_UISoundLogic:PlayClick()
+			fn()
+		end)
+		table.insert(self.handlers, { entity = e, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetPet()
+		-- 내 펫 계정 데이터 (PlayerPet).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerPet")
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer Diamonds()
+		-- 보유 다이아 (PlayerRoster).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return 0 end
+		local roster = player:GetComponent("script.PlayerRoster")
+		if roster == nil then return 0 end
+		return roster.Diamonds
+	end
+
+	@ExecSpace("ClientOnly")
+	method Color GradeColor(integer grade)
+		-- 등급 색: 레어 파랑, 에픽 보라, 유니크 노랑, 레전더리 초록, 초월 빨강.
+		if grade == 2 then return Color(0.60, 0.36, 0.88, 1) end
+		if grade == 3 then return Color(0.93, 0.66, 0.10, 1) end
+		if grade == 4 then return Color(0.30, 0.70, 0.24, 1) end
+		if grade == 5 then return Color(0.90, 0.24, 0.34, 1) end
+		return Color(0.26, 0.52, 0.92, 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean Setup()
+		-- PetTable 순서대로 등급별 줄에 칸을 배정하고 아이콘·등급 색을 한 번만 칠한다.
+		if self._T.ready then return true end
+		local pet = self:GetPet()
+		if pet == nil then return false end
+		local pp = pet
+		local list = pp:PetList()
+		if list == nil or #list == 0 then return false end
+		self._T.cells = {}
+		local used = { 0, 0, 0, 0, 0 }
+		for _, p in ipairs(list) do
+			local g = math.max(1, math.min(5, p.grade))
+			if used[g] < 5 then
+				used[g] = used[g] + 1
+				local cell = (g - 1) * 5 + used[g]
+				if cell <= 23 then self._T.cells[cell] = p end
+			end
+		end
+		for i = 1, 23 do
+			local p = self._T.cells[i]
+			local cell = self:Find(self:CellPath(i))
+			if isvalid(cell) then
+				if p == nil then
+					cell:SetEnable(false)
+				else
+					self:SetIcon(self:Find(self:CellPath(i) .. "/Icon"), p.icon, Color(1, 1, 1, 1))
+					self:SetColor(self:CellPath(i) .. "/Grade", self:GradeColor(p.grade))
+				end
+			end
+		end
+		for g = 1, 5 do self:SetColor("ListBg/Row" .. tostring(g) .. "/Chip/Bar", self:GradeColor(g)) end
+		self._T.ready = true
+		log("[VRF] pet ui setup cells=" .. tostring(#list))
+		return true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetIcon(Entity e, string ruid, Color c)
+		-- 펫 아이콘(스프라이트 RUID)을 칸 중앙에 원본 비율로 표시.
+		if not isvalid(e) then return end
+		local spr = e.SpriteGUIRendererComponent
+		if ruid ~= nil and ruid ~= "" and spr.ImageRUID.DataId ~= ruid then spr.ImageRUID = DataRef(ruid) end
+		spr.Color = c
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetColor(string sub, Color c)
+		-- 스프라이트 색 바꾸기.
+		local e = self:Find(sub)
+		if isvalid(e) then e.SpriteGUIRendererComponent.Color = c end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(string sub, string s)
+		-- 글자 바꾸기.
+		local e = self:Find(sub)
+		if isvalid(e) and e.TextGUIRendererComponent.Text ~= s then e.TextGUIRendererComponent.Text = s end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetTextColor(string sub, Color c)
+		-- 글자색 바꾸기.
+		local e = self:Find(sub)
+		if isvalid(e) then e.TextGUIRendererComponent.FontColor = c end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(string sub, boolean on)
+		-- 켜고 끄기 (바뀔 때만).
+		local e = self:Find(sub)
+		if isvalid(e) and e.Enable ~= on then e:SetEnable(on) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Num(number v, boolean floorIt)
+		-- 수치 표기: 정수면 소수점 없이, 아니면 소수 둘째 자리까지.
+		if floorIt then return tostring(math.floor(v)) end
+		local r = math.floor(v * 100 + 0.5) / 100
+		if r == math.floor(r) then return tostring(math.floor(r)) end
+		return tostring(r)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string EffText(table p, integer lv)
+		-- 특수 효과 문구 ({v} 치환). 돌파 횟수·선택지처럼 정수 효과는 내림.
+		local maxLv = 10
+		local l = math.max(1, math.min(maxLv, lv))
+		local v = p.eff1 + (p.eff10 - p.eff1) * (l - 1) / (maxLv - 1)
+		local floorIt = p.effKey == "StartBreak" or p.effKey == "BreakChoice"
+		local s = self:Num(v, floorIt)
+		local desc = p.desc or ""
+		local a, b = string.find(desc, "{v}", 1, true)
+		if a == nil then return desc end
+		return string.sub(desc, 1, a - 1) .. s .. string.sub(desc, b + 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method number AtkOf(table p, integer lv)
+		-- 보유 효과 공격력% (1·10레벨 직선 보간).
+		local l = math.max(1, math.min(10, lv))
+		local v = p.atk1 + (p.atk10 - p.atk1) * (l - 1) / 9
+		return math.floor(v * 100 + 0.5) / 100
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 성장창 5번 탭으로 열기.
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(true) end
+		self._T.open = true
+		self._T.msg = ""
+		self._T.key = nil
+		self:Show("Result", false)
+		self:Setup()
+		log("[VRF] pet ui open")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 닫기. 요청 대기는 서버 결과를 그대로 두고 화면 표시만 정리한다.
+		_TooltipLogic:Hide()
+		self:Show("Result", false)
+		local root = _EntityService:GetEntityByPath(self.RootPath)
+		if isvalid(root) then root:SetEnable(false) end
+		self._T.open = false
+	end
+
+	@ExecSpace("ClientOnly")
+	method string ErrText(string code)
+		-- 서버 결과 코드 → 한국어 문구.
+		if code == "err_notready" then return "펫 정보를 불러오는 중입니다. 잠시 후 다시 시도해 주세요" end
+		if code == "err_lobby" then return "로비에서만 할 수 있습니다" end
+		if code == "err_ticket" then return "펫 뽑기권이 부족합니다" end
+		if code == "err_dia" then return "다이아가 부족합니다" end
+		if code == "err_locked" then return "아직 잠긴 장착 칸입니다" end
+		if code == "err_notown" then return "보유하지 않은 펫입니다" end
+		if code == "err_arg" then return "잘못된 요청입니다" end
+		return "요청을 처리하지 못했습니다 (" .. code .. ")"
+	end
+
+	@ExecSpace("ClientOnly")
+	method void BeginRequest(Component pet, string kind)
+		-- 요청 시작: 응답(PetSeq 증가)이 올 때까지 모든 버튼을 막는다.
+		self._T.busy = true
+		self._T.busyKind = kind
+		self._T.busySeq = pet.PetSeq
+		self._T.busyTime = 0
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnReply(Component pet)
+		-- 서버 응답 처리: 결과 문구, 뽑기 결과 팝업.
+		local kind = self._T.busyKind or ""
+		self._T.busy = false
+		self._T.busyKind = ""
+		local code = pet.PetMsg or ""
+		local res = pet.PetResult or ""
+		if code ~= "ok" then
+			self._T.msg = self:ErrText(code)
+			log("[VRF] pet ui reply err kind=" .. kind .. " code=" .. code)
+			return
+		end
+		local f = {}
+		for part in string.gmatch(res, "[^:]+") do table.insert(f, part) end
+		if f[1] == "draw" then
+			local tokens = f[3] or ""
+			local before = tonumber(f[4]) or 0
+			local after = tonumber(f[5]) or 0
+			self._T.msg = "펫 " .. tostring(f[2] or "") .. "회 뽑기 완료"
+			if after > before then self._T.msg = self._T.msg .. " · 뽑기 Lv." .. tostring(after) .. " 달성!" end
+			self:ShowResult(tokens)
+		elseif f[1] == "buy" then
+			self._T.msg = "뽑기권 " .. tostring(f[2] or "") .. "장 구매 완료"
+		elseif f[1] == "equip" then
+			local slot = f[2] or ""
+			local pid = f[3] or ""
+			if pid == "" then
+				self._T.msg = slot .. "번 칸 펫 해제"
+			else
+				local name = pid
+				for _, p in pairs(self._T.cells) do if p.id == pid then name = p.name end end
+				self._T.msg = slot .. "번 칸에 " .. name .. " 장착"
+			end
+		end
+		log("[VRF] pet ui reply ok kind=" .. kind .. " res=" .. res)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowResult(string tokens)
+		-- 뽑기 결과 팝업: 최대 10칸 (아이콘·등급 색·이름·NEW/레벨업/최대).
+		local byId = {}
+		for _, p in pairs(self._T.cells) do byId[p.id] = p end
+		local list = {}
+		for tok in string.gmatch(tokens, "[^,]+") do
+			local a, b = string.find(tok, ".", 1, true)
+			if a ~= nil then
+				local id = string.sub(tok, 1, a - 1)
+				local tag = string.sub(tok, b + 1)
+				if byId[id] ~= nil then table.insert(list, { p = byId[id], tag = tag }) end
+			end
+		end
+		local n = #list
+		for k = 1, 10 do
+			local base = "Result/Box/R" .. tostring(k)
+			local rec = list[k]
+			self:Show(base, rec ~= nil)
+			if rec ~= nil then
+				local e = self:Find(base)
+				local x = -360 + ((k - 1) % 5) * 180
+				local y = 110 - math.floor((k - 1) / 5) * 190
+				if n == 1 then
+					x = 0
+					y = 15
+				end
+				e.UITransformComponent.anchoredPosition = Vector2(x, y)
+				self:SetColor(base .. "/Grade", self:GradeColor(rec.p.grade))
+				self:SetIcon(self:Find(base .. "/Icon"), rec.p.icon, Color(1, 1, 1, 1))
+				self:SetText(base .. "/Name", rec.p.name)
+				local tag = "NEW"
+				local tc = Color(0.20, 0.48, 0.12, 1)
+				if string.sub(rec.tag, 1, 1) == "U" then
+					tag = "Lv." .. string.sub(rec.tag, 2) .. " 레벨 업"
+					tc = Color(0.12, 0.37, 0.66, 1)
+				elseif rec.tag == "M" then
+					tag = "최대 레벨 · 뽑기권 환급"
+					tc = Color(0.36, 0.40, 0.46, 1)
+				end
+				self:SetText(base .. "/Tag", tag)
+				self:SetTextColor(base .. "/Tag", tc)
+			end
+		end
+		self:SetText("Result/Box/Head/Title", "뽑기 결과 (" .. tostring(n) .. "마리)")
+		self:Show("Result", n > 0)
+		log("[VRF] pet ui result shown n=" .. tostring(n) .. " tokens=" .. tokens)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CloseResult()
+		-- 결과 팝업 닫기.
+		self:Show("Result", false)
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnCell(integer i)
+		-- 펫 칸 선택 → 오른쪽 상세.
+		if self._T.cells[i] == nil then return end
+		self._T.sel = i
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnSlot(integer s)
+		-- 장착 칸 선택: 장착 대상 칸으로 지정하고, 펫이 있으면 그 펫을 상세에 띄운다.
+		local pet = self:GetPet()
+		if pet == nil then return end
+		local pp = pet
+		if s > pet.PetSlots then return end
+		self._T.slotSel = s
+		local eq = pp:ParseEquip(pet.PetEquip)
+		local id = eq[s] or ""
+		if id ~= "" then
+			for i, p in pairs(self._T.cells) do
+				if p.id == id then self._T.sel = i end
+			end
+		end
+		self._T.key = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer TargetSlot(Component pet, table eq)
+		-- 장착할 칸: 직접 고른 해금 칸 → 첫 빈 해금 칸 → 1번 칸.
+		local s = self._T.slotSel or 0
+		if s >= 1 and s <= pet.PetSlots then return s end
+		for i = 1, pet.PetSlots do
+			if (eq[i] or "") == "" then return i end
+		end
+		return 1
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEquip()
+		-- 장착 / 해제 요청.
+		local pet = self:GetPet()
+		local p = self._T.cells[self._T.sel]
+		if pet == nil or p == nil or self._T.busy or not pet.PetLoaded then return end
+		local pp = pet
+		local owned = pp:ParseOwned(pet.PetData)
+		if owned[p.id] == nil then return end
+		local eq = pp:ParseEquip(pet.PetEquip)
+		for i = 1, 3 do
+			if eq[i] == p.id then
+				self:BeginRequest(pet, "unequip")
+				pp:RequestPetEquip(i, "")
+				return
+			end
+		end
+		local slot = self:TargetSlot(pet, eq)
+		self:BeginRequest(pet, "equip")
+		pp:RequestPetEquip(slot, p.id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnDraw(integer n)
+		-- 뽑기 요청 (1회·10회, 뽑기권 n장).
+		local pet = self:GetPet()
+		if pet == nil or self._T.busy or not pet.PetLoaded or pet.PetTickets < n then return end
+		if n ~= 1 and n ~= 10 then return end
+		local pp = pet
+		self:BeginRequest(pet, "draw")
+		pp:RequestPetDraw(n)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBuy(integer n)
+		-- 뽑기권 구매 요청 (다이아).
+		local pet = self:GetPet()
+		if pet == nil or self._T.busy or not pet.PetLoaded then return end
+		if n ~= 1 and n ~= 10 then return end
+		local pp = pet
+		if self:Diamonds() < self:Price(pp, n) then return end
+		self:BeginRequest(pet, "buy")
+		pp:RequestBuyPetTicket(n)
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer Price(Component pet, integer n)
+		-- 뽑기권 가격 (PetConfig).
+		local pp = pet
+		if n == 10 then return math.floor(pp:Cfg("TicketPrice10", 450)) end
+		return math.floor(pp:Cfg("TicketPrice1", 50))
+	end
+
+	@ExecSpace("ClientOnly")
+	method string RateLine(table rates)
+		-- 등급 확률 한 줄 (0%인 등급은 뺀다).
+		local names = { "레어", "에픽", "유니크", "레전더리", "초월" }
+		local parts = {}
+		for g = 1, 5 do
+			local v = rates[g] or 0
+			if v > 0 then table.insert(parts, names[g] .. " " .. self:Num(v, false) .. "%") end
+		end
+		return table.concat(parts, " · ")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowRateTip()
+		-- 뽑기 레벨별 등급 확률 툴팁 (현재 레벨 표시).
+		local pet = self:GetPet()
+		local target = self:Find("GachaBg/Rates")
+		if pet == nil or not isvalid(target) then return end
+		local pp = pet
+		local lines = {}
+		for lv = 1, pp:MaxGachaLevel() do
+			local info = pp:GachaInfo(lv)
+			if info ~= nil then
+				local line = "Lv." .. tostring(lv) .. "  " .. self:RateLine(info.rates)
+				if lv == pet.PetGachaLevel then line = line .. "  (현재)" end
+				table.insert(lines, line)
+			end
+		end
+		_TooltipLogic:ShowText(target, "뽑기 레벨별 등급 확률", table.concat(lines, "\n"))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh(Component pet)
+		-- 목록·상세·장착 칸·뽑기 영역 다시 그리기.
+		local pp = pet
+		local owned = pp:ParseOwned(pet.PetData)
+		local eq = pp:ParseEquip(pet.PetEquip)
+		local equipped = {}
+		for i = 1, 3 do if (eq[i] or "") ~= "" then equipped[eq[i]] = i end end
+		local busy = self._T.busy or not pet.PetLoaded or self:Find("Result").Enable
+		-- 목록
+		local ownedN = 0
+		local totalN = 0
+		local atkSum = 0
+		local totalLv = 0
+		for i = 1, 23 do
+			local p = self._T.cells[i]
+			if p ~= nil then
+				totalN = totalN + 1
+				local base = self:CellPath(i)
+				local lv = owned[p.id]
+				local has = lv ~= nil
+				if has then
+					ownedN = ownedN + 1
+					atkSum = atkSum + self:AtkOf(p, lv)
+					totalLv = totalLv + lv
+				end
+				self:Show(base .. "/Dim", not has)
+				self:Show(base .. "/Lock", not has)
+				self:Show(base .. "/Eq", equipped[p.id] ~= nil)
+				self:SetIcon(self:Find(base .. "/Icon"), p.icon, has and Color(1, 1, 1, 1) or self.LockedIconTint)
+				self:SetText(base .. "/Lv", has and ("Lv." .. tostring(lv)) or "미보유")
+				self:SetTextColor(base .. "/Lv", has and Color(0.14, 0.17, 0.21, 1) or Color(0.90, 0.92, 0.95, 1))
+				_UIButtonLogic:SetSelected(self:Find(base), i == self._T.sel)
+			end
+		end
+		self:SetText("ListBg/Owned", "보유 " .. tostring(ownedN) .. " / " .. tostring(totalN))
+		self:SetText("ListBg/TotalAtk", "보유 효과 합계  공격력 +" .. self:Num(atkSum, false) .. "%")
+		-- 상세
+		local p = self._T.cells[self._T.sel]
+		if p ~= nil then
+			local lv = owned[p.id]
+			local has = lv ~= nil
+			self:SetIcon(self:Find("DetailBg/IconBg/Icon"), p.icon, has and Color(1, 1, 1, 1) or self.LockedIconTint)
+			self:SetColor("DetailBg/IconBg/Grade", self:GradeColor(p.grade))
+			self:SetText("DetailBg/Name", p.name)
+			self:SetText("DetailBg/Grade", p.gradeName)
+			self:SetTextColor("DetailBg/Grade", self:GradeColor(p.grade))
+			if has then
+				self:SetText("DetailBg/Lv", "Lv." .. tostring(lv) .. " / 10")
+				self:SetText("DetailBg/OwnEff", "보유 효과  공격력 +" .. self:Num(self:AtkOf(p, lv), false) .. "%")
+				local spec = self:EffText(p, lv)
+				if lv < 10 then spec = spec .. "   (Lv.10: " .. self:EffText(p, 10) .. ")" end
+				self:SetText("DetailBg/Spec", spec)
+			else
+				self:SetText("DetailBg/Lv", "미보유 — 뽑기로 얻을 수 있습니다")
+				self:SetText("DetailBg/OwnEff", "보유 효과  공격력 +" .. self:Num(self:AtkOf(p, 1), false) .. "% (획득 시)")
+				self:SetText("DetailBg/Spec", self:EffText(p, 1) .. "   (Lv.10: " .. self:EffText(p, 10) .. ")")
+			end
+			local eqSlot = equipped[p.id]
+			local btn = self:Find("DetailBg/Equip")
+			if not has then
+				self:SetText("DetailBg/EqState", "보유하면 장착할 수 있습니다")
+			elseif eqSlot ~= nil then
+				self:SetText("DetailBg/EqState", "현재 " .. eqSlot .. "번 칸에 장착 중")
+			else
+				self:SetText("DetailBg/EqState", "미장착 · 왼쪽 위 칸으로 위치 선택")
+			end
+			if eqSlot ~= nil then
+				self:SetText("DetailBg/Equip", eqSlot .. "번 칸 해제")
+			else
+				self:SetText("DetailBg/Equip", tostring(self:TargetSlot(pet, eq)) .. "번 칸에 장착")
+			end
+			if isvalid(btn) then _UIButtonLogic:SetDisabled(btn, busy or not has) end
+		end
+		-- 장착 칸
+		local slots = pet.PetSlots
+		local need = { 0, math.floor(pp:Cfg("Slot2TotalLv", 30)), math.floor(pp:Cfg("Slot3TotalLv", 60)) }
+		local target = 0
+		if p ~= nil and equipped[p.id] == nil then target = self:TargetSlot(pet, eq) end
+		for s = 1, 3 do
+			local base = "SlotBg/Slot" .. tostring(s)
+			local slotE = self:Find(base)
+			local open = s <= slots
+			local id = eq[s] or ""
+			local sp = nil
+			for _, c in pairs(self._T.cells) do if c.id == id then sp = c end end
+			self:Show(base .. "/Lock", not open)
+			self:Show(base .. "/Icon", open and sp ~= nil)
+			if open and sp ~= nil then
+				self:SetIcon(self:Find(base .. "/Icon"), sp.icon, Color(1, 1, 1, 1))
+				self:SetText(base .. "/Label", sp.name)
+			elseif open then
+				self:SetText(base .. "/Label", tostring(s) .. "번 빈 칸")
+			else
+				self:SetText(base .. "/Label", self.LockText .. tostring(need[s]))
+			end
+			if isvalid(slotE) then
+				_UIButtonLogic:SetDisabled(slotE, not open or busy)
+				local selected = open and ((p ~= nil and equipped[p.id] == s) or (target == s))
+				_UIButtonLogic:SetSelected(slotE, selected)
+			end
+		end
+		local nextNeed = 0
+		if slots < 3 then nextNeed = need[slots + 1] end
+		if nextNeed > 0 then
+			self:SetText("SlotBg/TotalLv", "펫 총레벨\n" .. tostring(totalLv) .. " / " .. tostring(nextNeed) .. "\n(다음 칸 해금)")
+		else
+			self:SetText("SlotBg/TotalLv", "펫 총레벨\n" .. tostring(totalLv) .. "\n장착 칸 모두 해금")
+		end
+		-- 뽑기
+		local gl = pet.PetGachaLevel
+		local maxGl = pp:MaxGachaLevel()
+		local info = pp:GachaInfo(gl)
+		self:SetText("GachaBg/DrawLv", "뽑기 Lv." .. tostring(gl))
+		local fill = self:Find("GachaBg/ExpBg/Fill")
+		local needDraw = 0
+		if info ~= nil then needDraw = info.need end
+		if gl >= maxGl or needDraw <= 0 then
+			self:SetText("GachaBg/ExpT", "최대 레벨 · 누적 " .. tostring(pet.PetDrawTotal) .. "회")
+			if isvalid(fill) then fill.SpriteGUIRendererComponent.FillAmount = 1 end
+		else
+			self:SetText("GachaBg/ExpT", tostring(pet.PetGachaExp) .. " / " .. tostring(needDraw))
+			if isvalid(fill) then fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, pet.PetGachaExp / needDraw)) end
+		end
+		if info ~= nil then self:SetText("GachaBg/Rates/Text", "등급 확률  " .. self:RateLine(info.rates) .. "   (눌러서 레벨별 확률 보기)") end
+		local tickets = pet.PetTickets
+		local dia = self:Diamonds()
+		self:SetText("GachaBg/Tickets", "뽑기권 " .. tostring(tickets) .. "장")
+		self:SetText("GachaBg/Dia", "다이아 " .. tostring(dia))
+		local p1 = self:Price(pet, 1)
+		local p10 = self:Price(pet, 10)
+		self:SetText("GachaBg/Buy1", "1장 구매 · " .. tostring(p1))
+		self:SetText("GachaBg/Buy10", "10장 구매 · " .. tostring(p10))
+		_UIButtonLogic:SetDisabled(self:Find("GachaBg/Draw1"), busy or tickets < 1)
+		_UIButtonLogic:SetDisabled(self:Find("GachaBg/Draw10"), busy or tickets < 10)
+		_UIButtonLogic:SetDisabled(self:Find("GachaBg/Buy1"), busy or dia < p1)
+		_UIButtonLogic:SetDisabled(self:Find("GachaBg/Buy10"), busy or dia < p10)
+		local msg = self._T.msg or ""
+		if self._T.busy then msg = "요청을 처리하고 있습니다..." elseif not pet.PetLoaded then msg = "펫 정보를 불러오는 중입니다" end
+		self:SetText("GachaBg/Msg", msg)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 열려 있을 때 응답 확인·데이터가 바뀌면 다시 그린다.
+		if not self._T.open then return end
+		local pet = self:GetPet()
+		if pet == nil then return end
+		if not self._T.ready and not self:Setup() then return end
+		if self._T.busy then
+			if pet.PetSeq > (self._T.busySeq or 0) then
+				self:OnReply(pet)
+			else
+				self._T.busyTime = (self._T.busyTime or 0) + delta
+				if self._T.busyTime >= self.RequestTimeout then
+					self._T.busy = false
+					self._T.msg = "응답이 늦어지고 있습니다. 잠시 후 다시 확인해 주세요"
+					self._T.key = nil
+				end
+			end
+		end
+		local result = self:Find("Result")
+		local key = tostring(pet.PetSeq) .. "|" .. tostring(pet.PetTickets) .. "|" .. tostring(self:Diamonds()) .. "|" .. tostring(self._T.sel) .. "|" .. tostring(self._T.slotSel)
+			.. "|" .. tostring(self._T.busy) .. "|" .. tostring(pet.PetLoaded) .. "|" .. (self._T.msg or "") .. "|" .. tostring(isvalid(result) and result.Enable)
+			.. "|" .. pet.PetData .. "|" .. pet.PetEquip .. "|" .. tostring(pet.PetSlots) .. "|" .. tostring(pet.PetGachaLevel) .. "|" .. tostring(pet.PetGachaExp)
+		if self._T.key ~= key then
+			self._T.key = key
+			self:Refresh(pet)
+		end
+	end
+
+end

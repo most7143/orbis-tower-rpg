@@ -596,6 +596,7 @@ script BattleHUDLogic extends Logic
 			if isvalid(self.procText) and self.procText.Entity.Enable then self.procText.Entity:SetEnable(false) end
 			self:UpdateHeroRes(nil)
 			self:UpdateParty(nil)
+			self:UpdateStone(nil)
 			return
 		end
 
@@ -663,11 +664,10 @@ script BattleHUDLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void UpdateStone(Component mgr)
-		-- 하단 HUD 바로 위 왼쪽: 스킬석·메소 (아이콘 + 수량, 반투명 배경). 판 진행 중에만.
+		-- 하단 HUD 바로 위 왼쪽: 스킬석·메소 (아이콘 + 수량, 반투명 배경). 하단 구성원 HUD와 같이 보이고 숨는다 (사용자 확정: UpdateParty와 같은 조건).
 		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Wallet")
 		if not isvalid(root) then return end
-		local st = mgr ~= nil and mgr.RunState or ""
-		local show = mgr ~= nil and st ~= "WAIT" and st ~= "READY" and st ~= "RESULT" and st ~= "DEFEAT"
+		local show = mgr ~= nil and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
 		if root.Enable ~= show then root:SetEnable(show) end
 		if not show then return end
 		local function setText(path, s2)

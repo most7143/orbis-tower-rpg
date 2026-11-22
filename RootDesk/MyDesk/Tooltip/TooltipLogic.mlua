@@ -218,7 +218,8 @@ script TooltipLogic extends Logic
 		local breaks = d.breaks or {}
 		if #breaks > 0 then
 			if text ~= "" then text = text .. "\n\n" end
-			text = text .. "<b><color=#2F6FD0>이번 판 돌파</color></b>"
+			-- 검은 배경 위에서 읽히도록 밝은 파랑
+			text = text .. "<b><color=#8FBFFF>이번 판 돌파</color></b>"
 			for _, b in ipairs(breaks) do text = text .. "\n· " .. b end
 		end
 		local textW = w - 36

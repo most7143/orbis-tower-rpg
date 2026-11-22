@@ -20,6 +20,8 @@ script ResultPopupLogic extends Logic
 	property string IconFeather = "804a3c5f7abe4ad48f6e428e112da0a5"
 	property string IconScroll = "d7d18132057f491181288c2b6038d32c"
 	property string IconDiamond = "81462aeb825b4660991cef05651271cf"
+	property string IconGoldMeso = "02a489cccff24a139a6c3582a5871f58"
+	property integer LootSlots = 7
 
 	@HideFromInspector
 	property table handlers = {}
@@ -183,15 +185,18 @@ script ResultPopupLogic extends Logic
 		-- 전투 보상: 실제로 받은 것만
 		self:SetText("battleRewardsPlaque/battleRewardsTitle", "전투 보상", nil)
 		local items = {}
+		-- 금색 메소(아웃게임 재화)를 맨 앞에. 스킬북은 보상에서 제거되어 표시하지 않는다.
+		if mgr.RunGoldMeso > 0 then table.insert(items, { icon = self.IconGoldMeso, name = "금색 메소", n = mgr.RunGoldMeso, center = true }) end
 		if mgr.RunDiamonds > 0 then table.insert(items, { icon = self.IconDiamond, name = "다이아", n = mgr.RunDiamonds }) end
-		if mgr.RunBooks > 0 then table.insert(items, { icon = self.IconBook, name = "스킬북", n = mgr.RunBooks }) end
 		if mgr.RunFeathers > 0 then table.insert(items, { icon = self.IconFeather, name = "깃털", n = mgr.RunFeathers }) end
 		if mgr.RunScrolls > 0 then table.insert(items, { icon = self.IconScroll, name = "주문서", n = mgr.RunScrolls }) end
 		-- 5-F: 이번 판 큐브 (레드 / 무료). 아이콘·이름은 GearCubeTable (PlayerGear.CubeInfo)
 		if mgr.RunCubes > 0 then table.insert(items, self:CubeItem("R", "레드 큐브", mgr.RunCubes)) end
 		if mgr.RunFreeCubes > 0 then table.insert(items, self:CubeItem("F", "무료 큐브", mgr.RunFreeCubes)) end
+		-- 보상 칸은 최대 7개(Loot0~6, 계정 경험치 영역 왼쪽 112 간격). Loot7은 쓰지 않는다.
 		for k = 0, 7 do
 			local it = items[k + 1]
+			if k >= self.LootSlots then it = nil end
 			local p = "LootView/Loot" .. tostring(k)
 			self:Show(p, it ~= nil)
 			if it ~= nil then
@@ -201,7 +206,7 @@ script ResultPopupLogic extends Logic
 				if isvalid(iconEnt) then
 					local spr = iconEnt.SpriteGUIRendererComponent
 					local want = PreserveSpriteType.AspectOnly
-					if it.icon == self.IconDiamond or it.cube == true then want = PreserveSpriteType.None end
+					if it.icon == self.IconDiamond or it.cube == true or it.center == true then want = PreserveSpriteType.None end
 					if spr.PreserveSprite ~= want then spr.PreserveSprite = want end
 				end
 				self:SetText(p .. "/Loot" .. tostring(k) .. "Count", "x" .. tostring(it.n), nil)
@@ -393,7 +398,11 @@ script ResultPopupLogic extends Logic
             if self._T.accountBar == nil then self._T.accountBar = gainedLevels > 0 and 0 or mgr.ResultAccountBeforeExp / math.max(1,mgr.ResultAccountBeforeNeed) end
             self._T.accountBar = self._T.accountBar + (target - self._T.accountBar) * math.min(1,delta*5)
             local af = self:E("AccountExp/Bar/Fill")
-            if isvalid(af) then af.UITransformComponent.RectSize = Vector2(math.max(1,460*self._T.accountBar),14) end
+            -- 채움 최대 폭 = 막대 폭 - 12 (결과 보상 7칸 배치로 막대를 340으로 줄임)
+            local barEnt = self:E("AccountExp/Bar")
+            local inner = 460
+            if isvalid(barEnt) then inner = math.max(1, barEnt.UITransformComponent.RectSize.x - 12) end
+            if isvalid(af) then af.UITransformComponent.RectSize = Vector2(math.max(1,inner*self._T.accountBar),14) end
         end
         local retry = self:E("retry")
         if isvalid(retry) then retry.ButtonComponent.Enable = mgr.ResultAccountSaved and eng ~= nil and eng.EnergyLoaded and eng.Energy >= cost end

@@ -1987,15 +1987,13 @@ script PlayerEngrave extends Component
 		local claimed = (self._T.claims or {})[section] or 0
 		if claimed & bit ~= 0 then reply("이미 받은 보상입니다") return end
 		self._T.claims[section] = claimed | bit
-		local books = self:ListValue(self.SectionBooks, tier)
+		-- 스킬북은 게임에서 제거됨(2026-11-22): 구간 상자는 깃털만 지급한다.
 		local feathers = self:ListValue(self.SectionFeathers, tier)
-		if books > 0 then self:AddSkillBooks(books) end
 		if feathers > 0 then self:AddFeathers(feathers) end
 		self:SyncStars()
 		self:SaveStars()
-		self:FlushSkills()
 		self:FlushGrace()
-		reply("보상 획득! 스킬북 +" .. tostring(books) .. " · 여신의 깃털 +" .. tostring(feathers))
+		reply("보상 획득! 여신의 깃털 +" .. tostring(feathers))
 	end
 
 

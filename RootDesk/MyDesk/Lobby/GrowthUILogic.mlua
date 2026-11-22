@@ -1,11 +1,11 @@
 @Logic
 script GrowthUILogic extends Logic
 
-	-- 성장 화면 (GrowthUI.ui): 탭 4개. 1 장비, 2 각인, 3 유물, 4 은총을 내용 영역에 띄운다.
+	-- 성장 화면 (GrowthUI.ui): 탭 5개. 1 장비, 2 각인, 3 유물, 4 은총, 5 펫(2026-11-22, 예전 스킬 탭 자리)을 내용 영역에 띄운다.
 	-- 스킬 탭은 2026-11-22 사용자 결정으로 삭제(스킬 강화 기능 제거). 스킬 데이터·저장은 6단계에서 정리한다.
 	property string RootPath = "/ui/GrowthUI/Root"
 	property string LobbyMapName = "Lobby"
-	property integer TabCount = 4
+	property integer TabCount = 5
 	property Color TabTextColor = Color(0.90, 0.93, 0.96, 1)
 	property Color TabSelectedColor = Color(1, 1, 1, 1)
 
@@ -127,6 +127,7 @@ script GrowthUILogic extends Logic
 		if self._T.tab == 2 then _EngraveUILogic:Close() end
 		if self._T.tab == 3 then _RelicUILogic:Close() end
 		if self._T.tab == 4 then _GraceUILogic:Close() end
+		if self._T.tab == 5 then _PetUILogic:Close() end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -154,6 +155,9 @@ script GrowthUILogic extends Logic
 		elseif index == 4 then
 			_GraceUILogic:Open()
 			_GraceUILogic.dimEntity:SetEnable(false)
+		elseif index == 5 then
+			-- 5번 탭: 펫
+			_PetUILogic:Open()
 		end
 		log("[VRF] growth tab=" .. tostring(index))
 	end

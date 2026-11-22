@@ -103,9 +103,9 @@ script RegionSelectLogic extends Logic
 		-- 툴팁: 보상 아이콘(글자 툴팁), 구간 별 상자(아이템 목록 툴팁).
 		-- 상자는 수령 가능하면 누를 때 수령(기존 동작), 잠김·수령 완료면 누를 때 상자 내용 툴팁.
 		local items = {
-			book = { "스킬북", "스킬을 성장시키는 데 쓰는 책입니다. 지역을 클리어하면 얻습니다." },
+			goldMeso = { "금색 메소", "장비 칸(슬롯) 강화 비용으로 쓰는 메소입니다. 전투 스테이지를 클리어할 때마다 얻고, 층 보스를 쓰러뜨리면 더 많이 얻습니다." },
 			feather = { "여신의 깃털", "여신의 은총을 강화하는 데 쓰는 깃털입니다. 지역을 클리어하면 얻습니다." },
-			scroll = { "주문서", "장비 칸(슬롯) 강화에 쓰는 주문서입니다. 전투 중 일정 확률로 얻습니다." },
+			scroll = { "주문서", "장비 칸(슬롯) 강화 성공 확률을 높이는 공용 주문서입니다 (하급 +5%p · 중급 +10%p · 상급 +20%p). 전투 중 일정 확률로 얻습니다." },
 			extraFeather = { "여신의 깃털", "여신의 은총을 강화하는 데 쓰는 깃털입니다. 전투 중 일정 확률로 추가로 얻습니다." },
 		}
 		for key, info in pairs(items) do
@@ -137,8 +137,8 @@ script RegionSelectLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void ShowChestTip(Entity e, integer tier)
-		-- 구간 상자 아이템 목록 툴팁: 스킬북·여신의 깃털 (3번째 상자는 다이아 추가).
-		local list = { "d0bb7509b8a54712ac2647d7ede2ad5f", "804a3c5f7abe4ad48f6e428e112da0a5" }
+		-- 구간 상자 아이템 목록 툴팁: 여신의 깃털 (3번째 상자는 다이아 추가). 스킬북은 표시하지 않는다(메소 재화 개편).
+		local list = { "804a3c5f7abe4ad48f6e428e112da0a5" }
 		if tier == 3 then table.insert(list, "81462aeb825b4660991cef05651271cf") end
 		_TooltipLogic:ShowItems(e, "별 " .. tostring(self:Threshold(tier)) .. "개 보상 상자", list)
 	end
@@ -627,13 +627,13 @@ script RegionSelectLogic extends Logic
 		end
 		if self._T.basePos == nil then
 			self._T.basePos = {}
-			for _, k in ipairs({ "listPanel", "detailPanel", "sectionRewards", "ListView", "scrollTrack", "regionPlaque", "sectionPrev", "sectionNext", "regionFilter", "currentRegion", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2", "energyPill", "closeX" }) do
+			for _, k in ipairs({ "listPanel", "detailPanel", "sectionRewards", "ListView", "scrollTrack", "regionPlaque", "sectionPrev", "sectionNext", "regionFilter", "currentRegion", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "goldMeso", "feather", "scroll", "extraFeather", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2", "energyPill", "closeX" }) do
 				local e = self:E(k)
 				if isvalid(e) then self._T.basePos[k] = e.UITransformComponent.anchoredPosition end
 			end
 		end
 		local left = { "listPanel", "ListView", "scrollTrack", "regionPlaque", "sectionPrev", "sectionNext", "regionFilter", "currentRegion" }
-		local right = { "detailPanel", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather", "closeX" }
+		local right = { "detailPanel", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "goldMeso", "feather", "scroll", "extraFeather", "closeX" }
 		local bottom = { "sectionRewards", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2", "energyPill" }
 		local kl = ease(t / 0.35)
 		local kr = ease((t - 0.06) / 0.35)

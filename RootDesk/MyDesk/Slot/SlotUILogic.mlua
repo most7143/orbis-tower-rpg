@@ -2,11 +2,13 @@
 script SlotUILogic extends Logic
 
 	-- 장비 화면 (GrowthUI 1번 탭): 아래 편성 칸(1~3) 선택, 왼쪽 부위 선택, 오른쪽 현재 상태와 다음 단계, 주문서 선택과 강화.
+	-- 메소 재화 개편: 강화 비용 = 금색 메소(단계별, GearCostTable). 주문서는 부위 무관 공용 확률 보정(없음/하급/중급/상급 중 1장 선택, 없이도 강화 가능).
 	-- 데이터는 로컬 플레이어의 PlayerGear(GearData·ScrollData·GearSeq 동기화)에서 읽고, 강화는 서버에 칸 번호와 함께 요청한다 (5-B).
 	-- 칸 이름은 PlayerEngrave 편성(MainJob·CompJob·Comp2Job, 읽기만) + PlayerRoster 현재 차수 이름.
 	property string RootPath = "/ui/GrowthUI/Root/Slot"
 	property integer MaxLevel = 30
-	property integer MaxScrolls = 3
+	-- 공용 주문서 카드 아이콘·이름 (단계 1~3 = 하급·중급·상급)
+	property string ScrollIconRUID = "d7d18132057f491181288c2b6038d32c"
 	property number StatStep = 10
 	property string FxSuccessRUID = "6d5a507b49764376bc71df113c5d7cf2"
 	property string FxFailRUID = "9431812f102a414f81bd677701623ce1"
@@ -41,8 +43,8 @@ script SlotUILogic extends Logic
 		self._T.mode = "scroll"
 		self._T.nameTimer = 0
 		self._T.partyNames = {}
-		self._T.tier = 1
-		self._T.count = 1
+		self._T.tier = 0
+		self._T.tierNames = { "하급 주문서", "중급 주문서", "상급 주문서" }
 		self._T.busy = 0
 		self._T.fxIndex = 0
 		self._T.fxTimers = {}
@@ -61,17 +63,11 @@ script SlotUILogic extends Logic
 				self:Refresh()
 			end)
 		end
-		for tier = 1, 3 do
+		for tier = 0, 3 do
 			local value = tier
 			self:Bind(self:Get("/Card" .. tostring(value)), function()
+				if self._T.busy > 0 then return end
 				self._T.tier = value
-				self:Refresh()
-			end)
-		end
-		for count = 1, self.MaxScrolls do
-			local value = count
-			self:Bind(self:Get("/Qty" .. tostring(value)), function()
-				self._T.count = value
 				self:Refresh()
 			end)
 		end
@@ -110,10 +106,7 @@ script SlotUILogic extends Logic
 		_GrowthUILogic:StyleButton(self:Get("/Pot/Buy"))
 		_GrowthUILogic:StyleButton(self:Get("/Pot/Keep"))
 		_GrowthUILogic:StyleButton(self:Get("/Pot/Take"))
-		for i = 1, self.MaxScrolls do
-			_GrowthUILogic:StyleButton(self:Get("/Qty" .. tostring(i)))
-		end
-		for tier = 1, 3 do
+		for tier = 0, 3 do
 			_GrowthUILogic:StyleButton(self:Get("/Card" .. tostring(tier)))
 		end
 		_GrowthUILogic:StyleButton(self:Get("/Upgrade"))
@@ -331,7 +324,6 @@ script SlotUILogic extends Logic
 		local busy = self._T.busy > 0 or not gear.GearLoaded
 		local gearAll = gear:ParseGear(gear.GearData)
 		local cell = (gearAll[slotNo] or {})[slot] or { lv = 0, bonus = 0 }
-		local scrollHave = gear:ParseScrolls(gear.ScrollData)
 		local lv = cell.lv
 		local bonus = cell.bonus
 		local name = self._T.slotName[slot] or ""
@@ -384,48 +376,77 @@ script SlotUILogic extends Logic
 			end
 		end
 		self:SetText("/Info", info)
-		-- 주문서 카드
-		for tier = 1, 3 do
-			local s = self._T.scrolls[slot .. "_" .. tostring(tier)]
+		-- 공용 주문서 카드: 0 = 없음, 1~3 = 하급·중급·상급 (보정 %p와 보유 장수). 보유 0장 카드는 고를 수 없다.
+		local us = gear:ParseUScrolls(gear.UScrollData)
+		if self._T.tier > 0 and (us[self._T.tier] or 0) < 1 then self._T.tier = 0 end
+		local maxed = lv >= self.MaxLevel
+		for tier = 0, 3 do
+			local card = self:Get("/Card" .. tostring(tier))
 			local cardIcon = self:Get("/Card" .. tostring(tier) .. "/Icon")
-			if s ~= nil and isvalid(cardIcon) then cardIcon.SpriteGUIRendererComponent.ImageRUID = DataRef(s.icon) end
-			self:SetText("/Card" .. tostring(tier) .. "/Count", "보유 " .. tostring(scrollHave[slot .. "_" .. tostring(tier)] or 0) .. "장")
+			if tier == 0 then
+				self:SetText("/Card0/Name", "주문서 없음")
+				self:SetText("/Card0/Count", "기본 확률")
+			else
+				if isvalid(cardIcon) then cardIcon.SpriteGUIRendererComponent.ImageRUID = DataRef(self.ScrollIconRUID) end
+				local n = us[tier] or 0
+				self:SetText("/Card" .. tostring(tier) .. "/Name", self._T.tierNames[tier] or "")
+				local countText = "+" .. self:Num(gear:ScrollBonus(tier)) .. "%p · " .. tostring(n) .. "장"
+				if n < 1 then countText = "<color=#B54538>" .. countText .. "</color>" end
+				self:SetText("/Card" .. tostring(tier) .. "/Count", countText)
+			end
 			local selected = tier == self._T.tier
-			_UIButtonLogic:SetSelected(self:Get("/Card" .. tostring(tier)), selected)
-			_UIButtonLogic:SetDisabled(self:Get("/Card" .. tostring(tier)), lv >= self.MaxLevel)
+			_UIButtonLogic:SetSelected(card, selected)
+			_UIButtonLogic:SetDisabled(card, busy or maxed or (tier > 0 and (us[tier] or 0) < 1))
 			local nameText = self:Get("/Card" .. tostring(tier) .. "/Name")
 			if isvalid(nameText) then
 				if selected then nameText.TextGUIRendererComponent.FontColor = self.SelectedTextColor else nameText.TextGUIRendererComponent.FontColor = self.NormalTextColor end
 			end
 		end
-		for count = 1, self.MaxScrolls do
-			_UIButtonLogic:SetSelected(self:Get("/Qty" .. tostring(count)), count == self._T.count)
-			_UIButtonLogic:SetDisabled(self:Get("/Qty" .. tostring(count)), lv >= self.MaxLevel)
+		-- 강화 비용 (금색 메소) · 보유
+		local cost = gear:ScrollCost(lv)
+		local gold = gear.GoldMeso
+		local enough = gold >= cost
+		local costColor = "#242B36"
+		if not enough then costColor = "#B54538" end
+		if maxed then
+			self:SetText("/Cost/Amount", "-")
+		else
+			self:SetText("/Cost/Amount", "<color=" .. costColor .. ">" .. self:Comma(cost) .. "</color>")
 		end
-		-- 성공 확률
-		local scroll = self._T.scrolls[slot .. "_" .. tostring(self._T.tier)]
-		local have = scrollHave[slot .. "_" .. tostring(self._T.tier)] or 0
-		local base = self:BaseRate(lv)
-		local power = 1
-		if scroll ~= nil then power = scroll.power end
-		local rate = math.min(100, base * power * self._T.count + bonus)
+		self:SetText("/Have", "보유  <color=" .. costColor .. ">" .. self:Comma(gold) .. "</color>")
+		-- 최종 성공 확률 = 기본 + 주문서 보정 + 실패 누적
+		local base = gear:SlotBaseRate(lv)
+		local plus = gear:ScrollBonus(self._T.tier)
+		local rate = gear:ScrollFinalRate(lv, self._T.tier, bonus)
 		local msg = ""
-		local haveColor = "#293442"
-		if have < self._T.count then haveColor = "#B54538" end
-		self:SetText("/Have", "보유   <color=" .. haveColor .. ">" .. tostring(have) .. "장</color>      /      필요   <color=#293442>" .. tostring(self._T.count) .. "장</color>")
-		if lv >= self.MaxLevel then
+		if maxed then
 			self:SetText("/Rate", "최대 단계")
 			self:SetText("/RateDetail", "")
 			self:SetText("/RateBonus", "")
 		else
 			self:SetText("/Rate", self:Num(rate) .. "%")
-			self:SetText("/RateDetail", "기본 " .. self:Num(base) .. "% × 주문서 효율 " .. tostring(math.floor(power)) .. "배 × " .. tostring(self._T.count) .. "장")
-			self:SetText("/RateBonus", "추가 성공 확률 +" .. self:Num(bonus) .. "%")
-			if have < self._T.count then msg = "주문서가 부족합니다" end
+			local detail = "기본 " .. self:Num(base) .. "%"
+			if plus > 0 then detail = detail .. "  +  주문서 <color=#347F24>" .. self:Num(plus) .. "%p</color>" end
+			if bonus > 0 then detail = detail .. "  +  누적 " .. self:Num(bonus) .. "%p" end
+			self:SetText("/RateDetail", detail)
+			self:SetText("/RateBonus", "실패하면 추가 성공 확률이 쌓입니다 (지금 +" .. self:Num(bonus) .. "%p)")
+			if not enough then msg = "<color=#B54538>금색 메소가 부족합니다</color>" end
 		end
 		if self._T.msg ~= nil and self._T.msg ~= "" then msg = self._T.msg end
 		self:SetText("/Msg", msg)
-		_UIButtonLogic:SetDisabled(self:Get("/Upgrade"), busy or lv >= self.MaxLevel or have < self._T.count)
+		_UIButtonLogic:SetDisabled(self:Get("/Upgrade"), busy or maxed or not enough or (self._T.tier > 0 and (us[self._T.tier] or 0) < 1))
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Comma(integer n)
+		-- 1234567 → "1,234,567".
+		local str = tostring(math.floor(n or 0))
+		local out = ""
+		while string.len(str) > 3 do
+			out = "," .. string.sub(str, -3) .. out
+			str = string.sub(str, 1, string.len(str) - 3)
+		end
+		return str .. out
 	end
 
 	@ExecSpace("ClientOnly")
@@ -433,14 +454,17 @@ script SlotUILogic extends Logic
 		-- 강화하기: 결과가 돌아올 때까지 다시 누를 수 없다.
 		local gear = self:GetGear()
 		if gear == nil or not gear.GearLoaded or self._T.busy > 0 then return end
+		-- 클라이언트 사전 검사(단계·금색 메소·주문서). 서버(PlayerGear.DoScroll)가 다시 검증한다.
 		local slot = self._T.slot
-		if self:CellOf(gear, self._T.slotNo, slot).lv >= self.MaxLevel then return end
-		if (gear:ParseScrolls(gear.ScrollData)[slot .. "_" .. tostring(self._T.tier)] or 0) < self._T.count then return end
+		local lv = self:CellOf(gear, self._T.slotNo, slot).lv
+		if lv >= self.MaxLevel then return end
+		if gear.GoldMeso < gear:ScrollCost(lv) then return end
+		if self._T.tier > 0 and (gear:ParseUScrolls(gear.UScrollData)[self._T.tier] or 0) < 1 then return end
 		self._T.busy = self.BusyTimeout
 		self._T.msg = ""
-		gear:RequestScroll(self._T.slotNo, slot, self._T.tier, self._T.count)
+		gear:RequestScroll(self._T.slotNo, slot, self._T.tier)
 		self:Refresh()
-		log("[VRF] slot ui request s" .. tostring(self._T.slotNo) .. " " .. slot .. " tier=" .. tostring(self._T.tier) .. " x" .. tostring(self._T.count))
+		log("[VRF] slot ui request s" .. tostring(self._T.slotNo) .. " " .. slot .. " tier=" .. tostring(self._T.tier) .. " cost=" .. tostring(gear:ScrollCost(lv)) .. " gold=" .. tostring(gear.GoldMeso))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -507,10 +531,18 @@ script SlotUILogic extends Logic
 					self._T.msg = "로비에서만 강화할 수 있습니다"
 				elseif gear.GearMsg == "err_scroll" then
 					self._T.msg = "주문서가 부족합니다"
+				elseif gear.GearMsg == "err_meso" then
+					self._T.msg = "금색 메소가 부족합니다"
 				elseif gear.GearMsg == "err_max" then
 					self._T.msg = "최대 단계입니다"
 				end
 			end
+			self:Refresh()
+		end
+		-- 금색 메소·공용 주문서 보유가 바뀌면(불러오기 완료 등) 비용·버튼 상태를 다시 그린다
+		local walletSig = tostring(gear.GoldMeso) .. "|" .. gear.UScrollData
+		if walletSig ~= self._T.walletSig then
+			self._T.walletSig = walletSig
 			self:Refresh()
 		end
 		-- 다이아가 바뀌면(다른 화면에서 사용 등) 구매 버튼 상태를 다시 그린다
@@ -572,7 +604,7 @@ script SlotUILogic extends Logic
 	method void ApplyMode()
 		-- 모드별로 보이는 위젯을 켜고 끈다. 잠재능력 모드에서는 주문서 전용 위젯을 숨기고 Pot 묶음을 켠다.
 		local pot = self._T.mode == "pot"
-		local scrollOnly = { "/CardLabel", "/Card1", "/Card2", "/Card3", "/QtyLabel", "/Qty1", "/Qty2", "/Qty3", "/Have", "/RateTitle", "/Rate", "/RateDetail", "/RateBonus", "/SetHead", "/Div2", "/Msg" }
+		local scrollOnly = { "/CardLabel", "/Card0", "/Card1", "/Card2", "/Card3", "/CostLabel", "/Cost", "/Have", "/RateTitle", "/Rate", "/RateDetail", "/RateBonus", "/SetHead", "/Div2", "/Msg" }
 		for _, path in ipairs(scrollOnly) do
 			local e = self:Get(path)
 			if isvalid(e) then e:SetEnable(not pot) end

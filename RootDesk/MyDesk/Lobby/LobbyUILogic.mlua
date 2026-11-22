@@ -15,6 +15,9 @@ script LobbyUILogic extends Logic
 	property TextGUIRendererComponent energyCountText = "fe688efc-922b-435d-bacc-8650a93b1f75"
 	property TextGUIRendererComponent energyEntriesText = "33ef45cc-c2ca-4810-bf4c-0b3ef3ec9f16"
 	property TextGUIRendererComponent energyTimerText = "17873579-e6dd-4e4d-a927-8e1211479730"
+	-- 로비 위쪽 재화 표시 (아웃게임 재화 2종: 금색 메소 = PlayerGear.GoldMeso, 다이아 = PlayerRoster.Diamonds)
+	property TextGUIRendererComponent goldMesoText = "fb019f8b-a43b-48d4-a60a-faa1ac10fed8"
+	property TextGUIRendererComponent diamondText = "c5ce14d5-7f7d-4028-9421-60b0532b4059"
 	-- 층 선택 창 (플레이 → 스테이지 고르기 → 입장). 스테이지 = 5층 묶음, 앞 스테이지를 깨야 다음이 열림
 	property Entity stageRoot = "7349262b-7dfe-4296-87a2-479c8c772bdf"
 	property TextGUIRendererComponent stageNoText = "94997364-85b0-4b76-b74f-cd54c5ef2998"
@@ -403,9 +406,8 @@ script LobbyUILogic extends Logic
 			self.stageStateText.Text = state
 			self.stageStateText.FontColor = stateColor
 		end
-		local books = math.floor(self.StageBookBase + n * self.StageBookPerStage)
 		local feathers = math.floor(self.StageFeatherBase + n * self.StageFeatherPerStage)
-		if isvalid(self.stageRewardText) then self.stageRewardText.Text = "스킬북 " .. tostring(books) .. " · 깃털 " .. tostring(feathers) .. " · 계정 EXP " .. tostring(_AccountRules:ClearExp(first)) end
+		if isvalid(self.stageRewardText) then self.stageRewardText.Text = "금색 메소 · 깃털 " .. tostring(feathers) .. " · 계정 EXP " .. tostring(_AccountRules:ClearExp(first)) end
 		local eng = self:GetEntryEnergy()
 		local canEnter = eng ~= nil and eng.Loaded and eng.EnergyLoaded and eng.Energy >= eng.EnergyCost
 		self:SetStageButton(self.btnStageEnter, n > unlocked or not canEnter)
@@ -517,16 +519,7 @@ script LobbyUILogic extends Logic
 		end
 		if isvalid(self.energyCountText) then
 			self.energyCountText.Text = count
-			local inset = self.energyCountText.Entity.Parent
-			local height = charging and 96 or 64
-			local y = charging and 14 or 0
-			self.energyCountText.Entity.UITransformComponent.anchoredPosition = Vector2(20, y)
-			if inset.UITransformComponent.RectSize.y ~= height then
-				inset.UITransformComponent.RectSize = Vector2(232, height)
-				inset.Parent.UITransformComponent.RectSize = Vector2(232, height)
-			end
-			local icon = inset:GetChildByName("Icon")
-			if isvalid(icon) then icon.UITransformComponent.anchoredPosition = Vector2(-84, y) end
+			-- 위쪽 가운데 재화 줄: 에너지 칸은 메소·다이아 칸과 같은 232×64로 고정하고, 충전 시간은 칸 아래 작은 글자로 표시한다.
 		end
 		if isvalid(self.energyEntriesText) then self.energyEntriesText.Entity:SetEnable(false) end
 		if isvalid(self.energyTimerText) then
@@ -539,6 +532,41 @@ script LobbyUILogic extends Logic
 			if isvalid(self.stageRoot) and self.stageRoot.Enable then self:RefreshStage() end
 			log("[VRF] compact energy count=" .. count .. " timer=" .. timer .. " charging=" .. tostring(charging))
 		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshWallet()
+		-- 로비 위쪽 재화 표시: 금색 메소(PlayerGear.GoldMeso)·다이아(PlayerRoster.Diamonds). 불러오기 전에는 "--". 값이 바뀔 때만 글자를 바꾼다.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return end
+		local gear = player:GetComponent("script.PlayerGear")
+		local roster = player:GetComponent("script.PlayerRoster")
+		local gold = "--"
+		local dia = "--"
+		if gear ~= nil and gear.GearLoaded then gold = self:Comma(gear.GoldMeso) end
+		if roster ~= nil and roster.RosterLoaded then dia = self:Comma(roster.Diamonds) end
+		local sig = gold .. "|" .. dia
+		if self._T.walletSig == sig then return end
+		self._T.walletSig = sig
+		if isvalid(self.goldMesoText) then self.goldMesoText.Text = gold end
+		if isvalid(self.diamondText) then self.diamondText.Text = dia end
+		log("[VRF] lobby wallet gold=" .. gold .. " dia=" .. dia)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Comma(integer n)
+		-- 1234567 → "1,234,567".
+		local s = tostring(math.floor(n or 0))
+		local neg = string.sub(s, 1, 1) == "-"
+		if neg then s = string.sub(s, 2) end
+		local out = ""
+		while string.len(s) > 3 do
+			out = "," .. string.sub(s, -3) .. out
+			s = string.sub(s, 1, string.len(s) - 3)
+		end
+		out = s .. out
+		if neg then out = "-" .. out end
+		return out
 	end
 
 	@ExecSpace("ClientOnly")
@@ -662,6 +690,7 @@ script LobbyUILogic extends Logic
 			if self._T.energyUiTick <= 0 then
 				self._T.energyUiTick = 0.2
 				self:RefreshEnergy()
+				self:RefreshWallet()
 			end
 		end
 		if isvalid(self.lobbyRoot) and self.lobbyRoot.Enable ~= inLobby then

@@ -81,7 +81,8 @@ script TowerPortal extends Component
 
 	@ExecSpace("ClientOnly")
 	method void OnTouch(TouchEvent event)
-		-- 포탈 클릭: 서버 매니저에 선택 전달.
+		-- 포탈 클릭: 서버 매니저에 선택 전달. 따라오는 펫(같은 모델 재사용)은 반응 없음.
+		if self.Kind == "pet" then return end
 		local map = self.Entity.CurrentMap
 		local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
 		if mgr == nil then return end
