@@ -1,0 +1,10 @@
+﻿Route,Tab,Order,Name,Desc,Key5,Val5,Label5,Key10,Val10,Label10,Key15,Val15,Label15
+Destroy,Atk,1,파괴,공격력·치명타·처형 피해를 키운다,AtkPct,3,공격력 +{v}%,CritDmg,10,치명타 피해 +{v}%p,AtkPct,5,공격력 +{v}%
+Affliction,Atk,2,상태이상,화상을 걸고 상태이상 적에게 큰 피해,DotDmg,10,지속 피해 +{v}%,StatusChance,5,화상 부여 확률 +{v}%p,StatusDmg,10,상태이상 적에게 주는 피해 +{v}%
+Haste,Atk,3,가속,쿨타임·공격 속도·궁극기 충전,Speed,3,공격 속도 +{v}%,CdReduce,3,스킬 재사용 대기시간 -{v}%,UltGainPct,10,궁극기 충전량 +{v}%
+Tough,Def,1,강인,체력·방어·받는 피해 감소,HpPct,5,최대 체력 +{v}%,DefPct,10,방어력 +{v}%,DmgReduce,3,받는 피해 -{v}%
+Recover,Def,2,회복,처치·흡혈·클리어 회복,KillHeal,1,처치 시 최대 체력 {v}% 회복,HealRecv,10,받는 회복량 +{v}%,LifestealPct,1,준 피해의 {v}% 회복
+Counter,Def,3,반격,회피·가시·철벽,Evade,2,회피 확률 +{v}%p,Thorns,20,받은 피해 {v}% 반사,HitNullify,3,공격 무효 확률 +{v}%p
+Wealth,Util,1,재화,판 안 메소·금색 메소·스킬석,MesoPct,5,판 안 메소 획득 +{v}%,GoldMesoPct,10,스테이지 클리어 금색 메소 +{v}%,MesoPct,10,판 안 메소 획득 +{v}%
+Break,Util,2,돌파,돌파 다시 고르기·추가 선택·마법의 서,Reroll,1,돌파 다시 뽑기 +{v}회,ExtraPick,5,돌파 추가 선택 확률 +{v}%p,StartStone,1,판 시작 스킬석 +{v}
+Explore,Util,3,탐험,상점 할인·물음표 보상·여신,ShopDiscount,5,장신구 상점 가격 -{v}%,MysteryUp,5,물음표 스테이지 확률 +{v}%p,GoddessUp,10,여신 제안 이로운 효과 +{v}%

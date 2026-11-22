@@ -1,0 +1,649 @@
+@Component
+script PlayerTalent extends Component
+
+	-- 새 각인(특성) 계정 데이터 (저장 키 OrbisTalentV1, 사용자 확정 2026-11-22).
+	-- 탭 3(공격·방어·특수) × 루트 3 × 5단: 1~4단 칸 2개(최대 3레벨), 5단 핵심 칸 1개(1레벨). 표: TalentTable / TalentRouteTable.
+	-- 해금: 그 루트의 아래 단에 쓴 포인트 2단 3·3단 6·4단 9·5단 12 (5단은 4단 칸 하나 이상 필요). 루트 보너스: 루트 포인트 5·10·15.
+	-- 총 포인트는 클리어한 최고 층 수(PlayerEngrave.ClearedFloor, 사용자 확정)를 TotalPoints에서 읽기만 한다. 옛 각인(OrbisEngrave)은 읽지도 지우지도 않는다.
+	-- 쓴 포인트가 총 포인트보다 많아도 판에는 찍은 그대로 반영하고, 레벨업만 막는다(남은 포인트 0).
+	-- 초기화는 항상 무료 (탭별 또는 전체). 판에는 TalentRunData()로 효과 합계(키별)와 핵심 칸 목록을 넘긴다.
+	property string TalentKey = "OrbisTalentV1"
+	property string NodeTableName = "TalentTable"
+	property string RouteTableName = "TalentRouteTable"
+	property string LobbyMapName = "Lobby"
+	-- 단계별 해금에 필요한 루트 포인트 (그 단보다 아래 단에 쓴 포인트 합, 1단부터)
+	property string TierNeed = "0,3,6,9,12"
+	property number LoadRetryDelay = 10
+	property number SaveRetryDelay = 5
+	-- 칸을 찍은 뒤 모아서 저장하기까지 기다리는 시간(초)
+	property number SaveDebounce = 2
+
+	@Sync
+	property boolean TalentLoaded = false
+	-- 칸 레벨 "Destroy11:3,Affliction5:1" (TalentTable 순서, 0레벨은 생략)
+	@Sync
+	property string TalentData = ""
+	-- 총 포인트 (클리어한 최고 층 수, TotalPoints)
+	@Sync
+	property integer TalentTotal = 0
+	@Sync
+	property integer TalentSpent = 0
+	@Sync
+	property integer TalentLeft = 0
+	-- 요청 처리마다 +1 (UI 갱신 신호)
+	@Sync
+	property integer TalentSeq = 0
+	-- 마지막 결과 코드 (ok / err_*), 한국어 변환은 UI에서 TalentMsgText로
+	@Sync
+	property string TalentMsg = ""
+	-- 마지막 결과 상세 ("up:Destroy11:2", "reset:Atk:6" 등)
+	@Sync
+	property string TalentResult = ""
+
+	@HideFromInspector
+	property boolean TalentDirty = false
+	@HideFromInspector
+	property number TalentRetryTimer = 0
+	@HideFromInspector
+	property number SaveTimer = 0
+	@HideFromInspector
+	property number TotalTimer = 0
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 표를 읽고 저장된 칸 레벨을 불러온다.
+		self:EnsureTables()
+		self:LoadTalent()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기 재시도, 1초마다 총 포인트 갱신, 모아 저장·저장 실패 재시도.
+		if not self.TalentLoaded then
+			self.TalentRetryTimer = self.TalentRetryTimer - delta
+			if self.TalentRetryTimer <= 0 then self:LoadTalent() end
+			return
+		end
+		self.TotalTimer = self.TotalTimer - delta
+		if self.TotalTimer <= 0 then
+			self.TotalTimer = 1
+			self:SyncPoints()
+		end
+		if self.TalentDirty then
+			if self._T.saveFailed == true then
+				self.TalentRetryTimer = self.TalentRetryTimer - delta
+				if self.TalentRetryTimer <= 0 then
+					self._T.saveFailed = false
+					self:SaveTalent()
+				end
+			elseif self._T.saving ~= true and self.SaveTimer > 0 then
+				self.SaveTimer = self.SaveTimer - delta
+				if self.SaveTimer <= 0 then self:SaveTalent() end
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 나갈 때 저장되지 않은 변경을 마지막으로 저장한다.
+		if self.TalentLoaded and self.TalentDirty then
+			local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+			local code = ds:SetAndWait(self.TalentKey, self:Encode())
+			if code ~= 0 then log_warning("[VRF] talent final save failed code=" .. tostring(code)) end
+		end
+	end
+
+	-- ───────────────────────── 표 읽기 (양쪽 공용, E-B 화면에서도 사용) ─────────────────────────
+
+	method void EnsureTables()
+		-- 표를 아직 읽지 않았으면 읽는다.
+		if self._T.nodes == nil then self:LoadTables() end
+	end
+
+	method void LoadTables()
+		-- TalentTable / TalentRouteTable을 self._T에 캐시한다.
+		self._T.nodes = {}
+		self._T.nodeById = {}
+		self._T.routes = {}
+		self._T.routeById = {}
+		self._T.need = {}
+		local i = 1
+		for v in string.gmatch(self.TierNeed, "[^,]+") do
+			self._T.need[i] = tonumber(v) or 0
+			i = i + 1
+		end
+		local nt = _DataService:GetTable(self.NodeTableName)
+		if nt == nil then
+			log_error("[VRF] TalentTable not found")
+		else
+			for r = 1, nt:GetRowCount() do
+				local n = {
+					id = nt:GetCell(r, "Id"), tab = nt:GetCell(r, "Tab"), route = nt:GetCell(r, "Route"),
+					tier = tonumber(nt:GetCell(r, "Tier")) or 1, col = tonumber(nt:GetCell(r, "Col")) or 1,
+					name = nt:GetCell(r, "Name"), key = nt:GetCell(r, "EffectKey"),
+					per = tonumber(nt:GetCell(r, "PerLv")) or 0, max = tonumber(nt:GetCell(r, "MaxLv")) or 1,
+					icon = nt:GetCell(r, "IconRUID") or "", desc = nt:GetCell(r, "Desc") or "",
+				}
+				n.core = n.tier >= 5
+				table.insert(self._T.nodes, n)
+				self._T.nodeById[n.id] = n
+			end
+		end
+		local rt = _DataService:GetTable(self.RouteTableName)
+		if rt == nil then
+			log_error("[VRF] TalentRouteTable not found")
+		else
+			for r = 1, rt:GetRowCount() do
+				local ro = { id = rt:GetCell(r, "Route"), tab = rt:GetCell(r, "Tab"), order = tonumber(rt:GetCell(r, "Order")) or r,
+					name = rt:GetCell(r, "Name"), desc = rt:GetCell(r, "Desc") or "", bonus = {} }
+				for _, th in ipairs({ 5, 10, 15 }) do
+					local s = tostring(th)
+					table.insert(ro.bonus, { at = th, key = rt:GetCell(r, "Key" .. s) or "", value = tonumber(rt:GetCell(r, "Val" .. s)) or 0, label = rt:GetCell(r, "Label" .. s) or "" })
+				end
+				table.insert(self._T.routes, ro)
+				self._T.routeById[ro.id] = ro
+			end
+		end
+	end
+
+	method table NodeList()
+		-- 전체 칸 목록 (표 순서). 각 칸: { id, tab, route, tier, col, name, key, per, max, icon, desc, core }.
+		self:EnsureTables()
+		return self._T.nodes
+	end
+
+	method any NodeInfo(string nodeId)
+		-- 칸 정보 (없으면 nil).
+		self:EnsureTables()
+		return self._T.nodeById[nodeId]
+	end
+
+	method table RouteList(string tab)
+		-- 탭(Atk/Def/Util)의 루트 목록 (Order 순). tab이 ""이면 전체.
+		self:EnsureTables()
+		local list = {}
+		for _, ro in ipairs(self._T.routes) do
+			if tab == "" or ro.tab == tab then table.insert(list, ro) end
+		end
+		table.sort(list, function(a, b) return a.order < b.order end)
+		return list
+	end
+
+	method any RouteInfo(string routeId)
+		-- 루트 정보 { id, tab, order, name, desc, bonus = { {at, key, value, label} x3 } } (없으면 nil).
+		self:EnsureTables()
+		return self._T.routeById[routeId]
+	end
+
+	method table RouteNodes(string routeId)
+		-- 루트의 칸 목록 (단·칸 순).
+		self:EnsureTables()
+		local list = {}
+		for _, n in ipairs(self._T.nodes) do
+			if n.route == routeId then table.insert(list, n) end
+		end
+		table.sort(list, function(a, b) if a.tier ~= b.tier then return a.tier < b.tier end return a.col < b.col end)
+		return list
+	end
+
+	method integer TierNeedOf(integer tier)
+		-- 그 단을 여는 데 필요한 아래 단 포인트.
+		self:EnsureTables()
+		return math.floor(self._T.need[tier] or 0)
+	end
+
+	method table ParseLevels(string data)
+		-- "Id:레벨,..." → { [Id] = 레벨 } (표에 있는 칸만, 최대 레벨로 자름). 클라이언트는 TalentData를 넣어 쓴다.
+		self:EnsureTables()
+		local lv = {}
+		for entry in string.gmatch(data or "", "[^,]+") do
+			local c, _ = string.find(entry, ":", 1, true)
+			if c ~= nil then
+				local id = string.sub(entry, 1, c - 1)
+				local n = self._T.nodeById[id]
+				local v = math.floor(tonumber(string.sub(entry, c + 1)) or 0)
+				if n ~= nil and v > 0 then lv[id] = math.min(n.max, v) end
+			end
+		end
+		return lv
+	end
+
+	method integer RoutePoints(table levels, string routeId)
+		-- 루트에 쓴 포인트 합 (모든 단).
+		self:EnsureTables()
+		local sum = 0
+		for _, n in ipairs(self._T.nodes) do
+			if n.route == routeId then sum = sum + (levels[n.id] or 0) end
+		end
+		return sum
+	end
+
+	method integer LowerPoints(table levels, string routeId, integer tier)
+		-- 루트에서 그 단보다 아래 단에 쓴 포인트 합 (해금 판정용).
+		self:EnsureTables()
+		local sum = 0
+		for _, n in ipairs(self._T.nodes) do
+			if n.route == routeId and n.tier < tier then sum = sum + (levels[n.id] or 0) end
+		end
+		return sum
+	end
+
+	method integer TabPoints(table levels, string tab)
+		-- 탭에 쓴 포인트 합 (tab이 ""이면 전체).
+		self:EnsureTables()
+		local sum = 0
+		for _, n in ipairs(self._T.nodes) do
+			if tab == "" or n.tab == tab then sum = sum + (levels[n.id] or 0) end
+		end
+		return sum
+	end
+
+	method string LockReason(table levels, string nodeId)
+		-- 칸을 찍을 수 없는 해금 이유 코드: "" = 열림, err_tier = 아래 단 포인트 부족, err_core = 4단 칸 미투자, err_node = 없는 칸.
+		local n = self:NodeInfo(nodeId)
+		if n == nil then return "err_node" end
+		if n.tier <= 1 then return "" end
+		if self:LowerPoints(levels, n.route, n.tier) < self:TierNeedOf(n.tier) then return "err_tier" end
+		if n.core then
+			local any = false
+			for _, p in ipairs(self._T.nodes) do
+				if p.route == n.route and p.tier == n.tier - 1 and (levels[p.id] or 0) > 0 then any = true end
+			end
+			if not any then return "err_core" end
+		end
+		return ""
+	end
+
+	method boolean IsNodeOpen(table levels, string nodeId)
+		-- 해금 여부 (LockReason이 "").
+		return self:LockReason(levels, nodeId) == ""
+	end
+
+	method number NodeValue(string nodeId, integer level)
+		-- 그 레벨의 효과 수치 (레벨당 수치 × 레벨).
+		local n = self:NodeInfo(nodeId)
+		if n == nil then return 0 end
+		return n.per * math.max(0, math.min(n.max, level))
+	end
+
+	method string NumStr(number v)
+		-- 정수면 소수점 없이.
+		if v == math.floor(v) then return tostring(math.floor(v)) end
+		return tostring(math.floor(v * 10 + 0.5) / 10)
+	end
+
+	method string NodeDesc(string nodeId, integer level)
+		-- 칸 설명에서 {v}를 그 레벨 수치로 바꾼 글 (레벨 0이면 1레벨 수치).
+		local n = self:NodeInfo(nodeId)
+		if n == nil then return "" end
+		local text = n.desc
+		local v = self:NumStr(self:NodeValue(nodeId, math.max(1, level)))
+		local s, e = string.find(text, "{v}", 1, true)
+		while s ~= nil do
+			text = string.sub(text, 1, s - 1) .. v .. string.sub(text, e + 1)
+			s, e = string.find(text, "{v}", s + #v, true)
+		end
+		return text
+	end
+
+	method string BonusText(table bonus)
+		-- 루트 보너스 한 줄의 {v}를 수치로 바꾼 글.
+		local text = bonus.label or ""
+		local v = self:NumStr(bonus.value or 0)
+		local s, e = string.find(text, "{v}", 1, true)
+		if s ~= nil then text = string.sub(text, 1, s - 1) .. v .. string.sub(text, e + 1) end
+		return text
+	end
+
+	method table ComputeValues(table levels)
+		-- 칸 효과 + 루트 보너스 합계 { values = {키 = 수치}, cores = {핵심 칸 키...}, coreIds = {...}, routes = {루트 = 포인트} }.
+		self:EnsureTables()
+		local data = { values = {}, cores = {}, coreIds = {}, routes = {} }
+		for _, n in ipairs(self._T.nodes) do
+			local lv = levels[n.id] or 0
+			if lv > 0 and n.key ~= "" then
+				data.values[n.key] = (data.values[n.key] or 0) + n.per * lv
+				if n.core then
+					table.insert(data.cores, n.key)
+					table.insert(data.coreIds, n.id)
+				end
+			end
+		end
+		for _, ro in ipairs(self._T.routes) do
+			local pts = self:RoutePoints(levels, ro.id)
+			data.routes[ro.id] = pts
+			for _, b in ipairs(ro.bonus) do
+				if pts >= b.at and b.key ~= "" then data.values[b.key] = (data.values[b.key] or 0) + b.value end
+			end
+		end
+		return data
+	end
+
+	method string TalentMsgText(string code)
+		-- 결과 코드 → 화면 안내 문구.
+		local map = {
+			ok = "", err_locked = "계정 레벨이 부족해 각인을 열 수 없습니다", err_lobby = "로비에서만 바꿀 수 있습니다",
+			err_node = "없는 각인입니다", err_max = "이미 최대 레벨입니다", err_tier = "이 루트의 아래 단에 포인트가 더 필요합니다",
+			err_core = "4단 각인을 하나 이상 찍어야 합니다", err_points = "남은 포인트가 없습니다", err_empty = "돌려받을 포인트가 없습니다",
+			err_loading = "각인 정보를 불러오는 중입니다",
+		}
+		return map[code] or ""
+	end
+
+	method integer TotalPoints()
+		-- 총 포인트 = 클리어한 최고 층 수 (사용자 확정, 기존 각인 규칙과 같음: PlayerEngrave.ClearedFloor 읽기만). 불러오기 전이면 0. 포인트 출처는 이 함수 한 곳에서만 정한다.
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.Loaded then return 0 end
+		return math.max(0, math.floor(eng.ClearedFloor))
+	end
+
+	-- ───────────────────────── 저장 (서버) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void LoadTalent()
+		-- OrbisTalentV1을 불러온다. 없으면 빈 상태(전부 0레벨). 실패하면 재시도하며 그동안 저장하지 않는다.
+		self:EnsureTables()
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.TalentKey)
+		if code == 0 and raw ~= nil and raw ~= "" then
+			self:Decode(raw)
+		elseif code == 1000002 or (code == 0 and (raw == nil or raw == "")) then
+			self:ResetState()
+		else
+			log_warning("[VRF] talent load failed code=" .. tostring(code))
+			self.TalentRetryTimer = self.LoadRetryDelay
+			self.TalentLoaded = false
+			return
+		end
+		local refunded = self:FixLocked()
+		self.TalentLoaded = true
+		self:SyncTalent()
+		if refunded then self:MarkDirty(0.1) end
+		log("[VRF] talent loaded data=" .. self.TalentData .. " total=" .. tostring(self.TalentTotal) .. " spent=" .. tostring(self.TalentSpent) .. " left=" .. tostring(self.TalentLeft))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ResetState()
+		-- 서버 상태를 빈 값으로.
+		self._T.lv = {}
+		self._T.unknownNodes = {}
+		self._T.extra = {}
+		self._T.extraKeys = {}
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Decode(string raw)
+		-- 저장 문자열 "v=1;n=Id:레벨,..." 을 읽는다. 모르는 키와 표에 없는 칸은 원문 그대로 보관한다.
+		self:ResetState()
+		for part in string.gmatch(raw, "[^;]+") do
+			local eq, _ = string.find(part, "=", 1, true)
+			if eq ~= nil then
+				local k = string.sub(part, 1, eq - 1)
+				local v = string.sub(part, eq + 1)
+				if k == "n" then
+					for entry in string.gmatch(v, "[^,]+") do
+						local c, _2 = string.find(entry, ":", 1, true)
+						local id = c ~= nil and string.sub(entry, 1, c - 1) or entry
+						local n = self._T.nodeById[id]
+						if n ~= nil and c ~= nil then
+							local lvl = math.floor(tonumber(string.sub(entry, c + 1)) or 0)
+							if lvl > 0 then self._T.lv[id] = math.min(n.max, lvl) end
+						elseif entry ~= "" then
+							table.insert(self._T.unknownNodes, entry)
+						end
+					end
+				elseif k ~= "v" and k ~= "" then
+					if self._T.extra[k] == nil then table.insert(self._T.extraKeys, k) end
+					self._T.extra[k] = v
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean FixLocked()
+		-- 표가 바뀌어 해금 조건이 안 맞는 칸은 0레벨로 돌린다 (단 순서대로 반복). 돌려준 것이 있으면 true.
+		local changed = false
+		local again = true
+		while again do
+			again = false
+			for tier = 2, 5 do
+				for _, n in ipairs(self._T.nodes) do
+					if n.tier == tier and (self._T.lv[n.id] or 0) > 0 and not self:IsNodeOpen(self._T.lv, n.id) then
+						self._T.lv[n.id] = nil
+						changed = true
+						again = true
+						log("[VRF] talent refund locked node " .. n.id)
+					end
+				end
+			end
+		end
+		return changed
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeLevels(boolean withUnknown)
+		-- 칸 레벨 "Id:레벨,..." (표 순서, 저장용이면 모르는 칸 원문도).
+		local parts = {}
+		for _, n in ipairs(self._T.nodes or {}) do
+			local v = (self._T.lv or {})[n.id] or 0
+			if v > 0 then table.insert(parts, n.id .. ":" .. tostring(math.floor(v))) end
+		end
+		if withUnknown then
+			for _, e in ipairs(self._T.unknownNodes or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 문자열 "v=1;n=칸레벨" + 모르는 키.
+		local parts = { "v=1", "n=" .. self:EncodeLevels(true) }
+		for _, k in ipairs(self._T.extraKeys or {}) do table.insert(parts, k .. "=" .. tostring(self._T.extra[k])) end
+		return table.concat(parts, ";")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncPoints()
+		-- 총·사용·남은 포인트만 다시 계산해 Sync 값에 쓴다 (바뀐 경우만).
+		local total = self:TotalPoints()
+		local spent = self:TabPoints(self._T.lv or {}, "")
+		local left = math.max(0, total - spent)
+		if self.TalentTotal ~= total then self.TalentTotal = total end
+		if self.TalentSpent ~= spent then self.TalentSpent = spent end
+		if self.TalentLeft ~= left then self.TalentLeft = left end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncTalent()
+		-- 서버 상태를 Sync 값으로 다시 쓴다.
+		self.TalentData = self:EncodeLevels(false)
+		self:SyncPoints()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MarkDirty(number delay)
+		-- 변경 표시. delay초 뒤 모아 저장한다 (0 이하면 바로).
+		self.TalentDirty = true
+		self._T.saveGen = (self._T.saveGen or 0) + 1
+		if delay <= 0 then
+			self:SaveTalent()
+		elseif self.SaveTimer <= 0 or self.SaveTimer > delay then
+			self.SaveTimer = delay
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveTalent()
+		-- 비동기 저장. 불러오기 전에는 절대 저장하지 않는다. 저장 중 또 바뀌면 Dirty를 유지해 다시 저장.
+		if not self.TalentLoaded then return end
+		self.SaveTimer = 0
+		self._T.saving = true
+		local gen = self._T.saveGen or 0
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.TalentKey, self:Encode(), function(errorCode, key)
+			self._T.saving = false
+			if errorCode == 0 then
+				if gen == (self._T.saveGen or 0) then
+					self.TalentDirty = false
+				else
+					self.SaveTimer = 0.5
+				end
+				log("[VRF] talent saved spent=" .. tostring(self.TalentSpent))
+			else
+				log_warning("[VRF] talent save failed code=" .. tostring(errorCode))
+				self._T.saveFailed = true
+				self.TalentRetryTimer = self.SaveRetryDelay
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Reply(string code, string result)
+		-- 처리 결과를 Sync 값에 쓰고 로그를 남긴 뒤 코드를 돌려준다.
+		self.TalentSeq = self.TalentSeq + 1
+		self.TalentMsg = code
+		self.TalentResult = result
+		log("[VRF] talent reply " .. code .. " " .. result .. " left=" .. tostring(self.TalentLeft))
+		return code
+	end
+
+	@ExecSpace("ServerOnly")
+	method string CheckEdit()
+		-- 바꿀 수 있는 상태인지: "" = 가능, 아니면 결과 코드.
+		if not self.TalentLoaded then return "err_loading" end
+		if not _UnlockRules:IsOpen(self.Entity, "Engrave") then return "err_locked" end
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return "err_lobby" end
+		return ""
+	end
+
+	-- ───────────────────────── 로비 요청 ─────────────────────────
+
+	@ExecSpace("Server")
+	method void RequestTalentUp(string nodeId)
+		-- 클라이언트 요청: 칸에 포인트 1 (본인·로비 전용, 해금·포인트 서버 검증).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		-- 계정 레벨 해금(UnlockTable Engrave, Lv3) 전에는 처리하지 않는다.
+		if not _UnlockRules:IsOpen(self.Entity, "Engrave") then self:Reply("err_locked", "up:" .. nodeId) return end
+		self:DoTalentUp(nodeId)
+	end
+
+	@ExecSpace("Server")
+	method void RequestTalentReset(string tab)
+		-- 클라이언트 요청: 무료 초기화. tab = Atk/Def/Util, "" = 전체 (본인·로비 전용).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		if not _UnlockRules:IsOpen(self.Entity, "Engrave") then self:Reply("err_locked", "reset:" .. tab) return end
+		self:DoTalentReset(tab)
+	end
+
+	@ExecSpace("Server")
+	method void RequestTalentSave()
+		-- 클라이언트 요청: 각인 창을 닫을 때 모아 둔 변경을 바로 저장.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		if self.TalentDirty and self._T.saving ~= true then self:SaveTalent() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoTalentUp(string nodeId)
+		-- 칸 레벨 +1. 결과 코드를 돌려준다.
+		local err = self:CheckEdit()
+		if err ~= "" then return self:Reply(err, "up:" .. nodeId) end
+		local n = self._T.nodeById[nodeId]
+		if n == nil then return self:Reply("err_node", "up:" .. nodeId) end
+		local lv = self._T.lv[nodeId] or 0
+		if lv >= n.max then return self:Reply("err_max", "up:" .. nodeId) end
+		local lock = self:LockReason(self._T.lv, nodeId)
+		if lock ~= "" then return self:Reply(lock, "up:" .. nodeId) end
+		self:SyncPoints()
+		if self.TalentLeft <= 0 then return self:Reply("err_points", "up:" .. nodeId) end
+		self._T.lv[nodeId] = lv + 1
+		self:SyncTalent()
+		self:MarkDirty(self.SaveDebounce)
+		return self:Reply("ok", "up:" .. nodeId .. ":" .. tostring(lv + 1))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoTalentReset(string tab)
+		-- 탭(또는 전체) 칸을 모두 0레벨로 (무료). 결과 코드를 돌려준다.
+		local err = self:CheckEdit()
+		if err ~= "" then return self:Reply(err, "reset:" .. tab) end
+		local back = 0
+		for _, n in ipairs(self._T.nodes) do
+			if (tab == "" or n.tab == tab) and (self._T.lv[n.id] or 0) > 0 then
+				back = back + self._T.lv[n.id]
+				self._T.lv[n.id] = nil
+			end
+		end
+		if back <= 0 then return self:Reply("err_empty", "reset:" .. tab) end
+		self:SyncTalent()
+		self:MarkDirty(0)
+		return self:Reply("ok", "reset:" .. tab .. ":" .. tostring(back))
+	end
+
+	-- ───────────────────────── 판 반영 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method table TalentRunData()
+		-- 판 시작 시 반영할 각인 값 { values = {효과 키 = 합}, cores = {핵심 칸 효과 키...}, coreIds = {...}, routes = {루트 = 포인트} }.
+		if not self.TalentLoaded then return { values = {}, cores = {}, coreIds = {}, routes = {} } end
+		local data = self:ComputeValues(self._T.lv)
+		local parts = {}
+		for k, v in pairs(data.values) do table.insert(parts, k .. "=" .. self:NumStr(v)) end
+		table.sort(parts)
+		log("[VRF] talent run data " .. table.concat(parts, ",") .. " cores=" .. table.concat(data.cores, ","))
+		return data
+	end
+
+	-- ───────────────────────── 테스트 전용 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method string DebugTalentRaw()
+		-- 테스트: 저장소의 OrbisTalentV1 원문 (없으면 "<none>", 읽기 실패면 "<error:코드>").
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.TalentKey)
+		local s = raw or ""
+		if code == 1000002 or (code == 0 and s == "") then s = "<none>" elseif code ~= 0 then s = "<error:" .. tostring(code) .. ">" end
+		log("[VRF] talent raw " .. s)
+		return s
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugTalentSet(string data)
+		-- 테스트: 칸 레벨을 "Id:레벨,..."로 통째로 바꾼다 (해금 검사 없음) 후 저장.
+		if not self.TalentLoaded then return end
+		local unknown = self._T.unknownNodes
+		local extra, extraKeys = self._T.extra, self._T.extraKeys
+		self._T.lv = self:ParseLevels(data)
+		self._T.unknownNodes = unknown
+		self._T.extra, self._T.extraKeys = extra, extraKeys
+		self:SyncTalent()
+		self:MarkDirty(0)
+		log("[VRF] talent debug set " .. self.TalentData)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugTalentRestore(string raw)
+		-- 테스트: DebugTalentRaw로 받아 둔 원문으로 되돌린다. "<none>"이면 저장 키를 지워 원래 없던 상태로 (메모리는 빈 상태).
+		if raw == nil or raw == "" then return end
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		self._T.saveGen = (self._T.saveGen or 0) + 1
+		self.SaveTimer = 0
+		self.TalentDirty = false
+		if raw == "<none>" then
+			local code = ds:DeleteAndWait(self.TalentKey)
+			self:ResetState()
+			self:SyncTalent()
+			log("[VRF] talent debug restore none code=" .. tostring(code))
+			return
+		end
+		local code = ds:SetAndWait(self.TalentKey, raw)
+		self:Decode(raw)
+		self:SyncTalent()
+		log("[VRF] talent debug restore code=" .. tostring(code) .. " ok=" .. tostring(self:Encode() == raw))
+	end
+
+end

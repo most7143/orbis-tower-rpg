@@ -8,6 +8,8 @@ script GrowthUILogic extends Logic
 	property integer TabCount = 5
 	property Color TabTextColor = Color(0.90, 0.93, 0.96, 1)
 	property Color TabSelectedColor = Color(1, 1, 1, 1)
+	-- 탭별 계정 레벨 해금 id (UnlockTable). 잠긴 탭은 비활성 이미지 + "이름 · Lv.N 해금", 눌러도 열리지 않는다(입력 차단).
+	property string TabUnlockIds = "Slot,Engrave,Relic,Pet,Grace"
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -101,13 +103,81 @@ script GrowthUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Open()
-		-- 로비 [성장] 버튼: 첫 탭부터 연다. 스킨은 초기화 때 준비하여 즉시 연다.
+		-- 로비 [성장] 버튼: 열려 있는 첫 탭부터 연다(잠긴 탭은 건너뜀). 전부 잠겼으면 열지 않는다(로비 버튼도 비활성).
 		local root = _EntityService:GetEntityByPath(self.RootPath)
 		if not isvalid(root) then return end
+		local first = self:FirstOpenTab()
+		if first == 0 then log("[VRF] growth open blocked (all tabs locked)") return end
 		root:SetEnable(true)
 		self._T.open = true
 		self._T.tab = 0
-		self:SelectTab(1)
+		self:ApplyLocks()
+		self:SelectTab(first)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string TabUnlockId(integer index)
+		-- index번 탭의 해금 id.
+		local i = 0
+		for id in string.gmatch(self.TabUnlockIds, "[^,]+") do
+			i = i + 1
+			if i == index then return id end
+		end
+		return ""
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean TabOpen(integer index)
+		-- 계정 레벨로 그 탭이 열렸는지.
+		local id = self:TabUnlockId(index)
+		if id == "" then return true end
+		return _UnlockRules:IsOpenLocal(id)
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer FirstOpenTab()
+		-- 열린 첫 탭 번호 (없으면 0).
+		for i = 1, self.TabCount do
+			if self:TabOpen(i) then return i end
+		end
+		return 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyLocks()
+		-- 탭 잠금 표시·입력 차단. 지금 탭이 잠기면 열린 첫 탭으로 옮기고, 전부 잠기면 닫는다.
+		if self._T.tabText == nil then self._T.tabText = {} end
+		local lockedNow = ""
+		for i = 1, self.TabCount do
+			local tab = _EntityService:GetEntityByPath(self.RootPath .. "/Tab" .. tostring(i))
+			if isvalid(tab) then
+				local open = self:TabOpen(i)
+				local text = tab.TextGUIRendererComponent
+				if self._T.tabText[i] == nil and isvalid(text) then self._T.tabText[i] = text.Text end
+				_UIButtonLogic:SetDisabled(tab, not open)
+				if isvalid(text) then
+					if open then
+						text.Text = self._T.tabText[i]
+					else
+						text.Text = self._T.tabText[i] .. " · " .. _UnlockRules:LockText(self:TabUnlockId(i))
+						lockedNow = lockedNow .. tostring(i)
+					end
+				end
+			end
+		end
+		if lockedNow ~= self._T.lockedLog then
+			self._T.lockedLog = lockedNow
+			log("[VRF] growth locked tabs=" .. lockedNow .. " lv=" .. tostring(_UnlockRules:AccountLevelOf(_UserService.LocalPlayer)))
+		end
+		local cubeOpen = _UnlockRules:IsOpenLocal("Cube")
+		if self._T.cubeOpen ~= cubeOpen then
+			self._T.cubeOpen = cubeOpen
+			if self._T.tab == 1 then _SlotUILogic:Refresh() end
+		end
+		if self._T.open and self._T.tab > 0 and not self:TabOpen(self._T.tab) then
+			local first = self:FirstOpenTab()
+			if first == 0 then self:Close() else self:SelectTab(first) end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -122,18 +192,19 @@ script GrowthUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void CloseContent()
-		-- 지금 탭의 기존 화면을 닫는다.
+		-- 지금 탭의 기존 화면을 닫는다 (탭 순서: 장비·각인·유물·펫·은총).
 		if self._T.tab == 1 then _SlotUILogic:Close() end
 		if self._T.tab == 2 then _EngraveUILogic:Close() end
 		if self._T.tab == 3 then _RelicUILogic:Close() end
-		if self._T.tab == 4 then _GraceUILogic:Close() end
-		if self._T.tab == 5 then _PetUILogic:Close() end
+		if self._T.tab == 4 then _PetUILogic:Close() end
+		if self._T.tab == 5 then _GraceUILogic:Close() end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void SelectTab(integer index)
 		-- 탭 전환: 고정 프레임과 선택 상태 이미지를 사용한다. 배치는 유지한다.
 		if self._T.tab == index or index < 1 or index > self.TabCount then return end
+		if not self:TabOpen(index) then log("[VRF] growth tab locked=" .. tostring(index)) return end
 		self:CloseContent()
 		self._T.tab = index
 		for i = 1, self.TabCount do
@@ -153,21 +224,27 @@ script GrowthUILogic extends Logic
 			-- 3번 탭: 유물 (심볼 대체, 2026-11-21)
 			_RelicUILogic:Open()
 		elseif index == 4 then
+			-- 4번 탭: 펫 (탭 순서 장비·각인·유물·펫·은총, 2026-11-22)
+			_PetUILogic:Open()
+		elseif index == 5 then
+			-- 5번 탭: 은총
 			_GraceUILogic:Open()
 			_GraceUILogic.dimEntity:SetEnable(false)
-		elseif index == 5 then
-			-- 5번 탭: 펫
-			_PetUILogic:Open()
 		end
 		log("[VRF] growth tab=" .. tostring(index))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
-		-- 로비를 벗어나면 닫는다.
+		-- 로비를 벗어나면 닫는다. 열려 있는 동안 0.3초마다 탭 잠금을 다시 맞춘다.
 		if not self._T.open then return end
 		local player = _UserService.LocalPlayer
-		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then self:Close() end
+		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then self:Close() return end
+		self._T.lockTick = (self._T.lockTick or 0) - delta
+		if self._T.lockTick <= 0 then
+			self._T.lockTick = 0.3
+			self:ApplyLocks()
+		end
 	end
 
 end

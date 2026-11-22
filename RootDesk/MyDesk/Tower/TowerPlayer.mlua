@@ -509,8 +509,12 @@ script TowerPlayer extends AttackComponent
 	end
 
 	method integer CalcDamage(Entity attacker, Entity defender, string attackInfo)
-		-- 판 진행 매니저가 넘겨준 공격력 그대로.
-		return self.CurrentDamage
+		-- 판 진행 매니저가 넘겨준 공격력 그대로. 각인 '섬멸'은 여기서 판정해 엔진이 띄우는 숫자도 2배가 되게 한다.
+		local dmg = self.CurrentDamage
+		local map = self.Entity.CurrentMap
+		local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
+		if mgr ~= nil and dmg > 0 then dmg = mgr:FinalDouble(dmg) end
+		return dmg
 	end
 
 	method boolean CalcCritical(Entity attacker, Entity defender, string attackInfo)

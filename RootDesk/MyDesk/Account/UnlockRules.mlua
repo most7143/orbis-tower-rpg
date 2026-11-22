@@ -1,0 +1,90 @@
+@Logic
+script UnlockRules extends Logic
+
+	-- 계정 레벨 콘텐츠 해금·레벨업 보상 공용 규칙 (서버·클라이언트 공용). 해금 레벨은 UnlockTable.csv가 원본.
+	-- 보상: 레벨마다 금색 메소 MesoPerLevel × 새 레벨, 다이아 DiaPerLevel (해금 레벨이면 DiaUnlockLevel).
+	property integer MesoPerLevel = 100
+	property integer DiaPerLevel = 50
+	property integer DiaUnlockLevel = 100
+
+	method void EnsureTable()
+		-- 표를 한 번만 읽는다. 표가 없으면 사양 기본값을 쓴다.
+		if self._T.list ~= nil then return end
+		local list = {}
+		local t = _DataService:GetTable("UnlockTable")
+		if t ~= nil then
+			for i = 1, t:GetRowCount() do
+				local id = t:GetCell(i, "Id")
+				if id ~= nil and id ~= "" then
+					table.insert(list, { id = id, name = t:GetCell(i, "Name") or id, level = math.max(1, math.floor(tonumber(t:GetCell(i, "Level")) or 1)) })
+				end
+			end
+		else
+			log_warning("[VRF] unlock UnlockTable missing")
+			list = { { id = "Slot", name = "슬롯", level = 2 }, { id = "Engrave", name = "각인", level = 3 }, { id = "Relic", name = "유물", level = 4 }, { id = "CharGacha", name = "캐릭터 뽑기", level = 5 }, { id = "Pet", name = "펫", level = 8 }, { id = "Grace", name = "은총", level = 15 }, { id = "Cube", name = "큐브", level = 25 } }
+		end
+		local map = {}
+		for _, r in ipairs(list) do map[r.id] = r end
+		self._T.list = list
+		self._T.map = map
+	end
+
+	method integer Level(string id)
+		-- 그 콘텐츠의 해금 계정 레벨 (모르는 id는 1 = 항상 열림).
+		self:EnsureTable()
+		local r = self._T.map[id]
+		if r == nil then return 1 end
+		return r.level
+	end
+
+	method string Name(string id)
+		-- 그 콘텐츠의 표시 이름.
+		self:EnsureTable()
+		local r = self._T.map[id]
+		if r == nil then return id end
+		return r.name
+	end
+
+	method table UnlocksAt(integer level)
+		-- 정확히 그 레벨에 해금되는 콘텐츠 이름 목록.
+		self:EnsureTable()
+		local names = {}
+		for _, r in ipairs(self._T.list) do
+			if r.level == level then table.insert(names, r.name) end
+		end
+		return names
+	end
+
+	method integer AccountLevelOf(Entity player)
+		-- 플레이어의 현재 계정 레벨 (PlayerEngrave 동기화 값, 읽기만). 불러오기 전이면 0.
+		if not isvalid(player) then return 0 end
+		---@type PlayerEngrave
+		local eng = player:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.AccountLoaded then return 0 end
+		return math.floor(eng.AccountLevel)
+	end
+
+	method boolean IsOpen(Entity player, string id)
+		-- 그 플레이어에게 콘텐츠가 열렸는지 (계정 불러오기 전에는 닫힘).
+		return self:AccountLevelOf(player) >= self:Level(id)
+	end
+
+	method boolean IsOpenLocal(string id)
+		-- 클라이언트: 내 플레이어 기준 IsOpen.
+		return self:IsOpen(_UserService.LocalPlayer, id)
+	end
+
+	method string LockText(string id)
+		-- 잠긴 버튼 글자 "Lv.N 해금".
+		return "Lv." .. tostring(self:Level(id)) .. " 해금"
+	end
+
+	method table RewardFor(integer level)
+		-- 그 레벨에 도달했을 때 보상 { meso, dia, unlocks }.
+		local unlocks = self:UnlocksAt(level)
+		local dia = self.DiaPerLevel
+		if #unlocks > 0 then dia = self.DiaUnlockLevel end
+		return { meso = self.MesoPerLevel * level, dia = dia, unlocks = unlocks }
+	end
+
+end

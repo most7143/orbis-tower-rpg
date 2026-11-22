@@ -551,6 +551,8 @@ script PlayerPet extends Component
 	method void RequestPetDraw(integer n)
 		-- 클라이언트 요청: 펫 뽑기 1회·10회 (로비 전용, 뽑기권 n장).
 		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		-- 계정 레벨 해금(UnlockTable Pet) 전에는 뽑기·뽑기권 구매·장착을 막는다.
+		if not _UnlockRules:IsOpen(self.Entity, "Pet") then self:Reply("err_locked", "draw:" .. tostring(n)) return end
 		self:DoDraw(n)
 	end
 
@@ -558,6 +560,7 @@ script PlayerPet extends Component
 	method void RequestBuyPetTicket(integer n)
 		-- 클라이언트 요청: 다이아로 뽑기권 1장·10장 구매 (로비 전용).
 		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		if not _UnlockRules:IsOpen(self.Entity, "Pet") then self:Reply("err_locked", "buy:" .. tostring(n)) return end
 		self:DoBuyTicket(n)
 	end
 
@@ -565,6 +568,7 @@ script PlayerPet extends Component
 	method void RequestPetEquip(integer slot, string petId)
 		-- 클라이언트 요청: 칸에 펫 장착 (petId 빈 문자열 = 해제, 로비 전용). 다른 칸에 장착된 펫이면 그 칸에서 옮긴다.
 		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		if not _UnlockRules:IsOpen(self.Entity, "Pet") then self:Reply("err_locked", "equip:" .. tostring(slot)) return end
 		self:DoEquip(slot, petId)
 	end
 

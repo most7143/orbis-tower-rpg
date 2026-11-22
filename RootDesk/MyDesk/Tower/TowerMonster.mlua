@@ -282,7 +282,8 @@ script TowerMonster extends AttackComponent
 		if isvalid(map) then
 			local mgr = map:GetComponent("script.TowerRunManager")
 			if mgr ~= nil then
-				mgr:ApplyMonsterDamage(event.TotalDamage)
+				-- '섬멸'은 공격 쪽 CalcDamage에서 이미 판정됨 (뜨는 숫자 = 적용 피해)
+				mgr:ApplyRolledDamage(event.TotalDamage)
 				if event.IsCritical then mgr:OnPlayerCrit() end
 			end
 		end

@@ -268,7 +268,8 @@ script SlotUILogic extends Logic
 		if gear ~= nil then self._T.lastSeq = gear.GearSeq end
 		self._T.busy = 0
 		self._T.open = true
-		-- 모드·칸·부위·큐브 선택은 탭을 닫았다 열어도 유지한다
+		-- 모드·칸·부위·큐브 선택은 탭을 닫았다 열어도 유지한다 (큐브가 잠겼으면 주문서 강화로)
+		if self._T.mode == "pot" and not _UnlockRules:IsOpenLocal("Cube") then self._T.mode = "scroll" end
 		root:SetEnable(true)
 		self:ApplyMode()
 		self:RefreshPartyNames()
@@ -333,10 +334,21 @@ script SlotUILogic extends Logic
 			_UIButtonLogic:SetSelected(btn, no == slotNo)
 			_UIButtonLogic:SetDisabled(btn, busy)
 		end
+		-- 잠재능력(큐브)은 계정 레벨 해금 전에는 비활성 + "Lv.N 해금"
+		local potOpen = _UnlockRules:IsOpenLocal("Cube")
+		if self._T.mode == "pot" and not potOpen and not busy then
+			self._T.mode = "scroll"
+			self:ApplyMode()
+		end
 		_UIButtonLogic:SetSelected(self:Get("/ModeScroll"), self._T.mode == "scroll")
 		_UIButtonLogic:SetDisabled(self:Get("/ModeScroll"), busy)
-		_UIButtonLogic:SetSelected(self:Get("/ModePot"), self._T.mode == "pot")
-		_UIButtonLogic:SetDisabled(self:Get("/ModePot"), busy)
+		local modePot = self:Get("/ModePot")
+		if isvalid(modePot) and isvalid(modePot.TextGUIRendererComponent) then
+			if self._T.potLabel == nil then self._T.potLabel = modePot.TextGUIRendererComponent.Text end
+			if potOpen then modePot.TextGUIRendererComponent.Text = self._T.potLabel else modePot.TextGUIRendererComponent.Text = _UnlockRules:LockText("Cube") end
+		end
+		_UIButtonLogic:SetSelected(modePot, self._T.mode == "pot")
+		_UIButtonLogic:SetDisabled(modePot, busy or not potOpen)
 		for _, id in ipairs(self._T.slots) do
 			-- 부위 칸 글자 "+12 · 에픽" (등급 이름은 등급 색)
 			local partInfo = self:Get("/Slot_" .. id .. "/Info")
@@ -592,6 +604,7 @@ script SlotUILogic extends Logic
 	method void SetMode(string mode)
 		-- 주문서 강화 / 잠재능력 전환. 요청 중에는 바꾸지 않는다.
 		if self._T.busy > 0 or self._T.mode == mode then return end
+		if mode == "pot" and not _UnlockRules:IsOpenLocal("Cube") then return end
 		self._T.mode = mode
 		self._T.msg = ""
 		self._T.potMsg = ""

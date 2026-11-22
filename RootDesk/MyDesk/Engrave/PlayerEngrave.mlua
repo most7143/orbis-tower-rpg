@@ -1007,6 +1007,7 @@ script PlayerEngrave extends Component
 	method boolean CanEditRelic(string fromUserId)
 		-- 본인 + 불러오기 완료 + 로비에서만.
 		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.RelicLoaded then return false end
+		if not _UnlockRules:IsOpen(self.Entity, "Relic") then return false end -- 계정 레벨 해금 (Lv4)
 		local map = self.Entity.CurrentMap
 		return isvalid(map) and map.Name == self.LobbyMapName
 	end
@@ -1080,6 +1081,7 @@ script PlayerEngrave extends Component
 	method boolean CanEditGrace(string fromUserId)
 		-- 본인 + 불러오기 완료 + 로비에서만.
 		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.GraceLoaded then return false end
+		if not _UnlockRules:IsOpen(self.Entity, "Grace") then return false end -- 계정 레벨 해금 (Lv15)
 		local map = self.Entity.CurrentMap
 		return isvalid(map) and map.Name == self.LobbyMapName
 	end

@@ -62,6 +62,13 @@ script PlayerRoster extends Component
 	@Sync
 	property integer GachaTotal = 0
 
+	-- 계정 레벨업 보상 (저장 alv = 보상 받은 계정 레벨). 지급마다 +1 → 클라이언트 레벨업 연출 신호
+	@Sync
+	property integer LevelUpSeq = 0
+	-- 마지막 레벨업 지급 "이전레벨:새레벨:금색메소:다이아:해금이름,해금이름"
+	@Sync
+	property string LevelUpData = ""
+
 	@HideFromInspector
 	property boolean RosterDirty = false
 	@HideFromInspector
@@ -534,6 +541,7 @@ script PlayerRoster extends Component
 		self.GachaTotal = 0
 		self._T.rewardFloor = 0
 		self._T.rewardSections = {}
+		self._T.rewardLevel = 0
 		self._T.gift = true
 		self._T.giftedNow = true
 		log("[VRF] roster first gift")
@@ -555,7 +563,7 @@ script PlayerRoster extends Component
 			if eq ~= nil then
 				local k = string.sub(part, 1, eq - 1)
 				local v = string.sub(part, eq + 1)
-				if k == "v" or k == "dia" or k == "book" or k == "cc" or k == "pt" or k == "awk" or k == "jc" or k == "ch" or k == "gift" or k == "gt" or k == "rf" or k == "rs" then
+				if k == "v" or k == "dia" or k == "book" or k == "cc" or k == "pt" or k == "awk" or k == "jc" or k == "ch" or k == "gift" or k == "gt" or k == "rf" or k == "rs" or k == "alv" then
 					kv[k] = v
 				elseif k ~= "" then
 					if self._T.extra[k] == nil then table.insert(self._T.extraKeys, k) end
@@ -607,6 +615,7 @@ script PlayerRoster extends Component
 			local n = self:ToInt(sec)
 			if n > 0 then self._T.rewardSections[n] = true end
 		end
+		self._T.rewardLevel = self:ToInt(kv["alv"])
 		self._T.gift = self:ToInt(kv["gift"]) == 1
 		return self._T.gift
 	end
@@ -655,6 +664,7 @@ script PlayerRoster extends Component
 		table.insert(parts, "gt=" .. tostring(self.GachaTotal))
 		table.insert(parts, "rf=" .. tostring(math.floor(self._T.rewardFloor or 0)))
 		table.insert(parts, "rs=" .. self:EncodeSections())
+		if math.floor(self._T.rewardLevel or 0) > 0 then table.insert(parts, "alv=" .. tostring(math.floor(self._T.rewardLevel))) end
 		for _, k in ipairs(self._T.extraKeys or {}) do
 			table.insert(parts, k .. "=" .. tostring(self._T.extra[k]))
 		end
@@ -1426,6 +1436,46 @@ script PlayerRoster extends Component
 		if eng == nil then return end
 		if eng.Loaded then self:GrantFirstClearDiamonds(eng.ClearedFloor) end
 		if eng.StarLoaded then self:GrantSectionDiamonds(eng.SectionData) end
+		self:CheckLevelRewards()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void CheckLevelRewards()
+		-- 1초마다(맵 상관없이): 계정 레벨(PlayerEngrave, 읽기만)이 보상 받은 레벨(alv)보다 높으면 오른 레벨마다 보상을 지급한다.
+		-- alv가 없으면(처음 접속·기존 계정) 현재 레벨로 맞추고 지난 레벨은 소급하지 않는다. 여러 레벨이 한 번에 오르면 합쳐 한 번 연출한다.
+		if not self.RosterLoaded then return end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.AccountLoaded then return end
+		local lv = math.floor(eng.AccountLevel)
+		local rl = math.floor(self._T.rewardLevel or 0)
+		if rl <= 0 then
+			self._T.rewardLevel = lv
+			self:SaveRoster()
+			log("[VRF] levelup reward init alv=" .. tostring(lv))
+			return
+		end
+		if lv <= rl then return end
+		---@type PlayerGear
+		local gear = self.Entity:GetComponent("script.PlayerGear")
+		if gear == nil or not gear.GearLoaded then return end
+		local meso = 0
+		local dia = 0
+		local names = {}
+		for L = rl + 1, lv do
+			local r = _UnlockRules:RewardFor(L)
+			meso = meso + r.meso
+			dia = dia + r.dia
+			for _, n in ipairs(r.unlocks) do table.insert(names, n) end
+		end
+		gear:AddGoldMeso(meso)
+		gear:Flush()
+		self.Diamonds = self.Diamonds + dia
+		self._T.rewardLevel = lv
+		self:SaveRoster()
+		self.LevelUpData = tostring(rl) .. ":" .. tostring(lv) .. ":" .. tostring(meso) .. ":" .. tostring(dia) .. ":" .. table.concat(names, ",")
+		self.LevelUpSeq = self.LevelUpSeq + 1
+		log("[VRF] levelup reward " .. self.LevelUpData .. " gold=" .. tostring(gear.GoldMeso) .. " dia=" .. tostring(self.Diamonds))
 	end
 
 	-- ───────────────────────── 클라이언트 요청 ─────────────────────────
@@ -1434,6 +1484,7 @@ script PlayerRoster extends Component
 	method void RequestGachaDraw(integer count)
 		-- 클라이언트 요청: 캐릭터 뽑기 1회·10회.
 		if not self:CanEditRoster(senderUserId) then self:GachaReply("err_lobby", "draw:" .. tostring(count)) return end
+		if not _UnlockRules:IsOpen(self.Entity, "CharGacha") then self:GachaReply("err_locked", "draw:" .. tostring(count)) return end
 		self:DoGachaDraw(count)
 	end
 
@@ -1441,6 +1492,7 @@ script PlayerRoster extends Component
 	method void RequestExchange(string jobId)
 		-- 클라이언트 요청: 교환 포인트로 직업 전용 카드.
 		if not self:CanEditRoster(senderUserId) then self:GachaReply("err_lobby", "exchange:" .. jobId) return end
+		if not _UnlockRules:IsOpen(self.Entity, "CharGacha") then self:GachaReply("err_locked", "exchange:" .. jobId) return end
 		self:DoExchange(jobId)
 	end
 

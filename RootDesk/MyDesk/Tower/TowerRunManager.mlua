@@ -83,7 +83,11 @@ script TowerRunManager extends Component
 	property number JobMesoStrikeRatio = 0.2
 	-- 연타 직업 스킬의 타격 간격(초)
 	property number ProcHitInterval = 0.12
-	-- 각인 (PlayerEngrave): 판 시작 시 효과 합계를 받아 Bonus에 더한다
+	-- 각인 (PlayerTalent, 탭·루트형): 판 시작 시 효과 합계를 받아 Bonus에 더한다. 상태이상 루트의 공용 화상 기본값·핵심 '수호막' 재사용 간격
+	property number TalentBurnPct = 20
+	property number TalentBurnTime = 3
+	property string TalentBurnFxRUID = "ae070e6b15934f64a723d57f0bb67313"
+	property number TalentShieldCooldown = 5
 	property number WeaponBaseSpeed = 1.0
 	property number WeaponSpeedPerTier = 0.1
 	property number LowHpDmgRatio = 0.3
@@ -1266,7 +1270,11 @@ script TowerRunManager extends Component
 		self:SetMateHp(i, math.max(0, self:MateHp(i) - damage))
 		local tp = comp:GetComponent("script.TowerPlayer")
 		if tp ~= nil and damage > 0 then tp:ShowProcDamage(comp, damage, false, tp:Uid()) end
-		if self:MateHp(i) > 0 then return end
+		if self:MateHp(i) > 0 then
+			-- 각인 핵심 '수호막'
+			if damage > 0 then self:TalentHitShield(comp) end
+			return
+		end
 		local accRevive = self:AccessoryBonus(comp, "Undying")
 		if accRevive > 0 and not (self._T.accUndying or {})[i + 1] then
 			self._T.accUndying[i + 1] = true
@@ -1832,8 +1840,9 @@ script TowerRunManager extends Component
 		-- 효과 합계 = 직업 스킬 수치 + 각인 + 은총 + 심볼 + 슬롯 + 거래 효과.
 		local total = self:SkillValue(effType)
         total = total + ((self._T.accountBonus or {})[effType] or 0)
-		local engrave = self._T.engrave
-		if engrave ~= nil and engrave[effType] ~= nil then total = total + engrave[effType] end
+		-- 각인 (PlayerTalent)
+		local talent = self._T.talent
+		if talent ~= nil and talent[effType] ~= nil then total = total + talent[effType] end
 		-- 미네르바의 은총
 		local grace = self._T.grace
 		if grace ~= nil and grace[effType] ~= nil then total = total + grace[effType] end
@@ -2338,6 +2347,46 @@ script TowerRunManager extends Component
 		return player:GetComponent("script.PlayerGear")
 	end
 
+	@ExecSpace("ServerOnly")
+	method Component GetTalent()
+		-- 플레이어 새 각인 컴포넌트 (PlayerTalent, 탭·루트형 각인).
+		local player = self._T.player
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerTalent")
+	end
+
+	@ExecSpace("ServerOnly")
+	method number TalentValue(string key)
+		-- 이번 판 각인 효과 수치 (판 시작 시점 고정값, 없으면 0).
+		return (self._T.talent or {})[key] or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TryTalentBurn(Entity target)
+		-- 각인 상태이상 루트: 화상이 없는 맨 앞 몬스터에게 확률로 공용 화상 (1초마다 공격력 TalentBurnPct+각인%, TalentBurnTime+각인초).
+		local chance = self:Bonus("StatusChance")
+		if chance <= 0 or self._T.burn ~= nil or not isvalid(target) then return end
+		if _UtilLogic:RandomDouble() * 100 >= chance then return end
+		self:ApplyBurn({ pct = self.TalentBurnPct + self:Bonus("BurnPct"), time = self.TalentBurnTime + self:Bonus("StatusTime"), fx = self.TalentBurnFxRUID,
+			burst = self:Bonus("BurnBurst"), vuln = self:Bonus("BurnVuln"), heal = 0 }, target)
+		log("[VRF] talent burn chance=" .. tostring(chance))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TalentHitShield(Entity actor)
+		-- 각인 핵심 '수호막': 맞고 살아 있으면 캐릭터마다 TalentShieldCooldown초에 1회 최대 체력 v% 보호막.
+		local pct = self:Bonus("HitShield")
+		if pct <= 0 or not isvalid(actor) then return end
+		local ready = self._T.talentShieldReady or {}
+		self._T.talentShieldReady = ready
+		local now = _UtilLogic.ElapsedSeconds
+		if now < (ready[actor] or 0) then return end
+		ready[actor] = now + self.TalentShieldCooldown
+		local amount = math.floor(self:ActorMaxHp(actor) * pct / 100 + 0.5)
+		self:AddShield(actor, amount)
+		log("[VRF] talent hit shield +" .. tostring(amount))
+	end
+
 	-- ───────────────────────── 펫 P-C (판 안 효과·따라오기) ─────────────────────────
 
 	@ExecSpace("ServerOnly")
@@ -2814,10 +2863,11 @@ script TowerRunManager extends Component
 			b.tick = b.tick + 1
 			local dmg = math.max(1, math.floor(self.PlayerAtk * b.pct / 100 + 0.5))
 			local pc = self:GetPlayerAttack()
+			dmg = self:FinalDouble(dmg)
 			if pc ~= nil and isvalid(self._T.monster) then pc:ShowProcDamage(self._T.monster, dmg, false) end
 			log("[VRF] burn tick dmg=" .. tostring(dmg))
 			self._T.dmgCtx = { dot = true, elem = true }
-			self:ApplyMonsterDamage(dmg)
+			self:ApplyRolledDamage(dmg)
 			self._T.dmgCtx = nil
 			if b.heal > 0 then self:HealPlayer(self.PlayerMaxHp * b.heal / 100) end
 			if self.RunState ~= "FIGHT" then return end
@@ -2886,11 +2936,12 @@ script TowerRunManager extends Component
 		end
 		if r.dmg > 0 then
 			local pc = self:GetPlayerAttack()
-			if pc ~= nil then pc:ShowProcDamage(target, r.dmg, r.crit) end
-			self:ApplyMonsterDamage(r.dmg)
+			local hitDmg = self:FinalDouble(r.dmg)
+			if pc ~= nil then pc:ShowProcDamage(target, hitDmg, r.crit) end
+			self:ApplyRolledDamage(hitDmg)
 			if r.crit then self:OnPlayerCrit() end
 			local m = r.m
-			if (m.SkillDrain or 0) > 0 then self:HealPlayer(r.dmg * m.SkillDrain / 100) end
+			if (m.SkillDrain or 0) > 0 then self:HealPlayer(hitDmg * m.SkillDrain / 100) end
 			-- 이 스킬로 처치했을 때
 			if self.MonsterHp <= 0 then
 				if (m.ResetOnKill or 0) > 0 then self._T.cd[r.id] = 0 end
@@ -3002,6 +3053,8 @@ script TowerRunManager extends Component
 		end
 		-- 펫 P-C: 고슴도치(충전량 +%)는 같은 합에, 쁘띠 포니(충전 속도 ×v배)는 마지막에 곱한다
 		v = v + self:PetEffect("UltGainPct")
+		-- 각인 가속 루트: 궁극기 충전량 +%
+		v = v + self:TalentValue("UltGainPct")
 		local mul = math.max(0, 1 + v / 100)
 		local pony = self:PetEffect("UltGainMul")
 		if pony > 1 then mul = mul * pony end
@@ -3413,10 +3466,17 @@ script TowerRunManager extends Component
         self.ResultAccountSaved = true
         self.ResultAccountBeforeLevel = accountPlayer.AccountLevel
         self.ResultAccountAfterLevel = accountPlayer.AccountLevel
-		-- 각인 효과는 판 시작 시점 값으로 고정 (각인은 로비에서만 바뀜)
-		self._T.engrave = {}
+		-- 각인 효과는 판 시작 시점 값으로 고정 (각인은 로비에서만 바뀜). 옛 각인(PlayerEngrave.BuildValues) 대신 새 각인(PlayerTalent)
+		self._T.talent = {}
+		self._T.talentCores = {}
+		self._T.talentShieldReady = {}
+		local talentComp = self:GetTalent()
+		if talentComp ~= nil then
+			local td = talentComp:TalentRunData()
+			self._T.talent = td.values or {}
+			self._T.talentCores = td.cores or {}
+		end
 		local engrave = self:GetEngrave()
-		if engrave ~= nil then self._T.engrave = engrave:BuildValues() end
 		-- 유물 (심볼 대체): 판 시작 시점 레벨로 고정
 		self._T.symbolPerm = {}
 		self._T.relic = {}
@@ -4226,8 +4286,9 @@ script TowerRunManager extends Component
 		if not mc.IsQueued then
 			if e == self._T.monster and self.RunState == "FIGHT" then
 				local pc0 = self:GetPlayerAttack()
-				if pc0 ~= nil then pc0:ShowProcDamageAt(e, dmg, crit, yOff) end
-				self:ApplyMonsterDamage(dmg)
+				local d0 = self:FinalDouble(dmg)
+				if pc0 ~= nil then pc0:ShowProcDamageAt(e, d0, crit, yOff) end
+				self:ApplyRolledDamage(d0)
 			end
 			return
 		end
@@ -4236,6 +4297,8 @@ script TowerRunManager extends Component
 		local ctx = self._T.dmgCtx
 		if ctx == nil or not ctx.aoe then relicPct = relicPct + self:Bonus("AoeDmg") end
 		if relicPct ~= 0 then dmg = math.max(1, math.floor(dmg * (1 + relicPct / 100) + 0.5)) end
+		-- 각인 핵심 '섬멸': 숫자를 띄우기 전에 판정
+		dmg = self:FinalDouble(dmg)
 		if self._T.probe ~= nil then self._T.probe.dealt = self._T.probe.dealt + math.max(0, math.min(mc.Hp, dmg)) end
 		mc.Hp = mc.Hp - dmg
 		local pc = self:GetPlayerAttack()
@@ -4325,6 +4388,12 @@ script TowerRunManager extends Component
 		-- 이 층 심볼: 메소·경험치 증가
 		local symGain = 1 + (self._T.symGain or 0) / 100
 		local meso = math.max(1, math.floor(self:KillMeso() * rewardMul * mesoRate * (1 + self:Bonus("MesoPct") / 100) * symGain + 0.5))
+		-- 각인 핵심 '대박': 확률로 처치 메소 3배
+		local jackpot = self:Bonus("MesoJackpot")
+		if jackpot > 0 and _UtilLogic:RandomDouble() * 100 < jackpot then
+			meso = meso * 3
+			log("[VRF] talent meso jackpot meso=" .. tostring(meso))
+		end
 		self.Meso = self.Meso + meso
 		self.RunMeso = self.RunMeso + meso
 		-- 클라이언트 메소 드롭 연출 신호 (KillSeq 변화 감지)
@@ -4344,8 +4413,30 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method integer FinalDouble(integer damage)
+		-- 각인 핵심 '섬멸': 확률로 최종 피해 2배. 피해 숫자를 띄우기 전에 불러 뜨는 숫자도 2배가 되게 한다.
+		local chance = self:Bonus("FinalDouble")
+		if damage > 0 and chance > 0 and _UtilLogic:RandomDouble() * 100 < chance then
+			log("[VRF] talent final double dmg=" .. tostring(damage * 2))
+			return damage * 2
+		end
+		return damage
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyRolledDamage(integer damage)
+		-- 이미 FinalDouble로 '섬멸'을 판정한 피해(숫자를 먼저 띄운 피해)를 다시 판정하지 않고 적용한다.
+		self._T.preRolled = true
+		self:ApplyMonsterDamage(damage)
+		self._T.preRolled = nil
+	end
+
+	@ExecSpace("ServerOnly")
 	method void ApplyMonsterDamage(integer damage)
 		-- 플레이어 공격이 몬스터에 맞았을 때 HP를 깎고 처치를 판정한다.
+		-- 숫자 없이 들어오는 피해(가시·폭발 등)만 여기서 '섬멸'을 판정한다 (숫자를 띄우는 피해는 FinalDouble → ApplyRolledDamage).
+		local preRolled = self._T.preRolled == true
+		self._T.preRolled = nil
 		if self.RunState ~= "FIGHT" then return end
 		-- 몬스터 약화·기절 중 받는 피해 증가
 		local takenMul = 1
@@ -4354,6 +4445,11 @@ script TowerRunManager extends Component
 		if self._T.burn ~= nil then takenMul = takenMul + self._T.burn.vuln / 100 end
 		takenMul = takenMul + self:RelicDamageBonus(self._T.monster) / 100
 		damage = math.floor(damage * takenMul + 0.5)
+		-- 각인 핵심 '섬멸': 숫자를 띄우지 않은 피해만 여기서 판정
+		if not preRolled then damage = self:FinalDouble(damage) end
+		-- 각인 상태이상 루트: 지속 피해가 아닌 적중이면 확률로 화상
+		local dctx = self._T.dmgCtx
+		if dctx == nil or not dctx.dot then self:TryTalentBurn(self._T.monster) end
 		-- 처형: HP 20% 이하 몬스터는 확률로 즉시 처치
 		if self.MonsterHp - damage > 0 and self.MonsterHp <= self.MonsterMaxHp * self.ExecuteHpRatio and self:RollSkill("Execute") then
 			damage = math.ceil(self.MonsterHp)
@@ -4440,6 +4536,8 @@ script TowerRunManager extends Component
 			-- 각인 '가시': 받은 피해의 일부를 몬스터에게 반사
 			local reflect = math.floor(damage * self:Bonus("Thorns") / 100 + 0.5)
 			if reflect > 0 then self:ApplyMonsterDamage(reflect) end
+			-- 각인 핵심 '수호막'
+			if damage > 0 then self:TalentHitShield(self._T.player) end
 			return
 		end
 		-- 불사: 층마다 1회 쓰러지는 대신 HP 일부로 부활
@@ -4625,7 +4723,8 @@ script TowerRunManager extends Component
 		elseif self.StageKind == "elite" then
 			mul = self.GoldMesoEliteMul
 		end
-		local n = math.floor((self.GoldMesoStageBase + self.Floor * self.GoldMesoPerFloor) * mul + 0.5)
+		-- 각인 재화 루트: 스테이지 클리어 금색 메소 +%
+		local n = math.floor((self.GoldMesoStageBase + self.Floor * self.GoldMesoPerFloor) * mul * (1 + self:Bonus("GoldMesoPct") / 100) + 0.5)
 		if n <= 0 then return end
 		local gear = self:GetGear()
 		if gear ~= nil and not self._T.debugRun then gear:AddGoldMeso(n) end
@@ -5016,23 +5115,37 @@ script TowerRunManager extends Component
 			self:OfferRoute()
 			return
 		end
+		-- 각인 핵심 '행운아': 도박 성공 75%, 보물 상자는 메소와 깃털 모두
+		local lucky = self:Bonus("MysteryLuck") > 0
 		if id == "chest" then
-			if _UtilLogic:RandomDouble() < 0.5 then
-				local gain = math.floor(self:KillMeso() * 10 + 0.5)
+			local giveMeso = lucky or _UtilLogic:RandomDouble() < 0.5
+			local gain = 0
+			local n = 0
+			if giveMeso then
+				-- 각인 탐험 루트 '보물 사냥': 보물 상자 메소 +%
+				gain = math.floor(self:KillMeso() * 10 * (1 + self:Bonus("MysteryGain") / 100) + 0.5)
 				self.Meso = self.Meso + gain
 				self.RunMeso = self.RunMeso + gain
 				self.MesoProcSeq = self.MesoProcSeq + 1
-				self:SetEnhanceMsg("보물 상자: 메소 +" .. tostring(gain))
-			else
-				local n = _UtilLogic:RandomIntegerRange(2, 4)
+			end
+			if lucky or not giveMeso then
+				n = _UtilLogic:RandomIntegerRange(2, 4)
 				local eng = self:GetEngrave()
 				if eng ~= nil and not self._T.debugRun then eng:AddFeathers(n) end
 				self.RunFeathers = self.RunFeathers + n
+			end
+			if gain > 0 and n > 0 then
+				self:SetEnhanceMsg("보물 상자: 메소 +" .. tostring(gain) .. ", 여신의 깃털 +" .. tostring(n))
+			elseif gain > 0 then
+				self:SetEnhanceMsg("보물 상자: 메소 +" .. tostring(gain))
+			else
 				self:SetEnhanceMsg("보물 상자: 여신의 깃털 +" .. tostring(n))
 			end
 		elseif id == "gamble" then
 			local bet = math.min(self._T.mysteryBet or 0, self.Meso)
-			if _UtilLogic:RandomDouble() < 0.5 then
+			local winRate = 0.5
+			if lucky then winRate = 0.75 end
+			if _UtilLogic:RandomDouble() < winRate then
 				self.Meso = self.Meso + bet
 				self.RunMeso = self.RunMeso + bet
 				self:SetEnhanceMsg("도박 성공! 메소 +" .. tostring(bet))
@@ -5131,7 +5244,7 @@ script TowerRunManager extends Component
 			local o = table.remove(pool, _UtilLogic:RandomIntegerRange(1, #pool))
 			table.insert(subs, { o.effect, o.value })
 		end
-		return { id = d.id, slot = slot, grade = gr.grade, mul = mul, subs = subs, price = math.max(1, math.floor(self:KillMeso() * gr.price * math.max(0, 1 - self:PetEffect("ShopDiscount") / 100) + 0.5)) }
+		return { id = d.id, slot = slot, grade = gr.grade, mul = mul, subs = subs, price = math.max(1, math.floor(self:KillMeso() * gr.price * math.max(0, 1 - (self:PetEffect("ShopDiscount") + self:Bonus("ShopDiscount")) / 100) + 0.5)) }
 	end
 
 	@ExecSpace("ServerOnly")
@@ -5157,6 +5270,8 @@ script TowerRunManager extends Component
 		if key ~= "MesoPct" and isvalid(actor) then pot = self:PotBonus(actor, key) end
 		-- 펫 P-C: 보유 공격력%와 장착 펫 효과(체력·방어·치명타·받는 피해·스킬 피해·정예·쿨감·공속·흡혈)는 구성원 전원에게 같은 경로로 더한다
 		if key ~= "MesoPct" and isvalid(actor) then pot = pot + self:PetActorBonus(key) end
+		-- 각인 가속 루트: 쿨타임 감소는 전투 컴포넌트가 이 경로(CdReduce)로만 읽으므로 여기서 더한다 (구성원 전원)
+		if key == "CdReduce" and isvalid(actor) then pot = pot + self:TalentValue("CdReduce") end
 		local acc = self._T.acc
 		if acc == nil or self._T.accDefs == nil then return pot * sign end
 		local total = 0
@@ -5388,7 +5503,8 @@ script TowerRunManager extends Component
 			end
 			local rolled = {}
 			if not bossNext and roll(self.EliteChance) then table.insert(rolled, "elite") end
-			if roll(self.MysteryChance) then table.insert(rolled, "mystery") end
+			-- 각인 탐험 루트: 물음표 등장 확률 +%p
+			if roll(self.MysteryChance + self:Bonus("MysteryUp")) then table.insert(rolled, "mystery") end
 			if not self._T.dealUsed and roll(self.DealChance) then table.insert(rolled, "deal") end
 			-- 보스 직전엔 보스 자리를 남기도록 비전투 최대 2개
 			local cap = 3 - #fixed
@@ -5709,7 +5825,12 @@ script TowerRunManager extends Component
 		local rest = self:RemainingBreaks(sk)
 		if #rest == 0 then return end
 		self.SkillStone = self.SkillStone - self.StoneCost
-		self.StoneCost = self.StoneCost + self.StoneCostStep
+		-- 각인 돌파 루트 '학자': 확률로 낸 스킬석 반환 / 핵심 '깨달음': 비용이 오르지 않음
+		if _UtilLogic:RandomDouble() * 100 < self:Bonus("BookRefund") then
+			self.SkillStone = self.SkillStone + self.StoneCost
+			log("[VRF] talent book refund stone=" .. tostring(self.SkillStone))
+		end
+		if self:Bonus("BookNoStep") <= 0 then self.StoneCost = self.StoneCost + self.StoneCostStep end
 		local picks = {}
 		local cardN = 2
 		if _UtilLogic:RandomDouble() * 100 < self:Bonus("Book3") then cardN = 3 end
@@ -6573,6 +6694,8 @@ script TowerRunManager extends Component
 			local value = e.value
 			local bad = self:GoddessIsBad(e.type, value)
 			if target > 0 and not bad then value = value * self.GoddessSingleScale end
+			-- 각인 탐험 루트 '축복': 여신 제안의 이로운 효과 +%
+			if not bad then value = value * (1 + self:Bonus("GoddessUp") / 100) end
 			local instant = e.type == "Heal" or e.type == "HpCost" or e.type == "SkillPick" or e.type == "MesoGain"
 			if e.type == "MesoGain" then value = math.floor(self:KillMeso() * value + 0.5) end
 			if e.type == "SkillPick" then value = math.floor(value) end

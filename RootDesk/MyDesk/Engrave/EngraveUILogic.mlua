@@ -1,64 +1,81 @@
 @Logic
 script EngraveUILogic extends Logic
 
-	-- 각인 화면 (EngraveUI.ui, 성장 2번 탭). 데이터는 로컬 플레이어의 PlayerEngrave(서버 동기화)에서 읽는다.
+	-- 각인 화면 (EngraveUI.ui, 성장 2번 탭) — 2026-11-22 각인 개편.
+	-- 왼쪽: 공격/방어/특수 탭 + 선택 탭의 루트 3열 × 5단 칸 트리. 오른쪽: 선택 칸 상세·레벨업·포인트·무료 초기화·루트 보너스.
+	-- 데이터는 로컬 플레이어의 PlayerTalent(서버 동기화)와 TalentTable·TalentRouteTable에서 읽는다. 성장창은 Open/Close/dimEntity만 사용한다.
 	property Entity dimEntity = "954a27e4-a328-4e13-95dd-aa5e0e9e3f10"
 	property Entity panelEntity = "2e8961bf-f27f-49f7-81d5-c0aaf797a55c"
-	property ButtonComponent btnClose = "0485624f-fd41-4988-8c75-d9011ee912fd"
-	property string TableName = "EngraveTable"
+	property string NodeTableName = "TalentTable"
+	property string RouteTableName = "TalentRouteTable"
 	property string PanelPath = "/ui/EngraveUI/Panel/"
-	property string TreePath = "/ui/EngraveUI/Panel/Tree/"
 	property string LobbyMapName = "Lobby"
-	property number MsgDuration = 2.0
-	-- 단계별 게이지 이미지 (0 미투자, 1 빨강, 2 주황, 3 초록)
-	property string Gauge0RUID = "c491e54a55b942a2bbb9db0fa50ae238"
-	property string Gauge1RUID = "fd4a96d5299c4041a67162b6ad07e31b"
-	property string Gauge2RUID = "2b4439074f7f4929bbeecd98d751005d"
-	property string Gauge3RUID = "47e277f9813e4051a684f0c5223595ee"
-	property string LinkLockedRUID = "ec3c953864424b5aa44f78395ec29786"
-	property string LinkDoneRUID = "261d00bc4a0d4d11bb546c7e71d8d66a"
-	property string StepOffRUID = "bea05f1ee4ea484eb10471a620c69046"
-	property string StepOnRUID = "1e130afe90a842028aed70edadbfb9f1"
-	property Color BranchAtkColor = Color(0.85, 0.54, 0.48, 1)
-	property Color BranchDefColor = Color(0.5, 0.69, 0.86, 1)
-	property Color BranchUtilColor = Color(0.79, 0.64, 0.42, 1)
-	property Color StepOnColor = Color(0.12, 0.34, 0.52, 1)
-	property Color StepOffColor = Color(0.36, 0.40, 0.46, 1)
-	property Color LockedIconColor = Color(0.35, 0.35, 0.38, 1)
+	property number MsgDuration = 2.5
+	property number RequestTimeout = 5.0
+	-- 단별 해금 루트 포인트 (표에 해금 열이 없을 때 사용)
+	property string TierReqs = "0,3,6,9,12"
+	property string BonusSteps = "5,10,15"
+	property string BonusOnRUID = "ffd05f5bf0274527b1e5cb977f2c49fe"
+	property string BonusOffRUID = "d262f8e8502e4b7b88f381a9b7a4e4fb"
+	property string IconFallbackRUID = "9f73253e798e459abceba700d648f7f4"
+	property Color LinkOnColor = Color(0.20, 0.48, 0.12, 1)
+	property Color LinkOffColor = Color(0.62, 0.65, 0.70, 1)
+	property Color TextDark = Color(0.14, 0.17, 0.21, 1)
+	property Color TextSub = Color(0.36, 0.40, 0.46, 1)
+	property Color TextGood = Color(0.20, 0.48, 0.12, 1)
+	property Color TextBad = Color(0.75, 0.22, 0.18, 1)
+	property Color IconLockedColor = Color(0.55, 0.57, 0.60, 1)
 
 	@HideFromInspector
 	property table clickHandlers = {}
 
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
-		-- 테이블을 읽고 노드·버튼을 연결한 뒤 닫힌 상태로 시작한다.
-		self:LoadTable()
+		-- 표를 읽고 탭·칸·버튼을 연결한 뒤 닫힌 상태로 시작한다.
 		self.clickHandlers = {}
-		self:Bind(self:Get("BtnReset"), function() self:OnReset() end)
-		self:Bind(self:Get("BtnUpgrade"), function() self:OnUpgrade() end)
-		self:Bind(self.btnClose.Entity, function() self:Close() _GrowthUILogic:Close() end)
-		_GrowthUILogic:StyleButton(self:Get("BtnReset"))
-		_GrowthUILogic:StyleButton(self:Get("BtnUpgrade"))
-		for _, n in ipairs(self._T.nodes) do
-			local id = n.id
-			n.btn = _EntityService:GetEntityByPath(self.TreePath .. id)
-			n.icon = _EntityService:GetEntityByPath(self.TreePath .. id .. "/Icon")
-			n.gauge = _EntityService:GetEntityByPath(self.TreePath .. id .. "/Gauge")
-			n.link = _EntityService:GetEntityByPath(self.TreePath .. "Link_" .. id)
-			if isvalid(n.btn) then self:Bind(n.btn, function() self:OnNodeClick(id) end) end
-		end
+		self._T.tabs = { "Atk", "Def", "Util" }
+		self._T.tabNames = { Atk = "공격", Def = "방어", Util = "특수" }
+		self._T.tabButtons = { Atk = "Tab_Atk", Def = "Tab_Def", Util = "Tab_Spc" }
+		self._T.tab = "Atk"
 		self._T.selected = ""
-		self._T.msgSeq = -1
+		self._T.busy = false
+		self._T.busyTimer = 0
 		self._T.msgTimer = 0
+		self._T.msgText = ""
+		self._T.msgGood = false
+		self._T.shown = {}
+		self:LoadTables()
+		for _, tab in ipairs(self._T.tabs) do
+			local key = tab
+			self:Bind(self:Get("Left/" .. self._T.tabButtons[tab]), function() self:SelectTab(key) end)
+		end
+		for r = 1, 3 do
+			local ri = r
+			for t = 1, 5 do
+				for k = 1, 2 do
+					local tt, kk = t, k
+					self:Bind(self:NodeEntity(r, t, k), function() self:OnNodeClick(ri, tt, kk) end)
+				end
+			end
+			for i = 1, 3 do
+				local chip = self:Get("Left/Route" .. tostring(r) .. "/Bonus" .. tostring(i))
+				local bi = i
+				if isvalid(chip) then _TooltipLogic:Register(chip, function() self:ShowBonusTip(ri, bi, chip) end) end
+				self:Bind(chip, function() self:ShowBonusTip(ri, bi, chip) end)
+			end
+		end
+		self:Bind(self:Get("Right/BtnUp"), function() self:OnLevelUp() end)
+		self:Bind(self:Get("Right/BtnResetTab"), function() self:OnReset(self._T.tab) end)
+		self:Bind(self:Get("Right/BtnResetAll"), function() self:OnReset("") end)
 		self._T.open = true
 		self:SetOpen(false)
-		log("[VRF] EngraveUILogic begin nodes=" .. tostring(#self._T.nodes))
+		log("[VRF] EngraveUILogic(talent) begin nodes=" .. tostring(#self._T.nodes) .. " routes=" .. tostring(#self._T.routes))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void Bind(Entity entity, any fn)
-		-- 버튼 클릭 연결 + 해제 기록.
-		if not isvalid(entity) then return end
+		-- 버튼 클릭 연결 + 해제 기록. 꺼진 버튼·비활성 버튼은 무시한다.
+		if not isvalid(entity) or not isvalid(entity.ButtonComponent) then return end
 		local h = entity:ConnectEvent(ButtonClickEvent, function(e) if not entity.EnabledInHierarchy or not entity.ButtonComponent.Enable then return end _UISoundLogic:PlayClick() fn(e) end)
 		table.insert(self.clickHandlers, { entity = entity, eventHandler = h })
 	end
@@ -73,60 +90,151 @@ script EngraveUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method void LoadTable()
-		-- EngraveTable: 이름·설명({v} 자리에 수치)·레벨당 수치·최대 레벨·계열·단계.
-		self._T.nodes = {}
-		self._T.nodeById = {}
-		local ds = _DataService:GetTable(self.TableName)
-		if ds == nil then
-			log_error("[VRF] EngraveTable not found (client)")
-			return
-		end
-		for i = 1, ds:GetRowCount() do
-			local n = {
-				id = ds:GetCell(i, "Id"), branch = ds:GetCell(i, "Branch"), tier = tonumber(ds:GetCell(i, "Tier")) or 1, col = tonumber(ds:GetCell(i, "Col")) or 1,
-				name = ds:GetCell(i, "Name"), desc = ds:GetCell(i, "Desc"), iconRuid = ds:GetCell(i, "IconRUID"),
-				per = tonumber(ds:GetCell(i, "PerLv")) or 0, max = tonumber(ds:GetCell(i, "MaxLv")) or 3,
-			}
-			table.insert(self._T.nodes, n)
-			self._T.nodeById[n.id] = n
-		end
-	end
-
-	@ExecSpace("ClientOnly")
 	method Entity Get(string name)
 		-- 패널 안 엔티티.
 		return _EntityService:GetEntityByPath(self.PanelPath .. name)
 	end
 
 	@ExecSpace("ClientOnly")
-	method Component GetEngrave()
-		-- 로컬 플레이어의 각인 컴포넌트.
-		local player = _UserService.LocalPlayer
-		if not isvalid(player) then return nil end
-		return player:GetComponent("script.PlayerEngrave")
+	method Entity NodeEntity(integer r, integer t, integer k)
+		-- 루트 r(1~3) · 단 t(1~5) · 칸 k(1~2, 5단은 1)의 칸 엔티티.
+		if t >= 5 and k > 1 then return nil end
+		return self:Get("Left/Route" .. tostring(r) .. "/Node_" .. tostring(t) .. "_" .. tostring(k))
+	end
+
+	-- ───────── 표 읽기 ─────────
+
+	@ExecSpace("ClientOnly")
+	method string Cell(any ds, integer i, string col, string fallback)
+		-- 표 칸 읽기 (없는 열·빈 칸이면 기본값).
+		local ok, v = pcall(function() return ds:GetCell(i, col) end)
+		if not ok or v == nil or v == "" then return fallback end
+		return v
 	end
 
 	@ExecSpace("ClientOnly")
+	method void LoadTables()
+		-- TalentRouteTable(루트: 탭·순서·이름·보너스) + TalentTable(칸: 탭·루트·단·칸·이름·최대 레벨·아이콘·설명).
+		self._T.nodes = {}
+		self._T.nodeById = {}
+		self._T.routes = {}
+		self._T.routeById = {}
+		local rt = _DataService:GetTable(self.RouteTableName)
+		if rt == nil then log_warning("[VRF] TalentRouteTable not found (client)") end
+		if rt ~= nil then
+			for i = 1, rt:GetRowCount() do
+				local ro = {
+					id = self:Cell(rt, i, "Route", ""), tab = self:Cell(rt, i, "Tab", "Atk"), index = tonumber(self:Cell(rt, i, "Order", "0")) or i,
+					name = self:Cell(rt, i, "Name", ""), info = self:Cell(rt, i, "Desc", ""), bonus = {},
+				}
+				local steps = self:SplitNumbers(self.BonusSteps)
+				for b = 1, 3 do
+					local at = steps[b] or (b * 5)
+					local s = tostring(at)
+					local label = self:Cell(rt, i, "Label" .. s, "")
+					local v = tonumber(self:Cell(rt, i, "Val" .. s, "0")) or 0
+					local p = string.find(label, "{v}", 1, true)
+					if p ~= nil then label = string.sub(label, 1, p - 1) .. self:FormatNum(v) .. string.sub(label, p + 3) end
+					ro.bonus[b] = { need = at, desc = label }
+				end
+				table.insert(self._T.routes, ro)
+				self._T.routeById[ro.id] = ro
+			end
+		end
+		local nt = _DataService:GetTable(self.NodeTableName)
+		if nt == nil then
+			log_warning("[VRF] TalentTable not found (client)")
+			return
+		end
+		for i = 1, nt:GetRowCount() do
+			local n = {
+				id = self:Cell(nt, i, "Id", ""), tab = self:Cell(nt, i, "Tab", ""), route = self:Cell(nt, i, "Route", ""),
+				tier = tonumber(self:Cell(nt, i, "Tier", "1")) or 1, col = tonumber(self:Cell(nt, i, "Col", "1")) or 1,
+				name = self:Cell(nt, i, "Name", ""), desc = self:Cell(nt, i, "Desc", ""), iconRuid = self:Cell(nt, i, "IconRUID", ""),
+				per = tonumber(self:Cell(nt, i, "PerLv", "0")) or 0, max = tonumber(self:Cell(nt, i, "MaxLv", "3")) or 3,
+			}
+			local ro = self._T.routeById[n.route]
+			if ro ~= nil and n.tab == "" then n.tab = ro.tab end
+			table.insert(self._T.nodes, n)
+			self._T.nodeById[n.id] = n
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table SplitNumbers(string s)
+		-- "0,3,6" → {0,3,6}.
+		local out = {}
+		for v in string.gmatch(s, "[^,]+") do table.insert(out, tonumber(v) or 0) end
+		return out
+	end
+
+	@ExecSpace("ClientOnly")
+	method table TabRoutes(string tab)
+		-- 그 탭의 루트를 순서대로 (최대 3개).
+		local list = {}
+		for _, ro in ipairs(self._T.routes) do
+			if ro.tab == tab then table.insert(list, ro) end
+		end
+		table.sort(list, function(a, b) return a.index < b.index end)
+		return list
+	end
+
+	@ExecSpace("ClientOnly")
+	method table FindNode(string routeId, integer t, integer k)
+		-- 루트·단·칸으로 칸 데이터 찾기.
+		for _, n in ipairs(self._T.nodes) do
+			if n.route == routeId and n.tier == t and n.col == k then return n end
+		end
+		return nil
+	end
+
+	-- ───────── PlayerTalent 연결 (서버 컴포넌트 형식에 맞춘 부분) ─────────
+
+	@ExecSpace("ClientOnly")
+	method Component GetTalent()
+		-- 로컬 플레이어의 각인(개편) 컴포넌트.
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerTalent")
+	end
+
+	@ExecSpace("ClientOnly")
+	method table Levels(Component tal)
+		-- 동기화된 칸 레벨 문자열 TalentData("Id:레벨,Id:레벨")을 표로. 같은 문자열이면 지난 결과를 재사용한다.
+		local s = tal.TalentData or ""
+		if self._T.levelSrc == s and self._T.levels ~= nil then return self._T.levels end
+		local out = {}
+		for part in string.gmatch(s, "[^,]+") do
+			local p = string.find(part, ":", 1, true)
+			if p ~= nil then out[string.sub(part, 1, p - 1)] = tonumber(string.sub(part, p + 1)) or 0 end
+		end
+		self._T.levelSrc = s
+		self._T.levels = out
+		return out
+	end
+
+	-- ───────── 열기·닫기 ─────────
+
+	@ExecSpace("ClientOnly")
 	method void Open()
-		-- 성장 화면 각인 탭: 첫 각인을 고른 상태로 연다.
-		local eng = self:GetEngrave()
-		if eng == nil or not eng.Loaded then return end
-		if self._T.selected == "" and #self._T.nodes > 0 then self._T.selected = self._T.nodes[1].id end
-		self._T.msgSeq = eng.MsgSeq
+		-- 성장 화면 각인 탭: 지난 탭·선택을 유지하고, 처음이면 공격 탭의 첫 칸을 고른다.
 		self:SetOpen(true)
+		local tal = self:GetTalent()
+		if tal ~= nil then self._T.seq = tal.TalentSeq end
+		if self._T.selected == "" then self:SelectFirst() end
 		self:Refresh()
-		log("[VRF] engrave open points=" .. tostring(eng.ClearedFloor - eng.Spent) .. "/" .. tostring(eng.ClearedFloor))
+		log("[VRF] talent open tab=" .. self._T.tab .. " loaded=" .. tostring(tal ~= nil and tal.TalentLoaded))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void Close()
-		-- 닫기: 화면을 숨기고 바뀐 각인을 저장 요청한다.
+		-- 닫기: 화면을 숨기고 모아 둔 변경을 바로 저장 요청한다.
 		if not self._T.open then return end
 		self:SetOpen(false)
-		local eng = self:GetEngrave()
-		if eng ~= nil then eng:RequestSave() end
-		log("[VRF] engrave close")
+		if _TooltipLogic:IsShowing(nil) then _TooltipLogic:Hide() end
+		local tal = self:GetTalent()
+		if tal ~= nil and tal.TalentLoaded then tal:RequestTalentSave() end
+		log("[VRF] talent close")
 	end
 
 	@ExecSpace("ClientOnly")
@@ -145,180 +253,448 @@ script EngraveUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method boolean IsNodeOpen(Component eng, table n)
-		-- 1단계는 항상 열림, 그 외에는 같은 계열·같은 줄의 바로 위 노드가 최대 레벨이어야 열림 (서버와 같은 규칙).
-		if n.tier <= 1 then return true end
-		for _, p in ipairs(self._T.nodes) do
-			if p.branch == n.branch and p.col == n.col and p.tier == n.tier - 1 then return (eng.Lv[p.id] or 0) >= p.max end
+	method void SelectTab(string tab)
+		-- 공격/방어/특수 탭 전환: 그 탭의 첫 칸을 고른다.
+		if self._T.tab == tab then return end
+		self._T.tab = tab
+		self:SelectFirst()
+		self:Refresh()
+		log("[VRF] talent tab=" .. tab)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SelectFirst()
+		-- 현재 탭 첫 루트의 1단 첫 칸.
+		self._T.selected = ""
+		local routes = self:TabRoutes(self._T.tab)
+		if #routes > 0 then
+			local n = self:FindNode(routes[1].id, 1, 1)
+			if n ~= nil then self._T.selected = n.id end
 		end
-		return false
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnNodeClick(integer r, integer t, integer k)
+		-- 칸을 누르면 오른쪽 상세에 표시한다. 레벨업은 [레벨업] 버튼으로.
+		local routes = self:TabRoutes(self._T.tab)
+		local ro = routes[r]
+		if ro == nil then return end
+		local n = self:FindNode(ro.id, t, k)
+		if n == nil then return end
+		self._T.selected = n.id
+		self:Refresh()
+	end
+
+	-- ───────── 규칙 (서버와 같은 기준, 화면 표시용) ─────────
+
+	@ExecSpace("ClientOnly")
+	method integer RouteSpent(table levels, string routeId)
+		-- 루트에 쓴 포인트.
+		local sum = 0
+		for _, n in ipairs(self._T.nodes) do
+			if n.route == routeId then sum = sum + (levels[n.id] or 0) end
+		end
+		return sum
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer LowerSpent(table levels, string routeId, integer t)
+		-- 루트에서 t단보다 아래 단에 쓴 포인트 (해금 판정 기준, 서버 LowerPoints와 같음).
+		local sum = 0
+		for _, n in ipairs(self._T.nodes) do
+			if n.route == routeId and n.tier < t then sum = sum + (levels[n.id] or 0) end
+		end
+		return sum
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowResult(Component tal)
+		-- 서버 결과 코드(TalentMsg)·상세(TalentResult)를 한국어 안내로.
+		local code = tal.TalentMsg or ""
+		local detail = tal.TalentResult or ""
+		if code == "ok" then
+			if string.sub(detail, 1, 6) == "reset:" then
+				local back = string.match(detail, ":(%d+)$") or "0"
+				self:ShowMsg("초기화 완료 · 포인트 " .. back .. " 돌려받음", true)
+			else
+				local id = string.match(detail, "^up:([^:]+)") or ""
+				local n = self._T.nodeById[id]
+				local nm = "각인"
+				if n ~= nil then nm = n.name end
+				self:ShowMsg(nm .. " 레벨업 완료", true)
+			end
+			return
+		end
+		local text = tal:TalentMsgText(code)
+		if text == "" then text = "요청을 처리하지 못했습니다" end
+		self:ShowMsg(text, false)
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer TabSpent(table levels, string tab)
+		-- 탭에 쓴 포인트.
+		local sum = 0
+		for _, n in ipairs(self._T.nodes) do
+			if n.tab == tab then sum = sum + (levels[n.id] or 0) end
+		end
+		return sum
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer TierReq(integer t)
+		-- t단 해금에 필요한 루트 포인트.
+		local reqs = self:SplitNumbers(self.TierReqs)
+		return reqs[t] or 0
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean TierOpen(table levels, string routeId, integer t)
+		-- 루트 포인트 조건 + 5단은 4단 칸을 하나 이상 찍어야 열린다.
+		if t <= 1 then return true end
+		if self:LowerSpent(levels, routeId, t) < self:TierReq(t) then return false end
+		if t >= 5 then
+			for _, n in ipairs(self._T.nodes) do
+				if n.route == routeId and n.tier == 4 and (levels[n.id] or 0) > 0 then return true end
+			end
+			return false
+		end
+		return true
+	end
+
+	@ExecSpace("ClientOnly")
+	method string FormatNum(number v)
+		-- 정수면 정수, 아니면 소수 한 자리.
+		if math.abs(v - math.floor(v)) > 0.001 then return string.format("%.1f", v) end
+		return tostring(math.floor(v))
 	end
 
 	@ExecSpace("ClientOnly")
 	method string EffectText(table n, integer lv)
-		-- 효과 문구 (설명의 {v}를 레벨 × 레벨당 수치로 바꾼다).
-		local v = n.per * lv
-		local vs = tostring(math.floor(v))
-		if math.abs(v - math.floor(v)) > 0.001 then vs = string.format("%.1f", v) end
-		return (string.gsub(n.desc, "{v}", vs))
+		-- 효과 문구: 설명의 {v}를 레벨 × 레벨당 수치로 바꾼다.
+		local s = n.desc
+		local p = string.find(s, "{v}", 1, true)
+		if p == nil then return s end
+		return string.sub(s, 1, p - 1) .. self:FormatNum(n.per * lv) .. string.sub(s, p + 3)
+	end
+
+	-- ───────── 요청 ─────────
+
+	@ExecSpace("ClientOnly")
+	method void OnLevelUp()
+		-- 레벨업 요청: 서버 응답(Seq 변경) 전까지 버튼을 막는다.
+		local tal = self:GetTalent()
+		local n = self._T.nodeById[self._T.selected or ""]
+		if tal == nil or n == nil or self._T.busy then return end
+		if not self:CanLevelUp(tal, n) then return end
+		self:BeginRequest(tal)
+		tal:RequestTalentUp(n.id)
+		log("[VRF] talent up request " .. n.id)
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnNodeClick(string id)
-		-- 아이콘을 누르면 상세 패널에 표시한다. 투자는 [각인 강화] 버튼으로.
-		self._T.selected = id
+	method void OnReset(string tab)
+		-- 무료 초기화 요청 (tab = 현재 탭, "" = 전체).
+		local tal = self:GetTalent()
+		if tal == nil or self._T.busy then return end
+		self:BeginRequest(tal)
+		tal:RequestTalentReset(tab)
+		log("[VRF] talent reset request tab=" .. tab)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void BeginRequest(Component tal)
+		-- 요청 중 표시: 실행 버튼 비활성.
+		self._T.busy = true
+		self._T.busyTimer = self.RequestTimeout
+		self._T.seq = tal.TalentSeq
 		self:Refresh()
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnUpgrade()
-		-- 각인 강화: 선택한 각인에 포인트 1 투자.
-		local eng = self:GetEngrave()
-		local n = self._T.nodeById[self._T.selected or ""]
-		if eng == nil or n == nil then return end
-		if (eng.Lv[n.id] or 0) < n.max and self:IsNodeOpen(eng, n) and eng.ClearedFloor - eng.Spent > 0 then
-			eng:RequestInvest(n.id)
-			log("[VRF] engrave invest request " .. n.id)
-		end
+	method boolean CanLevelUp(Component tal, table n)
+		-- 선택 칸 레벨업 가능 여부.
+		local levels = self:Levels(tal)
+		local lv = levels[n.id] or 0
+		return tal.TalentLoaded and lv < n.max and tal.TalentLeft > 0 and self:TierOpen(levels, n.route, n.tier)
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnReset()
-		-- 포인트 리셋 요청 (무료).
-		local eng = self:GetEngrave()
-		if eng ~= nil then eng:RequestReset() end
+	method void ShowMsg(string s, boolean good)
+		-- 안내 문구를 잠깐 띄운다.
+		self._T.msgText = s
+		self._T.msgGood = good
+		self._T.msgTimer = self.MsgDuration
 	end
 
 	@ExecSpace("ClientOnly")
-	method void SetText(string name, string s)
+	method void ShowBonusTip(integer r, integer i, Entity chip)
+		-- 루트 보너스 칸 툴팁.
+		local ro = self:TabRoutes(self._T.tab)[r]
+		if ro == nil or not isvalid(chip) then return end
+		local b = ro.bonus[i]
+		_TooltipLogic:ShowText(chip, ro.name .. " 루트 " .. tostring(b.need) .. "점 보너스", b.desc)
+	end
+
+	-- ───────── 표시 ─────────
+
+	@ExecSpace("ClientOnly")
+	method void SetText(Entity e, string s)
 		-- 바뀐 경우에만 글자를 바꾼다.
-		local e = self:Get(name)
 		if not isvalid(e) then return end
 		local t = e.TextGUIRendererComponent
 		if t.Text ~= s then t.Text = s end
 	end
 
 	@ExecSpace("ClientOnly")
-	method void SetImage(Entity e, string ruid, string key)
+	method void SetColor(Entity e, Color c)
+		-- 글자색.
+		if not isvalid(e) then return end
+		e.TextGUIRendererComponent.FontColor = c
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetImage(Entity e, string ruid, Color color)
 		-- 바뀐 경우에만 이미지를 바꾼다.
-		if not isvalid(e) or self._T.shown[key] == ruid then return end
-		self._T.shown[key] = ruid
-		e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		if not isvalid(e) then return end
+		local key = e.Id
+		if self._T.shown[key] ~= ruid then
+			self._T.shown[key] = ruid
+			e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+		end
+		e.SpriteGUIRendererComponent.Color = color
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOn(Entity e, boolean on)
+		-- 켜기/끄기 (바뀐 경우만).
+		if isvalid(e) and e.Enable ~= on then e:SetEnable(on) end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void Refresh()
-		-- 포인트·게이지·연결선·선택 표시·상세 패널을 갱신한다.
-		local eng = self:GetEngrave()
-		if eng == nil then return end
-		if self._T.shown == nil then self._T.shown = {} end
-		local avail = eng.ClearedFloor - eng.Spent
-		self:SetText("Points", tostring(avail))
-		self:SetText("PointsTotal", "/ 총 포인트 " .. tostring(eng.ClearedFloor))
-		_UIButtonLogic:SetDisabled(self:Get("BtnReset"), eng.Spent <= 0)
-		local gauges = { self.Gauge1RUID, self.Gauge2RUID, self.Gauge3RUID }
-		local spent = { Atk = 0, Def = 0, Util = 0 }
-		local total = { Atk = 0, Def = 0, Util = 0 }
-		for _, n in ipairs(self._T.nodes) do
-			local lv = eng.Lv[n.id] or 0
-			spent[n.branch] = (spent[n.branch] or 0) + lv
-			total[n.branch] = (total[n.branch] or 0) + n.max
-			local gauge = self.Gauge0RUID
-			if lv > 0 then gauge = gauges[math.min(3, lv)] end
-			self:SetImage(n.gauge, gauge, "g" .. n.id)
-			local open = self:IsNodeOpen(eng, n)
-			if isvalid(n.icon) then
-				local c = self.LockedIconColor
-				if open then c = Color(1, 1, 1, 1) end
-				n.icon.SpriteGUIRendererComponent.Color = c
-			end
-			-- 위 노드를 끝까지 찍었으면 아래로 이어지는 연결선을 초록색으로
-			local link = self.LinkLockedRUID
-			if open then link = self.LinkDoneRUID end
-			self:SetImage(n.link, link, "l" .. n.id)
+		-- 탭·루트 열·칸·연결선·오른쪽 상세를 갱신한다.
+		local tal = self:GetTalent()
+		local ready = tal ~= nil and tal.TalentLoaded
+		local levels = {}
+		local left = 0
+		local total = 0
+		if ready then
+			levels = self:Levels(tal)
+			left = tal.TalentLeft
+			total = tal.TalentTotal
 		end
-		for branch, v in pairs(spent) do self:SetText("Count_" .. branch, tostring(v) .. " / " .. tostring(total[branch])) end
-		self:RefreshDetail(eng, avail)
+		for _, tab in ipairs(self._T.tabs) do
+			_UIButtonLogic:SetSelected(self:Get("Left/" .. self._T.tabButtons[tab]), tab == self._T.tab)
+		end
+		local routes = self:TabRoutes(self._T.tab)
+		local white = Color(1, 1, 1, 1)
+		for r = 1, 3 do
+			local base = "Left/Route" .. tostring(r)
+			local ro = routes[r]
+			local col = self:Get(base)
+			self:SetOn(col, ro ~= nil)
+			if ro ~= nil then
+				local spent = self:RouteSpent(levels, ro.id)
+				self:SetText(self:Get(base .. "/Name"), ro.name)
+				self:SetText(self:Get(base .. "/Points"), "투자 " .. tostring(spent) .. "점")
+				for i = 1, 3 do
+					local on = spent >= ro.bonus[i].need
+					local chip = self:Get(base .. "/Bonus" .. tostring(i))
+					local ruid = self.BonusOffRUID
+					local tc = self.TextSub
+					if on then ruid = self.BonusOnRUID tc = white end
+					self:SetImage(chip, ruid, white)
+					local label = self:Get(base .. "/Bonus" .. tostring(i) .. "/Label")
+					self:SetText(label, tostring(ro.bonus[i].need) .. "점")
+					self:SetColor(label, tc)
+				end
+				for t = 1, 4 do
+					local lc = self.LinkOffColor
+					if self:TierOpen(levels, ro.id, t + 1) then lc = self.LinkOnColor end
+					local hc = self.LinkOffColor
+					if self:TierOpen(levels, ro.id, t) then hc = self.LinkOnColor end
+					local link = self:Get(base .. "/Link" .. tostring(t))
+					if isvalid(link) then link.SpriteGUIRendererComponent.Color = lc end
+					local hlink = self:Get(base .. "/HLink" .. tostring(t))
+					if isvalid(hlink) then hlink.SpriteGUIRendererComponent.Color = hc end
+				end
+				for t = 1, 5 do
+					for k = 1, 2 do
+						self:RefreshNode(self:NodeEntity(r, t, k), self:FindNode(ro.id, t, k), levels, left, ready)
+					end
+				end
+			end
+		end
+		self:RefreshRight(tal, ready, levels, left, total)
 	end
 
 	@ExecSpace("ClientOnly")
-	method void RefreshDetail(Component eng, integer avail)
-		-- 선택 표시와 오른쪽 상세 패널.
+	method void RefreshNode(Entity e, table n, table levels, integer left, boolean ready)
+		-- 칸 하나: 아이콘·레벨·잠금 덮개·찍을 수 있음 표시·선택 테두리.
+		if not isvalid(e) then return end
+		self:SetOn(e, n ~= nil)
+		if n == nil then return end
+		local lv = levels[n.id] or 0
+		local open = self:TierOpen(levels, n.route, n.tier)
+		local icon = _EntityService:GetEntityByPath(e.Path .. "/Icon")
+		local ruid = n.iconRuid
+		if ruid == "" then ruid = self.IconFallbackRUID end
+		local ic = Color(1, 1, 1, 1)
+		if not open then ic = self.IconLockedColor end
+		self:SetImage(icon, ruid, ic)
+		local lvText = _EntityService:GetEntityByPath(e.Path .. "/Lv")
+		self:SetText(lvText, tostring(lv) .. "/" .. tostring(n.max))
+		local lc = self.TextDark
+		if lv >= n.max then lc = self.TextGood end
+		self:SetColor(lvText, lc)
+		local lock = _EntityService:GetEntityByPath(e.Path .. "/Lock")
+		self:SetOn(lock, not open)
+		if not open then
+			local req = self:TierReq(n.tier)
+			self:SetText(_EntityService:GetEntityByPath(e.Path .. "/Lock/Text"), "아래 " .. tostring(req) .. "점")
+		end
+		self:SetOn(_EntityService:GetEntityByPath(e.Path .. "/Dot"), ready and open and lv < n.max and left > 0)
+		self:SetOn(_EntityService:GetEntityByPath(e.Path .. "/Sel"), n.id == self._T.selected)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshRight(Component tal, boolean ready, table levels, integer left, integer total)
+		-- 오른쪽: 포인트·선택 칸 상세·레벨업·초기화·루트 보너스.
+		self:SetText(self:Get("Right/PointsBox/Value"), tostring(left))
+		self:SetText(self:Get("Right/PointsBox/Total"), "/ 총 " .. tostring(total))
+		self:SetText(self:Get("Right/PointsBox/TabSpent"), "공격 " .. tostring(self:TabSpent(levels, "Atk")) .. " · 방어 " .. tostring(self:TabSpent(levels, "Def")) .. " · 특수 " .. tostring(self:TabSpent(levels, "Util")))
 		local n = self._T.nodeById[self._T.selected or ""]
-		local sel = self:Get("Select")
+		local busy = self._T.busy
+		local tabSpent = self:TabSpent(levels, self._T.tab)
+		local allSpent = total - left
+		_UIButtonLogic:SetDisabled(self:Get("Right/BtnResetTab"), busy or not ready or tabSpent <= 0)
+		_UIButtonLogic:SetDisabled(self:Get("Right/BtnResetAll"), busy or not ready or allSpent <= 0)
+		local msg = self:Get("Right/Msg")
 		if n == nil then
-			if isvalid(sel) then sel:SetEnable(false) end
+			self:SetText(self:Get("Right/Name"), "각인 정보 없음")
+			self:SetText(self:Get("Right/Where"), "")
+			self:SetText(self:Get("Right/Level"), "")
+			self:SetText(self:Get("Right/EffectBox/Now"), "")
+			self:SetText(self:Get("Right/EffectBox/Next"), "")
+			self:SetText(self:Get("Right/Cond"), "")
+			self:SetText(msg, "각인 표를 불러오지 못했습니다")
+			_UIButtonLogic:SetDisabled(self:Get("Right/BtnUp"), true)
 			return
 		end
-		if isvalid(sel) and isvalid(n.btn) then
-			sel.UITransformComponent.anchoredPosition = n.btn.UITransformComponent.anchoredPosition
-			if not sel.Enable then sel:SetEnable(true) end
+		local ro = self._T.routeById[n.route]
+		local routeName = ""
+		if ro ~= nil then routeName = ro.name end
+		local lv = levels[n.id] or 0
+		local open = self:TierOpen(levels, n.route, n.tier)
+		local icon = n.iconRuid
+		if icon == "" then icon = self.IconFallbackRUID end
+		local ic = Color(1, 1, 1, 1)
+		if not open then ic = self.IconLockedColor end
+		self:SetImage(self:Get("Right/IconFrame/Icon"), icon, ic)
+		local name = n.name
+		if n.tier >= 5 then name = name .. "  (핵심)" end
+		self:SetText(self:Get("Right/Name"), name)
+		self:SetText(self:Get("Right/Where"), (self._T.tabNames[n.tab] or "") .. " · " .. routeName .. " 루트 · " .. tostring(n.tier) .. "단")
+		self:SetText(self:Get("Right/Level"), "레벨 " .. tostring(lv) .. " / " .. tostring(n.max))
+		local now = "없음"
+		if lv > 0 then now = self:EffectText(n, lv) end
+		self:SetText(self:Get("Right/EffectBox/Now"), now)
+		local nextText = "최대 레벨입니다"
+		local nextColor = self.TextSub
+		if lv < n.max then
+			nextText = self:EffectText(n, lv + 1)
+			nextColor = self.TextGood
 		end
-		local lv = eng.Lv[n.id] or 0
-		local open = self:IsNodeOpen(eng, n)
-		self:SetImage(self:Get("IconFrame/Icon"), n.iconRuid, "detailIcon")
-		local names = { Atk = "공격 계열", Def = "방어 계열", Util = "특수 계열" }
-		local colors = { Atk = self.BranchAtkColor, Def = self.BranchDefColor, Util = self.BranchUtilColor }
-		self:SetText("Branch", names[n.branch] or "")
-		local branch = self:Get("Branch")
-		if isvalid(branch) then branch.TextGUIRendererComponent.FontColor = colors[n.branch] end
-		self:SetText("Name", n.name)
-		self:SetText("Level", "현재 단계   " .. tostring(lv) .. " / " .. tostring(n.max))
-		local effect = ""
-		if lv >= n.max then
-			effect = self:EffectText(n, lv)
-		elseif lv > 0 then
-			effect = self:EffectText(n, lv) .. "\n<color=#347F24>다음 단계: " .. self:EffectText(n, lv + 1) .. "</color>"
-		else
-			effect = "<color=#347F24>다음 단계: " .. self:EffectText(n, 1) .. "</color>"
+		self:SetText(self:Get("Right/EffectBox/Next"), nextText)
+		self:SetColor(self:Get("Right/EffectBox/Next"), nextColor)
+		-- 해금 조건
+		local spent = self:RouteSpent(levels, n.route)
+		local condText = "해금 조건 없음 (1단)"
+		if n.tier > 1 then
+			condText = "해금 조건: " .. routeName .. " 루트 " .. tostring(n.tier - 1) .. "단 이하에 " .. tostring(self:TierReq(n.tier)) .. "점 (현재 " .. tostring(self:LowerSpent(levels, n.route, n.tier)) .. "점)"
+			if n.tier >= 5 then condText = condText .. " + 4단 칸 1개 이상" end
 		end
-		self:SetText("Effect", effect)
-		for i = 1, 3 do
-			local step = self:Get("Step" .. tostring(i))
-			local label = self:Get("Step" .. tostring(i) .. "/Label")
-			local on = i <= lv
-			local ruid = self.StepOffRUID
-			local color = self.StepOffColor
-			if on then
-				ruid = self.StepOnRUID
-				color = self.StepOnColor
-			end
-			self:SetImage(step, ruid, "s" .. tostring(i))
-			if isvalid(label) then label.TextGUIRendererComponent.FontColor = color end
-		end
-		-- 서버 안내가 있으면 잠깐 보여 주고, 그 외에는 강화할 수 없는 이유를 표시
+		local cond = self:Get("Right/Cond")
+		self:SetText(cond, condText)
+		local cc = self.TextSub
+		if not open then cc = self.TextBad end
+		self:SetColor(cond, cc)
+		-- 안내: 서버 응답 문구 우선, 없으면 레벨업할 수 없는 이유
 		local hint = ""
-		if lv >= n.max then
-			hint = "최대 단계입니다"
+		local good = false
+		if self._T.msgTimer > 0 then
+			hint = self._T.msgText
+			good = self._T.msgGood
+		elseif busy then
+			hint = "요청 중..."
+			good = true
+		elseif not ready then
+			hint = "각인 정보를 불러오는 중입니다"
+		elseif lv >= n.max then
+			hint = "최대 레벨입니다"
+			good = true
 		elseif not open then
-			hint = "바로 위 각인을 " .. tostring(n.max) .. "단계까지 올려야 합니다"
-		elseif avail <= 0 then
-			hint = "남은 포인트가 없습니다"
+			hint = "아직 잠긴 칸입니다"
+		elseif left <= 0 then
+			hint = "남은 포인트가 없습니다 (계정 레벨업으로 획득)"
 		end
-		if self._T.msgTimer > 0 then hint = self._T.msgShown or "" end
-		self:SetText("Msg", hint)
-		if lv >= n.max then self:SetText("Cost", "-") else self:SetText("Cost", "1") end
-		_UIButtonLogic:SetDisabled(self:Get("BtnUpgrade"), lv >= n.max or not open or avail <= 0)
+		self:SetText(msg, hint)
+		local mc = self.TextBad
+		if good then mc = self.TextGood end
+		self:SetColor(msg, mc)
+		local up = self:Get("Right/BtnUp")
+		local upText = "레벨업 (포인트 1)"
+		if lv >= n.max then upText = "최대 레벨" end
+		self:SetText(up, upText)
+		_UIButtonLogic:SetDisabled(up, busy or tal == nil or not self:CanLevelUp(tal, n))
+		-- 루트 보너스
+		if ro ~= nil then
+			self:SetText(self:Get("Right/BonusHead"), "루트 보너스 · " .. routeName .. " (투자 " .. tostring(spent) .. "점)")
+			for i = 1, 3 do
+				local b = ro.bonus[i]
+				local line = self:Get("Right/Bonus" .. tostring(i))
+				local reached = spent >= b.need
+				local mark = "○ "
+				if reached then mark = "● " end
+				self:SetText(line, mark .. tostring(b.need) .. "점: " .. b.desc)
+				local bc = self.TextSub
+				if reached then bc = self.TextGood end
+				self:SetColor(line, bc)
+			end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
-		-- 열려 있는 동안 동기화된 각인 상태를 반영하고, 서버 안내 문구를 잠깐 띄운다. 로비를 벗어나면 닫는다.
+		-- 열려 있는 동안 동기화 상태 반영, 서버 응답·시간 초과 처리. 로비를 벗어나면 닫는다.
 		if not self._T.open then return end
 		local player = _UserService.LocalPlayer
 		if not isvalid(player) or not isvalid(player.CurrentMap) or player.CurrentMap.Name ~= self.LobbyMapName then
 			self:Close()
 			return
 		end
-		local eng = self:GetEngrave()
-		if eng == nil then return end
-		if eng.MsgSeq ~= self._T.msgSeq then
-			self._T.msgSeq = eng.MsgSeq
-			self._T.msgTimer = self.MsgDuration
-			self._T.msgShown = eng.Msg
+		local tal = self:GetTalent()
+		if tal ~= nil and self._T.seq ~= nil and tal.TalentSeq ~= self._T.seq then
+			self._T.seq = tal.TalentSeq
+			self._T.busy = false
+			self:ShowResult(tal)
+			log("[VRF] talent result seq=" .. tostring(tal.TalentSeq) .. " code=" .. tostring(tal.TalentMsg) .. " detail=" .. tostring(tal.TalentResult) .. " left=" .. tostring(tal.TalentLeft))
+		elseif tal ~= nil and self._T.seq == nil then
+			self._T.seq = tal.TalentSeq
+		end
+		if self._T.busy then
+			self._T.busyTimer = self._T.busyTimer - delta
+			if self._T.busyTimer <= 0 then
+				self._T.busy = false
+				self:ShowMsg("응답이 없습니다. 다시 시도해 주세요", false)
+			end
 		end
 		if self._T.msgTimer > 0 then self._T.msgTimer = self._T.msgTimer - delta end
-		self:Refresh()
+		self._T.tick = (self._T.tick or 0) - delta
+		if self._T.tick <= 0 then
+			self._T.tick = 0.15
+			self:Refresh()
+		end
 	end
 
 end

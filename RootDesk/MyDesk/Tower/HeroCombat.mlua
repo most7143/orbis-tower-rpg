@@ -1077,6 +1077,12 @@ script HeroCombat extends Component
 		self.UltGauge = 0
 		table.insert(list, self:MakeCast(usk))
 		log("[VRF] ult cast job=" .. self.JobId .. " id=" .. uid .. " free=" .. tostring(free))
+		-- 각인 핵심 '해방': 궁극기를 쓰면 이 캐릭터의 스킬 쿨타임 초기화
+		local tmgr = self._T.mgr
+		if tmgr ~= nil and self._T.cd ~= nil and tmgr:Bonus("UltReset") > 0 then
+			for cid, _ in pairs(self._T.cd) do self._T.cd[cid] = 0 end
+			log("[VRF] talent ult reset job=" .. self.JobId)
+		end
 		return true
 	end
 
@@ -1981,12 +1987,14 @@ script HeroCombat extends Component
 		if dmg <= 0 then return end
 		local crit = r.hitCrit[h] == true
 		local pc = self.Entity:GetComponent("script.TowerPlayer")
-		if pc ~= nil then pc:ShowProcDamageAt(target, dmg, crit, (h - 1) * self.HitNumGap) end
+		-- 각인 '섬멸'은 숫자를 띄우기 전에 판정 (뜨는 숫자도 2배, 줄 선 몬스터는 ApplySplashDamage가 따로 판정)
+		local frontDmg = mgr:FinalDouble(dmg)
+		if pc ~= nil then pc:ShowProcDamageAt(target, frontDmg, crit, (h - 1) * self.HitNumGap) end
 		-- 범위 스킬: 맨 앞 뒤로 줄 선 몬스터도 (최대 타격 수 - 1)마리까지 같은 피해 (앞 몬스터가 이 타격에 쓰러져도 맞음)
 		local splash = {}
 		if (r.targets or 1) > 1 then splash = mgr:SplashTargets(r.targets - 1) end
 		if h == 1 then r.splashHit = splash end
-		mgr:ApplyMonsterDamage(dmg)
+		mgr:ApplyRolledDamage(frontDmg)
 		if crit then mgr:OnPlayerCrit() end
 		for _, e in ipairs(splash) do
 			if not isvalid(e) or e.TransformComponent == nil then continue end
@@ -2034,8 +2042,9 @@ script HeroCombat extends Component
 				_EffectService:PlayEffect(first, e, pos, 0, Vector3(1, 1, 1), false, { FlipX = true })
 			end
 			if i == 1 then
-				if pc ~= nil then pc:ShowProcDamage(e, dmg, crit) end
-				mgr:ApplyMonsterDamage(dmg)
+				local d1 = mgr:FinalDouble(dmg)
+				if pc ~= nil then pc:ShowProcDamage(e, d1, crit) end
+				mgr:ApplyRolledDamage(d1)
 			else
 				mgr:ApplySplashDamage(e, dmg, crit, 0)
 			end
@@ -2360,8 +2369,9 @@ script HeroCombat extends Component
 		if not self:Alive(target) then return end
 		local dmg = self:DotValue(def, id, tonumber(mgr.MonsterHp) or 0, self:DefDownPct())
 		local pc = self.Entity:GetComponent("script.TowerPlayer")
+		dmg = mgr:FinalDouble(dmg)
 		if pc ~= nil then pc:ShowProcDamage(target, dmg, false) end
-		mgr:ApplyMonsterDamage(dmg)
+		mgr:ApplyRolledDamage(dmg)
 		log("[VRF] dot " .. def.name .. " dmg=" .. tostring(dmg))
 	end
 
@@ -2998,9 +3008,10 @@ script HeroCombat extends Component
 			_EffectService:PlayEffect(hitFx, target, self:HitPos(target, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true })
 			self:PlaySound(self.SwordHitSound)
 			local pc = self.Entity:GetComponent("script.TowerPlayer")
-			if pc ~= nil then pc:ShowProcDamage(target, dmg, crit) end
+			local d1 = mgr:FinalDouble(dmg)
+			if pc ~= nil then pc:ShowProcDamage(target, d1, crit) end
 			local splash = mgr:SplashTargets((sk.proc.targets or 1) - 1)
-			mgr:ApplyMonsterDamage(dmg)
+			mgr:ApplyRolledDamage(d1)
 			for _, e in ipairs(splash) do
 				if not isvalid(e) or e.TransformComponent == nil then continue end
 				local wp = e.TransformComponent.WorldPosition

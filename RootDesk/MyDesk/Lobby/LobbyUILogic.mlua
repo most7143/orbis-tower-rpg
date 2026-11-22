@@ -161,6 +161,30 @@ script LobbyUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void RefreshLocks()
+		-- 계정 레벨 해금 표시: 캐릭터 뽑기(UnlockTable CharGacha), 성장(열 수 있는 탭이 하나도 없으면 = 슬롯 해금 전).
+		self:SetMenuLocked(self.btnGacha, "CharGacha", not _UnlockRules:IsOpenLocal("CharGacha"))
+		self:SetMenuLocked(self.btnGrowth, "Slot", _GrowthUILogic:FirstOpenTab() == 0)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetMenuLocked(ButtonComponent button, string unlockId, boolean locked)
+		-- 잠긴 메뉴 버튼: 비활성 이미지·입력 차단 + Label을 "Lv.N 해금"으로. 풀리면 원래 글자로.
+		for _, rec in ipairs(self._T.menu or {}) do
+			if rec.button == button and rec.locked ~= locked then
+				rec.locked = locked
+				if isvalid(rec.label) then
+					local t = rec.label.TextGUIRendererComponent
+					if rec.baseLabel == nil then rec.baseLabel = t.Text end
+					if locked then t.Text = _UnlockRules:LockText(unlockId) else t.Text = rec.baseLabel end
+				end
+				self:SetMenuDisabled(button, locked)
+				log("[VRF] lobby menu " .. button.Entity.Name .. " locked=" .. tostring(locked))
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
 	method void Bind(ButtonComponent button, any fn)
 		-- 버튼 클릭 이벤트 연결 + 해제용 기록.
 		if not isvalid(button) then return end
@@ -691,6 +715,7 @@ script LobbyUILogic extends Logic
 				self._T.energyUiTick = 0.2
 				self:RefreshEnergy()
 				self:RefreshWallet()
+				self:RefreshLocks()
 			end
 		end
 		if isvalid(self.lobbyRoot) and self.lobbyRoot.Enable ~= inLobby then

@@ -1,12 +1,14 @@
 @Logic
 script PetUILogic extends Logic
 
-	-- 펫 화면 (PetUI.ui, 성장창 5번 탭). 계정 데이터는 PlayerPet(서버 동기화 값)을 읽기만 하고 요청은 PlayerPet의 Request* RPC로 보낸다.
+	-- 펫 화면 (PetUI.ui, 성장창 4번 탭). 계정 데이터는 PlayerPet(서버 동기화 값)을 읽기만 하고 요청은 PlayerPet의 Request* RPC로 보낸다.
 	-- 왼쪽 위: 장착 칸 3개 / 왼쪽 아래: 등급별 펫 23칸 / 오른쪽 위: 선택 펫 상세·장착/해제 / 오른쪽 아래: 뽑기 레벨·경험치·확률·뽑기권·구매·뽑기 / 결과 팝업.
 	property string RootPath = "/ui/PetUI/Panel"
 	property string LockText = "펫 총레벨 "
 	property number RequestTimeout = 8
 	property Color LockedIconTint = Color(0.62, 0.66, 0.72, 1)
+	-- 펫 아이콘 원본 크기(px, 리소스 조회값). 아이콘 피벗이 그림 모서리 밖이라 원본 피벗을 쓰지 않고(PreserveSprite None) 이 비율로 칸 중앙에 그린다.
+	property string IconSizes = "P01:32x28|P02:32x28|P03:36x24|P04:36x28|P05:32x20|P06:36x32|P07:32x28|P08:36x28|P09:36x28|P10:36x24|P11:32x32|P12:24x32|P13:36x36|P14:32x32|P15:32x32|P16:36x36|P17:32x36|P18:40x32|P19:36x32|P20:36x28|P21:32x36|P22:36x36|P23:32x32"
 
 	@HideFromInspector
 	property table handlers = {}
@@ -132,7 +134,7 @@ script PetUILogic extends Logic
 				if p == nil then
 					cell:SetEnable(false)
 				else
-					self:SetIcon(self:Find(self:CellPath(i) .. "/Icon"), p.icon, Color(1, 1, 1, 1))
+					self:SetIcon(self:Find(self:CellPath(i) .. "/Icon"), p, Color(1, 1, 1, 1), 60)
 					self:SetColor(self:CellPath(i) .. "/Grade", self:GradeColor(p.grade))
 				end
 			end
@@ -144,12 +146,46 @@ script PetUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method void SetIcon(Entity e, string ruid, Color c)
-		-- 펫 아이콘(스프라이트 RUID)을 칸 중앙에 원본 비율로 표시.
+	method void SetIcon(Entity e, table p, Color c, number box)
+		-- 펫 아이콘을 칸 중앙에 원본 비율로 표시. 원본 피벗(그림 모서리 밖)을 무시하도록 PreserveSprite None + 비율 맞춘 사각형. 펫이 없으면 아이콘 자리를 숨긴다.
 		if not isvalid(e) then return end
+		local ruid = ""
+		if p ~= nil then ruid = p.icon or "" end
+		if ruid == "" then
+			if e.Enable then e:SetEnable(false) end
+			return
+		end
 		local spr = e.SpriteGUIRendererComponent
-		if ruid ~= nil and ruid ~= "" and spr.ImageRUID.DataId ~= ruid then spr.ImageRUID = DataRef(ruid) end
+		if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+		if spr.ImageRUID.DataId ~= ruid then spr.ImageRUID = DataRef(ruid) end
 		spr.Color = c
+		local wh = self:IconSize(p.id)
+		local w = wh[1]
+		local h = wh[2]
+		local k = box / math.max(w, h)
+		local size = Vector2(math.floor(w * k + 0.5), math.floor(h * k + 0.5))
+		local rt = e.UITransformComponent
+		if rt.RectSize.x ~= size.x or rt.RectSize.y ~= size.y then rt.RectSize = size end
+		if not e.Enable then e:SetEnable(true) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table IconSize(string id)
+		-- 펫 Id → 아이콘 원본 가로·세로(px) 표. 모르면 정사각형.
+		if self._T.iconSizes == nil then
+			local t = {}
+			for part in string.gmatch(self.IconSizes, "[^|]+") do
+				local a, ae = string.find(part, ":", 1, true)
+				local x, xe = string.find(part, "x", 1, true)
+				if a ~= nil and x ~= nil then
+					t[string.sub(part, 1, a - 1)] = { tonumber(string.sub(part, a + 1, x - 1)) or 32, tonumber(string.sub(part, x + 1)) or 32 }
+				end
+			end
+			self._T.iconSizes = t
+		end
+		local v = self._T.iconSizes[id or ""]
+		if v == nil then return { 32, 32 } end
+		return v
 	end
 
 	@ExecSpace("ClientOnly")
@@ -213,7 +249,7 @@ script PetUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Open()
-		-- 성장창 5번 탭으로 열기.
+		-- 성장창 4번 탭으로 열기.
 		local root = _EntityService:GetEntityByPath(self.RootPath)
 		if isvalid(root) then root:SetEnable(true) end
 		self._T.open = true
@@ -324,7 +360,7 @@ script PetUILogic extends Logic
 				end
 				e.UITransformComponent.anchoredPosition = Vector2(x, y)
 				self:SetColor(base .. "/Grade", self:GradeColor(rec.p.grade))
-				self:SetIcon(self:Find(base .. "/Icon"), rec.p.icon, Color(1, 1, 1, 1))
+				self:SetIcon(self:Find(base .. "/Icon"), rec.p, Color(1, 1, 1, 1), 80)
 				self:SetText(base .. "/Name", rec.p.name)
 				local tag = "NEW"
 				local tc = Color(0.20, 0.48, 0.12, 1)
@@ -499,9 +535,8 @@ script PetUILogic extends Logic
 					totalLv = totalLv + lv
 				end
 				self:Show(base .. "/Dim", not has)
-				self:Show(base .. "/Lock", not has)
 				self:Show(base .. "/Eq", equipped[p.id] ~= nil)
-				self:SetIcon(self:Find(base .. "/Icon"), p.icon, has and Color(1, 1, 1, 1) or self.LockedIconTint)
+				self:SetIcon(self:Find(base .. "/Icon"), p, has and Color(1, 1, 1, 1) or self.LockedIconTint, 60)
 				self:SetText(base .. "/Lv", has and ("Lv." .. tostring(lv)) or "미보유")
 				self:SetTextColor(base .. "/Lv", has and Color(0.14, 0.17, 0.21, 1) or Color(0.90, 0.92, 0.95, 1))
 				_UIButtonLogic:SetSelected(self:Find(base), i == self._T.sel)
@@ -514,7 +549,7 @@ script PetUILogic extends Logic
 		if p ~= nil then
 			local lv = owned[p.id]
 			local has = lv ~= nil
-			self:SetIcon(self:Find("DetailBg/IconBg/Icon"), p.icon, has and Color(1, 1, 1, 1) or self.LockedIconTint)
+			self:SetIcon(self:Find("DetailBg/IconBg/Icon"), p, has and Color(1, 1, 1, 1) or self.LockedIconTint, 104)
 			self:SetColor("DetailBg/IconBg/Grade", self:GradeColor(p.grade))
 			self:SetText("DetailBg/Name", p.name)
 			self:SetText("DetailBg/Grade", p.gradeName)
@@ -558,10 +593,13 @@ script PetUILogic extends Logic
 			local id = eq[s] or ""
 			local sp = nil
 			for _, c in pairs(self._T.cells) do if c.id == id then sp = c end end
-			self:Show(base .. "/Lock", not open)
-			self:Show(base .. "/Icon", open and sp ~= nil)
+			-- 빈 칸·잠긴 칸은 아이콘 자리를 숨긴다 (원형 표시 없음)
 			if open and sp ~= nil then
-				self:SetIcon(self:Find(base .. "/Icon"), sp.icon, Color(1, 1, 1, 1))
+				self:SetIcon(self:Find(base .. "/Icon"), sp, Color(1, 1, 1, 1), 64)
+			else
+				self:SetIcon(self:Find(base .. "/Icon"), nil, Color(1, 1, 1, 1), 64)
+			end
+			if open and sp ~= nil then
 				self:SetText(base .. "/Label", sp.name)
 			elseif open then
 				self:SetText(base .. "/Label", tostring(s) .. "번 빈 칸")

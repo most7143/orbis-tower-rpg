@@ -1,0 +1,152 @@
+@Logic
+script LevelUpUILogic extends Logic
+
+	-- 계정 레벨업 연출 (ui/LevelUpUI, 그룹 정렬 28: 툴팁 아래, 다른 화면 위).
+	-- 서버 PlayerRoster.LevelUpSeq가 바뀌면 LevelUpData "이전:새레벨:금색메소:다이아:해금이름,..."를 읽어
+	-- 화면 중앙 반투명 검정 띠에 "레벨업!"·"Lv.N"·보상·"ㅁㅁ 해금!"을 띄운다. 저절로 사라지지 않고(사용자 확정 2026-11-22)
+	-- 등장 애니메이션(ClickDelay초) 뒤 화면 아무 곳이나 누르면 닫힌다. 전체 화면 입력 차단 판이 클릭을 흡수해 아래 버튼은 동작하지 않는다.
+	-- 서버가 한 번에 오른 여러 레벨을 한 신호로 묶어 보내므로 한 번에 보여 주고, 연달아 온 신호는 클릭할 때마다 다음 것을 보여 준다.
+	property Entity root = "0bbccc9e-4d37-4b2a-93d9-1299c4b274b2"
+	property TextGUIRendererComponent titleText = "83befac0-e8a5-42fa-819d-f6b1597d6fc6"
+	property TextGUIRendererComponent levelText = "166cdd3e-ba91-4ba5-8617-95a833cc4e96"
+	property TextGUIRendererComponent mesoText = "d8455824-a858-4c38-b218-01bcf789e786"
+	property TextGUIRendererComponent diaText = "0ce7ca9a-71f6-4ed1-b49f-b7897d17dbe0"
+	property TextGUIRendererComponent unlockText = "f3c0f3af-1475-45ce-96c6-09938324ac35"
+	property Entity rewards = "23a60d79-ba36-4ea6-bcd3-d620617c9197"
+	property Entity blocker = "1a0b6659-7de1-4814-a3bf-f2f9c0c978ea"
+	property TextGUIRendererComponent hintText = "973c978a-c25b-425c-9aa8-c092899aebc2"
+	property number FadeIn = 0.25
+	property number ClickDelay = 0.5
+	property number FadeOut = 0.2
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 처음에는 숨김. 접속 시점의 Seq는 기준값으로만 기록한다(지난 레벨업은 띄우지 않음).
+		self._T.queue = {}
+		self._T.t = -1
+		self._T.lastSeq = nil
+		self._T.closing = -1
+		if isvalid(self.root) then self.root:SetEnable(false) end
+		if isvalid(self.blocker) then
+			self._T.blockHandler = self.blocker:ConnectEvent(UITouchDownEvent, function() self:OnBlockerDown() end)
+		end
+		log("[VRF] LevelUpUILogic begin (client)")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 입력 차단 판 연결 해제.
+		if self._T.blockHandler ~= nil and isvalid(self.blocker) then self.blocker:DisconnectEvent(UITouchDownEvent, self._T.blockHandler) end
+		self._T.blockHandler = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBlockerDown()
+		-- 화면 클릭: 등장 애니메이션이 끝났으면 닫기 시작 (클릭은 판이 흡수).
+		if self._T.t < self.ClickDelay or self._T.closing >= 0 then return end
+		self._T.closing = 0
+		log("[VRF] levelup banner click close")
+	end
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 레벨업 신호 감시 + 표시 중 페이드.
+		local player = _UserService.LocalPlayer
+		if isvalid(player) then
+			---@type PlayerRoster
+			local roster = player:GetComponent("script.PlayerRoster")
+			if roster ~= nil and roster.RosterLoaded then
+				if self._T.lastSeq == nil then
+					self._T.lastSeq = roster.LevelUpSeq
+				elseif roster.LevelUpSeq ~= self._T.lastSeq then
+					self._T.lastSeq = roster.LevelUpSeq
+					table.insert(self._T.queue, roster.LevelUpData)
+				end
+			end
+		end
+		if self._T.t < 0 then
+			if #self._T.queue > 0 then self:Show(table.remove(self._T.queue, 1)) end
+			return
+		end
+		self._T.t = self._T.t + delta
+		local t = self._T.t
+		local a = math.min(1, t / self.FadeIn)
+		if self._T.closing >= 0 then
+			self._T.closing = self._T.closing + delta
+			a = math.max(0, 1 - self._T.closing / self.FadeOut)
+		end
+		self:SetAlpha(a)
+		-- 안내 글자: 클릭 가능해지면 천천히 깜빡임
+		if isvalid(self.hintText) then
+			local h = 0
+			if t >= self.ClickDelay then h = 0.65 + 0.35 * math.cos((t - self.ClickDelay) * 3) end
+			local c = self.hintText.FontColor
+			self.hintText.FontColor = Color(c.r, c.g, c.b, h)
+		end
+		-- 제목 살짝 튀어나오는 크기 (0.25초 동안 1.25 → 1)
+		if isvalid(self.titleText) then
+			local s = 1 + 0.25 * math.max(0, 1 - t / self.FadeIn) ^ 2
+			self.titleText.Entity.UITransformComponent.UIScale = Vector3(s, s, 1)
+		end
+		if self._T.closing >= self.FadeOut then
+			self._T.t = -1
+			self._T.closing = -1
+			if isvalid(self.root) then self.root:SetEnable(false) end
+			log("[VRF] levelup banner hide")
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetAlpha(number a)
+		-- 띠 전체 투명도.
+		if not isvalid(self.root) then return end
+		local cg = self.root.CanvasGroupComponent
+		if isvalid(cg) then cg.GroupAlpha = a end
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Comma(integer n)
+		-- 1234567 → "1,234,567".
+		local s = tostring(math.floor(n))
+		local out = ""
+		while string.len(s) > 3 do
+			out = "," .. string.sub(s, -3) .. out
+			s = string.sub(s, 1, string.len(s) - 3)
+		end
+		return s .. out
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Show(string data)
+		-- 띠 내용 채우고 페이드 시작.
+		if not isvalid(self.root) then return end
+		local f = {}
+		local start = 1
+		for i = 1, 4 do
+			local p, _ = string.find(data, ":", start, true)
+			if p == nil then break end
+			table.insert(f, string.sub(data, start, p - 1))
+			start = p + 1
+		end
+		local unlocks = string.sub(data, start)
+		local newLv = math.floor(tonumber(f[2]) or 0)
+		local meso = math.floor(tonumber(f[3]) or 0)
+		local dia = math.floor(tonumber(f[4]) or 0)
+		if newLv <= 0 then return end
+		self.levelText.Text = "Lv." .. tostring(newLv)
+		self.mesoText.Text = "+" .. self:Comma(meso)
+		self.diaText.Text = "+" .. self:Comma(dia)
+		local hasUnlock = unlocks ~= nil and unlocks ~= ""
+		if hasUnlock then
+			local names = {}
+			for n in string.gmatch(unlocks, "[^,]+") do table.insert(names, n .. " 해금!") end
+			self.unlockText.Text = table.concat(names, "   ")
+		end
+		self.unlockText.Entity:SetEnable(hasUnlock)
+		self.root:SetEnable(true)
+		self._T.t = 0
+		self._T.closing = -1
+		self:SetAlpha(0)
+		log("[VRF] levelup banner show lv=" .. tostring(newLv) .. " meso=" .. tostring(meso) .. " dia=" .. tostring(dia) .. " unlock=" .. unlocks)
+	end
+
+end

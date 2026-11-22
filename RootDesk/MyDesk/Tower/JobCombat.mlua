@@ -1214,6 +1214,12 @@ script JobCombat extends Component
 		self.UltGauge = 0
 		table.insert(list, self:MakeCast(usk))
 		log("[VRF] ult cast job=" .. self.JobId .. " id=" .. uid .. " res=" .. tostring(self.Res) .. " free=" .. tostring(free))
+		-- 각인 핵심 '해방': 궁극기를 쓰면 이 캐릭터의 스킬 쿨타임 초기화
+		local tmgr = self._T.mgr
+		if tmgr ~= nil and self._T.cd ~= nil and tmgr:Bonus("UltReset") > 0 then
+			for cid, _ in pairs(self._T.cd) do self._T.cd[cid] = 0 end
+			log("[VRF] talent ult reset job=" .. self.JobId)
+		end
 		return true
 	end
 
@@ -1487,8 +1493,10 @@ script JobCombat extends Component
 				_EffectService:PlayEffect(first, e, Vector3(wp.x, wp.y + 0.45 * e.TransformComponent.Scale.y, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
 			end
 			if e == mgr:HeroMonster() then
+				-- 각인 '섬멸'은 숫자를 띄우기 전에 판정 (뜨는 숫자도 2배)
+				d = mgr:FinalDouble(d)
 				if tp ~= nil and uid ~= "" then tp:ShowProcDamageAt(e, d, crit, yOff, uid) end
-				mgr:ApplyMonsterDamage(d)
+				mgr:ApplyRolledDamage(d)
 				if crit then mgr:OnPlayerCrit() end
 			else
 				mgr:ApplySplashDamage(e, d, crit, yOff)
