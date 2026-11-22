@@ -1,12 +1,12 @@
 @Logic
 script RegionSelectLogic extends Logic
 
-	-- 지역 선택 화면 (LobbyUI Root/RegionSelect). 왼쪽 지역 목록(가상 스크롤 6칸), 오른쪽 상세(몬스터·별 미션·보상), 아래 구간 보상, 입장.
+	-- 지역 선택 화면 (LobbyUI Root/RegionSelect). 왼쪽 지역 목록(10층 구역 단위, 구역 넘김 ◀▶), 오른쪽 상세(몬스터·별 미션·보상), 아래 구간 보상, 입장(아래 에너지 한 줄), 오른쪽 위 X 닫기.
 	-- 선택만으로는 입장·에너지 소모가 없고 입장 버튼으로만 들어간다. 별·구간 수령 판정은 서버(PlayerEngrave)가 한다.
 	property string Base = "/ui/LobbyUI/Root/RegionSelect"
-	property number RowH = 88
-	property integer Slots = 6
-	property number ViewH = 432
+	property number RowH = 48
+	property integer Slots = 10
+	property number ViewH = 480
 	property integer SectionSize = 10
 	property string SectionThresholds = "10|20|30"
 	property number StarTimeLimit = 600
@@ -55,43 +55,37 @@ script RegionSelectLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
-		-- 버튼·행·스크롤 입력 연결. 처음엔 숨긴다.
+		-- 버튼·행·구역 넘김 입력 연결. 처음엔 숨긴다.
 		self.handlers = {}
 		self._T.rowState = {}
-		self:OnClick("back", function() self:Close() end)
-		self:OnClick("prev", function() self:Select((self._T.sel or 1) - 1, true) end)
-		self:OnClick("next", function() self:Select((self._T.sel or 1) + 1, true) end)
+		self:OnClick("closeX", function() self:Close() end)
 		self:OnClick("currentRegion", function() self:Select(self:Unlocked(), true) end)
+		self:OnClick("sectionPrev", function() self:SetSection((self._T.sec or 1) - 1) end)
+		self:OnClick("sectionNext", function() self:SetSection((self._T.sec or 1) + 1) end)
 		self:OnClick("enter", function() self:Enter() end)
 		for i = 0, 2 do
 			local tier = i + 1
 			self:OnClick("sectionChestButton" .. tostring(i), function() self:Claim(tier) end)
 		end
+		self:ConnectTooltips()
 		for k = 0, self.Slots - 1 do
 			local slot = k
 			local row = self:E("ListView/Row" .. tostring(k))
 			if isvalid(row) then
 				self._T.rowState[k] = { hover = false, pressed = false }
 				self:On(row, ButtonClickEvent, function()
-					if self._T.dragged then return end
 					_UISoundLogic:PlayClick()
 					self:Select(self:SlotIndex(slot), false)
 				end)
 				self:On(row, UITouchEnterEvent, function() self._T.rowState[slot].hover = true self:PaintRow(slot) end)
 				self:On(row, UITouchExitEvent, function() self._T.rowState[slot].hover = false self._T.rowState[slot].pressed = false self:PaintRow(slot) end)
-				self:On(row, UITouchDownEvent, function() self._T.rowState[slot].pressed = true self._T.dragged = false self._T.dragSum = 0 self:PaintRow(slot) end)
+				self:On(row, UITouchDownEvent, function() self._T.rowState[slot].pressed = true self:PaintRow(slot) end)
 				self:On(row, UITouchUpEvent, function() self._T.rowState[slot].pressed = false self:PaintRow(slot) end)
-				self:On(row, UITouchDragEvent, function(e) self:DragBy(e.TouchDelta.y) end)
 			end
 		end
-		self:On(self:E("scrollTrack/scrollThumb"), UITouchDragEvent, function(e)
-			-- 스크롤 손잡이 드래그: 손잡이 이동량을 목록 이동량으로 환산
-			local range = self:MaxScroll()
-			if range <= 0 then return end
-			local scale = self:UIScale()
-			self._T.scrollTarget = math.max(0, math.min(range, (self._T.scrollTarget or 0) - e.TouchDelta.y / scale * range / (self.ViewH - 80)))
-		end)
-		self._T.wheel = _InputService:ConnectEvent(MouseScrollEvent, function(e) self:Wheel(e.ScrollDelta) end)
+		-- 구역 단위 목록이라 스크롤 막대는 쓰지 않는다
+		local track = self:E("scrollTrack")
+		if isvalid(track) then track:SetEnable(false) end
 		local root = _EntityService:GetEntityByPath(self.Base)
 		if isvalid(root) then root:SetEnable(false) end
 		-- 설정값 (서버와 같은 RunConfig)
@@ -105,21 +99,57 @@ script RegionSelectLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void ConnectTooltips()
+		-- 툴팁: 보상 아이콘(글자 툴팁), 구간 별 상자(아이템 목록 툴팁).
+		-- 상자는 수령 가능하면 누를 때 수령(기존 동작), 잠김·수령 완료면 누를 때 상자 내용 툴팁.
+		local items = {
+			book = { "스킬북", "스킬을 성장시키는 데 쓰는 책입니다. 지역을 클리어하면 얻습니다." },
+			feather = { "여신의 깃털", "여신의 은총을 강화하는 데 쓰는 깃털입니다. 지역을 클리어하면 얻습니다." },
+			scroll = { "주문서", "장비 칸(슬롯) 강화에 쓰는 주문서입니다. 전투 중 일정 확률로 얻습니다." },
+			extraFeather = { "여신의 깃털", "여신의 은총을 강화하는 데 쓰는 깃털입니다. 전투 중 일정 확률로 추가로 얻습니다." },
+		}
+		for key, info in pairs(items) do
+			local e = self:E(key)
+			if isvalid(e) then
+				local title = info[1]
+				local body = info[2]
+				local show = function() _TooltipLogic:ShowText(e, title, body) end
+				self:On(e, ButtonClickEvent, show)
+				_TooltipLogic:Register(e, show)
+			end
+		end
+		for i = 0, 2 do
+			local tier = i + 1
+			local e = self:E("sectionChestButton" .. tostring(i))
+			if isvalid(e) then
+				-- 수령 가능한 상자는 버튼이 켜져 있어 클릭으로 수령한다 → 툴팁은 버튼이 꺼진 상자에서만
+				self:On(e, UITouchDownEvent, function()
+					if e.ButtonComponent.Enable then return end
+					self:ShowChestTip(e, tier)
+				end)
+				_TooltipLogic:Register(e, function()
+					if e.ButtonComponent.Enable then _TooltipLogic:Hide() return end
+					self:ShowChestTip(e, tier)
+				end)
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowChestTip(Entity e, integer tier)
+		-- 구간 상자 아이템 목록 툴팁: 스킬북·여신의 깃털 (3번째 상자는 다이아 추가).
+		local list = { "d0bb7509b8a54712ac2647d7ede2ad5f", "804a3c5f7abe4ad48f6e428e112da0a5" }
+		if tier == 3 then table.insert(list, "81462aeb825b4660991cef05651271cf") end
+		_TooltipLogic:ShowItems(e, "별 " .. tostring(self:Threshold(tier)) .. "개 보상 상자", list)
+	end
+
+	@ExecSpace("ClientOnly")
 	method void OnEndPlay()
 		-- 이벤트 해제.
 		for _, r in ipairs(self.handlers) do
 			if isvalid(r.e) then r.e:DisconnectEvent(r.evt, r.h) end
 		end
 		self.handlers = {}
-		if self._T.wheel ~= nil then _InputService:DisconnectEvent(MouseScrollEvent, self._T.wheel) self._T.wheel = nil end
-	end
-
-	@ExecSpace("ClientOnly")
-	method number UIScale()
-		-- 화면 픽셀 → UI 단위 비율 (1920 기준 캔버스).
-		local w = _UILogic.ScreenWidth
-		if w == nil or w <= 0 then return 1 end
-		return w / 1920
 	end
 
 	@ExecSpace("ClientOnly")
@@ -225,13 +255,13 @@ script RegionSelectLogic extends Logic
 		root:SetEnable(true)
 		if floor <= 0 then floor = self:Unlocked() end
 		self._T.sel = math.max(1, math.min(self:Count(), floor))
-		self:CenterOn(self._T.sel, true)
+		self._T.sec = self:SectionOf(self._T.sel)
 		self._T.claiming = false
 		self._T.entering = false
 		self:Refresh()
 		self._T.openT = 0
 		self:ApplyOpen(0)
-		log("[VRF] region select open floor=" .. tostring(self._T.sel) .. " unlocked=" .. tostring(self:Unlocked()) .. " count=" .. tostring(self:Count()))
+		log("[VRF] region select open floor=" .. tostring(self._T.sel) .. " section=" .. tostring(self._T.sec) .. " unlocked=" .. tostring(self:Unlocked()) .. " count=" .. tostring(self:Count()))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -249,54 +279,55 @@ script RegionSelectLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method number MaxScroll()
-		-- 목록 최대 스크롤량.
-		return math.max(0, self:Count() * self.RowH - self.ViewH)
+	method integer SectionOf(integer floor)
+		-- 층이 속한 구역 번호 (10층 단위, 1부터).
+		return math.floor((math.max(1, floor) - 1) / self.SectionSize) + 1
 	end
 
 	@ExecSpace("ClientOnly")
-	method void CenterOn(integer index, boolean instant)
-		-- 해당 항목이 목록 가운데쯤 오도록 스크롤.
-		local target = math.max(0, math.min(self:MaxScroll(), (index - 1) * self.RowH - (self.ViewH - self.RowH) / 2))
-		self._T.scrollTarget = target
-		if instant then self._T.scroll = target end
+	method integer SectionCount()
+		-- 전체 구역 수 (마지막 구역은 남은 층만큼).
+		return math.max(1, math.floor((self:Count() + self.SectionSize - 1) / self.SectionSize))
 	end
 
 	@ExecSpace("ClientOnly")
-	method void Wheel(number delta)
-		-- 마우스 휠: 목록 위에 커서가 있을 때만.
-		if not self:IsOpen() then return end
-		local view = self:E("ListView")
-		if not isvalid(view) then return end
-		local tr = view.UITransformComponent
-		local p = _UILogic:ScreenToLocalUIPosition(_InputService:GetCursorPosition(), tr)
-		if math.abs(p.x) > tr.RectSize.x / 2 or math.abs(p.y) > tr.RectSize.y / 2 then return end
-		self._T.scrollTarget = math.max(0, math.min(self:MaxScroll(), (self._T.scrollTarget or 0) - delta * self.RowH * 1.5))
+	method integer SectionFirst(integer sec)
+		-- 구역 첫 층.
+		return (sec - 1) * self.SectionSize + 1
 	end
 
 	@ExecSpace("ClientOnly")
-	method void DragBy(number dy)
-		-- 행 위에서 드래그: 목록을 손가락 따라 이동 (조금이라도 움직이면 클릭은 무시).
-		local d = dy / self:UIScale()
-		self._T.dragSum = (self._T.dragSum or 0) + math.abs(d)
-		if self._T.dragSum > 12 then self._T.dragged = true end
-		local s = math.max(0, math.min(self:MaxScroll(), (self._T.scroll or 0) + d))
-		self._T.scroll = s
-		self._T.scrollTarget = s
+	method integer SectionLast(integer sec)
+		-- 구역 마지막 층 (전체 층 수를 넘지 않음).
+		return math.min(self:Count(), sec * self.SectionSize)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetSection(integer sec)
+		-- 구역 넘김: 그 구역의 현재 도전 층(없으면 첫 층)을 골라 목록·상세·구간 보상을 같은 구역으로 맞춘다.
+		local s = math.max(1, math.min(self:SectionCount(), sec))
+		if s == self._T.sec then return end
+		local unlocked = self:Unlocked()
+		local pick = self:SectionFirst(s)
+		if unlocked >= pick and unlocked <= self:SectionLast(s) then pick = unlocked end
+		self._T.sec = s
+		self._T.sel = pick
+		self:Refresh()
+		log("[VRF] region section=" .. tostring(s) .. " sel=" .. tostring(pick))
 	end
 
 	@ExecSpace("ClientOnly")
 	method integer SlotIndex(integer slot)
-		-- 행 칸 → 항목 번호.
-		return math.floor((self._T.scroll or 0) / self.RowH) + slot + 1
+		-- 행 칸 → 항목 번호 (현재 구역 첫 층부터).
+		return self:SectionFirst(self._T.sec or 1) + slot
 	end
 
 	@ExecSpace("ClientOnly")
-	method void Select(integer index, boolean scroll)
-		-- 지역 선택: 상세만 바뀌고 입장·에너지 소모 없음.
+	method void Select(integer index, boolean follow)
+		-- 지역 선택: 상세만 바뀌고 입장·에너지 소모 없음. 선택 층이 다른 구역이면 구역도 함께 바뀐다.
 		local n = math.max(1, math.min(self:Count(), index))
 		self._T.sel = n
-		if scroll then self:CenterOn(n, false) end
+		self._T.sec = self:SectionOf(n)
 		self:Refresh()
 	end
 
@@ -356,21 +387,20 @@ script RegionSelectLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void LayoutRows()
-		-- 가상 스크롤: 6칸 행을 스크롤 위치에 맞춰 배치하고 내용을 채운다.
-		local s = self._T.scroll or 0
-		local first = math.floor(s / self.RowH)
-		local frac = s - first * self.RowH
+		-- 현재 구역의 층(최대 10개)을 10칸 행에 채운다. 남는 칸은 숨긴다.
+		local sec = self._T.sec or 1
+		local first = self:SectionFirst(sec)
+		local last = self:SectionLast(sec)
 		local unlocked = self:Unlocked()
 		local stars = self:StarMap()
-		local count = self:Count()
 		for k = 0, self.Slots - 1 do
 			local row = self:E("ListView/Row" .. tostring(k))
 			if isvalid(row) then
-				local idx = first + k + 1
-				local show = idx <= count
+				local idx = first + k
+				local show = idx <= last
 				if row.Enable ~= show then row:SetEnable(show) end
 				if show then
-					row.UITransformComponent.anchoredPosition = Vector2(0, self.ViewH / 2 - 40 - k * self.RowH + frac)
+					row.UITransformComponent.anchoredPosition = Vector2(0, self.ViewH / 2 - self.RowH / 2 - k * self.RowH)
 					local key = tostring(idx) .. ":" .. tostring(stars[idx] or 0) .. ":" .. tostring(self._T.sel) .. ":" .. tostring(unlocked)
 					if self._T.rowKey == nil then self._T.rowKey = {} end
 					if self._T.rowKey[k] ~= key then
@@ -390,13 +420,15 @@ script RegionSelectLogic extends Logic
 				end
 			end
 		end
-		-- 스크롤 손잡이
-		local thumb = self:E("scrollTrack/scrollThumb")
-		if isvalid(thumb) then
-			local range = self:MaxScroll()
-			local t = range > 0 and s / range or 0
-			thumb.UITransformComponent.anchoredPosition = Vector2(0, (self.ViewH - 80) / 2 - t * (self.ViewH - 80))
-		end
+		-- 구역 넘김 줄: "N구역 · a~b층" + 별 합/최대, 첫·마지막 구역에서 ◀▶ 비활성
+		local total = 0
+		for fl = first, last do total = total + self:StarCount(stars[fl] or 0) end
+		self:SetText("regionFilter/regionFilterText", tostring(sec) .. "구역 · " .. tostring(first) .. "~" .. tostring(last) .. "층", nil)
+		self:SetText("regionFilter/navStarText", tostring(total) .. "/" .. tostring((last - first + 1) * 3), nil)
+		local sp = self:E("sectionPrev")
+		if isvalid(sp) then sp.ButtonComponent.Enable = sec > 1 end
+		local sn = self:E("sectionNext")
+		if isvalid(sn) then sn.ButtonComponent.Enable = sec < self:SectionCount() end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -435,10 +467,7 @@ script RegionSelectLogic extends Logic
 		local bits = self:StarMap()[n] or 0
 		local locked = n > unlocked
 		-- 상단·목록 머리
-		self:SetText("title", "오르비스탑 탐험", nil)
 		self:SetText("regionPlaque/regionPlaqueLabel", "지역 선택", nil)
-		self:SetText("regionFilter/regionFilterText", tostring(n) .. " / " .. tostring(self:Count()), nil)
-		self:SetText("back/backLabel", "메인으로", nil)
 		self:SetText("currentRegion/currentRegionText", "현재 도전 지역으로", nil)
 		-- 상세: 지역 이름·별·몬스터
 		local pano = "panoramaFrame/Panorama/"
@@ -473,8 +502,8 @@ script RegionSelectLogic extends Logic
 		self:SetStars("missionTable/missionStar", bits)
 		self:SetText("clearRewardsTitle", "클리어 보상", nil)
 		self:SetText("possibleRewardsTitle", "획득 가능 아이템", nil)
-		-- 구간 보상 (선택한 층이 속한 구간)
-		local section = math.floor((n - 1) / self.SectionSize) + 1
+		-- 구간 보상 (지금 보이는 구역 = 선택한 층의 구역)
+		local section = self._T.sec or self:SectionOf(n)
 		local total = 0
 		local sm = self:StarMap()
 		for fl = (section - 1) * self.SectionSize + 1, section * self.SectionSize do total = total + self:StarCount(sm[fl] or 0) end
@@ -483,7 +512,7 @@ script RegionSelectLogic extends Logic
 		self:SetText("sectionTitle", "구간별 보상", nil)
 		self:SetText("sectionCountPill/sectionCount", tostring(total) .. " / " .. tostring(maxStars), nil)
 		if (self._T.hintTime or 0) <= 0 then
-			self:SetText("sectionHint", tostring(first) .. "~" .. tostring(section * self.SectionSize) .. "번째 지역", nil)
+			self:SetText("sectionHint", tostring(first) .. "~" .. tostring(self:SectionLast(section)) .. "번째 지역", nil)
 		end
 		local fill = self:E("sectionGauge/sectionGaugeFill")
 		if isvalid(fill) then fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, total / math.max(1, maxStars))) end
@@ -511,31 +540,24 @@ script RegionSelectLogic extends Logic
 		if locked then label = "잠긴 지역" elseif eng ~= nil and eng.EnergyLoaded and not canPay then label = "에너지 부족" end
 		local textColor = (not locked and canPay) and Color(1, 0.957, 0.843, 1) or Color(0.42, 0.46, 0.51, 1)
 		self:SetText("enter/enterText", label, textColor)
-		self:SetText("enter/enterCost", "에너지 " .. tostring(eng ~= nil and eng.EnergyCost or 3), textColor)
-		-- 이전·다음
-		local prev = self:E("prev")
-		if isvalid(prev) then prev.ButtonComponent.Enable = n > 1 end
-		local nxt = self:E("next")
-		if isvalid(nxt) then nxt.ButtonComponent.Enable = n < self:Count() end
 		self:RefreshEnergy()
 	end
 
 	@ExecSpace("ClientOnly")
 	method void RefreshEnergy()
-		-- 우측 상단 에너지·다음 충전 시간.
+		-- 입장 버튼 아래 에너지 한 줄: "에너지 3 소모 · 보유 30/30" (충전 중이면 다음 충전 시간도).
 		local eng = self:Engrave()
 		if eng == nil or not eng.EnergyLoaded then
-			self:SetText("energyPill/energy", "-- / 30", nil)
-			self:SetText("energyTimer", "불러오는 중", nil)
+			self:SetText("energyPill/energy", "에너지 불러오는 중", nil)
 			return
 		end
-		self:SetText("energyPill/energy", tostring(eng.Energy) .. " / " .. tostring(eng.EnergyMax), nil)
-		if eng.Energy >= eng.EnergyMax then
-			self:SetText("energyTimer", "충전 완료", nil)
-		else
+		local line = "에너지 " .. tostring(eng.EnergyCost) .. " 소모 · 보유 " .. tostring(eng.Energy) .. "/" .. tostring(eng.EnergyMax)
+		if eng.Energy < eng.EnergyMax then
 			local left = math.max(0, eng.EnergyRemaining)
-			self:SetText("energyTimer", string.format("다음 충전 %02d:%02d", math.floor(left / 60), left % 60), nil)
+			line = line .. string.format(" · %02d:%02d", math.floor(left / 60), left % 60)
 		end
+		local color = eng.Energy >= eng.EnergyCost and Color(0.14, 0.17, 0.21, 1) or Color(0.75, 0.22, 0.18, 1)
+		self:SetText("energyPill/energy", line, color)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -564,7 +586,7 @@ script RegionSelectLogic extends Logic
 		if self._T.claiming then return end
 		local eng = self:Engrave()
 		if eng == nil then return end
-		local section = math.floor(((self._T.sel or 1) - 1) / self.SectionSize) + 1
+		local section = self._T.sec or self:SectionOf(self._T.sel or 1)
 		self._T.claiming = true
 		self._T.claimSeq = eng.ClaimSeq
 		self._T.claimTier = tier
@@ -605,14 +627,14 @@ script RegionSelectLogic extends Logic
 		end
 		if self._T.basePos == nil then
 			self._T.basePos = {}
-			for _, k in ipairs({ "listPanel", "detailPanel", "sectionRewards", "ListView", "scrollTrack", "regionPlaque", "prev", "next", "regionFilter", "currentRegion", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2" }) do
+			for _, k in ipairs({ "listPanel", "detailPanel", "sectionRewards", "ListView", "scrollTrack", "regionPlaque", "sectionPrev", "sectionNext", "regionFilter", "currentRegion", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2", "energyPill", "closeX" }) do
 				local e = self:E(k)
 				if isvalid(e) then self._T.basePos[k] = e.UITransformComponent.anchoredPosition end
 			end
 		end
-		local left = { "listPanel", "ListView", "scrollTrack", "regionPlaque", "prev", "next", "regionFilter", "currentRegion" }
-		local right = { "detailPanel", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather" }
-		local bottom = { "sectionRewards", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2" }
+		local left = { "listPanel", "ListView", "scrollTrack", "regionPlaque", "sectionPrev", "sectionNext", "regionFilter", "currentRegion" }
+		local right = { "detailPanel", "panoramaFrame", "monsterLabel", "monsterList", "missionLabel", "missionTable", "rewardDivider", "clearRewardsTitle", "possibleRewardsTitle", "book", "feather", "scroll", "extraFeather", "closeX" }
+		local bottom = { "sectionRewards", "sectionTitle", "sectionCountPill", "sectionHint", "sectionGauge", "sectionChestButton0", "sectionChestButton1", "sectionChestButton2", "energyPill" }
 		local kl = ease(t / 0.35)
 		local kr = ease((t - 0.06) / 0.35)
 		local kb = ease((t - 0.12) / 0.35)
@@ -641,7 +663,7 @@ script RegionSelectLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
-		-- 결과에서 돌아온 경우 열기, 스크롤 보간, 등장·선택 연출, 수령 응답, 에너지 표시.
+		-- 결과에서 돌아온 경우 열기, 등장 연출, 수령 응답, 에너지 표시.
 		local player = _UserService.LocalPlayer
 		if self.PendingOpenFloor > 0 and isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap.Name == "Lobby" then
 			self._T.pendingWait = (self._T.pendingWait or 0) + delta
@@ -656,16 +678,6 @@ script RegionSelectLogic extends Logic
 		if isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap.Name ~= "Lobby" then
 			self:Close()
 			return
-		end
-		-- 스크롤: 목표 위치로 부드럽게
-		local s = self._T.scroll or 0
-		local target = self._T.scrollTarget or s
-		if math.abs(target - s) > 0.5 then
-			self._T.scroll = s + (target - s) * math.min(1, delta * 14)
-			self:LayoutRows()
-		elseif s ~= target then
-			self._T.scroll = target
-			self:LayoutRows()
 		end
 		if self._T.openT ~= nil then
 			self._T.openT = self._T.openT + delta

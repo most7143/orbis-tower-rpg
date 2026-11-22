@@ -382,7 +382,7 @@ script AccountUILogic extends Logic
             local t=math.min(1,self._T.reveal+delta/0.22)
             self._T.reveal=t
             self:E("Window").CanvasGroupComponent.GroupAlpha=t
-            self:E("Window").UITransformComponent.anchoredPosition=Vector2(0,-18*(1-t)^3)
+            self:E("Window").UITransformComponent.anchoredPosition=Vector2(0,-65-18*(1-t)^3)
             if t>=1 then self._T.reveal=nil end
         end
         if self._T.fade~=nil then

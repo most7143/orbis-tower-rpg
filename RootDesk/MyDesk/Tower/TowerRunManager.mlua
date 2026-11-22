@@ -125,8 +125,13 @@ script TowerRunManager extends Component
 	-- 판 안 메소 장비 강화 사용 안 함
 	property boolean InRunEnhanceDisabled = true
 	-- 전투 스테이지 완료 보상 (설계 문서 2-14): 처치 메소 배수 / 여신의 깃털 / 주문서 / 스킬북 (최소~최대)
-	property string StageRewardNormal = "meso:3,feather:0-1,scroll:0-0,book:0-0"
-	property string StageRewardElite = "meso:8,feather:2-3,scroll:1-1,book:1-2"
+	property string StageRewardNormal = "meso:3,feather:0-1,scroll:0-0"
+	property string StageRewardElite = "meso:8,feather:2-3,scroll:1-1"
+	-- 금색 메소(아웃게임 재화): 전투 스테이지 클리어마다 (기본 + 층 × 증가) × 배율(정예·보스). RunConfig로 덮어씀
+	property number GoldMesoStageBase = 20
+	property number GoldMesoPerFloor = 3
+	property number GoldMesoEliteMul = 2
+	property number GoldMesoBossMul = 5
 	-- 물음표 사건 (초안 3종): 지금 사건 Id·표시 문구 (클라이언트로)
 	@Sync
 	property string MysteryId = ""
@@ -142,11 +147,11 @@ script TowerRunManager extends Component
 	property integer BossFeatherMin = 2
 	property integer BossFeatherMax = 4
 	-- 슬롯 강화 주문서 드랍 (RunConfig / ScrollDropTable)
-	property number ScrollChance = 3
+	property number ScrollChance = 4
 	property number ScrollChancePerFloor = 0.01
 	property number ScrollChancePerStage = 0.1
-	property integer ScrollBossMin = 1
-	property integer ScrollBossMax = 2
+	property integer ScrollBossMin = 2
+	property integer ScrollBossMax = 3
 	property number ScrollStageShift = 0.2
 	-- 슬롯 강화 단계당 장비 수치 증가 비율
 	property number SlotStatStep = 0.1
@@ -183,6 +188,12 @@ script TowerRunManager extends Component
 	property integer LastKillMeso = 0
 	@Sync
 	property string RunState = "WAIT"
+	-- 화면이 검은 동안 파티를 입장 출발점에 세워 두고 걷기를 멈춘 상태 (페이드인이 시작되면 RequestEntryGo로 출발)
+	@Sync
+	property boolean EntryHold = false
+	-- 입장 출발점에서 맨 앞 구성원의 x (클라이언트 페이드가 순간 이동 반영 여부를 확인할 때 씀)
+	@Sync
+	property number EntryLeadStartX = 0
 	@Sync
 	property number PlayerHp = 0
 	@Sync
@@ -340,8 +351,16 @@ script TowerRunManager extends Component
 	property integer RunFeathers = 0
 	@Sync
 	property integer RunScrolls = 0
+	-- 5-D: 이번 판에 얻은 레드 큐브 / 무료 큐브 (결과 팝업 표시용)
+	@Sync
+	property integer RunCubes = 0
+	@Sync
+	property integer RunFreeCubes = 0
 	@Sync
 	property integer RunBooks = 0
+	-- 이번 판에 얻은 금색 메소 (결과 팝업 표시용, 계정 보유는 PlayerGear.GoldMeso)
+	@Sync
+	property integer RunGoldMeso = 0
 	-- 이번 판에 받은 다이아 (층 첫 클리어, 결과 팝업 표시용)
 	@Sync
 	property integer RunDiamonds = 0
@@ -1319,6 +1338,10 @@ script TowerRunManager extends Component
 		self.MonsterHpBase = n("MonsterHpBase", self.MonsterHpBase)
 		self.SkillBookBossBase = n("SkillBookBossBase", self.SkillBookBossBase)
 		self.SkillBookBossPerFloor = n("SkillBookBossPerFloor", self.SkillBookBossPerFloor)
+		self.GoldMesoStageBase = n("GoldMesoStageBase", self.GoldMesoStageBase)
+		self.GoldMesoPerFloor = n("GoldMesoPerFloor", self.GoldMesoPerFloor)
+		self.GoldMesoEliteMul = n("GoldMesoEliteMul", self.GoldMesoEliteMul)
+		self.GoldMesoBossMul = n("GoldMesoBossMul", self.GoldMesoBossMul)
 		self.MonsterHpPerLevel = n("MonsterHpPerLevel", self.MonsterHpPerLevel)
 		self.MonsterAtkBase = n("MonsterAtkBase", self.MonsterAtkBase)
 		self.MonsterAtkPerLevel = n("MonsterAtkPerLevel", self.MonsterAtkPerLevel)
@@ -1465,7 +1488,8 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method void LoadEquipTable()
 		-- 장비 테이블을 부위·단계별로 읽는다.
-		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Shoes", "Cape" }
+		-- 5-C: 신발 제거 (신발이 주던 치명타 데미지는 장갑 두 번째 능력치 Stat2)
+		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Cape" }
 		self._T.equip = {}
 		self._T.jobEquip = {}
 		for _, slot in ipairs(self._T.slots) do self._T.equip[slot] = {} end
@@ -1500,6 +1524,7 @@ script TowerRunManager extends Component
 					name = ds:GetCell(i, "Name"),
 					ruid = ds:GetCell(i, "ItemRUID"),
 					value = tonumber(ds:GetCell(i, "StatValue")) or 0,
+					value2 = tonumber(ds:GetCell(i, "Stat2Value")) or 0,
 					cost = tonumber(ds:GetCell(i, "EnhCostBase")) or 10,
 				}
 			end
@@ -2285,6 +2310,14 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method Component GetGear()
+		-- 플레이어 장비 컴포넌트 (PlayerGear, 편성 칸 장비·주문서 보유).
+		local player = self._T.player
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerGear")
+	end
+
+	@ExecSpace("ServerOnly")
 	method integer PlayerHitDamage()
 		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
 		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
@@ -2706,11 +2739,105 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method number EquipStat(string slot)
-		-- 장비 능력치 = 단계 기본값 × (1 + 강화 수치 × 0.1) × (1 + 슬롯 단계 × 0.1). 잠긴 부위는 0.
+		-- 장비 능력치 (1칸 = 메인 기준). 구성원별 값은 EquipStatFor.
+		return self:EquipStatFor(slot, 1)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer ActorSlotNo(Entity actor)
+		-- 5-C: 구성원의 편성 칸 번호 = 장비 번호 (메인 1, 동료 MateIndex + 1, 그 밖 1).
+		if not isvalid(actor) or actor == self._T.player then return 1 end
+		local mi = self:MateIndex(actor)
+		if mi > 0 then return mi + 1 end
+		return 1
+	end
+
+	@ExecSpace("ServerOnly")
+	method number PotBonus(Entity actor, string key)
+		-- 5-F: 구성원 자기 편성 칸의 잠재능력 합계 (판 시작 때 고정한 gearRun.slots[칸].pot). 없으면 0.
+		local s = ((self._T.gearRun or {}).slots or {})[self:ActorSlotNo(actor)]
+		if s == nil or s.pot == nil then return 0 end
+		return tonumber(s.pot[key]) or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SlotSkillPotPct(Entity actor, string slotKey)
+		-- 5-F: 망토 공용 스킬 옵션. 칸 키(Main/Sub/Tech/Hyper/Ult)의 피해 % (패시브·칸 밖·기본 공격은 0).
+		if slotKey == nil or slotKey == "" or slotKey == "Passive" then return 0 end
+		local v = self:PotBonus(actor, slotKey .. "Dmg")
+		if v ~= 0 then
+			local gr = self._T.gearRun
+			if gr ~= nil then
+				if gr.potLogged == nil then gr.potLogged = {} end
+				local lk = tostring(self:ActorSlotNo(actor)) .. ":" .. slotKey
+				if not gr.potLogged[lk] then
+					gr.potLogged[lk] = true
+					log("[VRF] pot hook " .. slotKey .. "Dmg slot=" .. tostring(self:ActorSlotNo(actor)) .. " v=" .. tostring(v))
+				end
+			end
+		end
+		return v
+	end
+
+	@ExecSpace("ServerOnly")
+	method number UltGainMul(Entity actor)
+		-- 5-F: 궁극기 게이지 충전 배율 = 1 + 자기 칸 UltGainPct / 100. 처음 적용 시 로그 1회.
+		local v = self:PotBonus(actor, "UltGainPct")
+		if v ~= 0 then
+			local gr = self._T.gearRun
+			if gr ~= nil then
+				if gr.potLogged == nil then gr.potLogged = {} end
+				local lk = tostring(self:ActorSlotNo(actor)) .. ":UltGain"
+				if not gr.potLogged[lk] then
+					gr.potLogged[lk] = true
+					log("[VRF] pot hook UltGainPct slot=" .. tostring(self:ActorSlotNo(actor)) .. " v=" .. tostring(v))
+				end
+			end
+		end
+		return math.max(0, 1 + v / 100)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer GearSlotLv(string slot, integer no)
+		-- 판 시작 때 고정한 그 칸의 부위 주문서 단계.
+		local s = ((self._T.gearRun or {}).slots or {})[no]
+		if s == nil or s.lv == nil then return 0 end
+		return s.lv[slot] or 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method number EquipMul(string slot, integer no)
+		-- 장비 수치 배율 = (1 + 판 강화 × 0.1) × (1 + 그 칸 주문서 단계 × 0.1).
+		return (1 + self.EnhanceStatStep * (self.EquipEnh[slot] or 0)) * (1 + self.SlotStatStep * self:GearSlotLv(slot, no))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number EquipStatFor(string slot, integer no)
+		-- 장비 능력치 = 단계 기본값 × 배율(판 강화, no칸 주문서 단계). 잠긴 부위는 0.
 		if self.EquipUnlocked[slot] ~= 1 then return 0 end
-		local row = self._T.equip[slot][self.EquipTier[slot] or 1]
+		local row = (self._T.equip[slot] or {})[self.EquipTier[slot] or 1]
 		if row == nil then return 0 end
-		return row.value * (1 + self.EnhanceStatStep * (self.EquipEnh[slot] or 0)) * (1 + self.SlotStatStep * (self.SlotLevels[slot] or 0))
+		return row.value * self:EquipMul(slot, no)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number EquipStat2For(string slot, integer no)
+		-- 장비 두 번째 능력치 (장갑 치명타 데미지 = 예전 신발 값). 배율은 EquipStatFor와 같다.
+		if self.EquipUnlocked[slot] ~= 1 then return 0 end
+		local row = (self._T.equip[slot] or {})[self.EquipTier[slot] or 1]
+		if row == nil then return 0 end
+		return (row.value2 or 0) * self:EquipMul(slot, no)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SlotMileDelta(Entity actor, string effect)
+		-- 5-C: 구성원 능력치 단계 보너스는 자기 칸 값. Bonus()에는 1칸 값이 들어 있으므로 (자기 칸 − 1칸) 차이만 돌려준다.
+		local no = self:ActorSlotNo(actor)
+		if no == 1 then return 0 end
+		local slots = (self._T.gearRun or {}).slots or {}
+		local own = ((slots[no] or {}).bonus or {})[effect] or 0
+		local first = ((slots[1] or {}).bonus or {})[effect] or 0
+		return own - first
 	end
 
 	@ExecSpace("ServerOnly")
@@ -2757,7 +2884,7 @@ script TowerRunManager extends Component
 		end
 		if not isvalid(player) or not isvalid(player.CostumeManagerComponent) then return end
 		local cm = player.CostumeManagerComponent
-		local cats = { Weapon = MapleAvatarItemCategory.OneHandedWeapon, Cap = MapleAvatarItemCategory.Cap, Coat = MapleAvatarItemCategory.Coat, Glove = MapleAvatarItemCategory.Glove, Shoes = MapleAvatarItemCategory.Shoes, Cape = MapleAvatarItemCategory.Cape }
+		local cats = { Weapon = MapleAvatarItemCategory.OneHandedWeapon, Cap = MapleAvatarItemCategory.Cap, Coat = MapleAvatarItemCategory.Coat, Glove = MapleAvatarItemCategory.Glove, Cape = MapleAvatarItemCategory.Cape }
 		for _, slot in ipairs(self._T.slots) do
 			local row = self:EquipRow(slot, self.EquipTier[slot] or 1)
 			if self.EquipUnlocked[slot] == 1 and row ~= nil and row.ruid ~= "" then
@@ -2870,7 +2997,7 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method string SlotKoName(string slot)
 		-- 부위 한글 이름.
-		local names = { Weapon = "무기", Cap = "투구", Coat = "옷", Glove = "장갑", Shoes = "신발", Cape = "망토" }
+		local names = { Weapon = "무기", Cap = "투구", Coat = "갑옷", Glove = "장갑", Cape = "망토" }
 		return names[slot] or slot
 	end
 
@@ -2965,8 +3092,9 @@ script TowerRunManager extends Component
 		-- 능력치 재계산. 4단계: 구성원별 기본값 = 캐릭터 스탯(PlayerRoster CharRunData) × 계정 % + 장비(공용 부위) 고정값. 최대 HP 증가분만큼 현재 HP도 올린다.
 		local oldMax = self.PlayerMaxHp
         local account = self._T.accountBonus or {}
-		-- 직업 스킬 + 각인 등 (Bonus)
-		local weapon = self:EquipStat("Weapon") * (1 + self:Bonus("WeaponPct") / 100)
+		-- 직업 스킬 + 각인 등 (Bonus). 5-C: 무기·투구·갑옷은 구성원마다 자기 편성 칸 주문서 단계로
+		local weaponMul = 1 + self:Bonus("WeaponPct") / 100
+		local weapon = self:EquipStatFor("Weapon", 1) * weaponMul
 		local armorMul = 1 + self:Bonus("ArmorPct") / 100
 		self._T.actorBase = {}
 		local player = self._T.player
@@ -2986,10 +3114,12 @@ script TowerRunManager extends Component
 				end
 				d = { atk = self.BasePlayerAtk, hp = self.BasePlayerMaxHp, def = 0 }
 			end
+			local no = self:ActorSlotNo(actor)
 			local ab = {
-				atk = d.atk * (1 + (account.AccountAtk or 0) / 100) + weapon,
-				hp = d.hp * (1 + (account.AccountHp or 0) / 100) + self:EquipStat("Cap") * armorMul,
-				def = d.def * (1 + (account.AccountDef or 0) / 100) + self:EquipStat("Coat") * armorMul,
+				atk = d.atk * (1 + (account.AccountAtk or 0) / 100) + self:EquipStatFor("Weapon", no) * weaponMul,
+				hp = d.hp * (1 + (account.AccountHp or 0) / 100) + self:EquipStatFor("Cap", no) * armorMul,
+				def = d.def * (1 + (account.AccountDef or 0) / 100) + self:EquipStatFor("Coat", no) * armorMul,
+				slotNo = no,
 			}
 			self._T.actorBase[actor] = ab
 			if actor == player then mainBase = ab end
@@ -3011,8 +3141,9 @@ script TowerRunManager extends Component
 		-- 공격 간격 = 1 / (무기 기본 공격 속도 × (1 + 공격 속도 보너스%))
 		self.WeaponSpeed = self.WeaponBaseSpeed + self.WeaponSpeedPerTier * ((self.EquipTier["Weapon"] or 1) - 1)
 		self.PlayerAttackInterval = self:ActorInterval(self._T.player)
-		self.CritDmg = self.BaseCritDmg + self:EquipStat("Shoes") + self:Bonus("CritDmg")
-		self.Accuracy = self:EquipStat("Cape") + self:Bonus("Acc")
+		-- 5-C: 신발 치명타 데미지 → 장갑 두 번째 능력치 (메인 = 1칸). 명중은 파티 공용이라 1칸 망토
+		self.CritDmg = self.BaseCritDmg + self:EquipStat2For("Glove", 1) + self:Bonus("CritDmg")
+		self.Accuracy = self:EquipStatFor("Cape", 1) + self:Bonus("Acc")
 		self.EnhanceBonus = self:Bonus("EnhRate")
 		if oldMax > 0 and self.PlayerMaxHp > oldMax and not self.PlayerDown then
 			self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + (self.PlayerMaxHp - oldMax))
@@ -3071,13 +3202,30 @@ script TowerRunManager extends Component
 		-- 미네르바의 은총: 지금 프리셋 옵션 합계
 		self._T.grace = {}
 		if engrave ~= nil then self._T.grace = engrave:GraceValues() end
-		-- 슬롯 강화: 판 시작 시점 단계로 고정
+		-- 5-C: 편성 칸 장비(PlayerGear) 주문서 단계를 판 시작 시점으로 고정. 정비소 효과·단계 보너스(Bonus)는 1칸 기준,
+		-- 구성원 능력치(장비 배율·고유 단계 보너스)는 ActorSlotNo로 자기 칸 값 (EquipStatFor, SlotMileDelta)
+		self._T.gearRun = { slots = {}, party = { slots = {}, bonus = {} } }
 		self._T.slotInfo = {}
 		self._T.slotBonus = {}
-		if engrave ~= nil then
-			local slotData = engrave:SlotRunData()
-			self._T.slotInfo = slotData.slots
-			self._T.slotBonus = slotData.bonus
+		local gear = self:GetGear()
+		if gear ~= nil and gear.GearLoaded then
+			self._T.gearRun = gear:GearRunData()
+			self._T.slotInfo = self._T.gearRun.party.slots or {}
+			self._T.slotBonus = self._T.gearRun.party.bonus or {}
+			local logs = {}
+			for no, s in ipairs(self._T.gearRun.slots) do
+				local lvs = {}
+				for _, slot in ipairs(self._T.slots) do table.insert(lvs, string.sub(slot, 1, 2) .. tostring((s.lv or {})[slot] or 0)) end
+				local bs = {}
+				for k, v in pairs(s.bonus or {}) do table.insert(bs, k .. ":" .. tostring(v)) end
+				-- 5-F: 잠재능력 합계
+				local ps = {}
+				for k, v in pairs(s.pot or {}) do table.insert(ps, k .. ":" .. tostring(v)) end
+				table.insert(logs, "s" .. tostring(no) .. " lv=" .. table.concat(lvs, ",") .. " bonus=" .. table.concat(bs, ",") .. " pot=" .. table.concat(ps, ","))
+			end
+			log("[VRF] gear run " .. table.concat(logs, " | "))
+		else
+			log_warning("[VRF] gear run data missing")
 		end
 		for _, slot in ipairs(self._T.slots) do
 			local info = self._T.slotInfo[slot]
@@ -3089,10 +3237,14 @@ script TowerRunManager extends Component
 				self.SlotEnhRate[slot] = 0
 			end
 		end
+		self.EntryHold = false
 		self.RunFeathers = 0
 		self.RunKeys = 0
 		self.RunScrolls = 0
+		self.RunCubes = 0
+		self.RunFreeCubes = 0
 		self.RunBooks = 0
+		self.RunGoldMeso = 0
 		self.RunDiamonds = 0
 		-- 4단계: 판 안 레벨 없음. Level = 메인 캐릭터 레벨(표시용, 판 중 고정)
 		local mainData = self:RunDataFor(self._T.mainJob or "")
@@ -3273,15 +3425,14 @@ script TowerRunManager extends Component
 		self:SettleAccount(true)
 		self:DestroyMonster()
 		for _, h in ipairs(self:Heroes()) do h:ClearState() end
-		local books = math.floor(self.StageBookBase + self.StageNo * self.StageBookPerStage)
+		-- 스킬북은 판 보상에서 제거(메소 재화 개편): 깃털만 지급. 저장된 스킬북 값은 PlayerEngrave에 그대로 남는다.
+		local books = 0
 		local feathers = math.floor(self.StageFeatherBase + self.StageNo * self.StageFeatherPerStage)
 		local eng = self:GetEngrave()
-		-- 4-G 보완: 디버그 판은 판 보상(스킬북·깃털 등)을 계정에 더하지 않는다 (표시용 판 합계만)
+		-- 4-G 보완: 디버그 판은 판 보상(깃털 등)을 계정에 더하지 않는다 (표시용 판 합계만)
 		if eng ~= nil and not self._T.debugRun then
-			if books > 0 then eng:AddSkillBooks(books) end
 			if feathers > 0 then eng:AddFeathers(feathers) end
 		end
-		self.RunBooks = self.RunBooks + books
 		self.RunFeathers = self.RunFeathers + feathers
 		self.StageRewardBooks = books
 		self.StageRewardFeathers = feathers
@@ -3312,9 +3463,11 @@ script TowerRunManager extends Component
 		if eng ~= nil and not self._T.debugRun then
 			eng:FlushGrace()
 			eng:FlushRelics()
-			eng:FlushSlots()
 			eng:FlushSkills()
 		end
+		-- 5-B: 주문서 보유는 PlayerGear가 저장한다 (옛 PlayerEngrave.FlushSlots 호출 끊음)
+		local gear = self:GetGear()
+		if gear ~= nil and not self._T.debugRun then gear:Flush() end
 		self.RunState = "RESULT"
 		log("[VRF] stage clear " .. tostring(self.StageNo) .. " floors " .. tostring(self.StageStartFloor) .. "-" .. tostring(self.StageEndFloor) .. " books+" .. tostring(books) .. " feathers+" .. tostring(feathers))
 	end
@@ -3738,7 +3891,7 @@ script TowerRunManager extends Component
 			if pc ~= nil then pc:ShowMiss(player, missUid) end
 			log("[VRF] monster miss by debuff chance=" .. tostring(blind))
 		-- 각인 '회피': 확률로 몬스터 공격을 피한다
-		elseif _UtilLogic:RandomDouble() * 100 < self:Bonus("Evade") then
+		elseif _UtilLogic:RandomDouble() * 100 < self:Bonus("Evade") + self:SlotMileDelta(player, "Evade") then
 			local pc = self:GetPlayerAttack()
 			if pc ~= nil then pc:ShowMiss(player, missUid) end
 			-- 돌파 '반격 자세': 공격한 몬스터에게 반격
@@ -3758,10 +3911,10 @@ script TowerRunManager extends Component
 			if self:ActorHp(player) < self:ActorMaxHp(player) * self.BulwarkHpRatio then def = def * (1 + self:Bonus("Bulwark") / 100) end
 			local reduce = def / (def + self.DefConstant)
 			-- 직업 스킬 '철벽 자세': 받는 피해 감소
-			local reduceSum = self:Bonus("DmgReduce")
+			local reduceSum = self:Bonus("DmgReduce") + self:SlotMileDelta(player, "DmgReduce")
 			if self:ActorHp(player) >= self:ActorMaxHp(player) * 0.5 then reduceSum = reduceSum + self:Bonus("HighHpReduce") end
 			if self:ActorHp(player) <= self:ActorMaxHp(player) * 0.3 then reduceSum = reduceSum + self:Bonus("LowHpReduce") end
-			if front and self.MonsterElite then reduceSum = reduceSum + self:Bonus("EliteReduce") end
+			if front and self.MonsterElite then reduceSum = reduceSum + self:Bonus("EliteReduce") + self:SlotMileDelta(player, "EliteReduce") end
 			-- 직업 공용 전투(바이퍼 에너지·트랜스폼 등): 그 캐릭터만 받는 피해 감소 (합계 60% 상한)
 			local jc = player:GetComponent("script.JobCombat")
 			if jc ~= nil and jc.Active and self:HeroOf(player) == jc then reduceSum = math.min(math.max(reduceSum, 60), reduceSum + jc:SelfReduce()) end
@@ -3891,7 +4044,7 @@ script TowerRunManager extends Component
 		self:GiveKillReward()
 		self:DropFeathers(qElite)
 		self:DropScrolls(qElite)
-		if qElite then self:DropSkillBooks() end
+		if qElite and not (self._T.bossOf ~= nil and self._T.bossOf[e] == true) then self:DropCubes("elite") end
 		self.MonsterElite = elite
 		if self._T.waveInfo ~= nil then self:FillQueue(self._T.waveInfo) end
 		log("[VRF] splash kill wave left=" .. tostring(self._T.waveLeft) .. " queue=" .. tostring(#queue))
@@ -4023,7 +4176,7 @@ script TowerRunManager extends Component
 		self:GiveKillReward()
 		self:DropFeathers(bossKilled)
 		self:DropScrolls(bossKilled)
-		if bossKilled then self:DropSkillBooks() end
+		if bossKilled and not self.MonsterBoss then self:DropCubes("elite") end
 		if bossKilled then
 			-- 층 클리어(보스 처치): 탑의 열쇠 확률 지급 (심볼은 유물로 대체되어 폐지)
 			if self.MonsterBoss then self:RollFloorKey() end
@@ -4155,9 +4308,11 @@ script TowerRunManager extends Component
 		if eng ~= nil and not self._T.debugRun then
 			eng:FlushGrace()
 			eng:FlushRelics()
-			eng:FlushSlots()
 			eng:FlushSkills()
 		end
+		-- 5-B: 주문서 보유는 PlayerGear가 저장한다 (옛 PlayerEngrave.FlushSlots 호출 끊음)
+		local gear = self:GetGear()
+		if gear ~= nil and not self._T.debugRun then gear:Flush() end
 		log("[VRF] defeat at floor " .. tostring(self.Floor) .. " best=" .. tostring(self.BestFloor) .. " runMeso=" .. tostring(self.RunMeso))
 	end
 
@@ -4208,8 +4363,51 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method void DropCubes(string why)
+		-- 5-D 큐브 드랍(수치는 GearConfig): boss = 레드 BossCubeRed + 무료 BossCubeFree, elite = EliteCubeRedChance% 레드 1, stage = StageFreeChance% 무료 1. 저장은 판 끝 gear:Flush. 디버그 판은 지급 안 함.
+		local gear = self:GetGear()
+		if gear == nil then return end
+		local red = 0
+		local free = 0
+		if why == "boss" then
+			red = math.floor(gear:Cfg("BossCubeRed", 2))
+			free = math.floor(gear:Cfg("BossCubeFree", 3))
+		elseif why == "elite" then
+			if _UtilLogic:RandomDouble() * 100 < gear:Cfg("EliteCubeRedChance", 25) then red = 1 end
+		elseif why == "stage" then
+			if _UtilLogic:RandomDouble() * 100 < gear:Cfg("StageFreeChance", 50) then free = 1 end
+		end
+		if red <= 0 and free <= 0 then return end
+		if not self._T.debugRun then
+			gear:AddCubes("R", red)
+			gear:AddCubes("F", free)
+		end
+		self.RunCubes = self.RunCubes + red
+		self.RunFreeCubes = self.RunFreeCubes + free
+		log("[VRF] cube drop " .. why .. " red+" .. tostring(red) .. " free+" .. tostring(free) .. " floor=" .. tostring(self.Floor) .. " run=" .. tostring(self.RunCubes) .. "/" .. tostring(self.RunFreeCubes) .. " debugRun=" .. tostring(self._T.debugRun == true))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void GiveGoldMeso(boolean isBoss)
+		-- 금색 메소(아웃게임 계정 재화) 지급: (GoldMesoStageBase + 층 × GoldMesoPerFloor) × (보스 GoldMesoBossMul / 정예 GoldMesoEliteMul / 일반 1).
+		-- 계정 보유는 PlayerGear에 더하고(저장은 판 끝 gear:Flush), 판 합계 RunGoldMeso는 결과 팝업 표시용. 디버그 판은 계정에 더하지 않는다.
+		local mul = 1
+		if isBoss then
+			mul = self.GoldMesoBossMul
+		elseif self.StageKind == "elite" then
+			mul = self.GoldMesoEliteMul
+		end
+		local n = math.floor((self.GoldMesoStageBase + self.Floor * self.GoldMesoPerFloor) * mul + 0.5)
+		if n <= 0 then return end
+		local gear = self:GetGear()
+		if gear ~= nil and not self._T.debugRun then gear:AddGoldMeso(n) end
+		self.RunGoldMeso = self.RunGoldMeso + n
+		log("[VRF] gold meso +" .. tostring(n) .. " floor=" .. tostring(self.Floor) .. " kind=" .. tostring(self.StageKind) .. " boss=" .. tostring(isBoss) .. " run=" .. tostring(self.RunGoldMeso) .. " debugRun=" .. tostring(self._T.debugRun == true))
+	end
+
+	@ExecSpace("ServerOnly")
 	method void DropScrolls(boolean boss)
-		-- 슬롯 강화 주문서: 보스는 1~2장 확정, 일반 몬스터는 층·스테이지가 오를수록 조금씩 높아지는 확률로 1장. 부위는 무작위.
+		-- 슬롯 강화 주문서: 보스는 ScrollBossMin~Max장 확정, 일반 몬스터는 층·스테이지가 오를수록 조금씩 높아지는 확률로 1장. 부위는 무작위.
 		local n = 0
 		if boss then
 			n = _UtilLogic:RandomIntegerRange(self.ScrollBossMin, self.ScrollBossMax)
@@ -4218,11 +4416,12 @@ script TowerRunManager extends Component
 			if _UtilLogic:RandomDouble() * 100 < chance then n = 1 end
 		end
 		if n <= 0 then return end
-		local eng = self:GetEngrave()
-		if eng == nil then return end
+		-- 메소 재화 개편: 주문서는 부위 무관 공용 등급(하급·중급·상급)으로 PlayerGear에 넣는다 (등급 비율은 ScrollDropTable)
+		local gear = self:GetGear()
+		if gear == nil then return end
 		local rates = self:ScrollRates()
 		for i = 1, n do
-			local slot = self._T.slots[_UtilLogic:RandomIntegerRange(1, #self._T.slots)]
+			local slot = "Any"
 			local tier = 3
 			local r = _UtilLogic:RandomDouble() * 100
 			if r < rates[1] then
@@ -4230,7 +4429,7 @@ script TowerRunManager extends Component
 			elseif r < rates[1] + rates[2] then
 				tier = 2
 			end
-			if not self._T.debugRun then eng:AddScrolls(slot, tier, 1) end
+			if not self._T.debugRun then gear:AddScrolls(slot, tier, 1) end
 			self.RunScrolls = self.RunScrolls + 1
 			log("[VRF] scroll drop " .. slot .. " tier=" .. tostring(tier) .. " floor=" .. tostring(self.Floor) .. " stage=" .. tostring(self.Stage) .. " run=" .. tostring(self.RunScrolls))
 		end
@@ -4255,7 +4454,7 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method void DropSkillBooks()
-		-- 스킬북: 층 보스 처치 시 확정 지급 (판이 끝날 때 저장).
+		-- (사용 안 함) 스킬북: 층 보스 처치 시 확정 지급. 메소 재화 개편으로 호출을 끊었다.
 		local n = math.floor(self.SkillBookBossBase + self.Floor * self.SkillBookBossPerFloor)
 		local eng = self:GetEngrave()
 		if n <= 0 or eng == nil then return end
@@ -4550,12 +4749,6 @@ script TowerRunManager extends Component
 		local scroll = range("scroll")
 		for _ = 1, scroll do self:DropScrolls(true) end
 		if scroll > 0 then table.insert(got, "주문서") end
-		local book = range("book")
-		if book > 0 and eng ~= nil then
-			if not self._T.debugRun then eng:AddSkillBooks(book) end
-			self.RunBooks = self.RunBooks + book
-			table.insert(got, "스킬북 +" .. tostring(book))
-		end
 		if #got > 0 then self:SetEnhanceMsg("스테이지 보상: " .. table.concat(got, " · ")) end
 		log("[VRF] stage reward " .. self.StageKind .. " " .. table.concat(got, ","))
 	end
@@ -4728,11 +4921,14 @@ script TowerRunManager extends Component
 	@ExecSpace("ServerOnly")
 	method number AccessoryBonus(Entity actor, string effect)
 		-- 구성원 장신구 효과 합계. 처치 메소처럼 파티 효과는 누가 끼든 모두에게. 받는 피해(DmgTaken)는 피해 감소를 음수로 돌려준다.
-		local acc = self._T.acc
-		if acc == nil or self._T.accDefs == nil then return 0 end
+		-- 5-F: 편성 칸 잠재능력(자기 칸 합계)도 같은 효과 이름으로 이 경로에서 더한다 (파티 효과·대상 없음은 제외).
 		local key = effect
 		local sign = 1
 		if effect == "DmgTaken" then key = "DmgReduce" sign = -1 end
+		local pot = 0
+		if key ~= "MesoPct" and isvalid(actor) then pot = self:PotBonus(actor, key) end
+		local acc = self._T.acc
+		if acc == nil or self._T.accDefs == nil then return pot * sign end
 		local total = 0
 		if key == "MesoPct" or not isvalid(actor) then
 			if key ~= "MesoPct" then return 0 end
@@ -4743,13 +4939,16 @@ script TowerRunManager extends Component
 		end
 		local index = self:GoddessActorIndex(actor)
 		for _, item in pairs(acc[index] or {}) do total = total + self:AccessoryValue(item, key) end
-		return total * sign
+		return (total + pot) * sign
 	end
 
 	@ExecSpace("ServerOnly")
 	method number ActorCritDmg(Entity actor)
-		-- 구성원 크리티컬 데미지 (장신구 반영).
-		return self.CritDmg + self:AccessoryBonus(actor, "CritDmg")
+		-- 구성원 크리티컬 데미지 (장신구 반영). 5-C: 장갑 치명타 데미지는 자기 칸 값 (CritDmg에는 1칸 값이 들어 있음)
+		local no = self:ActorSlotNo(actor)
+		local glove = 0
+		if no ~= 1 then glove = self:EquipStat2For("Glove", no) - self:EquipStat2For("Glove", 1) end
+		return self.CritDmg + glove + self:AccessoryBonus(actor, "CritDmg")
 	end
 
 	@ExecSpace("ServerOnly")
@@ -5052,6 +5251,7 @@ script TowerRunManager extends Component
 		local player = self._T.player
 		if not isvalid(player) then return end
 		player.PlayerComponent:SetWorldPosition(self.PlayerPos + Vector3(-self.EntryDist, 0, 0))
+		self.EntryLeadStartX = self.PlayerPos.x - self.EntryDist
 		for i = 1, 2 do
 			local comp = self:Mate(i)
 			if isvalid(comp) and not self:MateDown(i) then
@@ -5070,12 +5270,32 @@ script TowerRunManager extends Component
 			return
 		end
 		self.RunState = "ENTER"
-		self._T.enter = { t = 0, lead = leadX, next = nextKey }
+		-- 화면이 검은 동안(입장·스테이지 이동 직후)에는 출발점에 세워 두고, 페이드인이 시작되면(RequestEntryGo) 걷는다
+		local hold = self._T.holdEntry == true
+		self._T.enter = { t = 0, lead = leadX, next = nextKey, hold = hold }
+		self.EntryHold = hold
+		if hold then
+			log("[VRF] party walk hold lead=" .. string.format("%.2f", leadX) .. " next=" .. nextKey)
+			return
+		end
+		self:StartPartyWalkMotion(0.2)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StartPartyWalkMotion(number leadDelay)
+		-- 파티 자동 이동 실제 출발: 맨 앞 구성원은 조작 클라이언트가 걷기, 2·3번은 걷기 자세 (위치는 TickEnter가 앞사람을 따라 옮김).
+		local e = self._T.enter
+		local player = self._T.player
+		if e == nil or not isvalid(player) then return end
+		e.hold = false
+		e.t = 0
+		self.EntryHold = false
+		local leadX = e.lead
 		local pc = player:GetComponent("script.TowerPlayer")
 		local uid = player.PlayerComponent.UserId
 		local spd = self.EntryWalkSpeed
 		-- 순간 이동이 클라이언트에 반영된 뒤 걷기 시작
-		if pc ~= nil then _TimerService:SetTimerOnce(function() if self.RunState == "ENTER" then pc:ClientWalkTo(leadX, spd, uid) end end, 0.2) end
+		if pc ~= nil then _TimerService:SetTimerOnce(function() if self.RunState == "ENTER" then pc:ClientWalkTo(leadX, spd, uid) end end, leadDelay) end
 		for i = 1, 2 do
 			local comp = self:Mate(i)
 			if isvalid(comp) and not self:MateDown(i) then
@@ -5083,7 +5303,27 @@ script TowerRunManager extends Component
 				if tp ~= nil then tp:SetWalkPose(true) end
 			end
 		end
-		log("[VRF] party walk start lead=" .. string.format("%.2f", leadX) .. " next=" .. nextKey)
+		log("[VRF] party walk start lead=" .. string.format("%.2f", leadX) .. " next=" .. e.next)
+	end
+
+	@ExecSpace("Server")
+	method void RequestEntryGo()
+		-- 클라이언트 페이드인 시작 신호: 출발점에서 기다리던 파티를 걷게 한다.
+		local player = self._T.player
+		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
+		local e = self._T.enter
+		if self.RunState ~= "ENTER" or e == nil or not e.hold then return end
+		self:StartPartyWalkMotion(0.05)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number FollowX(number curX, number targetX, number speed, number delta)
+		-- 따라가기 이동: 목표 x까지 앞으로만 움직인다 (뒤로 물러나지 않음). 뒤처졌으면 조금 빨리 따라붙는다.
+		if targetX <= curX + 0.001 then return curX end
+		local gap = targetX - curX
+		local spd = speed
+		if gap > 0.15 then spd = speed * 1.5 end
+		return math.min(targetX, curX + spd * delta)
 	end
 
 	@ExecSpace("ServerOnly")
@@ -5092,8 +5332,18 @@ script TowerRunManager extends Component
 		local e = self._T.enter
 		if e == nil then return end
 		e.t = e.t + delta
+		if e.hold then
+			-- 페이드인 신호를 기다리는 중 (신호가 끊겨도 멈춰 있지 않게 6초 뒤 스스로 출발)
+			if e.t >= 6 then
+				log_warning("[VRF] party walk hold timeout -> go")
+				self:StartPartyWalkMotion(0.05)
+			end
+			return
+		end
 		local done = e.t >= 0.3
 		local player = self._T.player
+		local leadNow = e.lead
+		if isvalid(player) then leadNow = player.TransformComponent.WorldPosition.x end
 		for i = 1, 2 do
 			local comp = self:Mate(i)
 			if isvalid(comp) and not self:MateDown(i) then
@@ -5102,7 +5352,9 @@ script TowerRunManager extends Component
 				-- 구성원 2·3번은 몸체가 없어 발판에 내려앉지 않으므로 구성원 1의 발 높이에 맞춘다
 				if isvalid(player) then wp = Vector3(wp.x, player.TransformComponent.WorldPosition.y, wp.z) end
 				if wp.x < slot - 0.01 then
-					local nx = math.min(slot, wp.x + self.EntryWalkSpeed * delta)
+					-- 앞사람(맨 앞 구성원의 지금 위치)에서 CompanionGap 간격을 유지하며 따라간다 (먼저 출발해 겹치지 않게)
+					local target = math.min(slot, leadNow - self.CompanionGap * i)
+					local nx = self:FollowX(wp.x, target, self.EntryWalkSpeed, delta)
 					comp.TransformComponent.WorldPosition = Vector3(nx, wp.y, wp.z)
 					if nx < slot - 0.01 then
 						done = false
@@ -5281,11 +5533,17 @@ script TowerRunManager extends Component
 		if w == nil then return end
 		w.t = w.t + delta
 		local allHidden = true
+		local lead = self._T.player
+		local leadVisible = isvalid(lead) and lead.Visible
 		for i = 1, 2 do
 			local comp = self:Mate(i)
 			if isvalid(comp) and comp.Visible then
 				local wp = comp.TransformComponent.WorldPosition
 				local nx = math.min(w.x, wp.x + self.PortalWalkSpeed * delta)
+				-- 맨 앞 구성원이 걷는 동안은 그 지금 위치에서 CompanionGap 간격을 유지하며 따라간다 (사라진 뒤엔 그대로 포탈까지)
+				if leadVisible then
+					nx = self:FollowX(wp.x, math.min(w.x, lead.TransformComponent.WorldPosition.x - self.CompanionGap * i), self.PortalWalkSpeed, delta)
+				end
 				comp.TransformComponent.WorldPosition = Vector3(nx, wp.y, wp.z)
 				if nx >= w.x - 0.05 then
 					comp:SetVisible(false)
@@ -5305,6 +5563,7 @@ script TowerRunManager extends Component
 			end
 		end
 		if allHidden or w.t > 7 then
+			log("[VRF] walk end lead=" .. string.format("%.2f", isvalid(player) and player.TransformComponent.WorldPosition.x or 0))
 			self._T.walk = nil
 			self.RunState = "FADE"
 			self.StateTimer = 6
@@ -5321,8 +5580,8 @@ script TowerRunManager extends Component
 
 	@ExecSpace("Client")
 	method void ClientStageFadeIn()
-		-- 다음 스테이지 준비 완료: 화면을 다시 밝힌다.
-		_ScreenFadeLogic:BeginFadeIn(self.Entity)
+		-- 다음 스테이지 준비 완료: 구성원이 발판에 내려앉은 것을 확인한 뒤 화면을 다시 밝힌다 (ScreenFadeLogic HOLD).
+		_ScreenFadeLogic:HoldForScene()
 	end
 
 	@ExecSpace("Server")
@@ -5356,6 +5615,8 @@ script TowerRunManager extends Component
 			end
 		end
 		self._T.routePending = false
+		-- 화면이 검은 동안 준비: 입장 걷기는 출발점에서 멈춰 두고 페이드인 때 출발 (RequestEntryGo)
+		self._T.holdEntry = true
 		if choice == "normal" or choice == "elite" or choice == "boss" then
 			self.Stage = math.min(self.StagesPerFloor, self.Stage + 1)
 			if choice == "boss" then self.Stage = self.StagesPerFloor end
@@ -5390,6 +5651,7 @@ script TowerRunManager extends Component
 				if self.RunState == "NONCOMBAT" then self:OfferRoute() end
 			end, 1.5)
 		end
+		self._T.holdEntry = false
 		if isvalid(player) then self:ClientStageFadeIn(player.PlayerComponent.UserId) end
 		log("[VRF] stage load " .. choice .. " stage=" .. tostring(self.Stage) .. " kind=" .. self.StageKind)
 	end
@@ -5461,7 +5723,10 @@ script TowerRunManager extends Component
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		if self.RunState ~= "READY" then return end
 		log("[VRF] start requested by fade-in")
+		-- 화면이 아직 검은 동안 판을 준비한다: 입장 걷기는 출발점에서 멈춰 두고 페이드인 때 출발 (RequestEntryGo)
+		self._T.holdEntry = true
 		self:StartRun()
+		self._T.holdEntry = false
 	end
 
 	@ExecSpace("Server")
@@ -5549,6 +5814,8 @@ script TowerRunManager extends Component
 			self:DestroyMonster()
 			self:DestroyCompanion()
 			self.RunState = "WAIT"
+			self.EntryHold = false
+			self._T.enter = nil
 			self._T.player = nil
 			player = nil
 		end
@@ -5690,6 +5957,10 @@ script TowerRunManager extends Component
 					end
 				end
 				if not isBoss then self:GiveStageReward() end
+				-- 5-D 큐브: 전투 스테이지 클리어 = 무료 큐브 확률 1개, 보스 스테이지(층 보스 처치) = 레드·무료 확정
+				if isBoss then self:DropCubes("boss") else self:DropCubes("stage") end
+				-- 금색 메소: 전투 스테이지 클리어마다 층 비례, 정예·보스 스테이지는 배율 (디버그 판은 지급 안 함, 저장은 판 끝 Flush)
+				self:GiveGoldMeso(isBoss)
 				-- 3인 파티: 전투 스테이지가 끝날 때마다 돌파 1번 (4단계: 레벨업 없음)
 				if self:IsHeroRun() and not isBoss then
 					self.PendingPicks = 1
@@ -5739,7 +6010,9 @@ script TowerRunManager extends Component
 			self.StateTimer = self.StateTimer - delta
 			if self.StateTimer <= 0 then
 				log("[VRF] ready timeout -> start")
+				self._T.holdEntry = true
 				self:StartRun()
+				self._T.holdEntry = false
 			end
 		elseif self.RunState == "DEFEAT" then
 			self.StateTimer = self.StateTimer - delta
@@ -5845,7 +6118,8 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method number ActorCrit(Entity actor)
-		return math.max(0, math.min(100, self:EquipStat("Glove") + self:Bonus("Crit") + self:GoddessBonus(actor, "Crit")))
+		-- 5-C: 장갑 치명타 확률·단계 보너스는 구성원 자기 편성 칸 값
+		return math.max(0, math.min(100, self:EquipStatFor("Glove", self:ActorSlotNo(actor)) + self:Bonus("Crit") + self:SlotMileDelta(actor, "Crit") + self:GoddessBonus(actor, "Crit")))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -6005,7 +6279,7 @@ script TowerRunManager extends Component
 	method integer ActorHitDamage(Entity actor)
 		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
 		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
-		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - (self:Bonus("DefIgnore") + (self._T.castDefIgnore or 0)) / 100)
+		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - (self:Bonus("DefIgnore") + self:SlotMileDelta(actor, "DefIgnore") + (self._T.castDefIgnore or 0)) / 100)
 		local atk = self:ActorAtk(actor)
 		local minAtk = math.max(1, math.floor(atk * (0.2 + 0.8 * self.Mastery / 100) + 0.5))
 		local dmg = (minAtk + _UtilLogic:RandomDouble() * (atk - minAtk)) * (1 - monDef / (monDef + self.DefConstant))
@@ -6013,7 +6287,7 @@ script TowerRunManager extends Component
 		-- 직업 스킬 '투혼': 내 체력 50% 이하일 때 주는 피해 증가
 		if self:ActorHp(actor) < self:ActorMaxHp(actor) * 0.5 then mul = mul + self:Bonus("LowHpAtk") / 100 end
 		if self.MonsterHp <= self.MonsterMaxHp * self.LowHpDmgRatio then mul = mul + self:Bonus("LowHpDmg") / 100 end
-		if self.MonsterElite then mul = mul + (self:Bonus("EliteDmg") + self:AccessoryBonus(actor, "EliteDmg")) / 100 end
+		if self.MonsterElite then mul = mul + (self:Bonus("EliteDmg") + self:SlotMileDelta(actor, "EliteDmg") + self:AccessoryBonus(actor, "EliteDmg")) / 100 end
 		-- 공용 패시브 돌파 '충만한 힘': 체력이 가득할 때 공격력 증가
 		if self:ActorHp(actor) >= self:ActorMaxHp(actor) then mul = mul + self:Bonus("FullHpAtk") / 100 end
 		-- 이 층 심볼: 주는 피해 증가
@@ -6191,6 +6465,8 @@ script TowerRunManager extends Component
 			local base = (self._T.actorBase or {})[e] or {}
 			log("[VRF] party k=" .. tostring(k) .. " job=" .. job .. " tier=" .. tostring(d.tier) .. " lv=" .. tostring(d.level) .. " label=" .. tostring(d.tierName)
 				.. " atk=" .. string.format("%.1f", self:ActorAtk(e)) .. " baseAtk=" .. string.format("%.1f", base.atk or 0) .. " maxHp=" .. tostring(self:ActorMaxHp(e)) .. " def=" .. string.format("%.1f", self:ActorDefense(e))
+				.. " gearSlot=" .. tostring(self:ActorSlotNo(e)) .. " weaponLv=" .. tostring(self:GearSlotLv("Weapon", self:ActorSlotNo(e))) .. " weaponAtk=" .. string.format("%.1f", self:EquipStatFor("Weapon", self:ActorSlotNo(e)))
+				.. " crit=" .. string.format("%.1f", self:ActorCrit(e)) .. " critDmg=" .. string.format("%.1f", self:ActorCritDmg(e))
 				.. " charAtk=" .. tostring(d.atk) .. " charHp=" .. tostring(d.hp) .. " charDef=" .. tostring(d.def)
 				.. " equip=" .. equip .. " hidden=" .. table.concat(hidden, ",") .. " passiveLv=" .. tostring(passiveLv) .. " active=" .. tostring(h ~= nil and h.Active)
 				.. " runLv=" .. tostring(h ~= nil and h.RunLevel or 0) .. " runLabel=" .. tostring(h ~= nil and h.RunLabel or "") .. " ult=" .. tostring(h ~= nil and (h._T.ultId or "") or "") .. " gauge=" .. tostring(h ~= nil and h.UltGauge or 0) .. "/" .. tostring(h ~= nil and h.UltMax or 0))

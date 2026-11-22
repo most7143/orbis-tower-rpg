@@ -60,7 +60,125 @@ script BattleHUDLogic extends Logic
 				table.insert(self._T.coins, { entity = child, active = false })
 			end
 		end
+		self:ConnectSlotTips()
 		log("[VRF] BattleHUDLogic begin (client) coins=" .. tostring(#self._T.coins))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ConnectSlotTips()
+		-- 구성원 패널 스킬 칸(P1~P3 / S1~S5)을 누르면 스킬 상세 툴팁. 전투는 계속 진행된다.
+		self._T.slotTipHandlers = {}
+		for k = 1, 3 do
+			for i = 1, 5 do
+				local e = _EntityService:GetEntityByPath("/ui/BattleHUD/Members/P" .. tostring(k) .. "/S" .. tostring(i))
+				if isvalid(e) then
+					local ck = k
+					local ci = i
+					local h = e:ConnectEvent(ButtonClickEvent, function() self:ShowSlotTip(ck, ci) end)
+					table.insert(self._T.slotTipHandlers, { entity = e, fn = h })
+					_TooltipLogic:Register(e, function() self:ShowSlotTip(ck, ci) end)
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 스킬 칸 툴팁 연결 해제.
+		for _, rec in ipairs(self._T.slotTipHandlers or {}) do
+			if isvalid(rec.entity) then
+				rec.entity:DisconnectEvent(ButtonClickEvent, rec.fn)
+				_TooltipLogic:Unregister(rec.entity)
+			end
+		end
+		self._T.slotTipHandlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadSkillTipData()
+		-- 스킬 툴팁용 표: 이름·아이콘·설명(자리표시자 치환)·쿨타임, 칸 종류, 돌파 이름·설명.
+		if self._T.tipSkills ~= nil then return end
+		self._T.tipSkills = {}
+		self._T.tipSlotKind = {}
+		self._T.tipBreaks = {}
+		local js = _DataService:GetTable("JobSkillTable")
+		if js ~= nil then
+			for i = 1, js:GetRowCount() do
+				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
+				local text = js:GetCell(i, "Desc") or ""
+				local vals = { c = num("Chance"), p = num("Pct"), h = num("ProcHits"), cd = num("Cooldown"), bt = num("BuffTime"), v1 = num("V1"), v2 = num("V2"), dp = num("DotPct"), dt = num("DotTime") }
+				for key, v in pairs(vals) do text = (string.gsub(text, "{" .. key .. "}", tostring(math.floor(v)))) end
+				local id = js:GetCell(i, "SkillId")
+				if id ~= nil and self._T.tipSkills[id] == nil then
+					self._T.tipSkills[id] = { name = js:GetCell(i, "Name") or id, icon = js:GetCell(i, "IconRUID") or "", desc = text, cd = num("Cooldown") }
+				end
+			end
+		end
+		local hs = _DataService:GetTable("HeroSkillTable")
+		if hs ~= nil then
+			for i = 1, hs:GetRowCount() do
+				local id = hs:GetCell(i, "SkillId")
+				if id ~= nil and self._T.tipSkills[id] == nil then
+					self._T.tipSkills[id] = { name = hs:GetCell(i, "Name") or id, icon = hs:GetCell(i, "IconRUID") or "", desc = hs:GetCell(i, "Desc") or "", cd = tonumber(hs:GetCell(i, "Cooldown")) or 0 }
+				end
+			end
+		end
+		local kinds = { Main = "주력기", Sub = "보조기", Tech = "기술", Hyper = "하이퍼", Ult = "궁극기" }
+		local ss = _DataService:GetTable("CharSkillSlotTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do
+				local id = ss:GetCell(i, "SkillId")
+				local key = ss:GetCell(i, "SlotKey") or ""
+				if id ~= nil and self._T.tipSlotKind[id] == nil and kinds[key] ~= nil then self._T.tipSlotKind[id] = kinds[key] end
+			end
+		end
+		local bt = _DataService:GetTable("SkillBreakTable")
+		if bt ~= nil then
+			for i = 1, bt:GetRowCount() do
+				local oid = bt:GetCell(i, "OptionId")
+				if oid ~= nil then self._T.tipBreaks[oid] = { name = bt:GetCell(i, "Name") or oid, desc = bt:GetCell(i, "Desc") or "" } end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowSlotTip(integer k, integer i)
+		-- 구성원 k번 i번째 스킬 칸 툴팁. 빈 칸이면 열려 있던 툴팁만 닫는다.
+		local e = _EntityService:GetEntityByPath("/ui/BattleHUD/Members/P" .. tostring(k) .. "/S" .. tostring(i))
+		local slots = (self._T.slotTips or {})[k]
+		local info = slots ~= nil and slots[i] or nil
+		if not isvalid(e) or info == nil then
+			_TooltipLogic:Hide()
+			return
+		end
+		self:LoadSkillTipData()
+		local sk = self._T.tipSkills[info.id] or { name = info.id, icon = "", desc = "", cd = 0 }
+		local data = { icon = (self._T.mateIcons or {})[info.id] or sk.icon, name = sk.name, kind = self._T.tipSlotKind[info.id] or "", desc = sk.desc, breaks = {} }
+		if info.ult then
+			if data.kind == "" then data.kind = "궁극기" end
+			local pct = 100
+			if info.max > 0 then pct = math.floor((info.max - info.left) / info.max * 100 + 0.0001) end
+			data.cooldownText = "충전 " .. tostring(pct) .. "%"
+		else
+			data.cooldown = info.max > 0 and info.max or sk.cd
+		end
+		-- 이번 판에 붙은 돌파 (서버가 동기화한 스킬별 돌파 Id 목록)
+		local player = _UserService.LocalPlayer
+		local mgr = (isvalid(player) and isvalid(player.CurrentMap)) and player.CurrentMap:GetComponent("script.TowerRunManager") or nil
+		if mgr ~= nil and mgr.SkillBreaks ~= nil then
+			local raw = mgr.SkillBreaks[info.id] or ""
+			for oid in string.gmatch(raw, "[^,]+") do
+				local b = self._T.tipBreaks[oid]
+				if b ~= nil then
+					local line = "<b>" .. b.name .. "</b>"
+					if b.desc ~= "" then line = line .. " — " .. b.desc end
+					table.insert(data.breaks, line)
+				else
+					table.insert(data.breaks, oid)
+				end
+			end
+		end
+		_TooltipLogic:ShowSkill(e, data)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -545,18 +663,19 @@ script BattleHUDLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void UpdateStone(Component mgr)
-		-- 왼쪽 위 스킬석 개수 (판 진행 중에만).
-		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Stone")
+		-- 하단 HUD 바로 위 왼쪽: 스킬석·메소 (아이콘 + 수량, 반투명 배경). 판 진행 중에만.
+		local root = _EntityService:GetEntityByPath("/ui/BattleHUD/Wallet")
 		if not isvalid(root) then return end
 		local st = mgr ~= nil and mgr.RunState or ""
 		local show = mgr ~= nil and st ~= "WAIT" and st ~= "READY" and st ~= "RESULT" and st ~= "DEFEAT"
 		if root.Enable ~= show then root:SetEnable(show) end
 		if not show then return end
-		local text = _EntityService:GetEntityByPath("/ui/BattleHUD/Stone/Text")
-		if isvalid(text) then
-			local s2 = "스킬석 " .. tostring(mgr.SkillStone)
-			if text.TextGUIRendererComponent.Text ~= s2 then text.TextGUIRendererComponent.Text = s2 end
+		local function setText(path, s2)
+			local e = _EntityService:GetEntityByPath("/ui/BattleHUD/Wallet/" .. path)
+			if isvalid(e) and e.TextGUIRendererComponent.Text ~= s2 then e.TextGUIRendererComponent.Text = s2 end
 		end
+		setText("Stone/Text", tostring(mgr.SkillStone))
+		setText("Meso/Text", tostring(mgr.Meso))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -669,6 +788,9 @@ script BattleHUDLogic extends Logic
 			-- 4-D: 넷째 값 "U" = 궁극기 게이지 칸 (left = 최대 − 게이지)
 			if id ~= nil then table.insert(list, { id = id, left = tonumber(left) or 0, max = tonumber(max) or 0, lv = tonumber(lvRaw) or 0, ult = lvRaw == "U" }) end
 		end
+		-- 스킬 칸 툴팁용으로 이번 프레임 칸 정보를 보관
+		self._T.slotTips = self._T.slotTips or {}
+		self._T.slotTips[k] = list
 		for i = 1, 5 do
 			local slot = "S" .. tostring(i)
 			local info = list[i]

@@ -171,23 +171,8 @@ script CharGachaUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void LoadJobs()
-		-- 직업 목록(CharJobTable 순서)과 직업 아이콘(4차 주력기 스킬 아이콘)을 읽는다.
+		-- 직업 목록(CharJobTable 순서)과 직업 아이콘(CharJobTable.IconRUID 직업 초상)을 읽는다.
 		self._T.jobs = {}
-		local icons = {}
-		local ht = _DataService:GetTable("HeroSkillTable")
-		if ht ~= nil then
-			for i = 1, ht:GetRowCount() do
-				local id = ht:GetCell(i, "SkillId")
-				if id ~= nil and id ~= "" then icons[id] = ht:GetCell(i, "IconRUID") or "" end
-			end
-		end
-		local mainT4 = {}
-		local st = _DataService:GetTable("CharSlotTable")
-		if st ~= nil then
-			for i = 1, st:GetRowCount() do
-				if st:GetCell(i, "SlotKey") == "Main" then mainT4[st:GetCell(i, "JobId") or ""] = st:GetCell(i, "T4") or "" end
-			end
-		end
 		local jt = _DataService:GetTable("CharJobTable")
 		if jt == nil then return end
 		for i = 1, jt:GetRowCount() do
@@ -195,11 +180,12 @@ script CharGachaUILogic extends Logic
 			if id ~= nil and id ~= "" then
 				table.insert(self._T.jobs, {
 					id = id, order = tonumber(jt:GetCell(i, "Order")) or i, group = jt:GetCell(i, "JobGroup") or "",
-					name4 = jt:GetCell(i, "Name4") or id, icon = icons[mainT4[id] or ""] or "",
+					name4 = jt:GetCell(i, "Name4") or id, icon = jt:GetCell(i, "IconRUID") or "",
 				})
 			end
 		end
 		table.sort(self._T.jobs, function(a, b) return a.order < b.order end)
+		log("[VRF] chargacha job icons " .. tostring(#self._T.jobs) .. " first=" .. tostring(self._T.jobs[1] and self._T.jobs[1].icon or ""))
 		if #self._T.jobs > 5 then log_warning("[VRF] chargacha jobs over 5 — 교환 창은 앞 5개만 표시") end
 	end
 
@@ -271,9 +257,12 @@ script CharGachaUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void SetIcon(string rel, string ruid)
-		-- 아이콘 이미지.
+		-- 아이콘 이미지 (직업 초상: 칸 안에서 비율 유지·가운데).
 		local e = self:E(rel)
-		if isvalid(e) and isvalid(e.SpriteGUIRendererComponent) then e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid) end
+		if isvalid(e) and isvalid(e.SpriteGUIRendererComponent) then
+			e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+			e.SpriteGUIRendererComponent.PreserveSprite = PreserveSpriteType.AspectOnly
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -482,7 +471,7 @@ script CharGachaUILogic extends Logic
 			for n = 1, 10 do self:SetShown("Result/Cell" .. tostring(n), false) end
 			local cell1 = self:E("Result/Cell1")
 			if isvalid(cell1) then
-				if #tokens == 1 then cell1.UITransformComponent.anchoredPosition = Vector2(0, 60) else cell1.UITransformComponent.anchoredPosition = Vector2(-440, 200) end
+				if #tokens == 1 then cell1.UITransformComponent.anchoredPosition = Vector2(0, 56) else cell1.UITransformComponent.anchoredPosition = Vector2(-440, 187) end
 			end
 			local first = self.RevealInterval
 			if #tokens == 1 then first = self.SingleDelay end

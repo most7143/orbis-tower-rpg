@@ -1,0 +1,327 @@
+@Logic
+script TooltipLogic extends Logic
+
+	-- 공용 툴팁 (ui/TooltipUI). 항상 1개만, 모든 화면보다 위에 띄운다.
+	-- 종류: 글자(ShowText) / 아이템 목록(ShowItems) / 스킬 상세(ShowSkill). 닫기는 Hide().
+	-- 떠 있는 동안 전체 화면 투명 판이 입력을 흡수한다: 다른 곳을 누르면 닫기만 하고 아래 버튼은 눌리지 않는다.
+	-- Register(대상, 함수)로 등록한 대상을 누르면 닫는 대신 그 함수를 불러 툴팁을 바로 바꾼다 (같은 대상이면 닫힘).
+	property string RootPath = "/ui/TooltipUI"
+	-- 화면 가장자리 여백, 대상과 툴팁 사이 간격
+	property number EdgeMargin = 10
+	property number TargetGap = 8
+	-- 화면 오른쪽 위 시스템 버튼 금지 영역 (1920×1080 기준 x≥740, y≥410 → 오른쪽·위 끝에서 220·130)
+	property number BlockRight = 220
+	property number BlockTop = 130
+	property number TextWidth = 440
+	property number ItemCell = 72
+	property number ItemGap = 8
+	property integer ItemPerRow = 6
+	property number SkillWidth = 480
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 상태 초기화와 입력 차단 판 연결.
+		-- 다른 로직이 먼저 Register했을 수 있으므로 대상 목록은 지우지 않는다
+		self._T.kind = self._T.kind or ""
+		self._T.targets = self._T.targets or {}
+		self:Connect()
+		log("[VRF] TooltipLogic begin (client)")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 입력 차단 판 연결 해제.
+		local blocker = self:E("Blocker")
+		if self._T.blockHandler ~= nil and isvalid(blocker) then blocker:DisconnectEvent(UITouchDownEvent, self._T.blockHandler) end
+		self._T.blockHandler = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string sub)
+		-- 툴팁 화면 아래 엔티티 찾기.
+		if sub == "" then return _EntityService:GetEntityByPath(self.RootPath) end
+		return _EntityService:GetEntityByPath(self.RootPath .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean Connect()
+		-- 입력 차단 판에 누름 이벤트를 한 번만 연결한다 (UI 준비 전이면 다음 호출 때 다시 시도).
+		if self._T.blockHandler ~= nil then return true end
+		local blocker = self:E("Blocker")
+		if not isvalid(blocker) then return false end
+		self._T.blockHandler = blocker:ConnectEvent(UITouchDownEvent, function(evt) self:OnBlockerDown(evt) end)
+		return true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 대상이 사라지거나 숨겨지면(화면 닫힘·맵 이동) 툴팁도 닫는다.
+		if self._T.kind == nil or self._T.kind == "" then return end
+		local t = self._T.target
+		if not isvalid(t) or not t.EnabledInHierarchy then self:Hide() end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Register(Entity target, any fn)
+		-- 툴팁 대상 등록: 툴팁이 떠 있을 때 이 대상을 누르면 fn()을 불러 바로 교체한다.
+		if not isvalid(target) or fn == nil then return end
+		self._T.targets = self._T.targets or {}
+		for _, rec in ipairs(self._T.targets) do
+			if rec.entity == target then
+				rec.fn = fn
+				return
+			end
+		end
+		table.insert(self._T.targets, { entity = target, fn = fn })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Unregister(Entity target)
+		-- 툴팁 대상 등록 해제.
+		local list = self._T.targets or {}
+		for i = #list, 1, -1 do
+			if list[i].entity == target or not isvalid(list[i].entity) then table.remove(list, i) end
+		end
+		if self._T.target == target then self:Hide() end
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsShowing(Entity target)
+		-- 지금 이 대상의 툴팁이 떠 있는지 (target이 nil이면 아무 툴팁이나).
+		if self._T.kind == nil or self._T.kind == "" then return false end
+		if target == nil then return true end
+		return self._T.target == target
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Hide()
+		-- 툴팁과 입력 차단 판을 모두 닫는다.
+		for _, n in ipairs({ "TextTip", "ItemTip", "SkillTip", "Blocker" }) do
+			local e = self:E(n)
+			if isvalid(e) and e.Enable then e:SetEnable(false) end
+		end
+		self._T.kind = ""
+		self._T.target = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean Begin(Entity target, string kind)
+		-- 공통 시작: 같은 대상을 다시 누르면 닫고 false. 아니면 이전 툴팁을 닫고 true.
+		self:Connect()
+		if (self._T.kind or "") ~= "" and self._T.target == target then
+			self:Hide()
+			return false
+		end
+		self:Hide()
+		if not isvalid(self:E(kind)) then return false end
+		return true
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Finish(Entity target, string kind, number w, number h)
+		-- 공통 마무리: 크기 적용 → 대상 기준 위치 보정 → 입력 차단 판과 함께 표시.
+		local panel = self:E(kind)
+		panel.UITransformComponent.RectSize = Vector2(w, h)
+		local pos = self:Place(target, w, h)
+		panel.UITransformComponent.anchoredPosition = pos
+		local blocker = self:E("Blocker")
+		if isvalid(blocker) then blocker:SetEnable(true) end
+		panel:SetEnable(true)
+		self._T.kind = kind
+		self._T.target = target
+		log("[VRF] Tooltip show kind=" .. kind .. " pos=" .. string.format("%.0f,%.0f", pos.x, pos.y) .. " size=" .. string.format("%.0f,%.0f", w, h))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowText(Entity target, string title, string body)
+		-- 글자 툴팁: 폭 고정, 높이는 설명 길이에 맞춘다.
+		if not self:Begin(target, "TextTip") then return end
+		local w = self.TextWidth
+		local textW = w - 36
+		local te = self:E("TextTip/Body/Text")
+		local tg = te.TextGUIRendererComponent
+		tg.Text = body or ""
+		local th = math.max(24, tg:GetPreferredHeight(body or "", textW))
+		te.UITransformComponent.RectSize = Vector2(textW, th)
+		self:E("TextTip/Title").TextGUIRendererComponent.Text = title or ""
+		local bodyH = th + 24
+		self:E("TextTip/Body").UITransformComponent.RectSize = Vector2(w - 8, bodyH)
+		self:Finish(target, "TextTip", w, 52 + bodyH + 4)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowItems(Entity target, string title, table ruids)
+		-- 아이템 목록 툴팁: 제목 1줄 + 아이콘 칸 (한 줄 최대 ItemPerRow칸, 최대 12칸).
+		if not self:Begin(target, "ItemTip") then return end
+		local list = ruids or {}
+		local n = math.min(12, #list)
+		local cols = math.max(1, math.min(self.ItemPerRow, n))
+		local rows = math.max(1, math.ceil(n / self.ItemPerRow))
+		local step = self.ItemCell + self.ItemGap
+		local innerW = cols * self.ItemCell + (cols - 1) * self.ItemGap + 28
+		local titleE = self:E("ItemTip/Title")
+		titleE.TextGUIRendererComponent.Text = title or ""
+		-- 제목이 길면 폭을 늘린다 (아이콘 칸은 가운데 정렬)
+		local titleW = titleE.TextGUIRendererComponent:GetPreferredWidth(title or "") + 36
+		local w = math.max(innerW + 8, titleW, 240)
+		titleE.UITransformComponent.RectSize = Vector2(w - 36, 40)
+		local offX = (w - 8 - innerW) / 2
+		for i = 1, 12 do
+			local slot = self:E("ItemTip/Body/Slot" .. tostring(i))
+			if isvalid(slot) then
+				local on = i <= n
+				if slot.Enable ~= on then slot:SetEnable(on) end
+				if on then
+					local c = (i - 1) % self.ItemPerRow
+					local r = math.floor((i - 1) / self.ItemPerRow)
+					slot.UITransformComponent.anchoredPosition = Vector2(offX + 14 + c * step, -12 - r * step)
+					local icon = slot:GetChildByName("Icon")
+					if isvalid(icon) then
+						local spr = icon.SpriteGUIRendererComponent
+						if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+						spr.ImageRUID = DataRef(list[i] or "")
+						spr.Color = Color(1, 1, 1, 1)
+					end
+				end
+			end
+		end
+		local bodyH = rows * self.ItemCell + (rows - 1) * self.ItemGap + 24
+		self:E("ItemTip/Body").UITransformComponent.RectSize = Vector2(w - 8, bodyH)
+		self:Finish(target, "ItemTip", w, 52 + bodyH + 4)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowSkill(Entity target, table data)
+		-- 스킬 상세 툴팁. data = { icon, name, kind(칸 종류), cooldown(초, 0이면 생략), cooldownText(직접 문구), desc, breaks = { "이름: 설명", ... } }
+		if not self:Begin(target, "SkillTip") then return end
+		local d = data or {}
+		local w = self.SkillWidth
+		local icon = self:E("SkillTip/IconBg/Icon")
+		if isvalid(icon) then
+			local spr = icon.SpriteGUIRendererComponent
+			if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+			spr.ImageRUID = DataRef(d.icon or "")
+			spr.Color = Color(1, 1, 1, 1)
+		end
+		self:E("SkillTip/Name").TextGUIRendererComponent.Text = d.name or ""
+		local kindParts = {}
+		if (d.kind or "") ~= "" then table.insert(kindParts, d.kind) end
+		if (d.cooldownText or "") ~= "" then
+			table.insert(kindParts, d.cooldownText)
+		elseif (d.cooldown or 0) > 0 then
+			local cd = d.cooldown
+			local s = (math.abs(cd - math.floor(cd)) < 0.05) and tostring(math.floor(cd)) or string.format("%.1f", cd)
+			table.insert(kindParts, "쿨타임 " .. s .. "초")
+		end
+		self:E("SkillTip/Kind").TextGUIRendererComponent.Text = table.concat(kindParts, "  ·  ")
+		local text = d.desc or ""
+		local breaks = d.breaks or {}
+		if #breaks > 0 then
+			if text ~= "" then text = text .. "\n\n" end
+			text = text .. "<b><color=#2F6FD0>이번 판 돌파</color></b>"
+			for _, b in ipairs(breaks) do text = text .. "\n· " .. b end
+		end
+		local textW = w - 36
+		local te = self:E("SkillTip/Body/Text")
+		local tg = te.TextGUIRendererComponent
+		tg.Text = text
+		local th = math.max(24, tg:GetPreferredHeight(text, textW))
+		te.UITransformComponent.RectSize = Vector2(textW, th)
+		local bodyH = th + 24
+		self:E("SkillTip/Body").UITransformComponent.RectSize = Vector2(w - 8, bodyH)
+		self:Finish(target, "SkillTip", w, 96 + bodyH + 4)
+	end
+
+	@ExecSpace("ClientOnly")
+	method table Bounds()
+		-- 툴팁 부모(루트) 기준 화면 반폭·반높이. 루트는 화면 전체로 늘어나므로 실제 크기를 쓴다.
+		local root = self:E("")
+		local size = Vector2(1920, 1080)
+		if isvalid(root) then
+			local s = root.UITransformComponent.RectSize
+			if s.x > 1 and s.y > 1 then size = s end
+		end
+		return { hw = size.x / 2, hh = size.y / 2 }
+	end
+
+	@ExecSpace("ClientOnly")
+	method table TargetRect(Entity target)
+		-- 대상 UI 요소의 사각형을 툴팁 루트 좌표(가운데 원점, UI 픽셀)로 변환. 해상도·UI 배율 차이는 월드 좌표를 거쳐 흡수한다.
+		local root = self:E("")
+		if not isvalid(target) or not isvalid(root) or target.UITransformComponent == nil then return nil end
+		local corners = target.UITransformComponent:GetWorldCorners()
+		if corners == nil then return nil end
+		local rt = root.UITransformComponent
+		local minX, minY, maxX, maxY = nil, nil, nil, nil
+		for _, c in pairs(corners) do
+			local p = rt:ToLocalPoint(Vector3(c.x, c.y, 0))
+			if minX == nil or p.x < minX then minX = p.x end
+			if maxX == nil or p.x > maxX then maxX = p.x end
+			if minY == nil or p.y < minY then minY = p.y end
+			if maxY == nil or p.y > maxY then maxY = p.y end
+		end
+		if minX == nil then return nil end
+		return { minX = minX, minY = minY, maxX = maxX, maxY = maxY }
+	end
+
+	@ExecSpace("ClientOnly")
+	method Vector2 Place(Entity target, number w, number h)
+		-- 위치: 대상 위쪽(공간이 모자라면 아래쪽), 가로는 대상 가운데 → 화면 안·금지 영역 밖으로 밀어 넣기.
+		local b = self:Bounds()
+		local m = self.EdgeMargin
+		local r = self:TargetRect(target)
+		if r == nil then r = { minX = 0, minY = 0, maxX = 0, maxY = 0 } end
+		local cx = (r.minX + r.maxX) / 2
+		local cy = r.maxY + self.TargetGap + h / 2
+		if cy + h / 2 > b.hh - m then
+			local below = r.minY - self.TargetGap - h / 2
+			if below - h / 2 >= -b.hh + m then cy = below end
+		end
+		local function clamp(v, lo, hi)
+			if lo > hi then return (lo + hi) / 2 end
+			return math.max(lo, math.min(hi, v))
+		end
+		cx = clamp(cx, -b.hw + m + w / 2, b.hw - m - w / 2)
+		cy = clamp(cy, -b.hh + m + h / 2, b.hh - m - h / 2)
+		-- 오른쪽 위 금지 영역과 겹치면 왼쪽으로 밀기와 아래로 밀기 중 덜 움직이는 쪽
+		local zx = b.hw - self.BlockRight
+		local zy = b.hh - self.BlockTop
+		if cx + w / 2 > zx and cy + h / 2 > zy then
+			local leftX = zx - 4 - w / 2
+			local downY = zy - 4 - h / 2
+			local okLeft = leftX - w / 2 >= -b.hw + m
+			local okDown = downY - h / 2 >= -b.hh + m
+			if okLeft and (not okDown or math.abs(cx - leftX) <= math.abs(cy - downY)) then
+				cx = leftX
+			elseif okDown then
+				cy = downY
+			end
+		end
+		return Vector2(cx, cy)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnBlockerDown(UITouchDownEvent evt)
+		-- 입력 차단 판 누름: 등록된 다른 대상 위면 그 툴팁으로 교체(같은 대상이면 닫힘), 아니면 닫기만.
+		local root = self:E("")
+		local hit = nil
+		if isvalid(root) and evt ~= nil then
+			local p = _UILogic:ScreenToLocalUIPosition(evt.TouchPoint, root.UITransformComponent)
+			for _, rec in ipairs(self._T.targets or {}) do
+				local e = rec.entity
+				if isvalid(e) and e.EnabledInHierarchy then
+					local r = self:TargetRect(e)
+					if r ~= nil and p.x >= r.minX and p.x <= r.maxX and p.y >= r.minY and p.y <= r.maxY then hit = rec end
+				end
+			end
+		end
+		if hit ~= nil and hit.entity ~= self._T.target then
+			log("[VRF] Tooltip blocker -> switch target=" .. hit.entity.Name)
+			hit.fn()
+			return
+		end
+		log("[VRF] Tooltip blocker -> close")
+		self:Hide()
+	end
+
+end

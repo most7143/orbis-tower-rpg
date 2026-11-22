@@ -1,10 +1,11 @@
 @Logic
 script GrowthUILogic extends Logic
 
-	-- 성장 화면 (GrowthUI.ui): 탭 5개. 1 슬롯 강화, 2 각인, 3 심볼, 4 은총, 5 스킬을 내용 영역에 띄운다.
+	-- 성장 화면 (GrowthUI.ui): 탭 4개. 1 장비, 2 각인, 3 유물, 4 은총을 내용 영역에 띄운다.
+	-- 스킬 탭은 2026-11-22 사용자 결정으로 삭제(스킬 강화 기능 제거). 스킬 데이터·저장은 6단계에서 정리한다.
 	property string RootPath = "/ui/GrowthUI/Root"
 	property string LobbyMapName = "Lobby"
-	property integer TabCount = 5
+	property integer TabCount = 4
 	property Color TabTextColor = Color(0.90, 0.93, 0.96, 1)
 	property Color TabSelectedColor = Color(1, 1, 1, 1)
 
@@ -75,7 +76,7 @@ script GrowthUILogic extends Logic
 			end
 			for _, child in ipairs(entity.Children) do visit(child) end
 		end
-		for _, name in ipairs({ "GrowthUI", "EngraveUI", "SymbolUI", "GraceUI", "SkillUI" }) do
+		for _, name in ipairs({ "GrowthUI", "EngraveUI", "SymbolUI", "GraceUI" }) do
 			visit(_EntityService:GetEntityByPath("/ui/" .. name))
 		end
 		log("[VRF] growth neutral theme ready buttons=" .. tostring(n))
@@ -126,13 +127,12 @@ script GrowthUILogic extends Logic
 		if self._T.tab == 2 then _EngraveUILogic:Close() end
 		if self._T.tab == 3 then _RelicUILogic:Close() end
 		if self._T.tab == 4 then _GraceUILogic:Close() end
-		if self._T.tab == 5 then _HeroSkillUILogic:Close() end
 	end
 
 	@ExecSpace("ClientOnly")
 	method void SelectTab(integer index)
 		-- 탭 전환: 고정 프레임과 선택 상태 이미지를 사용한다. 배치는 유지한다.
-		if self._T.tab == index then return end
+		if self._T.tab == index or index < 1 or index > self.TabCount then return end
 		self:CloseContent()
 		self._T.tab = index
 		for i = 1, self.TabCount do
@@ -142,7 +142,7 @@ script GrowthUILogic extends Logic
 			end
 		end
 		local empty = _EntityService:GetEntityByPath(self.RootPath .. "/Empty")
-		if isvalid(empty) then empty:SetEnable(index > 5) end
+		if isvalid(empty) then empty:SetEnable(index > self.TabCount) end
 		if index == 1 then
 			_SlotUILogic:Open()
 		elseif index == 2 then
@@ -154,9 +154,6 @@ script GrowthUILogic extends Logic
 		elseif index == 4 then
 			_GraceUILogic:Open()
 			_GraceUILogic.dimEntity:SetEnable(false)
-		elseif index == 5 then
-			_HeroSkillUILogic:Open()
-			_HeroSkillUILogic.dimEntity:SetEnable(false)
 		end
 		log("[VRF] growth tab=" .. tostring(index))
 	end

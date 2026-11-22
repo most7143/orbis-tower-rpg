@@ -709,7 +709,20 @@ script HeroCombat extends Component
 	method void AddUlt(number n)
 		-- 4-D: 궁극기 게이지 충전 (궁극기 칸이 있고 아직 가득이 아닐 때만).
 		if self._T.ultId == nil or n <= 0 or self.UltGauge >= self.UltMax then return end
+		-- 5-F: 망토 잠재능력 궁극기 게이지 충전 %
+		local mgr = self._T.mgr
+		if mgr ~= nil then n = n * mgr:UltGainMul(self.Entity) end
 		self.UltGauge = math.min(self.UltMax, self.UltGauge + n)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SlotPotPct(string id)
+		-- 5-F: 이 스킬이 장착된 칸(Main/Sub/Tech/Hyper/Ult)의 망토 잠재능력 피해 %. 패시브·칸 밖·기본 공격은 0.
+		local mgr = self._T.mgr
+		if mgr == nil or id == nil or id == "" then return 0 end
+		local slot = (self._T.slotOf or {})[id]
+		if slot == nil then return 0 end
+		return mgr:SlotSkillPotPct(self.Entity, slot)
 	end
 
 	@ExecSpace("Client")
@@ -923,6 +936,8 @@ script HeroCombat extends Component
 		mul = mul * (1 + self:ComboDirectPct() / 100)
 		-- 자상 방어력 감소
 		mul = mul * (1 + self:DefDownPct() / 100)
+		-- 5-F: 망토 잠재능력 칸 스킬 피해 (주력기·보조기·기술·하이퍼·궁극기)
+		mul = mul * (1 + self:SlotPotPct(id) / 100)
 		local rate = mgr:ActorCrit(self.Entity) + self:Star(id, "StarCrit")
 		local critDmg = mgr:ActorCritDmg(self.Entity) + self:Star(id, "StarCrit") * 2
 		local crit = forceCrit or _UtilLogic:RandomDouble() * 100 < rate
@@ -2942,7 +2957,7 @@ script HeroCombat extends Component
 		local pct = sk.proc.pct
 		if enhanced then pct = pct * 1.5 end
 		local bonus = self:SwordDmgPct(enhanced)
-		local base = mgr:ActorHitDamage(self.Entity) * pct / 100 * self:LvMul("H12") * (1 + bonus / 100) * (1 + self:AllDmgPct() / 100)
+		local base = mgr:ActorHitDamage(self.Entity) * pct / 100 * self:LvMul("H12") * (1 + bonus / 100) * (1 + self:AllDmgPct() / 100) * (1 + self:SlotPotPct("H12") / 100)
 		local rate = mgr:ActorCrit(self.Entity) + self:Star("H12", "StarCrit")
 		local crit = _UtilLogic:RandomDouble() * 100 < rate
 		if crit then base = base * (mgr:ActorCritDmg(self.Entity) + self:Star("H12", "StarCrit") * 2) / 100 end

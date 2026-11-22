@@ -144,6 +144,7 @@ script PlayerRoster extends Component
 						startCards = math.floor(tonumber(jt:GetCell(i, "StartCards")) or 0),
 						modelId = jt:GetCell(i, "ModelId") or "",
 						weaponFamily = jt:GetCell(i, "WeaponFamily") or "O",
+						hair = jt:GetCell(i, "HairRUID") or "", face = jt:GetCell(i, "FaceRUID") or "",
 					}
 					for t = 1, 5 do j.names[t] = jt:GetCell(i, "Name" .. tostring(t)) or "" end
 					self._T.jobs[id] = j
@@ -1027,12 +1028,17 @@ script PlayerRoster extends Component
 		local j = self._T.jobs[jobId]
 		out.family = "O"
 		if j ~= nil and j.weaponFamily ~= nil and j.weaponFamily ~= "" then out.family = j.weaponFamily end
+		-- 직업별 헤어·성형 (CharJobTable, 차수와 무관하게 고정)
+		if j ~= nil then
+			if j.hair ~= nil and j.hair ~= "" then out.Hair = j.hair end
+			if j.face ~= nil and j.face ~= "" then out.Face = j.face end
+		end
 		return out
 	end
 
 	method table OutfitSlots()
 		-- 외형 표가 다루는 아바타 부위 이름 (MapleAvatarItemCategory 이름과 같음).
-		return { "Cap", "Coat", "Pants", "Longcoat", "Glove", "Shoes", "Cape", "OneHandedWeapon", "TwoHandedWeapon" }
+		return { "Cap", "Coat", "Pants", "Longcoat", "Glove", "Shoes", "Cape", "OneHandedWeapon", "TwoHandedWeapon", "Hair", "Face" }
 	end
 
 	method any OutfitCategory(string slot)
@@ -1047,19 +1053,24 @@ script PlayerRoster extends Component
 		if slot == "OneHandedWeapon" then return MapleAvatarItemCategory.OneHandedWeapon end
 		if slot == "TwoHandedWeapon" then return MapleAvatarItemCategory.TwoHandedWeapon end
 		if slot == "SubWeapon" then return MapleAvatarItemCategory.SubWeapon end
+		if slot == "Hair" then return MapleAvatarItemCategory.Hair end
+		if slot == "Face" then return MapleAvatarItemCategory.Face end
 		return nil
 	end
 
 	@ExecSpace("ServerOnly")
 	method void ApplyOutfit(Entity target, string jobId, integer tier)
-		-- 대상 아바타에 차수 세트를 입힌다. 9개 부위를 모두 설정(세트에 없으면 "")하고 몸·머리·얼굴은 건드리지 않는다.
+		-- 대상 아바타에 차수 세트를 입힌다. 장비 9개 부위를 모두 설정(세트에 없으면 "")하고, 직업별 헤어·얼굴을 입힌다(몸은 건드리지 않음).
 		if not isvalid(target) or not isvalid(target.CostumeManagerComponent) then return end
 		local cm = target.CostumeManagerComponent
 		local set = self:OutfitFor(jobId, tier)
 		local n = 0
 		for _, slot in ipairs(self:OutfitSlots()) do
 			local ruid = set[slot] or ""
-			cm:SetEquip(self:OutfitCategory(slot), ruid)
+			-- 헤어·얼굴은 값이 있을 때만 바꾼다 (비우면 기본 머리·얼굴이 사라짐)
+			if ruid ~= "" or (slot ~= "Hair" and slot ~= "Face") then
+				cm:SetEquip(self:OutfitCategory(slot), ruid)
+			end
 			if ruid ~= "" then n = n + 1 end
 		end
 		cm:SetEquip(MapleAvatarItemCategory.SubWeapon, "")

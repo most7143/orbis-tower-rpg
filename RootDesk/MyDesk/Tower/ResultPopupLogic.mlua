@@ -187,6 +187,9 @@ script ResultPopupLogic extends Logic
 		if mgr.RunBooks > 0 then table.insert(items, { icon = self.IconBook, name = "스킬북", n = mgr.RunBooks }) end
 		if mgr.RunFeathers > 0 then table.insert(items, { icon = self.IconFeather, name = "깃털", n = mgr.RunFeathers }) end
 		if mgr.RunScrolls > 0 then table.insert(items, { icon = self.IconScroll, name = "주문서", n = mgr.RunScrolls }) end
+		-- 5-F: 이번 판 큐브 (레드 / 무료). 아이콘·이름은 GearCubeTable (PlayerGear.CubeInfo)
+		if mgr.RunCubes > 0 then table.insert(items, self:CubeItem("R", "레드 큐브", mgr.RunCubes)) end
+		if mgr.RunFreeCubes > 0 then table.insert(items, self:CubeItem("F", "무료 큐브", mgr.RunFreeCubes)) end
 		for k = 0, 7 do
 			local it = items[k + 1]
 			local p = "LootView/Loot" .. tostring(k)
@@ -198,7 +201,7 @@ script ResultPopupLogic extends Logic
 				if isvalid(iconEnt) then
 					local spr = iconEnt.SpriteGUIRendererComponent
 					local want = PreserveSpriteType.AspectOnly
-					if it.icon == self.IconDiamond then want = PreserveSpriteType.None end
+					if it.icon == self.IconDiamond or it.cube == true then want = PreserveSpriteType.None end
 					if spr.PreserveSprite ~= want then spr.PreserveSprite = want end
 				end
 				self:SetText(p .. "/Loot" .. tostring(k) .. "Count", "x" .. tostring(it.n), nil)
@@ -214,6 +217,23 @@ script ResultPopupLogic extends Logic
 		-- 늦게 도착한 Sync 값 반영용: 마지막으로 채운 키
 		self._T.fillKey = tostring(floor) .. ":" .. tostring(prev) .. ":" .. tostring(now) .. ":" .. tostring(clear)
 		log("[VRF] result fill floor=" .. tostring(floor) .. " clear=" .. tostring(clear) .. " prev=" .. tostring(prev) .. " now=" .. tostring(now) .. " loot=" .. tostring(#items))
+	end
+
+	@ExecSpace("ClientOnly")
+	method table CubeItem(string kind, string fallbackName, integer n)
+		-- 5-F: 결과 보상 줄 하나 (큐브). 표 행이 없으면 주문서 아이콘·기본 이름.
+		local icon = self.IconScroll
+		local name = fallbackName
+		local p = _UserService.LocalPlayer
+		local gear = isvalid(p) and p:GetComponent("script.PlayerGear") or nil
+		if gear ~= nil then
+			local info = gear:CubeInfo(kind)
+			if info ~= nil then
+				if info.icon ~= nil and info.icon ~= "" then icon = info.icon end
+				if info.name ~= nil and info.name ~= "" then name = info.name end
+			end
+		end
+		return { icon = icon, name = name, n = n, cube = true }
 	end
 
 	@ExecSpace("ClientOnly")

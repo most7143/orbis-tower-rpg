@@ -379,7 +379,20 @@ script JobCombat extends Component
 	method void AddUlt(number n)
 		-- 4-D: 궁극기 게이지 충전 (궁극기 칸이 있고 아직 가득이 아닐 때만).
 		if self._T.ultId == nil or n <= 0 or self.UltGauge >= self.UltMax then return end
+		-- 5-F: 망토 잠재능력 궁극기 게이지 충전 %
+		local mgr = self._T.mgr
+		if mgr ~= nil then n = n * mgr:UltGainMul(self.Entity) end
 		self.UltGauge = math.min(self.UltMax, self.UltGauge + n)
+	end
+
+	@ExecSpace("ServerOnly")
+	method number SlotPotPct(string id)
+		-- 5-F: 이 스킬이 장착된 칸(Main/Sub/Tech/Hyper/Ult)의 망토 잠재능력 피해 %. 패시브·칸 밖·기본 공격은 0.
+		local mgr = self._T.mgr
+		if mgr == nil or id == nil or id == "" then return 0 end
+		local slot = (self._T.slotOf or {})[id]
+		if slot == nil then return 0 end
+		return mgr:SlotSkillPotPct(self.Entity, slot)
 	end
 
 	@ExecSpace("Client")
@@ -909,6 +922,10 @@ script JobCombat extends Component
 		end
 		if self:On("V10") and self.Res >= 100 then bonusPct = bonusPct + (self._T.fullBonus or 0) end
 		local mul = (1 + (starPow + bonusPct) / 100) * (1 + self:ResAtkPct() / 100) * (1 + self:DefDownPct() / 100)
+		-- 5-F: 망토 잠재능력 칸 스킬 피해 + 무기 잠재능력 스킬 피해 (기본 공격·패시브 추가타 id "" 는 제외)
+		if id ~= "" then
+			mul = mul * (1 + self:SlotPotPct(id) / 100) * (1 + mgr:PotBonus(self.Entity, "SkillDmg") / 100)
+		end
 		local critRate = mgr:ActorCrit(self.Entity) + starCrit
 		if self._T.sureCrit then critRate = 100 end
 		local crit = _UtilLogic:RandomDouble() * 100 < critRate

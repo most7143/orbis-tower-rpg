@@ -24,7 +24,7 @@
           "enable": true,
           "visible": true,
           "localize": true,
-          "displayOrder": 8,
+          "displayOrder": 17,
           "pathConstraints": "//",
           "revision": 0,
           "origin": {
@@ -103,7 +103,7 @@
             {
               "@type": "MOD.Core.UIGroupComponent",
               "DefaultShow": true,
-              "GroupOrder": 8,
+              "GroupOrder": 16,
               "GroupType": 1,
               "Enable": true
             },
@@ -307,11 +307,11 @@
               "MobileOnly": false,
               "OffsetMax": {
                 "x": 300,
-                "y": 450
+                "y": 400
               },
               "OffsetMin": {
                 "x": -300,
-                "y": -450
+                "y": -500
               },
               "Pivot": {
                 "x": 0.5,
@@ -323,19 +323,14 @@
               },
               "UIMode": 1,
               "UIScale": {
-                "x": 1.875,
-                "y": 1.875,
+                "x": 1,
+                "y": 1,
                 "z": 1
               },
               "UIVersion": 2,
               "anchoredPosition": {
                 "x": 0,
-                "y": 0
-              },
-              "Rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0
+                "y": -50
               },
               "Position": {
                 "x": 0,
@@ -349,11 +344,10 @@
                 "w": 1
               },
               "Scale": {
-                "x": 1.875,
-                "y": 1.875,
+                "x": 1,
+                "y": 1,
                 "z": 1
               },
-              "ZRotation": 0,
               "Enable": true
             }
           ],
@@ -9537,11 +9531,11 @@
               "MobileOnly": false,
               "OffsetMax": {
                 "x": 300,
-                "y": 450
+                "y": 400
               },
               "OffsetMin": {
                 "x": -300,
-                "y": -450
+                "y": -500
               },
               "Pivot": {
                 "x": 0.5,
@@ -9553,19 +9547,14 @@
               },
               "UIMode": 1,
               "UIScale": {
-                "x": 1.875,
-                "y": 1.875,
+                "x": 1,
+                "y": 1,
                 "z": 1
               },
               "UIVersion": 2,
               "anchoredPosition": {
                 "x": 0,
-                "y": 0
-              },
-              "Rotation": {
-                "x": 0,
-                "y": 0,
-                "z": 0
+                "y": -50
               },
               "Position": {
                 "x": 0,
@@ -9579,11 +9568,10 @@
                 "w": 1
               },
               "Scale": {
-                "x": 1.875,
-                "y": 1.875,
+                "x": 1,
+                "y": 1,
                 "z": 1
               },
-              "ZRotation": 0,
               "Enable": true
             }
           ],

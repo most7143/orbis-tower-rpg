@@ -1,0 +1,1415 @@
+@Component
+script PlayerGear extends Component
+
+	-- 편성 칸 장비 계정 데이터: 칸(1~3) × 부위(5) = 15칸의 주문서 단계·잠재능력, 주문서·큐브 보유. (저장 키 OrbisGearV1)
+	-- 금색 메소(gm, 슬롯 강화 비용)와 공용 주문서(us, 하급·중급·상급 확률 보정)도 여기 저장한다. 옛 부위별 주문서(sc)는 처음 1회 공용으로 합산(usm).
+	-- 처음 1회 옛 계정 공용 슬롯(OrbisSlot, 읽기만)을 세 칸 모두에 복사한다. 5-B: 주문서 강화 요청(RequestScroll)과 판 주문서 저장(AddScrolls·Flush). 5-D: 큐브 사용·대기 선택·다이아 구매(RequestCube / RequestCubeChoose / RequestBuyCube), 첫 클리어·별 상자 큐브 소급(CheckCubeRewards).
+	property string GearKey = "OrbisGearV1"
+	property string OldSlotKey = "OrbisSlot"
+	property string LobbyMapName = "Lobby"
+	property number LoadRetryDelay = 10
+	property number SaveRetryDelay = 5
+
+	@Sync
+	property boolean GearLoaded = false
+	-- 큐브 보유 "F:30,R:20,B:3,P:1" (GearCubeTable 순서)
+	@Sync
+	property string CubeData = ""
+	-- 주문서 보유 "Weapon_1:3,Weapon_2:0,..." (5부위×단계 전부)
+	@Sync
+	property string ScrollData = ""
+	-- 칸 "칸/부위:단계:추가확률:등급:천장점수:줄1,줄2,줄3|..." (칸·부위 순서)
+	@Sync
+	property string GearData = ""
+	-- 대기 결과 "칸/부위:종류:등급:천장점수:후보1~후보2|..."
+	@Sync
+	property string PendData = ""
+	-- 금색 메소 (아웃게임 계정 재화, 슬롯 강화 비용)
+	@Sync
+	property integer GoldMeso = 0
+	-- 공용 주문서 보유 "1:3,2:0,3:1" (단계 = 하급·중급·상급, 부위 무관)
+	@Sync
+	property string UScrollData = ""
+	-- 요청 처리마다 +1 (UI 갱신 신호)
+	@Sync
+	property integer GearSeq = 0
+	-- 마지막 결과 코드
+	@Sync
+	property string GearMsg = ""
+	-- 마지막 결과 상세
+	@Sync
+	property string GearResult = ""
+
+	@HideFromInspector
+	property boolean GearDirty = false
+	@HideFromInspector
+	property number GearRetryTimer = 0
+	@HideFromInspector
+	property number RewardTimer = 0
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 표를 읽고 저장된 장비 데이터를 불러온다(없으면 옛 슬롯 이전).
+		self:LoadTables()
+		self:LoadGear()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기 재시도, 저장 실패 재시도, 1초마다 큐브 보상 확인.
+		if not self.GearLoaded then
+			self.GearRetryTimer = self.GearRetryTimer - delta
+			if self.GearRetryTimer <= 0 then self:LoadGear() end
+			return
+		end
+		if self.GearDirty and self._T.saveFailed == true then
+			self.GearRetryTimer = self.GearRetryTimer - delta
+			if self.GearRetryTimer <= 0 then
+				self._T.saveFailed = false
+				self:SaveGear()
+			end
+		end
+		self.RewardTimer = self.RewardTimer - delta
+		if self.RewardTimer <= 0 then
+			self.RewardTimer = 1
+			self:CheckCubeRewards()
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnEndPlay()
+		-- 나갈 때 저장되지 않은 변경을 마지막으로 저장한다.
+		if self.GearLoaded and self.GearDirty then
+			local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+			local code = ds:SetAndWait(self.GearKey, self:Encode())
+			if code ~= 0 and code ~= true then log_warning("[VRF] gear final save failed code=" .. tostring(code)) end
+		end
+	end
+
+	-- ───────────────────────── 표 읽기 (양쪽 공용) ─────────────────────────
+
+	method void LoadTables()
+		-- 부위·주문서·단계 보너스 표와 장비 표 4개(GearGradeTable / GearCubeTable / GearPotTable / GearConfig)를 self._T에 캐시한다.
+		self._T.parts = {}
+		self._T.partSet = {}
+		self._T.partNames = {}
+		local es = _DataService:GetTable("EquipSlotTable")
+		if es ~= nil then
+			for i = 1, es:GetRowCount() do
+				local s = es:GetCell(i, "Slot")
+				if s ~= nil and s ~= "" and s ~= "Shoes" then
+					table.insert(self._T.parts, s)
+					self._T.partSet[s] = true
+					self._T.partNames[s] = es:GetCell(i, "SlotName") or s
+				end
+			end
+		end
+		if #self._T.parts == 0 then
+			self._T.parts = { "Weapon", "Cap", "Coat", "Glove", "Cape" }
+			for _, s in ipairs(self._T.parts) do self._T.partSet[s] = true self._T.partNames[s] = s end
+			log_warning("[VRF] gear EquipSlotTable missing")
+		end
+		self._T.partNames["Coat"] = "갑옷"
+		self._T.scrollPower = {}
+		self._T.scrollTiers = {}
+		local ss = _DataService:GetTable("SlotScrollTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do
+				local slot = ss:GetCell(i, "Slot")
+				local tier = math.floor(tonumber(ss:GetCell(i, "Tier")) or 1)
+				if self._T.partSet[slot] then
+					if self._T.scrollPower[slot] == nil then self._T.scrollPower[slot] = {} end
+					self._T.scrollPower[slot][tier] = tonumber(ss:GetCell(i, "Power")) or 1
+					local seen = false
+					for _, t in ipairs(self._T.scrollTiers) do if t == tier then seen = true end end
+					if not seen then table.insert(self._T.scrollTiers, tier) end
+				end
+			end
+			table.sort(self._T.scrollTiers)
+		end
+		self._T.slotRates = {}
+		local rs = _DataService:GetTable("SlotRateTable")
+		if rs ~= nil then
+			for i = 1, rs:GetRowCount() do table.insert(self._T.slotRates, { min = tonumber(rs:GetCell(i, "MinLevel")) or 0, rate = tonumber(rs:GetCell(i, "Rate")) or 0 }) end
+		end
+		self._T.slotMiles = {}
+		local ms = _DataService:GetTable("SlotMilestoneTable")
+		if ms ~= nil then
+			for i = 1, ms:GetRowCount() do
+				local slot = ms:GetCell(i, "Slot")
+				if self._T.partSet[slot] then
+					table.insert(self._T.slotMiles, { slot = slot, level = tonumber(ms:GetCell(i, "Level")) or 0, type = ms:GetCell(i, "Type"), value = tonumber(ms:GetCell(i, "Value")) or 0 })
+				end
+			end
+		end
+		self._T.grades = {}
+		self._T.maxGrade = 1
+		local gt = _DataService:GetTable("GearGradeTable")
+		if gt ~= nil then
+			for i = 1, gt:GetRowCount() do
+				local g = math.floor(tonumber(gt:GetCell(i, "Grade")) or i)
+				self._T.grades[g] = {
+					name = gt:GetCell(i, "Name") or "", color = gt:GetCell(i, "ColorHex") or "5C6675",
+					up = { Free = tonumber(gt:GetCell(i, "FreeUp")) or 0, Red = tonumber(gt:GetCell(i, "RedUp")) or 0, Black = tonumber(gt:GetCell(i, "BlackUp")) or 0 },
+					ceil = tonumber(gt:GetCell(i, "Ceiling")) or 0,
+					prime = { Red = tonumber(gt:GetCell(i, "RedPrime")) or 0, Black = tonumber(gt:GetCell(i, "BlackPrime")) or 0 },
+				}
+				if g > self._T.maxGrade then self._T.maxGrade = g end
+			end
+		else
+			log_warning("[VRF] gear GearGradeTable missing")
+		end
+		self._T.cubes = {}
+		self._T.cubeMap = {}
+		local ct = _DataService:GetTable("GearCubeTable")
+		if ct ~= nil then
+			for i = 1, ct:GetRowCount() do
+				local kind = ct:GetCell(i, "Kind")
+				if kind ~= nil and kind ~= "" then
+					local c = {
+						kind = kind, name = ct:GetCell(i, "Name") or kind, icon = ct:GetCell(i, "IconRUID") or "",
+						up = ct:GetCell(i, "UpSet") or "None", prime = ct:GetCell(i, "PrimeSet") or "Red",
+						ceilPt = tonumber(ct:GetCell(i, "CeilPt")) or 0,
+						lock = math.floor(tonumber(ct:GetCell(i, "LockLines")) or 0),
+						choices = math.max(1, math.floor(tonumber(ct:GetCell(i, "Choices")) or 1)),
+						pending = (tonumber(ct:GetCell(i, "Pending")) or 0) == 1,
+						price = math.floor(tonumber(ct:GetCell(i, "DiaPrice")) or 0),
+					}
+					table.insert(self._T.cubes, c)
+					self._T.cubeMap[kind] = c
+				end
+			end
+		else
+			log_warning("[VRF] gear GearCubeTable missing")
+		end
+		self._T.pot = {}
+		local potRows = 0
+		local pt = _DataService:GetTable("GearPotTable")
+		if pt ~= nil then
+			for i = 1, pt:GetRowCount() do
+				local slot = pt:GetCell(i, "Slot")
+				local id = pt:GetCell(i, "OptId")
+				if slot ~= nil and slot ~= "" and id ~= nil and id ~= "" then
+					if self._T.pot[slot] == nil then self._T.pot[slot] = {} end
+					table.insert(self._T.pot[slot], {
+						id = id, w = tonumber(pt:GetCell(i, "Weight")) or 0,
+						vals = { tonumber(pt:GetCell(i, "R")) or 0, tonumber(pt:GetCell(i, "E")) or 0, tonumber(pt:GetCell(i, "U")) or 0, tonumber(pt:GetCell(i, "L")) or 0 },
+						label = pt:GetCell(i, "Label") or id,
+					})
+					potRows = potRows + 1
+				end
+			end
+		else
+			log_warning("[VRF] gear GearPotTable missing")
+		end
+		self._T.cfg = {}
+		local cfgRows = 0
+		local cf = _DataService:GetTable("GearConfig")
+		if cf ~= nil then
+			for i = 1, cf:GetRowCount() do
+				local k = cf:GetCell(i, "Key")
+				if k ~= nil and k ~= "" then
+					self._T.cfg[k] = tonumber(cf:GetCell(i, "Value")) or 0
+					cfgRows = cfgRows + 1
+				end
+			end
+		else
+			log_warning("[VRF] gear GearConfig missing")
+		end
+		-- 금색 메소 강화 비용 (현재 단계 → 다음 단계 1회 시도 비용)
+		self._T.costs = {}
+		local costRows = 0
+		local gc = _DataService:GetTable("GearCostTable")
+		if gc ~= nil then
+			for i = 1, gc:GetRowCount() do
+				local lv = tonumber(gc:GetCell(i, "Level"))
+				if lv ~= nil then
+					self._T.costs[math.floor(lv)] = math.max(0, math.floor(tonumber(gc:GetCell(i, "Meso")) or 0))
+					costRows = costRows + 1
+				end
+			end
+		else
+			log_warning("[VRF] gear GearCostTable missing")
+		end
+		local gradeRows = 0
+		for _, _g in pairs(self._T.grades) do gradeRows = gradeRows + 1 end
+		log("[VRF] gear tables parts=" .. table.concat(self._T.parts, ",") .. " grade=" .. tostring(gradeRows) .. " cube=" .. tostring(#self._T.cubes) .. " pot=" .. tostring(potRows) .. " cfg=" .. tostring(cfgRows) .. " cost=" .. tostring(costRows))
+	end
+
+	method void EnsureTables()
+		-- 표가 아직 없으면 읽는다 (클라이언트용).
+		if self._T.parts == nil then self:LoadTables() end
+	end
+
+	method number Cfg(string key, number fallback)
+		-- GearConfig 상수.
+		self:EnsureTables()
+		local v = self._T.cfg[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	method integer SlotCount()
+		-- 편성 칸 수.
+		return math.max(1, math.floor(self:Cfg("PartySlots", 3)))
+	end
+
+	method integer PotLines()
+		-- 잠재능력 줄 수.
+		return math.max(1, math.floor(self:Cfg("PotLines", 3)))
+	end
+
+	method table Parts()
+		-- 부위 목록 (표 순서, 신발 제외).
+		self:EnsureTables()
+		return self._T.parts
+	end
+
+	method string PartName(string part)
+		-- 부위 표시 이름.
+		self:EnsureTables()
+		return self._T.partNames[part] or part
+	end
+
+	method any GradeInfo(integer grade)
+		-- 등급 정보 { name, color, up, ceil, prime } (없으면 nil).
+		self:EnsureTables()
+		return self._T.grades[grade]
+	end
+
+	method any CubeInfo(string kind)
+		-- 큐브 표 행 (없으면 nil).
+		self:EnsureTables()
+		return self._T.cubeMap[kind]
+	end
+
+	method table CubeList()
+		-- 큐브 표 행 목록 (표 순서).
+		self:EnsureTables()
+		return self._T.cubes
+	end
+
+	-- ───────────────────────── 순수 계산 (양쪽 공용) ─────────────────────────
+
+	method table Split(string s, string sep)
+		-- 구분자로 자른다 (string.gsub 사용 금지). 빈 조각도 유지.
+		local out = {}
+		if s == nil or s == "" then return out end
+		local start = 1
+		while true do
+			local a, b = string.find(s, sep, start, true)
+			if a == nil then
+				table.insert(out, string.sub(s, start))
+				break
+			end
+			table.insert(out, string.sub(s, start, a - 1))
+			start = b + 1
+		end
+		return out
+	end
+
+	method integer ToInt(any x)
+		-- 정수로 바꾸고 음수는 0.
+		local n = math.floor(tonumber(x) or 0)
+		if n < 0 then n = 0 end
+		return n
+	end
+
+	method string NumStr(number n)
+		-- 소수 둘째 자리까지, 정수면 소수점 없이.
+		local r = math.floor(n * 100 + 0.5) / 100
+		if r == math.floor(r) then return tostring(math.floor(r)) end
+		return tostring(r)
+	end
+
+	method table ParseLines(string s)
+		-- "AtkPct@2,Crit@1" → { {id, g}, ... }
+		local out = {}
+		for _, part in ipairs(self:Split(s, ",")) do
+			local at, _ = string.find(part, "@", 1, true)
+			if at ~= nil then
+				table.insert(out, { id = string.sub(part, 1, at - 1), g = math.max(1, self:ToInt(string.sub(part, at + 1))) })
+			elseif part ~= "" then
+				table.insert(out, { id = part, g = 1 })
+			end
+		end
+		return out
+	end
+
+	method string EncodeLines(table lines)
+		-- { {id, g}, ... } → "AtkPct@2,Crit@1"
+		local parts = {}
+		for _, l in ipairs(lines or {}) do table.insert(parts, l.id .. "@" .. tostring(math.floor(l.g))) end
+		return table.concat(parts, ",")
+	end
+
+	method any ParseKey(string key)
+		-- "2/Weapon" → { no = 2, part = "Weapon" } (형식이 틀리면 nil).
+		local sl, _ = string.find(key, "/", 1, true)
+		if sl == nil then return nil end
+		return { no = self:ToInt(string.sub(key, 1, sl - 1)), part = string.sub(key, sl + 1) }
+	end
+
+	method table ParseGear(string data)
+		-- GearData 문자열 → { [칸] = { [부위] = { lv, bonus, grade, cnt, lines } } }
+		local out = {}
+		for _, entry in ipairs(self:Split(data, "|")) do
+			local f = self:Split(entry, ":")
+			local k = nil
+			if #f >= 6 then k = self:ParseKey(f[1]) end
+			if k ~= nil then
+				if out[k.no] == nil then out[k.no] = {} end
+				out[k.no][k.part] = { lv = self:ToInt(f[2]), bonus = math.max(0, tonumber(f[3]) or 0), grade = math.max(1, self:ToInt(f[4])), cnt = self:ToInt(f[5]), lines = self:ParseLines(f[6]) }
+			end
+		end
+		return out
+	end
+
+	method table ParsePend(string data)
+		-- PendData 문자열 → { ["칸/부위"] = { kind, grade, cnt, cands = { 줄목록, ... } } }
+		local out = {}
+		for _, entry in ipairs(self:Split(data, "|")) do
+			local f = self:Split(entry, ":")
+			if #f >= 5 and self:ParseKey(f[1]) ~= nil then
+				local cands = {}
+				for _, c in ipairs(self:Split(f[5], "~")) do table.insert(cands, self:ParseLines(c)) end
+				out[f[1]] = { kind = f[2], grade = math.max(1, self:ToInt(f[3])), cnt = self:ToInt(f[4]), cands = cands }
+			end
+		end
+		return out
+	end
+
+	method table ParseScrolls(string data)
+		-- ScrollData 문자열 → { ["부위_단계"] = 장수 }
+		local out = {}
+		for _, entry in ipairs(self:Split(data, ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and f[1] ~= "" then out[f[1]] = self:ToInt(f[2]) end
+		end
+		return out
+	end
+
+	method table ParseCubes(string data)
+		-- CubeData 문자열 → { [종류] = 개수 }
+		return self:ParseScrolls(data)
+	end
+
+	method number LineValue(string part, string id, integer g)
+		-- 그 부위 옵션의 줄 등급 수치 (모르는 옵션은 0).
+		self:EnsureTables()
+		for _, row in ipairs(self._T.pot[part] or {}) do
+			if row.id == id then return row.vals[math.max(1, math.min(4, g))] or 0 end
+		end
+		return 0
+	end
+
+	method string LineLabel(string part, string id, integer g)
+		-- "공격력 +6%" 같은 줄 글자 ({v} 치환, string.gsub 금지).
+		self:EnsureTables()
+		local label = id .. " {v}"
+		for _, row in ipairs(self._T.pot[part] or {}) do
+			if row.id == id then label = row.label end
+		end
+		local v = self:NumStr(self:LineValue(part, id, g))
+		local a, b = string.find(label, "{v}", 1, true)
+		if a == nil then return label end
+		return string.sub(label, 1, a - 1) .. v .. string.sub(label, b + 1)
+	end
+
+	method table PotSum(string gearData, integer slotNo)
+		-- 그 칸 5부위 잠재능력 합계 { [효과] = 합 } (GearData 문자열 기준, 양쪽 공용).
+		local out = {}
+		local slot = self:ParseGear(gearData)[slotNo] or {}
+		for part, rec in pairs(slot) do
+			for _, l in ipairs(rec.lines) do
+				local v = self:LineValue(part, l.id, l.g)
+				if v ~= 0 then out[l.id] = (out[l.id] or 0) + v end
+			end
+		end
+		return out
+	end
+
+	method integer ScrollCost(integer level)
+		-- 그 단계에서 강화 1회 시도에 드는 금색 메소 (GearCostTable, 없으면 마지막 행 값).
+		self:EnsureTables()
+		local c = self._T.costs[level]
+		if c ~= nil then return c end
+		local best = 0
+		local bestLv = -1
+		for lv, v in pairs(self._T.costs) do
+			if lv <= level and lv > bestLv then
+				bestLv = lv
+				best = v
+			end
+		end
+		return best
+	end
+
+	method number ScrollBonus(integer tier)
+		-- 공용 주문서 단계별 확률 보정(%p): 0 = 주문서 없음, 1 하급 · 2 중급 · 3 상급 (GearConfig ScrollBonus1~3).
+		if tier == 1 then return self:Cfg("ScrollBonus1", 5) end
+		if tier == 2 then return self:Cfg("ScrollBonus2", 10) end
+		if tier == 3 then return self:Cfg("ScrollBonus3", 20) end
+		return 0
+	end
+
+	method number ScrollFinalRate(integer level, integer tier, number bonus)
+		-- 최종 성공 확률 = min(100, 기본 확률 + 주문서 보정 + 실패 누적 추가 확률).
+		return math.min(100, self:SlotBaseRate(level) + self:ScrollBonus(tier) + bonus)
+	end
+
+	method table ParseUScrolls(string data)
+		-- UScrollData "1:3,2:0,3:1" → { [1] = 3, [2] = 0, [3] = 1 }
+		local out = { 0, 0, 0 }
+		for _, entry in ipairs(self:Split(data, ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 then
+				local t = self:ToInt(f[1])
+				if t >= 1 and t <= 3 then out[t] = self:ToInt(f[2]) end
+			end
+		end
+		return out
+	end
+
+	method number SlotBaseRate(integer level)
+		-- 그 단계에서 효율 1배 주문서 1장의 성공 확률.
+		self:EnsureTables()
+		local rate = 0
+		for _, r in ipairs(self._T.slotRates) do
+			if level >= r.min then rate = r.rate end
+		end
+		return rate
+	end
+
+	-- ───────────────────────── 잠재능력 굴림 (일반형) ─────────────────────────
+
+	method table NewRule()
+		-- 칸을 처음 만들 때 쓰는 규칙 (상승 없음, 레드 줄 표, 잠금 없음, 후보 1개, 즉시 적용).
+		return { kind = "N", up = "None", prime = "Red", ceilPt = 0, lock = 0, choices = 1, pending = false }
+	end
+
+	method any CubeRule(string kind)
+		-- GearCubeTable 행 → 굴림 규칙 (모르는 종류면 nil).
+		local c = self:CubeInfo(kind)
+		if c == nil then return nil end
+		return { kind = c.kind, up = c.up, prime = c.prime, ceilPt = c.ceilPt, lock = c.lock, choices = c.choices, pending = c.pending }
+	end
+
+	method string PickOption(string part)
+		-- 그 부위 옵션 풀에서 가중 무작위로 옵션 Id 하나.
+		self:EnsureTables()
+		local rows = self._T.pot[part] or {}
+		local total = 0
+		for _, r in ipairs(rows) do total = total + r.w end
+		if total <= 0 then
+			if #rows > 0 then return rows[1].id end
+			return "AtkPct"
+		end
+		local x = _UtilLogic:RandomDouble() * total
+		for _, r in ipairs(rows) do
+			x = x - r.w
+			if x < 0 then return r.id end
+		end
+		return rows[#rows].id
+	end
+
+	method table RollPot(string part, integer grade, integer cnt, table curLines, table rule)
+		-- 일반형 잠재 굴림. rule = { up, prime, ceilPt, lock, choices }. 반환 { grade, cnt, up, ceil, cands = { 줄목록, ... } }.
+		-- 1) 등급 상승: up ~= None, 잠금 없음, 최고 등급 미만일 때 천장 점수 += ceilPt, 확률 또는 천장이면 +1 등급·점수 0.
+		-- 2) 후보: 앞 lock 줄은 현재 줄 그대로, 나머지 줄은 줄 등급(1번째 = 장비 등급, 2·3번째 = Prime 확률로 장비 등급 아니면 한 등급 아래)과 가중 무작위 옵션.
+		self:EnsureTables()
+		local res = { grade = grade, cnt = cnt, up = false, ceil = false, cands = {} }
+		local lock = math.max(0, math.floor(rule.lock or 0))
+		if rule.up ~= "None" and lock == 0 and grade < self._T.maxGrade then
+			local gi = self._T.grades[grade]
+			res.cnt = cnt + math.floor(rule.ceilPt or 0)
+			if gi ~= nil then
+				local chance = gi.up[rule.up] or 0
+				local hit = _UtilLogic:RandomDouble() * 100 < chance
+				if not hit and gi.ceil > 0 and (rule.ceilPt or 0) > 0 and res.cnt >= gi.ceil then
+					hit = true
+					res.ceil = true
+				end
+				if hit then
+					res.grade = grade + 1
+					res.cnt = 0
+					res.up = true
+				end
+			end
+		end
+		local g = res.grade
+		local primeRate = 0
+		local gi2 = self._T.grades[g]
+		if gi2 ~= nil then primeRate = gi2.prime[rule.prime or "Red"] or 0 end
+		local n = self:PotLines()
+		for c = 1, math.max(1, math.floor(rule.choices or 1)) do
+			local lines = {}
+			for i = 1, n do
+				local keep = nil
+				if i <= lock and curLines ~= nil then keep = curLines[i] end
+				if keep ~= nil then
+					table.insert(lines, { id = keep.id, g = keep.g })
+				else
+					local lg = g
+					if i > 1 and g > 1 then
+						if not (_UtilLogic:RandomDouble() * 100 < primeRate) then lg = g - 1 end
+					end
+					table.insert(lines, { id = self:PickOption(part), g = lg })
+				end
+			end
+			table.insert(res.cands, lines)
+		end
+		return res
+	end
+
+	@ExecSpace("ServerOnly")
+	method table MakeCell(string part, integer lv, number bonus)
+		-- 새 칸(부위 지정): 단계·추가확률 + 레어 + 3줄 새로 굴림.
+		local r = self:RollPot(part, 1, 0, {}, self:NewRule())
+		return { lv = lv, bonus = bonus, grade = 1, cnt = 0, lines = r.cands[1] }
+	end
+
+	-- ───────────────────────── 불러오기·이전·저장 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void ResetState()
+		-- 서버 상태를 빈 값으로.
+		self._T.gear = {}
+		self._T.pend = {}
+		self._T.cubeCnt = {}
+		self._T.scrolls = {}
+		self._T.unknownGear = {}
+		self._T.unknownPend = {}
+		self._T.unknownCubes = {}
+		self._T.unknownScrolls = {}
+		self._T.extra = {}
+		self._T.extraKeys = {}
+		self._T.mig = false
+		self._T.gift = false
+		self._T.bf = 0
+		self._T.bs = {}
+		self._T.gold = 0
+		self._T.us = { 0, 0, 0 }
+		self._T.usm = false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MigrateScrolls()
+		-- 처음 1회: 부위별·단계별 주문서 보유(sc)를 같은 단계 공용 주문서(us)로 합산하고 부위별 보유는 0으로 비운다. usm=1로 다시 하지 않는다.
+		local moved = { 0, 0, 0 }
+		for key, n in pairs(self._T.scrolls or {}) do
+			local us, _ = string.find(key, "_", 1, true)
+			if us ~= nil and n > 0 then
+				local tier = self:ToInt(string.sub(key, us + 1))
+				if tier >= 1 and tier <= 3 then
+					self._T.us[tier] = (self._T.us[tier] or 0) + n
+					moved[tier] = moved[tier] + n
+				end
+			end
+		end
+		self._T.scrolls = {}
+		self._T.usm = true
+		log("[VRF] gear scroll merge low+" .. tostring(moved[1]) .. " mid+" .. tostring(moved[2]) .. " high+" .. tostring(moved[3]) .. " have=" .. self:EncodeUScrolls())
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeUScrolls()
+		-- 공용 주문서 보유 "1:n,2:n,3:n".
+		local us = self._T.us or { 0, 0, 0 }
+		return "1:" .. tostring(math.floor(us[1] or 0)) .. ",2:" .. tostring(math.floor(us[2] or 0)) .. ",3:" .. tostring(math.floor(us[3] or 0))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void FillMissing()
+		-- 표에 있는데 저장에 없는 칸은 단계 0 + 레어 3줄로 만든다. 줄이 비면 다시 굴린다.
+		for no = 1, self:SlotCount() do
+			if self._T.gear[no] == nil then self._T.gear[no] = {} end
+			for _, part in ipairs(self._T.parts) do
+				local c = self._T.gear[no][part]
+				if c == nil then
+					self._T.gear[no][part] = self:MakeCell(part, 0, 0)
+				elseif #c.lines == 0 then
+					c.lines = self:MakeCell(part, 0, 0).lines
+				end
+			end
+		end
+		for _, cb in ipairs(self._T.cubes) do
+			if self._T.cubeCnt[cb.kind] == nil then self._T.cubeCnt[cb.kind] = 0 end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadGear()
+		-- OrbisGearV1을 불러온다. 없거나 이전 전이면 OrbisSlot을 읽어 1회 이전. 실패하면 재시도하며 그동안 저장하지 않는다.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.GearKey)
+		local needSave = false
+		if code == 0 and raw ~= nil and raw ~= "" then
+			self:Decode(raw)
+			if not self._T.mig then
+				if not self:Migrate() then return end
+				needSave = true
+			end
+		elseif code == 1000002 or (code == 0 and (raw == nil or raw == "")) then
+			self:ResetState()
+			if not self:Migrate() then return end
+			needSave = true
+		else
+			log_warning("[VRF] gear load failed code=" .. tostring(code))
+			self.GearRetryTimer = self.LoadRetryDelay
+			self.GearLoaded = false
+			return
+		end
+		if not self._T.usm then
+			self:MigrateScrolls()
+			needSave = true
+		end
+		self:FillMissing()
+		self.GearLoaded = true
+		self:SyncGear()
+		if needSave then self:SaveGear() end
+		log("[VRF] gear loaded mig=" .. tostring(self._T.mig) .. " cube=" .. self.CubeData .. " pend=" .. self.PendData .. " gold=" .. tostring(self.GoldMeso) .. " us=" .. self.UScrollData)
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Migrate()
+		-- 옛 OrbisSlot(읽기만)을 세 칸 모두에 복사. 신발 단계 → 큐브, 신발 주문서 → 5부위 돌려 주기, 첫 지급. 읽기 실패면 false(재시도).
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.OldSlotKey)
+		local t = {}
+		if code == 0 and raw ~= nil and raw ~= "" then
+			t = _HttpService:JSONDecode(raw) or {}
+		elseif code ~= 0 and code ~= 1000002 then
+			log_warning("[VRF] gear old slot load failed code=" .. tostring(code))
+			self.GearRetryTimer = self.LoadRetryDelay
+			self.GearLoaded = false
+			return false
+		end
+		local lv = t["lv"] or {}
+		local bonus = t["b"] or {}
+		local sc = t["s"] or {}
+		local maxLv = math.floor(self:Cfg("ScrollMaxLevel", 30))
+		local lvText = {}
+		self._T.gear = {}
+		for no = 1, self:SlotCount() do
+			self._T.gear[no] = {}
+			for _, part in ipairs(self._T.parts) do
+				local l = math.max(0, math.min(maxLv, math.floor(tonumber(lv[part]) or 0)))
+				local b = math.max(0, tonumber(bonus[part]) or 0)
+				self._T.gear[no][part] = self:MakeCell(part, l, b)
+			end
+		end
+		for _, part in ipairs(self._T.parts) do
+			table.insert(lvText, part .. ":" .. tostring(self._T.gear[1][part].lv))
+			for _, tier in ipairs(self._T.scrollTiers) do
+				local key = part .. "_" .. tostring(tier)
+				self._T.scrolls[key] = (self._T.scrolls[key] or 0) + math.max(0, math.floor(tonumber(sc[key]) or 0))
+			end
+		end
+		-- 신발 주문서: 같은 단계 주문서를 부위 순서대로 1장씩 돌아가며
+		local shoesScrolls = 0
+		for _, tier in ipairs(self._T.scrollTiers) do
+			local n = math.max(0, math.floor(tonumber(sc["Shoes_" .. tostring(tier)]) or 0))
+			shoesScrolls = shoesScrolls + n
+			for i = 1, n do
+				local part = self._T.parts[((i - 1) % #self._T.parts) + 1]
+				local key = part .. "_" .. tostring(tier)
+				self._T.scrolls[key] = (self._T.scrolls[key] or 0) + 1
+			end
+		end
+		-- 신발 단계 → 레드·블랙
+		local shoesLv = math.max(0, math.min(maxLv, math.floor(tonumber(lv["Shoes"]) or 0)))
+		local red = shoesLv * math.floor(self:Cfg("ShoesLvToRed", 2))
+		local black = shoesLv // math.max(1, math.floor(self:Cfg("ShoesLvPerBlack", 5)))
+		self._T.cubeCnt["R"] = (self._T.cubeCnt["R"] or 0) + red
+		self._T.cubeCnt["B"] = (self._T.cubeCnt["B"] or 0) + black
+		if not self._T.gift then
+			self._T.cubeCnt["F"] = (self._T.cubeCnt["F"] or 0) + math.floor(self:Cfg("StartCubeFree", 30))
+			self._T.cubeCnt["R"] = (self._T.cubeCnt["R"] or 0) + math.floor(self:Cfg("StartCubeRed", 20))
+			self._T.cubeCnt["B"] = (self._T.cubeCnt["B"] or 0) + math.floor(self:Cfg("StartCubeBlack", 3))
+			self._T.cubeCnt["P"] = (self._T.cubeCnt["P"] or 0) + math.floor(self:Cfg("StartCubePlatinum", 1))
+			self._T.gift = true
+		end
+		self._T.mig = true
+		self._T.pend = {}
+		self:FillMissing()
+		local scrollTotal = 0
+		for _, v in pairs(self._T.scrolls) do scrollTotal = scrollTotal + v end
+		log("[VRF] gear migrated slots=" .. tostring(self:SlotCount()) .. " oldCode=" .. tostring(code) .. " lv=" .. table.concat(lvText, ",") .. " shoesLv=" .. tostring(shoesLv)
+			.. " shoesScrolls=" .. tostring(shoesScrolls) .. " cube=" .. self:EncodeCubes(false) .. " scrolls=" .. tostring(scrollTotal))
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Decode(string raw)
+		-- 저장 문자열을 읽는다. 모르는 키·칸·큐브·주문서는 원문 보관. 읽는 동안(상태가 비어 있는 동안) 큐브 보상 확인을 멈춘다.
+		self._T.decoding = true
+		self:ResetState()
+		local kv = {}
+		for _, part in ipairs(self:Split(raw, ";")) do
+			local eq, _ = string.find(part, "=", 1, true)
+			if eq ~= nil then
+				local k = string.sub(part, 1, eq - 1)
+				local v = string.sub(part, eq + 1)
+				if k == "v" or k == "mig" or k == "gift" or k == "cube" or k == "sc" or k == "bf" or k == "bs" or k == "g" or k == "p" or k == "gm" or k == "us" or k == "usm" then
+					kv[k] = v
+				elseif k ~= "" then
+					if self._T.extra[k] == nil then table.insert(self._T.extraKeys, k) end
+					self._T.extra[k] = v
+				end
+			end
+		end
+		self._T.mig = self:ToInt(kv["mig"]) == 1
+		self._T.gift = self:ToInt(kv["gift"]) == 1
+		self._T.usm = self:ToInt(kv["usm"]) == 1
+		self._T.gold = self:ToInt(kv["gm"])
+		self._T.us = self:ParseUScrolls(kv["us"] or "")
+		for _, entry in ipairs(self:Split(kv["cube"] or "", ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and f[1] ~= "" then
+				if self._T.cubeMap[f[1]] ~= nil then self._T.cubeCnt[f[1]] = self:ToInt(f[2]) else table.insert(self._T.unknownCubes, entry) end
+			end
+		end
+		for _, entry in ipairs(self:Split(kv["sc"] or "", ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 and f[1] ~= "" then
+				local us, _ = string.find(f[1], "_", 1, true)
+				local part = ""
+				if us ~= nil then part = string.sub(f[1], 1, us - 1) end
+				if self._T.partSet[part] then self._T.scrolls[f[1]] = self:ToInt(f[2]) else table.insert(self._T.unknownScrolls, entry) end
+			end
+		end
+		self._T.bf = self:ToInt(kv["bf"])
+		for _, sec in ipairs(self:Split(kv["bs"] or "", ",")) do
+			local n = self:ToInt(sec)
+			if n > 0 then self._T.bs[n] = true end
+		end
+		local slots = self:SlotCount()
+		for _, entry in ipairs(self:Split(kv["g"] or "", "|")) do
+			local f = self:Split(entry, ":")
+			local k = nil
+			if #f >= 6 then k = self:ParseKey(f[1]) end
+			if k ~= nil and k.no >= 1 and k.no <= slots and self._T.partSet[k.part] then
+				if self._T.gear[k.no] == nil then self._T.gear[k.no] = {} end
+				local maxLv = math.floor(self:Cfg("ScrollMaxLevel", 30))
+				self._T.gear[k.no][k.part] = {
+					lv = math.min(maxLv, self:ToInt(f[2])), bonus = math.max(0, tonumber(f[3]) or 0),
+					grade = math.max(1, math.min(self._T.maxGrade, self:ToInt(f[4]))), cnt = self:ToInt(f[5]), lines = self:ParseLines(f[6]),
+				}
+			elseif entry ~= "" then
+				table.insert(self._T.unknownGear, entry)
+			end
+		end
+		for _, entry in ipairs(self:Split(kv["p"] or "", "|")) do
+			local f = self:Split(entry, ":")
+			local k = nil
+			if #f >= 5 then k = self:ParseKey(f[1]) end
+			if k ~= nil and k.no >= 1 and k.no <= slots and self._T.partSet[k.part] and self._T.cubeMap[f[2]] ~= nil then
+				local cands = {}
+				for _, c in ipairs(self:Split(f[5], "~")) do table.insert(cands, self:ParseLines(c)) end
+				self._T.pend[f[1]] = { kind = f[2], grade = math.max(1, math.min(self._T.maxGrade, self:ToInt(f[3]))), cnt = self:ToInt(f[4]), cands = cands }
+			elseif entry ~= "" then
+				table.insert(self._T.unknownPend, entry)
+			end
+		end
+		self._T.decoding = false
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeCubes(boolean withUnknown)
+		-- 큐브 보유 "F:30,R:20,..." (표 순서, 저장용이면 모르는 종류 원문도).
+		local parts = {}
+		for _, c in ipairs(self._T.cubes or {}) do table.insert(parts, c.kind .. ":" .. tostring(math.floor((self._T.cubeCnt or {})[c.kind] or 0))) end
+		if withUnknown then
+			for _, e in ipairs(self._T.unknownCubes or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeScrolls(boolean all)
+		-- 주문서 보유. all = 0 포함 전체(동기화용), 아니면 0 생략 + 모르는 원문(저장용).
+		local parts = {}
+		for _, part in ipairs(self._T.parts or {}) do
+			for _, tier in ipairs(self._T.scrollTiers or {}) do
+				local key = part .. "_" .. tostring(tier)
+				local n = math.floor((self._T.scrolls or {})[key] or 0)
+				if all or n > 0 then table.insert(parts, key .. ":" .. tostring(n)) end
+			end
+		end
+		if not all then
+			for _, e in ipairs(self._T.unknownScrolls or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string CellStr(integer no, string part, table c)
+		-- 칸 하나 "칸/부위:단계:추가확률:등급:천장점수:줄..."
+		return tostring(no) .. "/" .. part .. ":" .. tostring(math.floor(c.lv)) .. ":" .. self:NumStr(c.bonus) .. ":" .. tostring(math.floor(c.grade)) .. ":" .. tostring(math.floor(c.cnt)) .. ":" .. self:EncodeLines(c.lines)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeGear(boolean withUnknown)
+		-- 칸 목록 (칸·부위 순서, 저장용이면 모르는 칸 원문도).
+		local parts = {}
+		for no = 1, self:SlotCount() do
+			for _, part in ipairs(self._T.parts or {}) do
+				local c = ((self._T.gear or {})[no] or {})[part]
+				if c ~= nil then table.insert(parts, self:CellStr(no, part, c)) end
+			end
+		end
+		if withUnknown then
+			for _, e in ipairs(self._T.unknownGear or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, "|")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodePend(boolean withUnknown)
+		-- 대기 결과 목록 (칸·부위 순서).
+		local parts = {}
+		for no = 1, self:SlotCount() do
+			for _, part in ipairs(self._T.parts or {}) do
+				local key = tostring(no) .. "/" .. part
+				local p = (self._T.pend or {})[key]
+				if p ~= nil then
+					local cs = {}
+					for _, c in ipairs(p.cands) do table.insert(cs, self:EncodeLines(c)) end
+					table.insert(parts, key .. ":" .. p.kind .. ":" .. tostring(math.floor(p.grade)) .. ":" .. tostring(math.floor(p.cnt)) .. ":" .. table.concat(cs, "~"))
+				end
+			end
+		end
+		if withUnknown then
+			for _, e in ipairs(self._T.unknownPend or {}) do table.insert(parts, e) end
+		end
+		return table.concat(parts, "|")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string EncodeSections()
+		-- 블랙 큐브를 받은 별 구간 "1,2,..." (오름차순).
+		local list = {}
+		for sec, on in pairs(self._T.bs or {}) do
+			if on then table.insert(list, math.floor(sec)) end
+		end
+		table.sort(list)
+		local parts = {}
+		for _, n in ipairs(list) do table.insert(parts, tostring(n)) end
+		return table.concat(parts, ",")
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 문자열 "v=1;mig=1;gift=1;cube=..;sc=..;bf=..;bs=..;g=..;p=..;gm=금색메소;us=공용주문서;usm=1" + 모르는 키.
+		local parts = { "v=1" }
+		if self._T.mig == true then table.insert(parts, "mig=1") end
+		if self._T.gift == true then table.insert(parts, "gift=1") end
+		table.insert(parts, "cube=" .. self:EncodeCubes(true))
+		table.insert(parts, "sc=" .. self:EncodeScrolls(false))
+		table.insert(parts, "bf=" .. tostring(math.floor(self._T.bf or 0)))
+		table.insert(parts, "bs=" .. self:EncodeSections())
+		table.insert(parts, "g=" .. self:EncodeGear(true))
+		local p = self:EncodePend(true)
+		if p ~= "" then table.insert(parts, "p=" .. p) end
+		table.insert(parts, "gm=" .. tostring(math.floor(self._T.gold or 0)))
+		table.insert(parts, "us=" .. self:EncodeUScrolls())
+		if self._T.usm == true then table.insert(parts, "usm=1") end
+		for _, k in ipairs(self._T.extraKeys or {}) do
+			table.insert(parts, k .. "=" .. tostring(self._T.extra[k]))
+		end
+		return table.concat(parts, ";")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncGear()
+		-- 서버 상태를 Sync 문자열로 다시 쓴다.
+		self.CubeData = self:EncodeCubes(false)
+		self.ScrollData = self:EncodeScrolls(true)
+		self.GearData = self:EncodeGear(false)
+		self.PendData = self:EncodePend(false)
+		self.GoldMeso = math.floor(self._T.gold or 0)
+		self.UScrollData = self:EncodeUScrolls()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SaveGear()
+		-- 비동기 저장. 불러오기 전에는 절대 저장하지 않는다.
+		if not self.GearLoaded then return end
+		self:SyncGear()
+		self.GearDirty = true
+		self._T.saveGen = (self._T.saveGen or 0) + 1
+		local gen = self._T.saveGen
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		ds:SetAsync(self.GearKey, self:Encode(), function(errorCode, key)
+			if errorCode == 0 then
+				if gen == self._T.saveGen then self.GearDirty = false end
+			else
+				log_warning("[VRF] gear save failed code=" .. tostring(errorCode))
+				self._T.saveFailed = true
+				self.GearRetryTimer = self.SaveRetryDelay
+			end
+		end)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Reply(string code, string result)
+		-- 처리 결과를 Sync 값에 쓰고 로그를 남긴 뒤 코드를 돌려준다.
+		self.GearSeq = self.GearSeq + 1
+		self.GearMsg = code
+		self.GearResult = result
+		log("[VRF] gear reply " .. code .. " " .. result)
+		return code
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean CanEdit(string fromUserId)
+		-- 본인 요청 + 불러오기 완료 + 로비에 있을 때만 (5-B 이후 요청 함수에서 사용).
+		if fromUserId ~= self.Entity.PlayerComponent.UserId or not self.GearLoaded then return false end
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	-- ───────────────────────── 로비 요청 ─────────────────────────
+
+	@ExecSpace("Server")
+	method void RequestScroll(integer slotNo, string part, integer tier)
+		-- 편성 칸 슬롯 강화 (로비 전용). 금색 메소를 내고, 공용 주문서는 선택(tier 0 = 없음, 1~3 = 하급·중급·상급 1장).
+		-- 확률 = min(100, 기본 확률 + 주문서 보정 + 실패 누적 추가 확률). 성공 +1단계·추가확률 0, 실패 시 추가확률 누적.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId or not self.GearLoaded then return end
+		self:DoScroll(slotNo, part, tier)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoScroll(integer slotNo, string part, integer tier)
+		-- 슬롯 강화 본체 (RequestScroll·서버 테스트 공용). 서버에서 단계·금색 메소·주문서 보유를 모두 검사한다. 결과 코드를 돌려준다.
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return self:Reply("err_lobby", "scroll") end
+		if slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] or tier < 0 or tier > 3 then
+			return self:Reply("err_arg", "scroll")
+		end
+		local c = self._T.gear[slotNo][part]
+		local maxLv = math.floor(self:Cfg("ScrollMaxLevel", 30))
+		if c.lv >= maxLv then return self:Reply("err_max", "scroll") end
+		local cost = self:ScrollCost(c.lv)
+		if (self._T.gold or 0) < cost then return self:Reply("err_meso", "scroll") end
+		if tier > 0 and (self._T.us[tier] or 0) < 1 then return self:Reply("err_scroll", "scroll") end
+		local rate = self:ScrollFinalRate(c.lv, tier, c.bonus)
+		self._T.gold = (self._T.gold or 0) - cost
+		if tier > 0 then self._T.us[tier] = (self._T.us[tier] or 0) - 1 end
+		local ok = _UtilLogic:RandomDouble() * 100 < rate
+		if ok then
+			c.lv = c.lv + 1
+			c.bonus = 0
+		else
+			c.bonus = c.bonus + math.floor(rate * self:Cfg("ScrollFailRatio", 0.1) * 100 + 0.5) / 100
+		end
+		self:SaveGear()
+		log("[VRF] gear scroll s" .. tostring(slotNo) .. " " .. part .. " tier=" .. tostring(tier) .. " rate=" .. self:NumStr(rate) .. " cost=" .. tostring(cost)
+			.. " ok=" .. tostring(ok) .. " lv=" .. tostring(c.lv) .. " bonus=" .. self:NumStr(c.bonus) .. " gold=" .. tostring(self._T.gold) .. " us=" .. self:EncodeUScrolls())
+		local okNum = 0
+		if ok then okNum = 1 end
+		return self:Reply("ok", "scroll:" .. tostring(slotNo) .. ":" .. part .. ":" .. tostring(okNum) .. ":" .. tostring(c.lv))
+	end
+
+	-- ───────────────────────── 큐브 (5-D) ─────────────────────────
+
+	@ExecSpace("Server")
+	method void RequestCube(integer slotNo, string part, string kind)
+		-- 큐브 사용 (로비 전용). 즉시 적용 큐브(무료·레드)는 바로 바뀌고, 대기 큐브(블랙·플래티넘)는 대기 결과로 저장된다.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId or not self.GearLoaded then return end
+		self:DoCube(slotNo, part, kind)
+	end
+
+	@ExecSpace("Server")
+	method void RequestCubeChoose(integer slotNo, string part, integer pick)
+		-- 대기 결과 선택 (로비 전용). pick 0 = 이전 유지, 1~k = 그 후보 적용.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId or not self.GearLoaded then return end
+		self:DoChoose(slotNo, part, pick)
+	end
+
+	@ExecSpace("Server")
+	method void RequestBuyCube(string kind, integer n)
+		-- 다이아로 큐브 구매 (로비 전용, n = 1 또는 10). 무료 큐브(DiaPrice 0)는 구매 불가.
+		if senderUserId ~= self.Entity.PlayerComponent.UserId or not self.GearLoaded then return end
+		self:DoBuyCube(kind, n)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoCube(integer slotNo, string part, string kind)
+		-- 큐브 사용 본체 (RequestCube·서버 테스트 공용). 결과 코드를 돌려준다.
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return self:Reply("err_lobby", "cube") end
+		local rule = self:CubeRule(kind)
+		if rule == nil or slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] then return self:Reply("err_arg", "cube") end
+		local key = tostring(slotNo) .. "/" .. part
+		if self._T.pend[key] ~= nil then return self:Reply("err_pending", "cube:" .. kind .. ":" .. key) end
+		local have = self._T.cubeCnt[kind] or 0
+		if have < 1 then return self:Reply("err_cube", "cube:" .. kind) end
+		self._T.cubeCnt[kind] = have - 1
+		local c = self._T.gear[slotNo][part]
+		local before = c.grade
+		local r = self:RollPot(part, c.grade, c.cnt, c.lines, rule)
+		local upNum = 0
+		if r.up then upNum = 1 end
+		local tag = "cube"
+		if rule.pending then
+			self._T.pend[key] = { kind = kind, grade = r.grade, cnt = r.cnt, cands = r.cands }
+			tag = "pend"
+		else
+			c.grade = r.grade
+			c.cnt = r.cnt
+			c.lines = r.cands[1]
+		end
+		self:SaveGear()
+		log("[VRF] gear " .. tag .. " " .. kind .. " s" .. tostring(slotNo) .. " " .. part .. " " .. tostring(before) .. "->" .. tostring(r.grade) .. " up=" .. tostring(r.up)
+			.. " ceil=" .. tostring(r.ceil) .. " cnt=" .. tostring(r.cnt) .. " lines=" .. self:EncodeLines(r.cands[1]) .. " left=" .. tostring(self._T.cubeCnt[kind]))
+		return self:Reply("ok", tag .. ":" .. kind .. ":" .. tostring(slotNo) .. ":" .. part .. ":" .. tostring(r.grade) .. ":" .. tostring(upNum))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoChoose(integer slotNo, string part, integer pick)
+		-- 대기 결과 선택 본체. 유지 시 천장 점수: 상승하지 않은 결과면 대기 결과의 점수, 상승한 결과를 버리면 이전 점수 + 그 큐브 CeilPt.
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return self:Reply("err_lobby", "choose") end
+		if slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] then return self:Reply("err_arg", "choose") end
+		local key = tostring(slotNo) .. "/" .. part
+		local p = self._T.pend[key]
+		if p == nil then return self:Reply("err_nopend", "choose:" .. key) end
+		if pick < 0 or pick > #p.cands then return self:Reply("err_arg", "choose") end
+		local c = self._T.gear[slotNo][part]
+		if pick == 0 then
+			if p.grade == c.grade then
+				c.cnt = p.cnt
+			else
+				local info = self:CubeInfo(p.kind)
+				local pt = 0
+				if info ~= nil then pt = info.ceilPt end
+				c.cnt = c.cnt + math.floor(pt)
+			end
+		else
+			c.grade = p.grade
+			c.cnt = p.cnt
+			c.lines = p.cands[pick]
+		end
+		self._T.pend[key] = nil
+		self:SaveGear()
+		log("[VRF] gear choose s" .. tostring(slotNo) .. " " .. part .. " pick=" .. tostring(pick) .. " kind=" .. p.kind .. " grade=" .. tostring(c.grade) .. " cnt=" .. tostring(c.cnt) .. " lines=" .. self:EncodeLines(c.lines))
+		return self:Reply("ok", "choose:" .. p.kind .. ":" .. tostring(slotNo) .. ":" .. part .. ":" .. tostring(pick) .. ":" .. tostring(c.grade))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoBuyCube(string kind, integer n)
+		-- 다이아 구매 본체. PlayerRoster:SpendDiamonds(가격 × n)가 성공할 때만 지급·저장.
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) or map.Name ~= self.LobbyMapName then return self:Reply("err_lobby", "buy") end
+		local info = self:CubeInfo(kind)
+		if info == nil or (n ~= 1 and n ~= 10) then return self:Reply("err_arg", "buy") end
+		if info.price <= 0 then return self:Reply("err_buy", "buy:" .. kind) end
+		---@type PlayerRoster
+		local roster = self.Entity:GetComponent("script.PlayerRoster")
+		if roster == nil then return self:Reply("err_arg", "buy") end
+		local cost = info.price * n
+		if not roster:SpendDiamonds(cost) then return self:Reply("err_dia", "buy:" .. kind .. ":" .. tostring(n)) end
+		self._T.cubeCnt[kind] = (self._T.cubeCnt[kind] or 0) + n
+		self:SaveGear()
+		log("[VRF] gear buy " .. kind .. " x" .. tostring(n) .. " cost=" .. tostring(cost) .. " have=" .. tostring(self._T.cubeCnt[kind]))
+		return self:Reply("ok", "buy:" .. kind .. ":" .. tostring(n))
+	end
+
+	-- ───────────────────────── 판에서 쓰는 지급·저장 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void AddScrolls(string part, integer tier, integer n)
+		-- 판 중 주문서 획득: 부위와 상관없이 같은 단계 공용 주문서로 보유만 늘리고 표시 (저장은 Flush). part는 옛 호출 호환용(무시).
+		if not self.GearLoaded or n <= 0 or tier < 1 or tier > 3 then return end
+		self._T.us[tier] = (self._T.us[tier] or 0) + n
+		self.UScrollData = self:EncodeUScrolls()
+		self.GearDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddGoldMeso(integer n)
+		-- 금색 메소 획득(스테이지 클리어): 보유만 늘리고 표시 (저장은 판 끝 Flush).
+		if not self.GearLoaded or n <= 0 then return end
+		self._T.gold = (self._T.gold or 0) + n
+		self.GoldMeso = math.floor(self._T.gold)
+		self.GearDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void AddCubes(string kind, integer n)
+		-- 큐브 획득: 보유만 늘리고 표시 (저장은 Flush).
+		if not self.GearLoaded or n <= 0 or self._T.cubeMap[kind] == nil then return end
+		self._T.cubeCnt[kind] = (self._T.cubeCnt[kind] or 0) + n
+		self.CubeData = self:EncodeCubes(false)
+		self.GearDirty = true
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Flush()
+		-- 바뀐 값이 있으면 저장.
+		if self.GearLoaded and self.GearDirty then self:SaveGear() end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void CheckCubeRewards()
+		-- 1초마다(맵 상관없이): PlayerEngrave를 읽기만 해서 층 첫 클리어(FirstClearBlackEvery 배수 층마다 블랙)·별 구간 마지막 상자(블랙·플래티넘) 큐브를 소급 지급한다.
+		if not self.GearLoaded or self._T.decoding == true then return end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil then return end
+		local changed = false
+		if eng.Loaded then
+			local cleared = math.floor(eng.ClearedFloor or 0)
+			local bf = math.floor(self._T.bf or 0)
+			if cleared > bf then
+				local every = math.max(1, math.floor(self:Cfg("FirstClearBlackEvery", 10)))
+				local n = 0
+				for f = bf + 1, cleared do
+					if f % every == 0 then n = n + 1 end
+				end
+				self._T.bf = cleared
+				if n > 0 then self._T.cubeCnt["B"] = (self._T.cubeCnt["B"] or 0) + n end
+				changed = true
+				log("[VRF] gear cube first clear floors " .. tostring(bf + 1) .. "-" .. tostring(cleared) .. " black+" .. tostring(n))
+			end
+		end
+		if eng.StarLoaded then
+			local bit = 1 << (math.max(1, math.floor(self:Cfg("SectionLastTier", 3))) - 1)
+			local black = math.floor(self:Cfg("SectionBlack", 3))
+			local plat = math.floor(self:Cfg("SectionPlatinum", 1))
+			for _, entry in ipairs(self:Split(eng.SectionData or "", ",")) do
+				local f = self:Split(entry, ":")
+				local sec = self:ToInt(f[1])
+				local bits = self:ToInt(f[2])
+				if sec > 0 and (bits & bit) ~= 0 and not self._T.bs[sec] then
+					self._T.bs[sec] = true
+					self._T.cubeCnt["B"] = (self._T.cubeCnt["B"] or 0) + black
+					self._T.cubeCnt["P"] = (self._T.cubeCnt["P"] or 0) + plat
+					changed = true
+					log("[VRF] gear cube section s=" .. tostring(sec) .. " black+" .. tostring(black) .. " plat+" .. tostring(plat))
+				end
+			end
+		end
+		if changed then self:SaveGear() end
+	end
+
+	-- ───────────────────────── 판 반영 (5-C) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method table MileData(table lvs)
+		-- 부위별 단계 → SlotMilestoneTable 적용 결과 { slots = { [부위] = { lv, enhRate, costDown, startEnh, doubleEnh } }, bonus = { [효과] = 합 } }.
+		local data = { slots = {}, bonus = {} }
+		for _, part in ipairs(self._T.parts) do data.slots[part] = { lv = lvs[part] or 0, enhRate = 0, costDown = 0, startEnh = 0, doubleEnh = 0 } end
+		for _, m in ipairs(self._T.slotMiles) do
+			local s = data.slots[m.slot]
+			if s ~= nil and s.lv >= m.level then
+				if m.type == "SlotEnhRate" then s.enhRate = s.enhRate + m.value
+				elseif m.type == "SlotCostDown" then s.costDown = s.costDown + m.value
+				elseif m.type == "SlotStartEnh" then s.startEnh = s.startEnh + m.value
+				elseif m.type == "SlotDoubleEnh" then s.doubleEnh = s.doubleEnh + m.value
+				else data.bonus[m.type] = (data.bonus[m.type] or 0) + m.value
+				end
+			end
+		end
+		return data
+	end
+
+	@ExecSpace("ServerOnly")
+	method table GearRunData()
+		-- 판 시작 시 반영할 칸별 장비 값. slots[칸] = { lv = {부위 = 단계}, bonus = {단계 고유 효과 합}, pot = {잠재능력 합} }, party = 1칸 기준 정비소 효과·단계 보너스.
+		local data = { slots = {}, party = { slots = {}, bonus = {} } }
+		if not self.GearLoaded then return data end
+		for no = 1, self:SlotCount() do
+			local lvs = {}
+			for _, part in ipairs(self._T.parts) do
+				local c = (self._T.gear[no] or {})[part]
+				lvs[part] = c ~= nil and c.lv or 0
+			end
+			local md = self:MileData(lvs)
+			data.slots[no] = { lv = lvs, bonus = md.bonus, pot = self:PotSum(self.GearData, no) }
+			if no == 1 then data.party = md end
+		end
+		return data
+	end
+
+	-- ───────────────────────── 테스트 전용 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void DebugGearSet(integer slotNo, string part, integer lv, integer grade)
+		-- 테스트: 칸 단계·등급 설정, 줄 다시 굴림, 추가확률·천장 0, 그 칸 대기 결과 삭제 후 저장.
+		if not self.GearLoaded or slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] then return end
+		local maxLv = math.floor(self:Cfg("ScrollMaxLevel", 30))
+		local g = math.max(1, math.min(self._T.maxGrade, grade))
+		local c = self:MakeCell(part, math.max(0, math.min(maxLv, lv)), 0)
+		local rule = self:NewRule()
+		local r = self:RollPot(part, g, 0, {}, rule)
+		c.grade = g
+		c.lines = r.cands[1]
+		self._T.gear[slotNo][part] = c
+		self._T.pend[tostring(slotNo) .. "/" .. part] = nil
+		self:SaveGear()
+		log("[VRF] gear debug set " .. self:CellStr(slotNo, part, c))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGearLines(integer slotNo, string part, string lines)
+		-- 테스트: 줄 고정 ("AtkPct@4,Crit@4,Crit@3"), 등급은 첫 줄 등급.
+		if not self.GearLoaded or slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] then return end
+		local ls = self:ParseLines(lines)
+		if #ls == 0 then return end
+		local c = self._T.gear[slotNo][part]
+		c.lines = ls
+		c.grade = math.max(1, math.min(self._T.maxGrade, ls[1].g))
+		self:SaveGear()
+		log("[VRF] gear debug lines " .. self:CellStr(slotNo, part, c))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGiveCubes(string kind, integer n)
+		-- 테스트: 큐브 지급(음수면 감소) 후 저장.
+		if not self.GearLoaded or self._T.cubeMap[kind] == nil then return end
+		self._T.cubeCnt[kind] = math.max(0, (self._T.cubeCnt[kind] or 0) + n)
+		self:SaveGear()
+		log("[VRF] gear debug cubes " .. self:EncodeCubes(false))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGiveScrolls(string part, integer tier, integer n)
+		-- 테스트: 공용 주문서 지급(음수면 감소) 후 저장. part는 무시.
+		if not self.GearLoaded or tier < 1 or tier > 3 then return end
+		self._T.us[tier] = math.max(0, (self._T.us[tier] or 0) + n)
+		self:SaveGear()
+		log("[VRF] gear debug scrolls tier=" .. tostring(tier) .. " +" .. tostring(n) .. " us=" .. self:EncodeUScrolls())
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGiveGold(integer n)
+		-- 테스트: 금색 메소 지급(음수면 감소, 0 미만 없음) 후 저장.
+		if not self.GearLoaded then return end
+		self._T.gold = math.max(0, (self._T.gold or 0) + n)
+		self:SaveGear()
+		log("[VRF] gear debug gold " .. tostring(n) .. " have=" .. tostring(self._T.gold))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugScrollMerge(string scrollText)
+		-- 테스트: 옛 부위별 주문서 보유("Weapon_1:2,Cap_3:1")를 넣고 usm을 지운 뒤 공용 합산 이전을 다시 실행해 저장 (이전 로그 확인용).
+		if not self.GearLoaded then return end
+		for _, entry in ipairs(self:Split(scrollText, ",")) do
+			local f = self:Split(entry, ":")
+			if #f >= 2 then self._T.scrolls[f[1]] = (self._T.scrolls[f[1]] or 0) + self:ToInt(f[2]) end
+		end
+		self._T.usm = false
+		self:MigrateScrolls()
+		self:SaveGear()
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DebugGearDump()
+		-- 테스트: 저장 문자열 출력.
+		local s = self:Encode()
+		log("[VRF] gear dump " .. s)
+		return s
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGearRestore(string raw)
+		-- 테스트: DebugGearDump로 받아 둔 저장 문자열을 그대로 되살려 저장 (테스트 전 값 복원용).
+		if not self.GearLoaded or raw == nil or raw == "" then return end
+		self:Decode(raw)
+		self:FillMissing()
+		self:SaveGear()
+		log("[VRF] gear debug restore ok=" .. tostring(self:Encode() == raw))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGearReset()
+		-- 테스트 전용: 새 계정처럼 상태를 비우고 옛 슬롯 이전·첫 지급을 다시 수행해 저장 (큐브가 다시 지급된다).
+		if not self.GearLoaded then return end
+		self:ResetState()
+		if not self:Migrate() then return end
+		self:MigrateScrolls()
+		self:FillMissing()
+		self:SaveGear()
+		log("[VRF] gear debug reset")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugRollOnce(integer slotNo, string part, string kind)
+		-- 테스트: 그 칸에 큐브 규칙으로 1회 굴린 결과만 로그 (저장·보유 변화 없음).
+		if not self.GearLoaded or slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] then return end
+		local rule = self:CubeRule(kind)
+		if rule == nil then log("[VRF] gear roll once unknown kind " .. kind) return end
+		local c = self._T.gear[slotNo][part]
+		local r = self:RollPot(part, c.grade, c.cnt, c.lines, rule)
+		local cs = {}
+		for _, cand in ipairs(r.cands) do table.insert(cs, self:EncodeLines(cand)) end
+		log("[VRF] gear roll once " .. kind .. " s" .. tostring(slotNo) .. " " .. part .. " " .. tostring(c.grade) .. "->" .. tostring(r.grade) .. " up=" .. tostring(r.up)
+			.. " ceil=" .. tostring(r.ceil) .. " cnt=" .. tostring(c.cnt) .. "->" .. tostring(r.cnt) .. " before=" .. self:EncodeLines(c.lines) .. " after=" .. table.concat(cs, "~")
+			.. " pending=" .. tostring(rule.pending) .. " lock=" .. tostring(rule.lock))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugRollSim(integer n, string part)
+		-- 테스트: 그 부위 옵션을 n회 뽑아 비율(%) 로그.
+		local cnt = {}
+		for i = 1, n do
+			local id = self:PickOption(part)
+			cnt[id] = (cnt[id] or 0) + 1
+		end
+		local parts = {}
+		for _, row in ipairs(self._T.pot[part] or {}) do
+			table.insert(parts, row.id .. "=" .. tostring(math.floor((cnt[row.id] or 0) * 1000 / math.max(1, n) + 0.5) / 10))
+		end
+		log("[VRF] gear roll sim " .. part .. " n=" .. tostring(n) .. " " .. table.concat(parts, ","))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugGearCeil(integer slotNo, string part, integer cnt)
+		-- 테스트: 칸의 천장 점수를 직접 설정 후 저장 (천장 확정 상승 확인용).
+		if not self.GearLoaded or slotNo < 1 or slotNo > self:SlotCount() or not self._T.partSet[part] then return end
+		local c = self._T.gear[slotNo][part]
+		c.cnt = math.max(0, cnt)
+		self:SaveGear()
+		log("[VRF] gear debug ceil " .. self:CellStr(slotNo, part, c))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugCubeSim(integer n, string kind, integer grade)
+		-- 테스트: 저장하지 않는 가상 무기 칸(그 등급·천장 0)에서 큐브를 n회 굴린다. 상승하면 다시 그 등급·점수 0으로 되돌려 실효 상승률(천장 포함)을 잰다.
+		self:EnsureTables()
+		local rule = self:CubeRule(kind)
+		if rule == nil then log("[VRF] cube sim unknown kind " .. kind) return end
+		local part = "Weapon"
+		local g0 = math.max(1, math.min(self._T.maxGrade, grade))
+		local cnt = 0
+		local lines = self:RollPot(part, g0, 0, {}, self:NewRule()).cands[1]
+		local ups, ceilHits, primeN, primeHit, kept = 0, 0, 0, 0, 0
+		for i = 1, math.max(1, n) do
+			local r = self:RollPot(part, g0, cnt, lines, rule)
+			local cand = r.cands[1]
+			if r.up then ups = ups + 1 end
+			if r.ceil then ceilHits = ceilHits + 1 end
+			if r.grade > 1 and cand[2] ~= nil then
+				primeN = primeN + 1
+				if cand[2].g == r.grade then primeHit = primeHit + 1 end
+			end
+			if cand[1] ~= nil and lines[1] ~= nil and cand[1].id == lines[1].id and cand[1].g == lines[1].g then kept = kept + 1 end
+			if r.up then cnt = 0 else cnt = r.cnt end
+		end
+		local function pct(a, b) return tostring(math.floor(a * 10000 / math.max(1, b) + 0.5) / 100) end
+		local gi = self._T.grades[g0]
+		local base = 0
+		local ceilAt = 0
+		if gi ~= nil then
+			base = gi.up[rule.up] or 0
+			ceilAt = gi.ceil
+		end
+		log("[VRF] cube sim kind=" .. kind .. " grade=" .. tostring(g0) .. " n=" .. tostring(n) .. " up=" .. pct(ups, n) .. "% (table " .. tostring(base) .. "%, ceil " .. tostring(ceilAt) .. "pt/" .. tostring(rule.ceilPt) .. ")"
+			.. " ceilHit=" .. tostring(ceilHits) .. " line2Prime=" .. pct(primeHit, primeN) .. "% line1Kept=" .. pct(kept, n) .. "%")
+	end
+end

@@ -48,6 +48,8 @@ script MainPanelLogic extends Logic
 
 	-- 가로 화면: 왼쪽 세로 탭 + 밀려나오는 패널, 하단 정보 바
 	property Entity sideTabsRoot = "78968938-e653-491e-af51-62db15224f47"
+	-- 왼쪽 세로 탭 비활성 (사용자 요청 2026-11-22: 일단 Disabled 이미지 + 입력 차단)
+	property boolean SideTabsDisabled = true
 	property Entity bottomBarRoot = "4ab4771e-72ad-49e8-b2b2-c9ea76400d03"
 	-- 오른쪽 아래 스킬 아이콘 슬롯 6칸 (Slot1~6, 각 칸: Icon / Cool / CoolText) — 히어로 장착 스킬과 쿨타임 표시
 	property Entity skillSlotsRoot = "7b98f946-4af2-4970-9fb6-c3395d5dead7"
@@ -119,7 +121,11 @@ script MainPanelLogic extends Logic
         -- 인게임 탭과 포기 버튼도 공통 UI 규칙을 사용한다.
         if isvalid(self.giveUpBtn) then _UIButtonLogic:UseTheme(self.giveUpBtn.Entity,"button") end
         for _,button in ipairs({self.tabInfo,self.tabTrait,self.tabStat,self.tabSkill}) do
-            if isvalid(button) then _UIButtonLogic:UseTheme(button.Entity,"button") end
+            if isvalid(button) then
+                _UIButtonLogic:UseTheme(button.Entity,"button")
+                -- 왼쪽 세로 탭은 당분간 비활성 (Disabled 이미지 + 입력 차단)
+                if self.SideTabsDisabled then _UIButtonLogic:SetDisabled(button.Entity,true) end
+            end
         end
     end
 
@@ -208,9 +214,10 @@ script MainPanelLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void SetupEquipRows()
 		-- 장비 테이블을 읽고, 부위별 줄(아이콘/이름/능력치/버튼)을 찾아 버튼을 연결한다.
-		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Shoes", "Cape" }
-		self._T.statLabel = { Weapon = { "공격력 +", "" }, Cap = { "체력 +", "" }, Coat = { "방어력 +", "" }, Glove = { "크리티컬 확률 +", "%" }, Shoes = { "크리티컬 데미지 +", "%" }, Cape = { "명중률 +", "%" } }
-		self._T.slotName = { Weapon = "무기", Cap = "투구", Coat = "옷", Glove = "장갑", Shoes = "신발", Cape = "망토" }
+		-- 5-C: 신발 제거 (치명타 데미지는 장갑 두 번째 능력치). 신발 줄은 끄고 망토 줄을 그 자리로 올린다
+		self._T.slots = { "Weapon", "Cap", "Coat", "Glove", "Cape" }
+		self._T.statLabel = { Weapon = { "공격력 +", "" }, Cap = { "체력 +", "" }, Coat = { "방어력 +", "" }, Glove = { "크리티컬 확률 +", "%" }, Cape = { "명중률 +", "%" } }
+		self._T.slotName = { Weapon = "무기", Cap = "투구", Coat = "갑옷", Glove = "장갑", Cape = "망토" }
 		self._T.equip = {}
 		self._T.jobEquip = {}
 		self._T.rows = {}
@@ -230,7 +237,7 @@ script MainPanelLogic extends Logic
 				elseif self._T.equip[slot] ~= nil then
 					self._T.equip[slot][tier] = {
 						name = ds:GetCell(i, "Name"), ruid = ds:GetCell(i, "ItemRUID"),
-						value = tonumber(ds:GetCell(i, "StatValue")) or 0, req = tonumber(ds:GetCell(i, "ReqLevel")) or 0,
+						value = tonumber(ds:GetCell(i, "StatValue")) or 0, value2 = tonumber(ds:GetCell(i, "Stat2Value")) or 0, req = tonumber(ds:GetCell(i, "ReqLevel")) or 0,
 					}
 				end
 			end
@@ -242,6 +249,14 @@ script MainPanelLogic extends Logic
 			for i = 1, slotDs:GetRowCount() do
 				self._T.unlockFloor[slotDs:GetCell(i, "Slot")] = tonumber(slotDs:GetCell(i, "UnlockBestFloor")) or 0
 			end
+		end
+		local shoesRow = _EntityService:GetEntityByPath(self.EquipRowPath .. "Shoes")
+		local capeRow = _EntityService:GetEntityByPath(self.EquipRowPath .. "Cape")
+		if isvalid(shoesRow) then
+			if isvalid(capeRow) and isvalid(shoesRow.UITransformComponent) and isvalid(capeRow.UITransformComponent) then
+				capeRow.UITransformComponent.anchoredPosition = shoesRow.UITransformComponent.anchoredPosition
+			end
+			shoesRow:SetEnable(false)
 		end
 		for _, slot in ipairs(self._T.slots) do
 			local base = self.EquipRowPath .. slot
@@ -458,7 +473,7 @@ script MainPanelLogic extends Logic
 		if jr == nil then return row end
 		local ruid = row.ruid
 		if jr.ruid ~= "" then ruid = jr.ruid end
-		return { name = jr.name, ruid = ruid, value = row.value, req = row.req }
+		return { name = jr.name, ruid = ruid, value = row.value, value2 = row.value2, req = row.req }
 	end
 
 	@ExecSpace("ClientOnly")
@@ -496,6 +511,8 @@ script MainPanelLogic extends Logic
 					local extra = ""
 					-- 무기: 기본 공격 속도 (1티어 1.0, 티어마다 +0.1)
 					if slot == "Weapon" then extra = "   공속 " .. string.format("%.1f", mgr.WeaponBaseSpeed + mgr.WeaponSpeedPerTier * (tier - 1)) end
+					-- 장갑: 치명타 확률 · 데미지 (예전 신발 값)
+					if slot == "Glove" then extra = " · 데미지 +" .. string.format("%.1f", (info.value2 or 0) * (1 + 0.1 * enh) * (1 + mgr.SlotStatStep * (mgr.SlotLevels[slot] or 0))) .. "%" end
 					row.stat.TextGUIRendererComponent.Text = "티어 " .. tostring(tier - 1) .. "   " .. fmt[1] .. vs .. fmt[2] .. extra
 				end
 				if isvalid(row.btn) then
@@ -521,6 +538,7 @@ script MainPanelLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void SelectTab(integer index)
 		-- 왼쪽 탭 클릭: 닫혀 있으면 그 탭으로 열고, 열린 탭을 다시 누르면 닫는다. 다른 탭이면 내용만 바꾼다.
+		if self.SideTabsDisabled then return end
 		if self._T.open and self.SelectedTab == index then
 			self:SetPanelOpen(false)
 		else

@@ -1,7 +1,9 @@
 @Logic
 script CharacterUILogic extends Logic
 
-	-- 로비 캐릭터 화면 (CharacterUI.ui): 왼쪽 직업 목록, 오른쪽 상세(미리보기·능력치·레벨업·전직), 위쪽 편성 3칸·재화.
+	-- 로비 캐릭터 화면 (CharacterUI.ui): 왼쪽 위 편성 칸 3개(차수 외형 아바타), 왼쪽 아래 직업 목록, 오른쪽 상세(능력치·레벨업·전직), 위쪽 재화.
+	-- 편성 변경: 편성 칸을 누르면 그 칸이 선택되고 나머지 두 칸 오른쪽 위에 누르기 표시가 깜박인다 → 그 칸을 누르면 두 칸이 자리를 바꾼다.
+	-- 목록에서 편성 밖(해금된) 직업을 누르면 세 칸 모두에 같은 표시 → 누른 칸의 직업과 교체. 칸끼리 자리 바꾸기는 칸 안에서만 한다.
 	-- 계산은 PlayerRoster의 실행 공간 지정 없는 함수(CharStat·PlanBooksFor·CapLevel 등)를 그대로 쓰고, 변경은 Request* 서버 요청으로만 한다.
 	property string RootPath = "/ui/CharacterUI/Root"
 	property string LobbyMapName = "Lobby"
@@ -14,8 +16,11 @@ script CharacterUILogic extends Logic
 	property Color BadColor = Color(0.78, 0.20, 0.20, 1)
 	-- 미리보기에서 두손 무기 대기 자세(stand2)를 쓰는 직업 (쉼표 구분)
 	property string PreviewStand2Jobs = "Hero"
-	-- 잠긴 직업 미리보기 아바타 밝기 (부위별 색)
-	property number PreviewLockedBrightness = 0.45
+	property string HintIdle = "칸을 누르면 다른 칸과 자리를 바꾸고, 편성 밖 직업을 누르면 칸에 넣을 수 있습니다"
+	-- 누르기 표시: 두 이미지(눌림·안 눌림)를 HintFlipTime초마다 번갈아 보여 준다
+	property string HintPressedRUID = "79819392249746f88952f3b2321f2f17"
+	property string HintIdleRUID = "3930c5d2e85b4bff8467aada64fda7f5"
+	property number HintFlipTime = 0.5
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -41,11 +46,18 @@ script CharacterUILogic extends Logic
 			_UIButtonLogic:UseTheme(card, "card")
 			self:Bind(card, function() self:OnJobCard(index) end)
 		end
+		self._T.partySel = 0
+		self._T.placeJob = ""
+		self._T.lockedSel = false
+		self._T.hintOn = { false, false, false }
+		self._T.hintPhase = false
+		self._T.hintClock = 0
+		self._T.slotKey = {}
 		for k = 1, 3 do
 			local slot = k
-			local b = self:E("Party" .. tostring(k))
-			_UIButtonLogic:UseTheme(b, "button")
-			self:Bind(b, function() self:OnParty(slot) end)
+			local b = self:E("Party/Slot" .. tostring(k))
+			_UIButtonLogic:UseTheme(b, "card")
+			self:Bind(b, function() self:OnPartySlot(slot) end)
 		end
 		local roles = { BtnLv1 = "button", BtnLvMax = "action", BtnPromote = "action", BtnPromoteCommon = "button", BtnUnlock = "action" }
 		for name, role in pairs(roles) do _UIButtonLogic:UseTheme(self:E("Detail/" .. name), role) end
@@ -80,6 +92,7 @@ script CharacterUILogic extends Logic
 			self:Close()
 			return
 		end
+		self:TickHints(delta)
 		if self._T.msgUntil ~= nil and self._T.clock >= self._T.msgUntil then
 			self._T.msgUntil = nil
 			self:SetText("Detail/Msg", "", nil)
@@ -113,6 +126,9 @@ script CharacterUILogic extends Logic
 		self._T.open = true
 		self._T.pendingAt = nil
 		self._T.msgUntil = nil
+		self._T.partySel = 0
+		self._T.placeJob = ""
+		self._T.lockedSel = false
 		self:SetText("Detail/Msg", "", nil)
 		local roster = self:Roster()
 		if roster ~= nil then self._T.lastSeq = roster.RosterSeq else self._T.lastSeq = -1 end
@@ -131,6 +147,8 @@ script CharacterUILogic extends Logic
 		local wasOpen = self._T.open
 		self._T.open = false
 		self._T.pendingAt = nil
+		self._T.partySel = 0
+		self._T.placeJob = ""
 		local root = _EntityService:GetEntityByPath(self.RootPath)
 		if isvalid(root) then root:SetEnable(false) end
 		if wasOpen then log("[VRF] charui close") end
@@ -178,23 +196,8 @@ script CharacterUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void LoadJobs()
-		-- 직업 목록(CharJobTable 순서)과 직업 아이콘(4차 주력기 스킬 아이콘)을 읽는다.
+		-- 직업 목록(CharJobTable 순서)과 직업 아이콘(CharJobTable.IconRUID 직업 초상)을 읽는다.
 		self._T.jobs = {}
-		local icons = {}
-		local ht = _DataService:GetTable("HeroSkillTable")
-		if ht ~= nil then
-			for i = 1, ht:GetRowCount() do
-				local id = ht:GetCell(i, "SkillId")
-				if id ~= nil and id ~= "" then icons[id] = ht:GetCell(i, "IconRUID") or "" end
-			end
-		end
-		local mainT4 = {}
-		local st = _DataService:GetTable("CharSlotTable")
-		if st ~= nil then
-			for i = 1, st:GetRowCount() do
-				if st:GetCell(i, "SlotKey") == "Main" then mainT4[st:GetCell(i, "JobId") or ""] = st:GetCell(i, "T4") or "" end
-			end
-		end
 		local jt = _DataService:GetTable("CharJobTable")
 		if jt == nil then return end
 		for i = 1, jt:GetRowCount() do
@@ -202,11 +205,12 @@ script CharacterUILogic extends Logic
 			if id ~= nil and id ~= "" then
 				table.insert(self._T.jobs, {
 					id = id, order = tonumber(jt:GetCell(i, "Order")) or i, group = jt:GetCell(i, "JobGroup") or "",
-					name4 = jt:GetCell(i, "Name4") or id, icon = icons[mainT4[id] or ""] or "",
+					name4 = jt:GetCell(i, "Name4") or id, icon = jt:GetCell(i, "IconRUID") or "",
 				})
 			end
 		end
 		table.sort(self._T.jobs, function(a, b) return a.order < b.order end)
+		log("[VRF] charui job icons " .. tostring(#self._T.jobs) .. " first=" .. tostring(self._T.jobs[1] and self._T.jobs[1].icon or ""))
 		if #self._T.jobs > self.MaxJobCards then log_warning("[VRF] charui jobs over " .. tostring(self.MaxJobCards) .. " — 앞 " .. tostring(self.MaxJobCards) .. "개만 표시") end
 	end
 
@@ -332,13 +336,7 @@ script CharacterUILogic extends Logic
 		local cards = roster:ParseJobCards(roster.JobCards)
 		local party = self:Party()
 		local busy = self._T.pendingAt ~= nil or not loaded
-		-- 위쪽 띠: 편성·재화
-		local names = {}
-		for k = 1, 3 do
-			local pj = self:JobById(party[k])
-			names[k] = tostring(k) .. " " .. ((pj ~= nil and pj.name4) or party[k])
-		end
-		self:SetText("PartyText", "편성  " .. names[1] .. " · " .. names[2] .. " · " .. names[3], nil)
+		-- 위쪽 띠: 재화
 		self:SetText("Currency", "다이아 " .. self:Comma(roster.Diamonds) .. " · 공용 카드 " .. tostring(roster.CommonCards), nil)
 		-- 직업 카드
 		for n = 1, self.MaxJobCards do
@@ -358,6 +356,8 @@ script CharacterUILogic extends Logic
 				local icon = self:E(cardRel .. "/Icon")
 				if isvalid(icon) then
 					icon.SpriteGUIRendererComponent.ImageRUID = DataRef(j.icon)
+					-- 직업 초상: 칸 안에서 비율 유지·가운데 (늘어나거나 잘리지 않게)
+					icon.SpriteGUIRendererComponent.PreserveSprite = PreserveSpriteType.AspectOnly
 					if c.unlocked then icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, 1) else icon.SpriteGUIRendererComponent.Color = Color(0.70, 0.70, 0.70, 1) end
 				end
 				self:SetShown(cardRel .. "/Lock", not c.unlocked)
@@ -370,12 +370,18 @@ script CharacterUILogic extends Logic
 				_UIButtonLogic:SetSelected(self:E(cardRel), j.id == self._T.sel)
 			end
 		end
-		-- 편성 버튼
-		local sc = self:CharOf(chars, self._T.sel)
+		-- 편성 칸: 차수 외형 아바타·직업 이름·Lv, 선택된 칸은 파란 테두리(Selected)
 		for k = 1, 3 do
-			local rel = "Party" .. tostring(k)
-			self:SetButton(rel, sc.unlocked and not busy)
-			_UIButtonLogic:SetSelected(self:E(rel), party[k] == self._T.sel)
+			self:RefreshPartySlot(roster, chars, k, party[k], busy)
+		end
+		if self._T.partySel > 0 then
+			self:SetText("List/Hint", tostring(self._T.partySel) .. "번 칸 선택됨 — 자리를 바꿀 칸을 누르세요 (같은 칸을 다시 누르면 취소)", self.TextColor)
+		elseif self._T.placeJob ~= "" then
+			self:SetText("List/Hint", roster:TierName(self._T.placeJob, self:CharOf(chars, self._T.placeJob).tier) .. " — 넣을 칸을 누르세요 (그 칸의 직업은 편성에서 빠집니다)", self.TextColor)
+		elseif self._T.lockedSel then
+			self:SetText("List/Hint", "잠긴 직업입니다 — 해금하면 편성할 수 있습니다", self.BadColor)
+		else
+			self:SetText("List/Hint", self.HintIdle, self.SubColor)
 		end
 		self:RefreshDetail(roster, chars, cards, busy)
 	end
@@ -396,7 +402,6 @@ script CharacterUILogic extends Logic
 		if tier >= maxTier then tierLabel = tierName end
 		self:SetText("Detail/Group", j.group .. " · " .. j.name4 .. " 계열", nil)
 		self:SetText("Detail/TierName", tierLabel, nil)
-		self:SetText("Detail/PreviewName", tierLabel, nil)
 		local atMax = tier >= maxTier and level >= roster:MaxLevel()
 		if atMax then
 			self:SetText("Detail/LevelText", "Lv." .. tostring(level) .. " (최고)", nil)
@@ -405,8 +410,8 @@ script CharacterUILogic extends Logic
 		end
 		-- 경험치 막대 (폭 < 24면 숨김: 슬라이스 경계 보호)
 		local need = roster:NeedExp(level)
-		local width = 840
-		if level < cap and need > 0 then width = math.floor(840 * c.exp / need) end
+		local width = 884
+		if level < cap and need > 0 then width = math.floor(884 * c.exp / need) end
 		local fill = self:E("Detail/ExpFill")
 		if isvalid(fill) then
 			fill.UITransformComponent.RectSize = Vector2(math.max(24, width), 28)
@@ -429,7 +434,7 @@ script CharacterUILogic extends Logic
 			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%", nil)
 		else
 			local pctNext = math.floor(roster:StatPct(tier + 1) + 0.5)
-			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%\n전직하면 +" .. tostring(pctNext) .. "%", nil)
+			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%  ·  전직하면 +" .. tostring(pctNext) .. "%", nil)
 		end
 		-- 경험의 서
 		local have = { roster.BookS, roster.BookM, roster.BookL }
@@ -512,7 +517,6 @@ script CharacterUILogic extends Logic
 			self:SetButton("Detail/BtnPromote", canJob and not busy)
 			self:SetButton("Detail/BtnPromoteCommon", canCommon and not busy)
 		end
-		self:ShowPreview(roster, job, tier, c.unlocked)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -528,33 +532,78 @@ script CharacterUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method void ShowPreview(any roster, string job, integer tier, boolean unlocked)
-		-- 미리보기 아바타: 선택 직업·차수 세트를 입힌다 (잠긴 직업은 1차 세트 + 어두운 덮개). 아바타 엔티티가 없으면 이름만 둔다.
-		local av = self:E("Detail/Avatar")
-		if not isvalid(av) or not av.Enable then return end
-		-- 잠긴 직업: 미리보기 칸에 어두운 덮개 + 자물쇠, 이름은 흰 글자.
-		-- UI 아바타는 다른 UI보다 항상 위에 그려져 덮개로 어두워지지 않으므로 부위별 색(SetAvatarPartColor)으로 어둡게 한다.
-		self:SetShown("Detail/PreviewDim", not unlocked)
-		local ar = av.AvatarGUIRendererComponent
-		if isvalid(ar) then
-			local v = 1
-			if not unlocked then v = self.PreviewLockedBrightness end
-			for _, c in ipairs({ MapleAvatarItemCategory.Body, MapleAvatarItemCategory.Head, MapleAvatarItemCategory.Hair, MapleAvatarItemCategory.Face, MapleAvatarItemCategory.Cap, MapleAvatarItemCategory.Coat, MapleAvatarItemCategory.Pants, MapleAvatarItemCategory.Longcoat, MapleAvatarItemCategory.Glove, MapleAvatarItemCategory.Shoes, MapleAvatarItemCategory.Cape, MapleAvatarItemCategory.OneHandedWeapon, MapleAvatarItemCategory.TwoHandedWeapon, MapleAvatarItemCategory.SubWeapon }) do
-				ar:SetAvatarPartColor(c, v, v, v, 1)
+	method void RefreshPartySlot(any roster, table chars, integer k, string job, boolean busy)
+		-- 편성 칸 k: 직업(차수) 이름·Lv·차수, 실제 차수 외형 아바타. 빈 칸이면 아바타를 숨긴다.
+		local rel = "Party/Slot" .. tostring(k)
+		local slot = self:E(rel)
+		if not isvalid(slot) then return end
+		local j = self:JobById(job)
+		local av = self:E(rel .. "/Avatar")
+		if j == nil then
+			self:SetText(rel .. "/Name", "비어 있음", self.SubColor)
+			self:SetText(rel .. "/Sub", "", nil)
+			if isvalid(av) and av.Enable then av:SetEnable(false) end
+		else
+			local c = self:CharOf(chars, job)
+			local tier = c.tier
+			self:SetText(rel .. "/Name", roster:TierName(job, tier), self.TextColor)
+			self:SetText(rel .. "/Sub", "Lv." .. tostring(c.level) .. " · " .. tostring(tier) .. "차", self.SubColor)
+			if isvalid(av) then
+				if not av.Enable then av:SetEnable(true) end
+				self:ShowSlotAvatar(roster, av, k, job, tier)
 			end
 		end
-		local pn = self:E("Detail/PreviewName")
-		if isvalid(pn) and isvalid(pn.TextGUIRendererComponent) then
-			if unlocked then pn.TextGUIRendererComponent.FontColor = self.TextColor else pn.TextGUIRendererComponent.FontColor = Color(1, 1, 1, 1) end
+		_UIButtonLogic:SetSelected(slot, self._T.partySel == k)
+		self:SetButton(rel, not busy)
+		local hint = (self._T.partySel > 0 and self._T.partySel ~= k) or self._T.placeJob ~= ""
+		self:SetHint(k, hint and not busy)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetHint(integer k, boolean on)
+		-- k번 칸 오른쪽 위 누르기 표시 켜기/끄기. 켤 때는 지금 깜박임 단계의 이미지로 맞춘다.
+		local e = self:E("Party/Slot" .. tostring(k) .. "/SwapHint")
+		if not isvalid(e) then return end
+		self._T.hintOn[k] = on
+		if on then self:ApplyHintImage(e) end
+		if e.Enable ~= on then e:SetEnable(on) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyHintImage(Entity e)
+		-- 깜박임 단계에 맞는 이미지 (true = 눌림).
+		local ruid = self.HintIdleRUID
+		if self._T.hintPhase then ruid = self.HintPressedRUID end
+		e.SpriteGUIRendererComponent.ImageRUID = DataRef(ruid)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void TickHints(number delta)
+		-- HintFlipTime초마다 눌림/안 눌림 이미지를 번갈아 바꾼다 (켜진 표시만).
+		self._T.hintClock = self._T.hintClock + delta
+		if self._T.hintClock < self.HintFlipTime then return end
+		self._T.hintClock = self._T.hintClock - self.HintFlipTime
+		if self._T.hintClock >= self.HintFlipTime then self._T.hintClock = 0 end
+		self._T.hintPhase = not self._T.hintPhase
+		for k = 1, 3 do
+			if self._T.hintOn[k] then
+				local e = self:E("Party/Slot" .. tostring(k) .. "/SwapHint")
+				if isvalid(e) then self:ApplyHintImage(e) end
+			end
 		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowSlotAvatar(any roster, Entity av, integer k, string job, integer tier)
+		-- 편성 칸 아바타: 그 직업·차수 외형 세트(머리·얼굴 포함)를 입히고 대기 자세를 정한다. 같은 세트면 다시 입히지 않는다.
 		local cm = av.CostumeManagerComponent
 		if not isvalid(cm) then return end
-		local key = job .. ":" .. tostring(tier) .. ":" .. tostring(unlocked)
-		if self._T.previewKey == key then return end
-		self._T.previewKey = key
+		local key = job .. ":" .. tostring(tier)
+		if self._T.slotKey[k] == key then return end
+		self._T.slotKey[k] = key
 		local set = roster:OutfitFor(job, tier)
-		for _, slot in ipairs(roster:OutfitSlots()) do
-			cm:SetEquip(roster:OutfitCategory(slot), set[slot] or "")
+		for _, slotName in ipairs(roster:OutfitSlots()) do
+			cm:SetEquip(roster:OutfitCategory(slotName), set[slotName] or "")
 		end
 		cm:SetEquip(MapleAvatarItemCategory.SubWeapon, "")
 		local stand = "stand1"
@@ -562,18 +611,61 @@ script CharacterUILogic extends Logic
 			if sj == job then stand = "stand2" end
 		end
 		av:SendEvent(BodyActionTypeChangeEvent(true, stand))
-		log("[VRF] charui preview job=" .. job .. " tier=" .. tostring(tier) .. " stand=" .. stand)
+		log("[VRF] charui slot" .. tostring(k) .. " avatar job=" .. job .. " tier=" .. tostring(tier) .. " stand=" .. stand)
 	end
 
 	-- ───────────────────────── 입력 ─────────────────────────
 
 	@ExecSpace("ClientOnly")
 	method void OnJobCard(integer n)
-		-- 직업 선택.
+		-- 직업 선택: 상세를 바꾼다. 편성 밖의 해금된 직업이면 세 칸에 누르기 표시(같은 직업을 다시 누르면 취소). 편성 중·잠긴 직업은 표시 없음.
 		local j = self._T.jobs[n]
 		if j == nil then return end
 		self._T.sel = j.id
-		log("[VRF] charui select " .. j.id)
+		self._T.partySel = 0
+		self._T.lockedSel = false
+		local roster = self:Roster()
+		local place = ""
+		if roster ~= nil then
+			local c = self:CharOf(roster:ParseCharData(roster.CharData), j.id)
+			local inParty = false
+			for _, pj in ipairs(self:Party()) do
+				if pj == j.id then inParty = true end
+			end
+			if not c.unlocked then
+				self._T.lockedSel = true
+			elseif not inParty and self._T.placeJob ~= j.id then
+				place = j.id
+			end
+		end
+		self._T.placeJob = place
+		log("[VRF] charui select " .. j.id .. " place=" .. place)
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnPartySlot(integer k)
+		-- 편성 칸: 목록에서 고른 직업이 있으면 그 칸에 넣는다. 아니면 칸 선택 → 다른 칸 누름 = 자리 교환, 같은 칸 = 취소.
+		self._T.lockedSel = false
+		if self._T.placeJob ~= "" then
+			local job = self._T.placeJob
+			self._T.placeJob = ""
+			self:SetParty(k, job)
+			return
+		end
+		local sel = self._T.partySel
+		if sel == k then
+			self._T.partySel = 0
+		elseif sel > 0 then
+			self._T.partySel = 0
+			self:SwapParty(sel, k)
+			return
+		else
+			self._T.partySel = k
+			local job = self:Party()[k]
+			if self:JobById(job) ~= nil then self._T.sel = job end
+		end
+		log("[VRF] charui party slot sel=" .. tostring(self._T.partySel))
 		self:Refresh()
 	end
 
@@ -619,21 +711,41 @@ script CharacterUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
-	method void OnParty(integer k)
-		-- 선택 직업을 k번 자리에 넣는다 (다른 자리에 있으면 서로 바꿈).
+	method void SwapParty(integer a, integer b)
+		-- 두 편성 칸의 직업 자리 교환. 서버 편성 저장은 PlayerRoster.RequestSetParty.
 		local roster = self:Roster()
-		if roster == nil or self._T.pendingAt ~= nil then return end
-		local job = self._T.sel
-		local c = self:CharOf(roster:ParseCharData(roster.CharData), job)
-		if not c.unlocked then return end
+		if roster == nil or self._T.pendingAt ~= nil then
+			self:Refresh()
+			return
+		end
 		local party = self:Party()
-		if party[k] == job then return end
-		for i = 1, 3 do
-			if i ~= k and party[i] == job then party[i] = party[k] end
+		party[a], party[b] = party[b], party[a]
+		roster:RequestSetParty(party[1], party[2], party[3])
+		self:MarkPending("party swap " .. tostring(a) .. "<->" .. tostring(b), party[1] .. "," .. party[2] .. "," .. party[3])
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetParty(integer k, string job)
+		-- 편성 밖 직업을 k번 칸에 넣는다 (원래 그 칸의 직업은 편성에서 빠짐).
+		local roster = self:Roster()
+		if roster == nil or self._T.pendingAt ~= nil then
+			self:Refresh()
+			return
+		end
+		local c = self:CharOf(roster:ParseCharData(roster.CharData), job)
+		local party = self:Party()
+		local inParty = false
+		for _, pj in ipairs(party) do
+			if pj == job then inParty = true end
+		end
+		if not c.unlocked or inParty then
+			self:Refresh()
+			return
 		end
 		party[k] = job
+		self._T.sel = job
 		roster:RequestSetParty(party[1], party[2], party[3])
-		self:MarkPending("party", party[1] .. "," .. party[2] .. "," .. party[3])
+		self:MarkPending("party place " .. tostring(k), party[1] .. "," .. party[2] .. "," .. party[3])
 	end
 
 	-- ───────────────────────── 결과 문구 ─────────────────────────

@@ -1,8 +1,9 @@
 @Logic
 script SlotUILogic extends Logic
 
-	-- 슬롯 강화 화면 (GrowthUI 1번 탭): 왼쪽 부위 선택, 오른쪽 현재 상태와 다음 단계, 주문서 선택과 강화.
-	-- 데이터는 로컬 플레이어의 PlayerEngrave(SlotLv·SlotBonus·Scrolls 동기화)에서 읽고, 강화는 서버에 요청한다.
+	-- 장비 화면 (GrowthUI 1번 탭): 아래 편성 칸(1~3) 선택, 왼쪽 부위 선택, 오른쪽 현재 상태와 다음 단계, 주문서 선택과 강화.
+	-- 데이터는 로컬 플레이어의 PlayerGear(GearData·ScrollData·GearSeq 동기화)에서 읽고, 강화는 서버에 칸 번호와 함께 요청한다 (5-B).
+	-- 칸 이름은 PlayerEngrave 편성(MainJob·CompJob·Comp2Job, 읽기만) + PlayerRoster 현재 차수 이름.
 	property string RootPath = "/ui/GrowthUI/Root/Slot"
 	property integer MaxLevel = 30
 	property integer MaxScrolls = 3
@@ -18,6 +19,14 @@ script SlotUILogic extends Logic
 	property Color SelectedTextColor = Color(0.12, 0.34, 0.52, 1)
 	property Color NormalTextColor = Color(0.14, 0.17, 0.21, 1)
 	property Color SlotSilhouetteColor = Color(0.25, 0.29, 0.34, 1)
+	property integer PartySlots = 3
+	-- 잠재능력 모드 (5-E)
+	property Color GoodTextColor = Color(0.20, 0.48, 0.12, 1)
+	property Color BadTextColor = Color(0.78, 0.20, 0.20, 1)
+	property Color SubTextColor = Color(0.36, 0.40, 0.46, 1)
+	property number PotMsgTime = 2.5
+	property number GlowTime = 1.2
+	property number GradeTextDarken = 0.78
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -28,11 +37,22 @@ script SlotUILogic extends Logic
 		self.clickHandlers = {}
 		self._T.open = false
 		self._T.slot = "Weapon"
+		self._T.slotNo = 1
+		self._T.mode = "scroll"
+		self._T.nameTimer = 0
+		self._T.partyNames = {}
 		self._T.tier = 1
 		self._T.count = 1
 		self._T.busy = 0
 		self._T.fxIndex = 0
 		self._T.fxTimers = {}
+		self._T.cube = "R"
+		self._T.cubeKinds = { "F", "R", "B", "P" }
+		self._T.potMsg = ""
+		self._T.potMsgTimer = 0
+		self._T.glow = 0
+		self._T.glowColor = Color(1, 1, 1, 1)
+		self._T.reqGrade = 0
 		self:LoadTables()
 		for _, slot in ipairs(self._T.slots) do
 			local id = slot
@@ -55,8 +75,42 @@ script SlotUILogic extends Logic
 				self:Refresh()
 			end)
 		end
-		self:Bind(self:Get("/Upgrade"), function() self:Upgrade() end)
-				for i = 1, self.MaxScrolls do
+		for no = 1, self.PartySlots do
+			local value = no
+			self:Bind(self:Get("/Party" .. tostring(value)), function()
+				if self._T.busy > 0 then return end
+				self._T.slotNo = value
+				self:Refresh()
+			end)
+			_GrowthUILogic:StyleButton(self:Get("/Party" .. tostring(value)))
+		end
+		self:Bind(self:Get("/ModeScroll"), function() self:SetMode("scroll") end)
+		self:Bind(self:Get("/ModePot"), function() self:SetMode("pot") end)
+		_GrowthUILogic:StyleButton(self:Get("/ModeScroll"))
+		_GrowthUILogic:StyleButton(self:Get("/ModePot"))
+		self:Bind(self:Get("/Upgrade"), function()
+			if self._T.mode == "pot" then self:UseCube() else self:Upgrade() end
+		end)
+		-- 잠재능력 모드 (5-E): 큐브 카드 4장, 구매, 대기 결과 선택
+		for i = 1, 4 do
+			local index = i
+			local cubeBtn = self:Get("/Pot/Cube" .. tostring(index))
+			self:Bind(cubeBtn, function()
+				if self._T.busy > 0 then return end
+				local kind = self._T.cubeKinds[index]
+				if kind == nil then return end
+				self._T.cube = kind
+				self:Refresh()
+			end)
+			_GrowthUILogic:StyleButton(cubeBtn)
+		end
+		self:Bind(self:Get("/Pot/Buy"), function() self:Buy() end)
+		self:Bind(self:Get("/Pot/Keep"), function() self:Choose(0) end)
+		self:Bind(self:Get("/Pot/Take"), function() self:Choose(1) end)
+		_GrowthUILogic:StyleButton(self:Get("/Pot/Buy"))
+		_GrowthUILogic:StyleButton(self:Get("/Pot/Keep"))
+		_GrowthUILogic:StyleButton(self:Get("/Pot/Take"))
+		for i = 1, self.MaxScrolls do
 			_GrowthUILogic:StyleButton(self:Get("/Qty" .. tostring(i)))
 		end
 		for tier = 1, 3 do
@@ -71,7 +125,7 @@ script SlotUILogic extends Logic
 				table.insert(self.clickHandlers, { entity = fx, eventHandler = h, isFx = true })
 			end
 		end
-		log("[VRF] SlotUILogic silhouette icons=6 lightSlots=true")
+		log("[VRF] SlotUILogic gear tab parts=" .. tostring(#self._T.slots) .. " partySlots=" .. tostring(self.PartySlots))
 		log("[VRF] SlotUILogic begin slots=" .. tostring(#self._T.slots) .. " miles=" .. tostring(#self._T.miles))
 	end
 
@@ -114,12 +168,12 @@ script SlotUILogic extends Logic
 		self._T.slots = {}
 		self._T.slotName = {}
 		self._T.slotIcon = {}
-		self._T.statName = { Weapon = "공격력", Cap = "최대 체력", Coat = "방어력", Glove = "치명타 확률", Shoes = "치명타 데미지", Cape = "명중률" }
+		self._T.statName = { Weapon = "공격력", Cap = "최대 체력", Coat = "방어력", Glove = "치명타 확률·데미지", Cape = "명중률" }
 		local sd = _DataService:GetTable("EquipSlotTable")
 		if sd ~= nil then
 			for i = 1, sd:GetRowCount() do
 				local slot = sd:GetCell(i, "Slot")
-				table.insert(self._T.slots, slot)
+				if slot ~= "Shoes" then table.insert(self._T.slots, slot) end
 				self._T.slotName[slot] = sd:GetCell(i, "SlotName")
 				self._T.slotIcon[slot] = sd:GetCell(i, "IconRUID")
 			end
@@ -136,6 +190,19 @@ script SlotUILogic extends Logic
 		if rs ~= nil then
 			for i = 1, rs:GetRowCount() do table.insert(self._T.rates, { min = tonumber(rs:GetCell(i, "MinLevel")) or 0, rate = tonumber(rs:GetCell(i, "Rate")) or 0 }) end
 		end
+		-- 잠재능력 합계 표시용 옵션 글자 (같은 옵션 Id는 첫 행의 글자, 표 순서 유지)
+		self._T.potLabel = {}
+		self._T.potOrder = {}
+		local pt = _DataService:GetTable("GearPotTable")
+		if pt ~= nil then
+			for i = 1, pt:GetRowCount() do
+				local id = pt:GetCell(i, "OptId")
+				if id ~= nil and id ~= "" and self._T.potLabel[id] == nil then
+					self._T.potLabel[id] = pt:GetCell(i, "Label") or id
+					table.insert(self._T.potOrder, id)
+				end
+			end
+		end
 		self._T.miles = {}
 		local ms = _DataService:GetTable("SlotMilestoneTable")
 		if ms ~= nil then
@@ -147,10 +214,56 @@ script SlotUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method Component GetEngrave()
-		-- 로컬 플레이어의 저장 컴포넌트.
+		-- 로컬 플레이어의 각인 컴포넌트 (편성 읽기만).
 		local player = _UserService.LocalPlayer
 		if not isvalid(player) then return nil end
 		return player:GetComponent("script.PlayerEngrave")
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component GetGear()
+		-- 로컬 플레이어의 장비 컴포넌트 (PlayerGear).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerGear")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshPartyNames()
+		-- 칸 버튼 글자 "1칸 · 히어로": 지금 그 칸 캐릭터의 현재 차수 이름. 편성이 바뀌어도 칸 강화는 그대로다.
+		local eng = self:GetEngrave()
+		local player = _UserService.LocalPlayer
+		local roster = nil
+		if isvalid(player) then roster = player:GetComponent("script.PlayerRoster") end
+		local jobs = { "", "", "" }
+		if eng ~= nil then jobs = { eng.MainJob, eng.CompJob, eng.Comp2Job } end
+		local chars = {}
+		if roster ~= nil then chars = roster:ParseCharData(roster.CharData) end
+		for no = 1, self.PartySlots do
+			local job = jobs[no] or ""
+			local name = job
+			if roster ~= nil and job ~= "" then
+				local c = chars[job]
+				local tier = 1
+				if c ~= nil then tier = c.tier end
+				local n = roster:TierName(job, tier)
+				if n ~= "" then name = n end
+			end
+			self._T.partyNames[no] = name
+			local label = tostring(no) .. "칸"
+			if name ~= "" then label = label .. " · " .. name end
+			local btn = self:Get("/Party" .. tostring(no))
+			if isvalid(btn) and isvalid(btn.TextGUIRendererComponent) then btn.TextGUIRendererComponent.Text = label end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table CellOf(Component gear, integer slotNo, string part)
+		-- 선택 칸·부위의 { lv, bonus } (없으면 0).
+		local all = gear:ParseGear(gear.GearData)
+		local c = (all[slotNo] or {})[part]
+		if c == nil then return { lv = 0, bonus = 0 } end
+		return c
 	end
 
 	@ExecSpace("ClientOnly")
@@ -158,11 +271,14 @@ script SlotUILogic extends Logic
 		-- 성장 화면 1번 탭을 고르면 연다.
 		local root = self:Get("")
 		if not isvalid(root) then return end
-		local eng = self:GetEngrave()
-		if eng ~= nil then self._T.lastSeq = eng.SlotSeq end
+		local gear = self:GetGear()
+		if gear ~= nil then self._T.lastSeq = gear.GearSeq end
 		self._T.busy = 0
 		self._T.open = true
+		-- 모드·칸·부위·큐브 선택은 탭을 닫았다 열어도 유지한다
 		root:SetEnable(true)
+		self:ApplyMode()
+		self:RefreshPartyNames()
 		self:Refresh()
 		log("[VRF] slot ui open")
 	end
@@ -173,6 +289,9 @@ script SlotUILogic extends Logic
 		self._T.open = false
 		self._T.fxTimers = {}
 		for i = 1, 2 do self:EndFx(i) end
+		self._T.glow = 0
+		self._T.potMsg = ""
+		self:SetGlowAlpha(0)
 		local root = self:Get("")
 		if isvalid(root) then root:SetEnable(false) end
 	end
@@ -205,13 +324,32 @@ script SlotUILogic extends Logic
 	method void Refresh()
 		-- 선택한 부위·주문서 기준으로 화면 전체를 다시 그린다.
 		if not self._T.open then return end
-		local eng = self:GetEngrave()
-		if eng == nil then return end
+		local gear = self:GetGear()
+		if gear == nil then return end
 		local slot = self._T.slot
-		local lv = eng.SlotLv[slot] or 0
-		local bonus = eng.SlotBonus[slot] or 0
+		local slotNo = self._T.slotNo
+		local busy = self._T.busy > 0 or not gear.GearLoaded
+		local gearAll = gear:ParseGear(gear.GearData)
+		local cell = (gearAll[slotNo] or {})[slot] or { lv = 0, bonus = 0 }
+		local scrollHave = gear:ParseScrolls(gear.ScrollData)
+		local lv = cell.lv
+		local bonus = cell.bonus
 		local name = self._T.slotName[slot] or ""
+		-- 칸 버튼·모드 버튼 (요청 중에는 칸·모드 전환을 막는다)
+		for no = 1, self.PartySlots do
+			local btn = self:Get("/Party" .. tostring(no))
+			_UIButtonLogic:SetSelected(btn, no == slotNo)
+			_UIButtonLogic:SetDisabled(btn, busy)
+		end
+		_UIButtonLogic:SetSelected(self:Get("/ModeScroll"), self._T.mode == "scroll")
+		_UIButtonLogic:SetDisabled(self:Get("/ModeScroll"), busy)
+		_UIButtonLogic:SetSelected(self:Get("/ModePot"), self._T.mode == "pot")
+		_UIButtonLogic:SetDisabled(self:Get("/ModePot"), busy)
 		for _, id in ipairs(self._T.slots) do
+			-- 부위 칸 글자 "+12 · 에픽" (등급 이름은 등급 색)
+			local partInfo = self:Get("/Slot_" .. id .. "/Info")
+			local pc = (gearAll[slotNo] or {})[id] or { lv = 0, grade = 1 }
+			if isvalid(partInfo) then partInfo.TextGUIRendererComponent.Text = "+" .. tostring(pc.lv) .. " · " .. self:GradeTag(gear, pc.grade or 1) end
 			_UIButtonLogic:SetSelected(self:Get("/Slot_" .. id), id == slot)
 			local slotIcon = self:Get("/Slot_" .. id .. "/Icon")
 			if isvalid(slotIcon) then slotIcon.SpriteGUIRendererComponent.Color = self.SlotSilhouetteColor end
@@ -223,9 +361,16 @@ script SlotUILogic extends Logic
 			icon.SpriteGUIRendererComponent.ImageRUID = DataRef(self._T.slotIcon[slot])
 			icon.SpriteGUIRendererComponent.Color = self.SlotSilhouetteColor
 		end
+		if self._T.mode == "pot" then
+			self:RefreshPot(gear, gearAll, busy)
+			return
+		end
 		-- 현재 상태 → 다음 단계
 		local statName = self._T.statName[slot] or ""
-		local info = name .. " 슬롯  +" .. tostring(lv) .. "\n\n"
+		local who = self._T.partyNames[slotNo] or ""
+		local head = tostring(slotNo) .. "칸"
+		if who ~= "" then head = head .. "(" .. who .. ")" end
+		local info = head .. " · " .. name .. " 슬롯  +" .. tostring(lv) .. "\n\n"
 		if lv >= self.MaxLevel then
 			info = info .. "장비 " .. statName .. "  +" .. self:Num(self.StatStep * lv) .. "%\n최대 단계입니다"
 		else
@@ -244,7 +389,7 @@ script SlotUILogic extends Logic
 			local s = self._T.scrolls[slot .. "_" .. tostring(tier)]
 			local cardIcon = self:Get("/Card" .. tostring(tier) .. "/Icon")
 			if s ~= nil and isvalid(cardIcon) then cardIcon.SpriteGUIRendererComponent.ImageRUID = DataRef(s.icon) end
-			self:SetText("/Card" .. tostring(tier) .. "/Count", "보유 " .. tostring(eng.Scrolls[slot .. "_" .. tostring(tier)] or 0) .. "장")
+			self:SetText("/Card" .. tostring(tier) .. "/Count", "보유 " .. tostring(scrollHave[slot .. "_" .. tostring(tier)] or 0) .. "장")
 			local selected = tier == self._T.tier
 			_UIButtonLogic:SetSelected(self:Get("/Card" .. tostring(tier)), selected)
 			_UIButtonLogic:SetDisabled(self:Get("/Card" .. tostring(tier)), lv >= self.MaxLevel)
@@ -259,7 +404,7 @@ script SlotUILogic extends Logic
 		end
 		-- 성공 확률
 		local scroll = self._T.scrolls[slot .. "_" .. tostring(self._T.tier)]
-		local have = eng.Scrolls[slot .. "_" .. tostring(self._T.tier)] or 0
+		local have = scrollHave[slot .. "_" .. tostring(self._T.tier)] or 0
 		local base = self:BaseRate(lv)
 		local power = 1
 		if scroll ~= nil then power = scroll.power end
@@ -278,20 +423,24 @@ script SlotUILogic extends Logic
 			self:SetText("/RateBonus", "추가 성공 확률 +" .. self:Num(bonus) .. "%")
 			if have < self._T.count then msg = "주문서가 부족합니다" end
 		end
+		if self._T.msg ~= nil and self._T.msg ~= "" then msg = self._T.msg end
 		self:SetText("/Msg", msg)
-		_UIButtonLogic:SetDisabled(self:Get("/Upgrade"), lv >= self.MaxLevel or have < self._T.count)
+		_UIButtonLogic:SetDisabled(self:Get("/Upgrade"), busy or lv >= self.MaxLevel or have < self._T.count)
 	end
 
 	@ExecSpace("ClientOnly")
 	method void Upgrade()
 		-- 강화하기: 결과가 돌아올 때까지 다시 누를 수 없다.
-		local eng = self:GetEngrave()
-		if eng == nil or not eng.SlotLoaded or self._T.busy > 0 then return end
+		local gear = self:GetGear()
+		if gear == nil or not gear.GearLoaded or self._T.busy > 0 then return end
 		local slot = self._T.slot
-		if (eng.SlotLv[slot] or 0) >= self.MaxLevel then return end
-		if (eng.Scrolls[slot .. "_" .. tostring(self._T.tier)] or 0) < self._T.count then return end
+		if self:CellOf(gear, self._T.slotNo, slot).lv >= self.MaxLevel then return end
+		if (gear:ParseScrolls(gear.ScrollData)[slot .. "_" .. tostring(self._T.tier)] or 0) < self._T.count then return end
 		self._T.busy = self.BusyTimeout
-		eng:RequestSlotUpgrade(slot, self._T.tier, self._T.count)
+		self._T.msg = ""
+		gear:RequestScroll(self._T.slotNo, slot, self._T.tier, self._T.count)
+		self:Refresh()
+		log("[VRF] slot ui request s" .. tostring(self._T.slotNo) .. " " .. slot .. " tier=" .. tostring(self._T.tier) .. " x" .. tostring(self._T.count))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -335,14 +484,63 @@ script SlotUILogic extends Logic
 	method void OnUpdate(number delta)
 		-- 서버 결과를 받으면 연출을 재생하고 화면을 갱신한다.
 		if not self._T.open then return end
-		local eng = self:GetEngrave()
-		if eng == nil then return end
-		if self._T.busy > 0 then self._T.busy = self._T.busy - delta end
-		if eng.SlotSeq ~= self._T.lastSeq then
-			self._T.lastSeq = eng.SlotSeq
+		local gear = self:GetGear()
+		if gear == nil then return end
+		if self._T.busy > 0 then
+			self._T.busy = self._T.busy - delta
+			if self._T.busy <= 0 then self:Refresh() end
+		end
+		if gear.GearSeq ~= self._T.lastSeq then
+			self._T.lastSeq = gear.GearSeq
 			self._T.busy = 0
-			self:PlayFx(eng.SlotOk)
+			local result = gear.GearResult or ""
+			local head = string.sub(result, 1, 4)
+			if head == "cube" or head == "pend" or head == "choo" or head == "buy:" or result == "buy" then
+				-- 잠재능력 결과 (큐브·대기·선택·구매)
+				self:HandlePotResult(gear, gear.GearMsg, result)
+			else
+				self._T.msg = ""
+				if gear.GearMsg == "ok" and string.sub(result, 1, 7) == "scroll:" then
+					local f = gear:Split(result, ":")
+					self:PlayFx(f[5] == "1")
+				elseif gear.GearMsg == "err_lobby" then
+					self._T.msg = "로비에서만 강화할 수 있습니다"
+				elseif gear.GearMsg == "err_scroll" then
+					self._T.msg = "주문서가 부족합니다"
+				elseif gear.GearMsg == "err_max" then
+					self._T.msg = "최대 단계입니다"
+				end
+			end
 			self:Refresh()
+		end
+		-- 다이아가 바뀌면(다른 화면에서 사용 등) 구매 버튼 상태를 다시 그린다
+		if self._T.mode == "pot" then
+			local roster = _UserService.LocalPlayer:GetComponent("script.PlayerRoster")
+			if roster ~= nil and roster.Diamonds ~= self._T.lastDia then
+				self._T.lastDia = roster.Diamonds
+				self:Refresh()
+			end
+		end
+		-- 잠재능력 메시지 자동 지움, 등급 상승 강조 띠
+		if self._T.potMsgTimer > 0 then
+			self._T.potMsgTimer = self._T.potMsgTimer - delta
+			if self._T.potMsgTimer <= 0 then
+				self._T.potMsg = ""
+				if self._T.mode == "pot" then self:Refresh() end
+			end
+		end
+		if self._T.glow > 0 then
+			self._T.glow = math.max(0, self._T.glow - delta)
+			local t = self._T.glow / self.GlowTime
+			local pulse = 0.5 + 0.5 * math.sin((1 - t) * math.pi * 4)
+			self:SetGlowAlpha(t * (0.25 + 0.45 * pulse))
+		end
+		self._T.nameTimer = self._T.nameTimer - delta
+		if self._T.nameTimer <= 0 then
+			self._T.nameTimer = 1
+			local old = table.concat(self._T.partyNames, ",")
+			self:RefreshPartyNames()
+			if table.concat(self._T.partyNames, ",") ~= old then self:Refresh() end
 		end
 		for i = 1, 2 do
 			local t = self._T.fxTimers[i]
@@ -354,6 +552,422 @@ script SlotUILogic extends Logic
 				end
 			end
 		end
+	end
+
+	-- ───────────────────────── 잠재능력 모드 (5-E) ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void SetMode(string mode)
+		-- 주문서 강화 / 잠재능력 전환. 요청 중에는 바꾸지 않는다.
+		if self._T.busy > 0 or self._T.mode == mode then return end
+		self._T.mode = mode
+		self._T.msg = ""
+		self._T.potMsg = ""
+		self:ApplyMode()
+		self:Refresh()
+		log("[VRF] slot ui mode=" .. mode)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyMode()
+		-- 모드별로 보이는 위젯을 켜고 끈다. 잠재능력 모드에서는 주문서 전용 위젯을 숨기고 Pot 묶음을 켠다.
+		local pot = self._T.mode == "pot"
+		local scrollOnly = { "/CardLabel", "/Card1", "/Card2", "/Card3", "/QtyLabel", "/Qty1", "/Qty2", "/Qty3", "/Have", "/RateTitle", "/Rate", "/RateDetail", "/RateBonus", "/SetHead", "/Div2", "/Msg" }
+		for _, path in ipairs(scrollOnly) do
+			local e = self:Get(path)
+			if isvalid(e) then e:SetEnable(not pot) end
+		end
+		local potRoot = self:Get("/Pot")
+		if isvalid(potRoot) then potRoot:SetEnable(pot) end
+		local upgrade = self:Get("/Upgrade")
+		if isvalid(upgrade) then
+			upgrade:SetEnable(true)
+			if pot then upgrade.TextGUIRendererComponent.Text = "큐브 사용" else upgrade.TextGUIRendererComponent.Text = "강화하기" end
+		end
+		if not pot then
+			self._T.glow = 0
+			self:SetGlowAlpha(0)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method string DarkHex(string hex, number f)
+		-- 밝은 배경에서 읽히도록 등급 색을 어둡게 한 "#RRGGBB".
+		local h = hex or "5C6675"
+		if string.sub(h, 1, 1) == "#" then h = string.sub(h, 2) end
+		local r = tonumber(string.sub(h, 1, 2), 16) or 92
+		local g = tonumber(string.sub(h, 3, 4), 16) or 102
+		local b = tonumber(string.sub(h, 5, 6), 16) or 117
+		return string.format("#%02X%02X%02X", math.floor(r * f), math.floor(g * f), math.floor(b * f))
+	end
+
+	@ExecSpace("ClientOnly")
+	method Color HexColor(string hex)
+		-- "RRGGBB" → Color.
+		local h = hex or "FFFFFF"
+		if string.sub(h, 1, 1) == "#" then h = string.sub(h, 2) end
+		local r = tonumber(string.sub(h, 1, 2), 16) or 255
+		local g = tonumber(string.sub(h, 3, 4), 16) or 255
+		local b = tonumber(string.sub(h, 5, 6), 16) or 255
+		return Color(r / 255, g / 255, b / 255, 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method string GradeName(Component gear, integer grade)
+		-- 등급 이름 (표에 없으면 빈 글자).
+		local gi = gear:GradeInfo(grade)
+		if gi == nil then return "" end
+		return gi.name
+	end
+
+	@ExecSpace("ClientOnly")
+	method string GradeTag(Component gear, integer grade)
+		-- 등급 색 태그를 붙인 등급 이름.
+		local gi = gear:GradeInfo(grade)
+		if gi == nil then return "" end
+		return "<color=" .. self:DarkHex(gi.color, self.GradeTextDarken) .. ">" .. gi.name .. "</color>"
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Josa(string word)
+		-- "에픽으로" / "유니크로": 마지막 한글 글자의 받침(ㄹ 제외)이 있으면 "으로".
+		local n = string.len(word or "")
+		if n < 3 then return "로" end
+		local b1 = string.byte(word, n - 2)
+		local b2 = string.byte(word, n - 1)
+		local b3 = string.byte(word, n)
+		local code = ((b1 & 15) << 12) | ((b2 & 63) << 6) | (b3 & 63)
+		if code < 44032 or code > 55203 then return "로" end
+		local jong = (code - 44032) % 28
+		if jong == 0 or jong == 8 then return "로" end
+		return "으로"
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetGlowAlpha(number a)
+		-- 등급 상승 강조 띠의 투명도.
+		local glow = self:Get("/Pot/Glow")
+		if not isvalid(glow) then return end
+		local c = self._T.glowColor or Color(1, 1, 1, 1)
+		glow.SpriteGUIRendererComponent.Color = Color(c.r, c.g, c.b, a)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void StartGlow(Component gear, integer grade)
+		-- 등급 상승 시 짧은 강조: 등급 색 띠 깜빡임 + 미리보기 성공 연출.
+		local gi = gear:GradeInfo(grade)
+		if gi ~= nil then self._T.glowColor = self:HexColor(gi.color) else self._T.glowColor = Color(1, 1, 1, 1) end
+		self._T.glow = self.GlowTime
+		self:PlayFx(true)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetPotMsg(string text, string hex)
+		-- 결과 메시지 (2.5초 뒤 지움). hex가 있으면 그 색.
+		if hex ~= nil and hex ~= "" then text = "<color=" .. hex .. ">" .. text .. "</color>" end
+		self._T.potMsg = text
+		self._T.potMsgTimer = self.PotMsgTime
+	end
+
+	@ExecSpace("ClientOnly")
+	method string LineText(Component gear, string part, table line, boolean locked)
+		-- 잠재 줄 한 개: "[에픽] 공격력 +6%" (줄 등급은 등급 색), 잠긴 줄은 앞에 [잠금].
+		if line == nil then return "" end
+		local text = self:GradeTagShort(gear, line.g) .. " " .. gear:LineLabel(part, line.id, line.g)
+		if locked then text = "<color=#5C6675>[잠금]</color> " .. text end
+		return text
+	end
+
+	@ExecSpace("ClientOnly")
+	method string GradeTagShort(Component gear, integer grade)
+		-- 줄 앞 등급 표시 "[에픽]".
+		local gi = gear:GradeInfo(grade)
+		if gi == nil then return "" end
+		return "<color=" .. self:DarkHex(gi.color, self.GradeTextDarken) .. ">[" .. gi.name .. "]</color>"
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshPot(Component gear, table gearAll, boolean busy)
+		-- 잠재능력 모드 화면: 등급, 현재 3줄, 대기 결과 비교, 큐브 카드, 확률·천장, 사용·구매·선택 버튼.
+		local slot = self._T.slot
+		local slotNo = self._T.slotNo
+		local cell = (gearAll[slotNo] or {})[slot] or { lv = 0, bonus = 0, grade = 1, cnt = 0, lines = {} }
+		local key = tostring(slotNo) .. "/" .. slot
+		local pend = gear:ParsePend(gear.PendData)[key]
+		local have = gear:ParseCubes(gear.CubeData)
+		local cubes = gear:CubeList()
+		self._T.cubeKinds = {}
+		local selValid = false
+		for i, c in ipairs(cubes) do
+			if i <= 4 then
+				table.insert(self._T.cubeKinds, c.kind)
+				if c.kind == self._T.cube then selValid = true end
+			end
+		end
+		if not selValid and #self._T.cubeKinds > 0 then self._T.cube = self._T.cubeKinds[1] end
+		local info = gear:CubeInfo(self._T.cube)
+		local gi = gear:GradeInfo(cell.grade)
+		local pendInfo = nil
+		if pend ~= nil then pendInfo = gear:CubeInfo(pend.kind) end
+		-- 등급
+		self:SetText("/Pot/Grade", "잠재능력  " .. self:GradeTag(gear, cell.grade))
+		-- 확률·천장
+		local rate = ""
+		if info ~= nil then
+			if info.lock > 0 then
+				rate = "첫 줄 잠금 · 등급 상승 없음"
+			elseif info.up == "None" then
+				rate = "등급 상승 없음"
+			elseif gear:GradeInfo(cell.grade + 1) == nil or gi == nil then
+				rate = "최고 등급"
+			else
+				local chance = gi.up[info.up] or 0
+				local nextName = self:GradeName(gear, cell.grade + 1)
+				rate = nextName .. " 상승 " .. gear:NumStr(chance) .. "%"
+				if gi.ceil > 0 and info.ceilPt > 0 then
+					if cell.cnt + info.ceilPt >= gi.ceil then
+						rate = "<color=#347F24>다음 큐브 등급 상승 확정</color> · 천장 " .. tostring(cell.cnt) .. " / " .. self:Num(gi.ceil) .. "점"
+					else
+						rate = rate .. " · 천장 " .. tostring(cell.cnt) .. " / " .. self:Num(gi.ceil) .. "점"
+					end
+				end
+			end
+		end
+		self:SetText("/Pot/Rate", rate)
+		-- 현재 옵션 (대기 결과가 없으면 넓게)
+		local lockNow = false
+		if pend ~= nil then
+			lockNow = pendInfo ~= nil and pendInfo.lock > 0
+		else
+			lockNow = info ~= nil and info.lock > 0
+		end
+		local beforeCard = self:Get("/Pot/Before")
+		if isvalid(beforeCard) then
+			if pend ~= nil then
+				beforeCard.UITransformComponent.anchoredPosition = Vector2(60, -190)
+				beforeCard.UITransformComponent.RectSize = Vector2(490, 130)
+			else
+				beforeCard.UITransformComponent.anchoredPosition = Vector2(315, -190)
+				beforeCard.UITransformComponent.RectSize = Vector2(1000, 130)
+			end
+		end
+		self:SetText("/Pot/Before/Title", "현재 옵션")
+		for i = 1, 3 do
+			self:SetText("/Pot/Before/Line" .. tostring(i), self:LineText(gear, slot, cell.lines[i], i == 1 and lockNow))
+		end
+		-- 새 옵션 (블랙·플래티넘 대기 결과)
+		local afterCard = self:Get("/Pot/After")
+		if isvalid(afterCard) then afterCard:SetEnable(pend ~= nil) end
+		if pend ~= nil then
+			local title = "새 옵션"
+			if pendInfo ~= nil then title = title .. " · " .. pendInfo.name end
+			if pend.grade ~= cell.grade then title = title .. " · " .. self:GradeTag(gear, pend.grade) .. " <color=#347F24>상승</color>" end
+			self:SetText("/Pot/After/Title", title)
+			local cand = pend.cands[1] or {}
+			for i = 1, 3 do
+				self:SetText("/Pot/After/Line" .. tostring(i), self:LineText(gear, slot, cand[i], i == 1 and lockNow))
+			end
+		end
+		-- 큐브 카드
+		for i = 1, 4 do
+			local btn = self:Get("/Pot/Cube" .. tostring(i))
+			local c = cubes[i]
+			if isvalid(btn) then
+				btn:SetEnable(c ~= nil)
+				if c ~= nil then
+					local n = have[c.kind] or 0
+					local icon = self:Get("/Pot/Cube" .. tostring(i) .. "/Icon")
+					if isvalid(icon) and c.icon ~= "" then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(c.icon) end
+					self:SetText("/Pot/Cube" .. tostring(i) .. "/Name", c.name)
+					local countText = "보유 " .. tostring(n) .. "개"
+					if n <= 0 then countText = "<color=#B54538>" .. countText .. "</color>" end
+					self:SetText("/Pot/Cube" .. tostring(i) .. "/Count", countText)
+					local selected = c.kind == self._T.cube
+					_UIButtonLogic:SetSelected(btn, selected)
+					_UIButtonLogic:SetDisabled(btn, busy)
+					local nameText = self:Get("/Pot/Cube" .. tostring(i) .. "/Name")
+					if isvalid(nameText) then
+						if selected then nameText.TextGUIRendererComponent.FontColor = self.SelectedTextColor else nameText.TextGUIRendererComponent.FontColor = self.NormalTextColor end
+					end
+				end
+			end
+		end
+		-- 구매 (무료 큐브는 숨김, 다이아 부족이면 비활성)
+		local dia = 0
+		local player = _UserService.LocalPlayer
+		if isvalid(player) then
+			local roster = player:GetComponent("script.PlayerRoster")
+			if roster ~= nil then dia = roster.Diamonds end
+		end
+		local price = 0
+		if info ~= nil then price = info.price end
+		local buy = self:Get("/Pot/Buy")
+		local diaText = self:Get("/Pot/Dia")
+		if isvalid(buy) then
+			buy:SetEnable(price > 0)
+			if price > 0 then
+				buy.TextGUIRendererComponent.Text = "다이아 " .. tostring(price)
+				_UIButtonLogic:SetDisabled(buy, busy or dia < price)
+			end
+		end
+		if isvalid(diaText) then
+			diaText:SetEnable(price > 0)
+			local dc = "#5C6675"
+			if dia < price then dc = "#B54538" end
+			diaText.TextGUIRendererComponent.Text = "보유 다이아 <color=" .. dc .. ">" .. tostring(dia) .. "</color>"
+		end
+		-- 사용 / 선택 버튼
+		local count = 0
+		if info ~= nil then count = have[info.kind] or 0 end
+		local upgrade = self:Get("/Upgrade")
+		if isvalid(upgrade) then
+			upgrade:SetEnable(pend == nil)
+			_UIButtonLogic:SetDisabled(upgrade, busy or pend ~= nil or count < 1)
+		end
+		local keep = self:Get("/Pot/Keep")
+		local take = self:Get("/Pot/Take")
+		if isvalid(keep) then
+			keep:SetEnable(pend ~= nil)
+			_UIButtonLogic:SetDisabled(keep, busy)
+		end
+		if isvalid(take) then
+			take:SetEnable(pend ~= nil)
+			_UIButtonLogic:SetDisabled(take, busy)
+		end
+		-- 메시지
+		local msg = self._T.potMsg or ""
+		if msg == "" then
+			if pend ~= nil then
+				msg = "새 옵션을 확인하고 선택하세요"
+			elseif count < 1 then
+				msg = "<color=#B54538>큐브가 부족합니다</color>"
+			end
+		end
+		self:SetText("/Pot/Msg", msg)
+		-- 오른쪽 위 정보: 칸·부위, 주문서 단계, 그 칸 잠재능력 합계
+		local who = self._T.partyNames[slotNo] or ""
+		local head = tostring(slotNo) .. "칸"
+		if who ~= "" then head = head .. "(" .. who .. ")" end
+		local text = head .. " · " .. (self._T.slotName[slot] or "") .. "\n"
+		text = text .. "주문서 +" .. tostring(cell.lv) .. " · 장비 " .. (self._T.statName[slot] or "") .. " +" .. self:Num(self.StatStep * cell.lv) .. "%\n"
+		local sum = gear:PotSum(gear.GearData, slotNo)
+		local parts = {}
+		for _, id in ipairs(self._T.potOrder) do
+			local v = sum[id]
+			if v ~= nil and v ~= 0 then
+				local label = self._T.potLabel[id] or id
+				local a, b = string.find(label, "{v}", 1, true)
+				if a ~= nil then label = string.sub(label, 1, a - 1) .. gear:NumStr(v) .. string.sub(label, b + 1) end
+				table.insert(parts, label)
+			end
+		end
+		if #parts == 0 then
+			text = text .. "잠재능력 합계: 없음"
+		else
+			text = text .. "잠재능력 합계: " .. table.concat(parts, " · ")
+		end
+		self:SetText("/Info", text)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UseCube()
+		-- 고른 큐브 사용: 결과가 돌아올 때까지 칸·부위·모드·버튼을 막는다.
+		local gear = self:GetGear()
+		if gear == nil or not gear.GearLoaded or self._T.busy > 0 then return end
+		local slotNo = self._T.slotNo
+		local slot = self._T.slot
+		if gear:ParsePend(gear.PendData)[tostring(slotNo) .. "/" .. slot] ~= nil then return end
+		if (gear:ParseCubes(gear.CubeData)[self._T.cube] or 0) < 1 then return end
+		local c = self:CellOf(gear, slotNo, slot)
+		self._T.reqGrade = c.grade or 1
+		self._T.busy = self.BusyTimeout
+		self._T.potMsg = ""
+		gear:RequestCube(slotNo, slot, self._T.cube)
+		self:Refresh()
+		log("[VRF] slot ui cube s" .. tostring(slotNo) .. " " .. slot .. " kind=" .. self._T.cube)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Choose(integer pick)
+		-- 대기 결과 선택: 0 = 이전 유지, 1 = 새 옵션 적용.
+		local gear = self:GetGear()
+		if gear == nil or not gear.GearLoaded or self._T.busy > 0 then return end
+		local slotNo = self._T.slotNo
+		local slot = self._T.slot
+		if gear:ParsePend(gear.PendData)[tostring(slotNo) .. "/" .. slot] == nil then return end
+		local c = self:CellOf(gear, slotNo, slot)
+		self._T.reqGrade = c.grade or 1
+		self._T.busy = self.BusyTimeout
+		self._T.potMsg = ""
+		gear:RequestCubeChoose(slotNo, slot, pick)
+		self:Refresh()
+		log("[VRF] slot ui choose s" .. tostring(slotNo) .. " " .. slot .. " pick=" .. tostring(pick))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Buy()
+		-- 고른 큐브 1개를 다이아로 구매 (무료 큐브 제외).
+		local gear = self:GetGear()
+		if gear == nil or not gear.GearLoaded or self._T.busy > 0 then return end
+		local info = gear:CubeInfo(self._T.cube)
+		if info == nil or info.price <= 0 then return end
+		self._T.busy = self.BusyTimeout
+		self._T.potMsg = ""
+		gear:RequestBuyCube(self._T.cube, 1)
+		self:Refresh()
+		log("[VRF] slot ui buy kind=" .. self._T.cube)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void HandlePotResult(Component gear, string code, string result)
+		-- 서버 결과 → 한국어 메시지와 등급 상승 강조.
+		local f = gear:Split(result, ":")
+		if code == "ok" then
+			if f[1] == "cube" then
+				local grade = math.floor(tonumber(f[5]) or 1)
+				if f[6] == "1" then
+					local name = self:GradeName(gear, grade)
+					self:SetPotMsg(name .. self:Josa(name) .. " 등급 상승!", "#347F24")
+					self:StartGlow(gear, grade)
+				else
+					self:SetPotMsg("옵션이 바뀌었습니다", "")
+				end
+			elseif f[1] == "pend" then
+				if f[6] == "1" then
+					self:SetPotMsg("등급 상승 결과! 새 옵션을 확인하고 선택하세요", "#347F24")
+				else
+					self:SetPotMsg("새 옵션을 확인하고 선택하세요", "")
+				end
+			elseif f[1] == "choose" then
+				local grade = math.floor(tonumber(f[6]) or 1)
+				if f[5] == "0" then
+					self:SetPotMsg("이전 옵션을 유지했습니다", "")
+				elseif grade > self._T.reqGrade then
+					local name = self:GradeName(gear, grade)
+					self:SetPotMsg(name .. self:Josa(name) .. " 등급 상승! 새 옵션을 적용했습니다", "#347F24")
+					self:StartGlow(gear, grade)
+				else
+					self:SetPotMsg("새 옵션을 적용했습니다", "")
+				end
+			elseif f[1] == "buy" then
+				local info = gear:CubeInfo(f[2] or "")
+				local name = "큐브"
+				if info ~= nil then name = info.name end
+				self:SetPotMsg(name .. " " .. (f[3] or "1") .. "개를 구매했습니다", "#347F24")
+			end
+		else
+			local errs = {
+				err_lobby = "로비에서만 사용할 수 있습니다",
+				err_arg = "잘못된 요청입니다",
+				err_pending = "먼저 대기 중인 새 옵션을 선택하세요",
+				err_cube = "큐브가 부족합니다",
+				err_nopend = "선택할 새 옵션이 없습니다",
+				err_buy = "구매할 수 없는 큐브입니다",
+				err_dia = "다이아가 부족합니다",
+			}
+			self:SetPotMsg(errs[code] or ("요청 실패 (" .. tostring(code) .. ")"), "#B54538")
+		end
+		log("[VRF] slot ui pot result " .. tostring(code) .. " " .. result)
 	end
 
 end

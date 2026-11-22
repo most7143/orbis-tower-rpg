@@ -6,7 +6,10 @@ script ScreenFadeLogic extends Logic
 
 	property number FadeOutTime = 1.0
 	property number FadeInTime = 1.0
-	property number MaxHoldTime = 2.0
+	-- 검은 화면 대기 최대 시간 (준비가 늦어도 이 시간이 지나면 밝힌다)
+	property number MaxHoldTime = 4.0
+	-- 탑: 구성원 1이 발판에 선 채 이 시간 동안 움직이지 않아야 화면을 밝힌다
+	property number GroundStableTime = 0.25
 
 	-- IDLE / OUT(어두워지는 중) / HOLD(검은 화면 유지, 맵 로드 대기) / IN(밝아지는 중)
 	@HideFromInspector
@@ -25,6 +28,7 @@ script ScreenFadeLogic extends Logic
 		self.Phase = "HOLD"
 		self.Alpha = 1
 		self.HoldTimer = 0
+		self:ResetHold()
 		self:ApplyAlpha()
 		log("[VRF] ScreenFadeLogic begin")
 	end
@@ -48,12 +52,64 @@ script ScreenFadeLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void ResetHold()
+		-- 검은 화면 대기(HOLD) 판정값 초기화.
+		self._T.startSent = false
+		self._T.stable = 0
+		self._T.lastY = nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method void HoldForScene()
+		-- 탑 스테이지 이동: 검은 화면을 유지한 채 구성원이 발판에 선 것을 확인하고 밝힌다.
+		self.Phase = "HOLD"
+		self.Alpha = 1
+		self.HoldTimer = 0
+		self:ResetHold()
+		self:ApplyAlpha()
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean SceneReady(Component mgr, Entity player, number delta)
+		-- 탑: 판이 시작되어(HUD 표시 상태) 구성원 1이 발판에 선 채 멈춰 있으면 준비 완료. 탑이 아니면 바로 준비 완료.
+		if mgr == nil then return true end
+		local st = mgr.RunState
+		if st == "WAIT" or st == "READY" or st == "FADE" or not isvalid(player) then
+			self._T.stable = 0
+			return false
+		end
+		local wp = player.TransformComponent.WorldPosition
+		-- 입장 출발점으로 옮겨지는 중이면(순간 이동이 아직 반영 전) 기다린다
+		if mgr.EntryHold and math.abs(wp.x - mgr.EntryLeadStartX) > 0.15 then
+			self._T.stable = 0
+			return false
+		end
+		local body = player.RigidbodyComponent
+		local grounded = not isvalid(body) or body:IsOnGround()
+		local lastY = self._T.lastY
+		self._T.lastY = wp.y
+		if not grounded or lastY == nil or math.abs(wp.y - lastY) > 0.002 then
+			self._T.stable = 0
+			return false
+		end
+		self._T.stable = (self._T.stable or 0) + delta
+		return self._T.stable >= self.GroundStableTime
+	end
+
+	@ExecSpace("ClientOnly")
 	method void BeginFadeIn(Entity map)
-		-- 검은 화면을 걷어내기 시작. 탑 맵이면 이 순간 서버에 전투 시작을 요청한다.
+		-- 검은 화면을 걷어내기 시작. 탑 맵이면 입장 출발점에서 기다리던 파티를 걷게 한다 (아직 판 시작 전이면 시작 요청).
 		self.Phase = "IN"
 		local mgr = map:GetComponent("script.TowerRunManager")
-		if mgr ~= nil then mgr:RequestStart() end
-		log("[VRF] fade in start map=" .. map.Name .. " battleStart=" .. tostring(mgr ~= nil))
+		if mgr ~= nil then
+			if mgr.RunState == "READY" and not self._T.startSent then
+				self._T.startSent = true
+				mgr:RequestStart()
+			end
+			if mgr.EntryHold then mgr:RequestEntryGo() end
+		end
+		local st = mgr ~= nil and mgr.RunState or "-"
+		log("[VRF] fade in start map=" .. map.Name .. " state=" .. st .. " hold=" .. tostring(self.HoldTimer))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -71,6 +127,7 @@ script ScreenFadeLogic extends Logic
 			self.Phase = "HOLD"
 			self.Alpha = 1
 			self.HoldTimer = 0
+			self:ResetHold()
 		end
 
 		if self.Phase == "OUT" then
@@ -87,8 +144,14 @@ script ScreenFadeLogic extends Logic
 			self.HoldTimer = self.HoldTimer + delta
 			if isvalid(map) then
 				local mgr = map:GetComponent("script.TowerRunManager")
-				local ready = mgr == nil or mgr.RunState == "READY"
+				-- 탑: 검은 화면인 동안 판 시작을 요청해 HUD·구성원 배치를 먼저 끝낸다
+				if mgr ~= nil and mgr.RunState == "READY" and self.HoldTimer >= 0.15 and not self._T.startSent then
+					self._T.startSent = true
+					mgr:RequestStart()
+				end
+				local ready = self:SceneReady(mgr, player, delta)
 				if (ready and self.HoldTimer >= 0.15) or self.HoldTimer >= self.MaxHoldTime then
+					if not ready then log_warning("[VRF] fade hold timeout") end
 					self:BeginFadeIn(map)
 				end
 			end
