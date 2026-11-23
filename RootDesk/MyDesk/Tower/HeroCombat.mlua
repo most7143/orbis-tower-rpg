@@ -445,6 +445,7 @@ script HeroCombat extends Component
 	method void LoadSkills()
 		-- skills[Id] = { id, name, trigger, kind, cooldown, buffTime, mana, comboUse, comboBonus, bleed, proc = { chance, pct, hits, 연출 } }
 		self._T.skills = {}
+		self._T.baseOf = {}
 		-- 디버프 표: debuffDefs[Id] = { name, effect, value, duration, fx }
 		self._T.debuffDefs = {}
 		local dt = _DataService:GetTable(self.DebuffTableName)
@@ -472,6 +473,8 @@ script HeroCombat extends Component
 		for i = 1, js:GetRowCount() do
 			if js:GetCell(i, "JobId") == "Hero" then
 				local id = js:GetCell(i, "SkillId")
+				local baseId = js:GetCell(i, "Base") or ""
+				if baseId ~= "" then self._T.baseOf[id] = baseId end
 				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
 				local p = acts[id] or { actionFrames = "", actionTime = 0.8, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", hitGap = 0.12, hitY = 0.45, targets = 1 }
 				p.chance = num("Chance")
@@ -514,6 +517,7 @@ script HeroCombat extends Component
 		t.equip = {}
 		t.ownLv = {}
 		t.slotOf = {}
+		t.dataOf = {}
 		t.pctMul = {}
 		t.tier = 0
 		t.ultId = nil
@@ -578,6 +582,8 @@ script HeroCombat extends Component
 		end
 		-- 4-F: 돌파 저장 키(직업.칸) 등록
 		mgr:RegisterSlots(self.JobId, self._T.slotOf)
+		-- 스킬 개편: 새 스킬 이름·속성을 판 매니저(돌파 카드·타격 속성)에 알린다
+		mgr:RegisterSkillAlias(self.JobId, self._T.dataOf or {})
 		self.Active = true
         self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
 		self.Mana = self.ManaStart
@@ -624,6 +630,35 @@ script HeroCombat extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method string Alias(Component mgr, string id)
+		-- 스킬 개편: 새 스킬 Id(JobSkillTable 행)를 동작 기준 스킬(Base 열)에 입힌다. 이름·수치·발동 방식은 새 스킬 값, 동작·돌파·연출은 기준 스킬 것.
+		-- 돌려주는 값: 장착할 동작 Id (기준이 없으면 그대로). dataOf[동작 Id] = 새 스킬 Id (HUD·툴팁·속성 표시용).
+		if id == nil or id == "" then return "" end
+		local base = (self._T.baseOf or {})[id] or ""
+		local src = self._T.skills[id]
+		local dst = self._T.skills[base]
+		if base == "" or src == nil or dst == nil then return id end
+		for _, k in ipairs({ "name", "trigger", "cooldown", "buffTime", "mana", "chance", "pct", "hits", "comboUse", "comboBonus", "bleed" }) do
+			if src[k] ~= nil then dst[k] = src[k] end
+		end
+		if src.proc ~= nil and dst.proc ~= nil then
+			dst.proc.chance = src.proc.chance
+			dst.proc.pct = src.proc.pct
+			dst.proc.hits = src.proc.hits
+		end
+		if self._T.dataOf == nil then self._T.dataOf = {} end
+		self._T.dataOf[base] = id
+		log("[VRF] skill alias job=" .. self.JobId .. " id=" .. id .. " base=" .. base .. " name=" .. tostring(dst.name))
+		return base
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DataId(string id)
+		-- 동작 Id → 화면에 보일 스킬 Id (새 스킬이 입혀져 있으면 그 Id).
+		return (self._T.dataOf or {})[id] or id
+	end
+
+	@ExecSpace("ServerOnly")
 	method void ApplySlots(Component mgr, table d)
 		-- 4-C: 칸 순서(주력·보조·기술·하이퍼·궁극기 = HUD S1~S5)대로 현재 차수 칸 스킬을 장착하고 칸 수치(배율·쿨·마나·발동 방식)를 덮어쓴다.
 		local tier = math.max(1, math.floor(d.tier or 1))
@@ -636,8 +671,8 @@ script HeroCombat extends Component
 		self._T.pExtra = p.extra or {}
 		self.UltMax = mgr.UltGaugeMax
 		local pcts = {}
-		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "Ult" }) do
-			local id = (d.slots or {})[key] or ""
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "V1", "V2", "V3", "Ult" }) do
+			local id = self:Alias(mgr, (d.slots or {})[key] or "")
 			if id ~= "" and self._T.skills[id] ~= nil then
 				table.insert(self._T.equip, id)
 				self._T.slotOf[id] = key
@@ -662,7 +697,8 @@ script HeroCombat extends Component
 		log("[VRF] slots run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " lv=" .. tostring(self.RunLevel) .. " equip=" .. table.concat(self._T.equip, ",") .. " pct=" .. table.concat(pcts, ",") .. " ult=" .. tostring(self._T.ultId or ""))
 		-- 4-E: 패시브가 흡수한 확률·위기 스킬을 숨은 장착으로 (HUD 칸에는 안 보임, 돌파 카드·마법의 서 대상)
 		local hidden = {}
-		for _, gid in ipairs(p.grants or {}) do
+		for _, gid0 in ipairs(p.grants or {}) do
+			local gid = self:Alias(mgr, gid0)
 			if self._T.skills[gid] ~= nil and not self:Equipped(gid) then
 				table.insert(self._T.equip, gid)
 				self._T.hidden[gid] = true
@@ -679,6 +715,7 @@ script HeroCombat extends Component
 	@ExecSpace("ServerOnly")
 	method string SwapSlot(Component mgr, string slot, string newId)
 		-- 4-F 테스트(DebugSwapSlot): 판 중 진화 흉내 — 그 칸의 스킬을 newId로 바꾸고 칸 수치를 다시 덮어쓴다. 돌려주는 값: 이전 스킬 Id(없으면 "").
+		newId = self:Alias(mgr, newId)
 		local sk = self._T.skills[newId]
 		if sk == nil then return "" end
 		local old = ""
@@ -1988,6 +2025,8 @@ script HeroCombat extends Component
 		local crit = r.hitCrit[h] == true
 		local pc = self.Entity:GetComponent("script.TowerPlayer")
 		-- 각인 '섬멸'은 숫자를 띄우기 전에 판정 (뜨는 숫자도 2배, 줄 선 몬스터는 ApplySplashDamage가 따로 판정)
+		-- 전투 개편: 이 타격의 주인·스킬 (공격 타입·속성 배율용)
+		local prevSrc = mgr:SetHitSrc(self.Entity, r.id or "", false)
 		local frontDmg = mgr:FinalDouble(dmg)
 		if pc ~= nil then pc:ShowProcDamageAt(target, frontDmg, crit, (h - 1) * self.HitNumGap) end
 		-- 범위 스킬: 맨 앞 뒤로 줄 선 몬스터도 (최대 타격 수 - 1)마리까지 같은 피해 (앞 몬스터가 이 타격에 쓰러져도 맞음)
@@ -2007,6 +2046,7 @@ script HeroCombat extends Component
 			end
 			mgr:ApplySplashDamage(e, dmg, crit, (h - 1) * self.HitNumGap)
 		end
+		mgr:ClearHitSrc(prevSrc)
 		if r.execute ~= nil and h == #r.hitDmg and self:Alive(target) and mgr.MonsterHp > 0 and mgr.MonsterHp <= mgr.MonsterMaxHp * r.execute then
 			local rest = math.ceil(mgr.MonsterHp)
 			if pc ~= nil then pc:ShowProcDamage(target, rest, true) end
@@ -2030,6 +2070,8 @@ script HeroCombat extends Component
 		if fx ~= nil and fx ~= "" then first = string.match(fx, "^([^|]+)") or fx end
 		self:PlaySound(sound)
 		local pc = self.Entity:GetComponent("script.TowerPlayer")
+		-- 전투 개편: 추가 피해는 히어로 기본 공격 타입·속성 (이미 스킬 타격 중이면 그 값을 유지)
+		local prevSrc = mgr:EnsureHitSrc(self.Entity)
 		for i, e in ipairs(list) do
 			if not isvalid(e) or e.TransformComponent == nil then continue end
 			if first ~= "" then
@@ -2050,6 +2092,7 @@ script HeroCombat extends Component
 			end
 			table.insert(hit, e)
 		end
+		mgr:ClearHitSrc(prevSrc)
 		return hit
 	end
 
@@ -2369,7 +2412,9 @@ script HeroCombat extends Component
 		if not self:Alive(target) then return end
 		local dmg = self:DotValue(def, id, tonumber(mgr.MonsterHp) or 0, self:DefDownPct())
 		local pc = self.Entity:GetComponent("script.TowerPlayer")
+		local prevSrc = mgr:SetHitSrc(self.Entity, id, true)
 		dmg = mgr:FinalDouble(dmg)
+		mgr:ClearHitSrc(prevSrc)
 		if pc ~= nil then pc:ShowProcDamage(target, dmg, false) end
 		mgr:ApplyRolledDamage(dmg)
 		log("[VRF] dot " .. def.name .. " dmg=" .. tostring(dmg))
@@ -3008,6 +3053,7 @@ script HeroCombat extends Component
 			_EffectService:PlayEffect(hitFx, target, self:HitPos(target, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true })
 			self:PlaySound(self.SwordHitSound)
 			local pc = self.Entity:GetComponent("script.TowerPlayer")
+			local prevSrc = mgr:SetHitSrc(self.Entity, "H12", false)
 			local d1 = mgr:FinalDouble(dmg)
 			if pc ~= nil then pc:ShowProcDamage(target, d1, crit) end
 			local splash = mgr:SplashTargets((sk.proc.targets or 1) - 1)
@@ -3018,6 +3064,7 @@ script HeroCombat extends Component
 				_EffectService:PlayEffect(hitFx, e, Vector3(wp.x, wp.y + self._T.monMid, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
 				mgr:ApplySplashDamage(e, dmg, crit, 0)
 			end
+			mgr:ClearHitSrc(prevSrc)
 			-- 돌파 4: 작은 검 2개가 원본 피해의 30%로 따라 침
 			if mini then
 				local small = math.max(1, math.floor(dmg * self.SwordMiniPct / 100 + 0.5))
@@ -3141,9 +3188,9 @@ script HeroCombat extends Component
 			local sk = self._T.skills[id]
 			if sk ~= nil and self:Learned(id) and not (self._T.hidden or {})[id] then
 				if id == self._T.ultId then
-					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
+					table.insert(slots, self:DataId(id) .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
 				else
-					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
+					table.insert(slots, self:DataId(id) .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
 				end
 			end
 		end

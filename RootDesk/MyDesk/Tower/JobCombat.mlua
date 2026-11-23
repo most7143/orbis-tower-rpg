@@ -69,6 +69,7 @@ script JobCombat extends Component
 	method void LoadSkills()
 		-- JobSkillTable(JobId) + SkillActionTable(연출)을 읽는다.
 		self._T.skills = {}
+		self._T.baseOf = {}
 		self._T.skillCount = 0
 		self._T.loadedJob = self.JobId
 		local acts = {}
@@ -86,6 +87,8 @@ script JobCombat extends Component
 		for i = 1, js:GetRowCount() do
 			if js:GetCell(i, "JobId") == self.JobId then
 				local id = js:GetCell(i, "SkillId")
+				local baseId = js:GetCell(i, "Base") or ""
+				if baseId ~= "" then self._T.baseOf[id] = baseId end
 				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
 				local a = acts[id] or { actionFrames = "", actionTime = 0.6, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", gap = 0.12, targets = 1 }
 				self._T.skills[id] = { id = id, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Skill", cooldown = num("Cooldown"), buffTime = num("BuffTime"),
@@ -151,6 +154,19 @@ script JobCombat extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method table SpecOverride()
+		-- 스킬 개편: 기준 스킬(Base)과 효과가 다른 새 스킬의 기본 효과. 키 = 새 스킬 Id.
+		return {
+			N21 = { knock = true },
+			A20 = {},
+			A24 = { slow = true },
+			A28 = { slow = true },
+			V22 = { kind = "buff", reduce = 20, atk = 15 },
+			V27 = { kind = "buff", atk = 15 },
+		}
+	end
+
+	@ExecSpace("ServerOnly")
 	method table Breaks()
 		-- 돌파 효과. cd·mana·hits·targets·recast·dur·interval·proc = 값 바꾸기, dmg = 피해 +%, set = 효과 필드 덮어쓰기, flag = 코드 처리.
 		if self._T.brk ~= nil then return self._T.brk end
@@ -211,6 +227,7 @@ script JobCombat extends Component
 		t.equip = {}
 		t.ownLv = {}
 		t.slotOf = {}
+		t.dataOf = {}
 		t.pctMul = {}
 		t.tier = 0
 		t.ultId = nil
@@ -244,7 +261,8 @@ script JobCombat extends Component
 	method void BeginRun(Component mgr)
 		-- 4-C: 판 시작 — 캐릭터 차수의 칸 스킬(주력·보조·기술·하이퍼·궁극기)을 장착한다. 로비 장착·스킬 레벨은 읽지 않는다.
 		-- 직업이 바뀌었으면 spec 초기화. 칸 수치 덮어쓰기가 판마다 쌓이지 않게 스킬표는 매 판 다시 읽는다.
-		if self._T.loadedJob ~= self.JobId then self._T.spec = nil end
+		-- 스킬 개편: 새 스킬이 기준 스킬의 효과(spec)를 바꿔 쓸 수 있으므로 매 판 다시 만든다
+		self._T.spec = nil
 		self:LoadSkills()
 		self:ClearState()
 		self._T.mgr = mgr
@@ -278,6 +296,8 @@ script JobCombat extends Component
 		end
 		-- 4-F: 돌파 저장 키(직업.칸) 등록
 		mgr:RegisterSlots(self.JobId, self._T.slotOf)
+		-- 스킬 개편: 새 스킬 이름·속성을 판 매니저(돌파 카드·타격 속성)에 알린다
+		mgr:RegisterSkillAlias(self.JobId, self._T.dataOf or {})
 		self.Active = true
 		self.ManaMax = 100 * (1 + mgr:Bonus("AccountMana") / 100)
 		self.Mana = self.ManaStart
@@ -295,6 +315,38 @@ script JobCombat extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method string Alias(Component mgr, string id)
+		-- 스킬 개편: 새 스킬 Id(JobSkillTable 행)를 동작 기준 스킬(Base 열)에 입힌다. 이름·수치·발동 방식은 새 스킬 값, 동작·돌파·연출은 기준 스킬 것.
+		-- 돌려주는 값: 장착할 동작 Id (기준이 없으면 그대로). dataOf[동작 Id] = 새 스킬 Id (HUD·툴팁·속성 표시용).
+		if id == nil or id == "" then return "" end
+		local base = (self._T.baseOf or {})[id] or ""
+		local src = self._T.skills[id]
+		local dst = self._T.skills[base]
+		if base == "" or src == nil or dst == nil then return id end
+		for _, k in ipairs({ "name", "trigger", "cooldown", "buffTime", "mana", "chance", "pct", "hits", "comboUse", "comboBonus", "bleed" }) do
+			if src[k] ~= nil then dst[k] = src[k] end
+		end
+		if src.proc ~= nil and dst.proc ~= nil then
+			dst.proc.chance = src.proc.chance
+			dst.proc.pct = src.proc.pct
+			dst.proc.hits = src.proc.hits
+		end
+		if self._T.dataOf == nil then self._T.dataOf = {} end
+		self._T.dataOf[base] = id
+		-- 기준 스킬 효과와 성격이 다른 새 스킬은 효과(spec)만 바꿔 쓴다 (돌파·연출은 기준 스킬 것)
+		local ovr = self:SpecOverride()[id]
+		if ovr ~= nil then self:Spec()[base] = ovr end
+		log("[VRF] skill alias job=" .. self.JobId .. " id=" .. id .. " base=" .. base .. " name=" .. tostring(dst.name) .. " ovr=" .. tostring(ovr ~= nil))
+		return base
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DataId(string id)
+		-- 동작 Id → 화면에 보일 스킬 Id (새 스킬이 입혀져 있으면 그 Id).
+		return (self._T.dataOf or {})[id] or id
+	end
+
+	@ExecSpace("ServerOnly")
 	method void ApplySlots(Component mgr, table d)
 		-- 4-C: 칸 순서(주력·보조·기술·하이퍼·궁극기 = HUD S1~S5)대로 현재 차수 칸 스킬을 장착하고 칸 수치(배율·쿨·마나·발동 방식)를 덮어쓴다.
 		local tier = math.max(1, math.floor(d.tier or 1))
@@ -307,8 +359,8 @@ script JobCombat extends Component
 		self._T.pExtra = p.extra or {}
 		self.UltMax = mgr.UltGaugeMax
 		local pcts = {}
-		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "Ult" }) do
-			local id = (d.slots or {})[key] or ""
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "V1", "V2", "V3", "Ult" }) do
+			local id = self:Alias(mgr, (d.slots or {})[key] or "")
 			if id ~= "" and self._T.skills[id] ~= nil then
 				table.insert(self._T.equip, id)
 				self._T.slotOf[id] = key
@@ -332,7 +384,8 @@ script JobCombat extends Component
 		log("[VRF] slots run job=" .. self.JobId .. " tier=" .. tostring(tier) .. " lv=" .. tostring(self.RunLevel) .. " equip=" .. table.concat(self._T.equip, ",") .. " pct=" .. table.concat(pcts, ",") .. " ult=" .. tostring(self._T.ultId or ""))
 		-- 4-E: 패시브가 흡수한 확률·위기 스킬을 숨은 장착으로 (HUD 칸에는 안 보임, 돌파 카드·마법의 서 대상)
 		local hidden = {}
-		for _, gid in ipairs(p.grants or {}) do
+		for _, gid0 in ipairs(p.grants or {}) do
+			local gid = self:Alias(mgr, gid0)
 			if self._T.skills[gid] ~= nil and not self:Equipped(gid) then
 				table.insert(self._T.equip, gid)
 				self._T.hidden[gid] = true
@@ -349,6 +402,7 @@ script JobCombat extends Component
 	@ExecSpace("ServerOnly")
 	method string SwapSlot(Component mgr, string slot, string newId)
 		-- 4-F 테스트(DebugSwapSlot): 판 중 진화 흉내 — 그 칸의 스킬을 newId로 바꾸고 칸 수치를 다시 덮어쓴다. 돌려주는 값: 이전 스킬 Id(없으면 "").
+		newId = self:Alias(mgr, newId)
 		local sk = self._T.skills[newId]
 		if sk == nil then return "" end
 		local old = ""
@@ -1444,7 +1498,10 @@ script JobCombat extends Component
 			_EffectService:PlayEffectAttached(r.mobFx, target, Vector3(0, 0.5, 0), 0, Vector3(1, 1, 1), false)
 		end
 		local last = h == #r.hitDmg
+		-- 전투 개편: 이 타격의 스킬 (스킬 표 DmgType·Element)
+		local prevSrc = mgr:SetHitSrc(self.Entity, r.id or "", false)
 		local list = self:DealTo(target, dmg, r.hitCrit[h] == true, fx, r.targets or 1, ((h - 1) % 4) * self.HitNumGap)
+		mgr:ClearHitSrc(prevSrc)
 		for _, e in ipairs(list) do
 			self:ApplyEffects(p, e, last)
 			if (p.life or 0) > 0 then mgr:HealActor(self.Entity, math.min(dmg * p.life / 100, mgr:ActorMaxHp(self.Entity) * (p.lifeCap or 3) / 100)) end
@@ -1479,6 +1536,8 @@ script JobCombat extends Component
 		if fx ~= nil and fx ~= "" then first = string.match(fx, "^([^|]+)") or fx end
 		local tp = self.Entity:GetComponent("script.TowerPlayer")
 		local uid = self:OwnerUid()
+		-- 전투 개편: 타격 주인 = 이 구성원 (스킬 타격 중이면 그 스킬 유지)
+		local prevSrc = mgr:EnsureHitSrc(self.Entity)
 		table.insert(list, target)
 		if targets > 1 then
 			for _, e in ipairs(mgr:SplashTargets(targets - 1)) do table.insert(list, e) end
@@ -1515,6 +1574,7 @@ script JobCombat extends Component
 				end
 			end
 		end
+		mgr:ClearHitSrc(prevSrc)
 		return list
 	end
 
@@ -1824,9 +1884,9 @@ script JobCombat extends Component
 			local sk = self._T.skills[id]
 			if sk ~= nil and self:Learned(id) and not (self._T.hidden or {})[id] then
 				if id == self._T.ultId then
-					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
+					table.insert(slots, self:DataId(id) .. ":" .. string.format("%.1f", math.max(0, self.UltMax - self.UltGauge)) .. ":" .. string.format("%.1f", self.UltMax) .. ":U")
 				else
-					table.insert(slots, id .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
+					table.insert(slots, self:DataId(id) .. ":" .. string.format("%.1f", math.max(0, self._T.cd[id] or 0)) .. ":" .. string.format("%.1f", self:Cooldown(sk)) .. ":0")
 				end
 			end
 		end

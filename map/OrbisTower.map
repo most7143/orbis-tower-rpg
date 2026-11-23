@@ -16,7 +16,7 @@
       {
         "id": "d9cb02ec-c008-4662-98eb-0faa6128db9c",
         "path": "/maps/OrbisTower",
-        "componentNames": "MOD.Core.MapComponent,MOD.Core.FootholdComponent,script.TowerRunManager",
+        "componentNames": "MOD.Core.MapComponent,MOD.Core.FootholdComponent,script.TowerRunManager,script.BossMechanics",
         "jsonString": {
           "name": "OrbisTower",
           "path": "/maps/OrbisTower",
@@ -1114,6 +1114,10 @@
               "StateTimer": 0,
               "SpawnSeq": 0,
               "SavedBestFloor": 0
+            },
+            {
+              "@type": "script.BossMechanics",
+              "Enable": true
             }
           ],
           "@version": 1

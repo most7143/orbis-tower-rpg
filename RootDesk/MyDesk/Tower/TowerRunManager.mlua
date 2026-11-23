@@ -115,6 +115,17 @@ script TowerRunManager extends Component
 	-- 지금 전투 스테이지 종류: normal / elite / boss
 	@Sync
 	property string StageKind = "normal"
+	-- 보스 개편 (Docs/Boss/Boss-Stage-Spec.md): 판 종류 normal / boss(보스 탭 보스전), 보스전 보스·단계, 보스전 정산 결과
+	@Sync
+	property string RunMode = "normal"
+	@Sync
+	property string BossRunId = ""
+	@Sync
+	property integer BossRunStep = 0
+	@Sync
+	property string BossResult = ""
+	-- 머쉬맘 소환물 (MonsterTable id, 주황버섯)
+	property string BossSummonMonsterId = "8"
 	-- 정비소·장신구 (설계 문서 8장): 장착 상태·진열대를 JSON으로 클라이언트에 보낸다
 	@Sync
 	property string AccessoryJson = ""
@@ -251,6 +262,9 @@ script TowerRunManager extends Component
 	-- 돌파 옵션 화면을 보고 있는 스킬
 	@Sync
 	property string BreakSkill = ""
+	-- 스킬 개편: 이번 판 동작 Id → 화면에 보일 새 스킬 Id ("H02=H21,N03=N20"). 돌파 카드·마법의 서가 새 이름·아이콘을 보여 주는 데 쓴다
+	@Sync
+	property string SkillAlias = ""
 	@Sync
 	property integer ChoiceSeq = 0
 	@Sync
@@ -548,6 +562,8 @@ script TowerRunManager extends Component
 		self:LoadEquipTable()
 		self:LoadDealTable()
 		self:LoadJobTables()
+		self:LoadCombatJobs()
+		self:LoadBossTables()
 		log("[VRF] TowerRunManager begin map=" .. self.Entity.Name .. " monsters=" .. tostring(#self._T.monsters) .. " floors=" .. tostring(#self._T.floors) .. " prefixes=" .. tostring(#self._T.prefixes))
 	end
 
@@ -1442,6 +1458,9 @@ script TowerRunManager extends Component
 		self.ScrollBossMax = i("ScrollBossMax", self.ScrollBossMax)
 		self.ScrollStageShift = n("ScrollStageShift", self.ScrollStageShift)
 		self.SlotStatStep = n("SlotStatStep", self.SlotStatStep)
+		-- 전투 능력치 개편: 속성 배율·마법 방어 비율·빗나감 상한 (속성 선언 없이 _T.cm에 보관)
+		self._T.cm = { weak = n("ElemWeakMul", 1.5), resist = n("ElemResistMul", 0.5), immune = n("ElemImmuneMul", 0.1), magicDef = n("MagicDefRatio", 0.5),
+			missCap = n("MissCap", 60), evadeCap = n("PlayerEvadeCap", 50), missTotalCap = n("PlayerMissTotalCap", 75), magicNeverMiss = n("MagicNeverMiss", 1) == 1 }
 		local count = 0
 		for _ in pairs(cfg) do count = count + 1 end
 		log("[VRF] RunConfig loaded keys=" .. tostring(count) .. " baseMeso=" .. tostring(self.BaseMesoReward) .. " expToNext=" .. tostring(self.BaseExpToNext) .. " enhanceRate=" .. tostring(self.EnhanceBaseRate) .. " stages=" .. tostring(self.StagesPerFloor))
@@ -1462,8 +1481,10 @@ script TowerRunManager extends Component
 				local pool = {}
 				for id in string.gmatch(floorDs:GetCell(i, "MonsterIds") or "", "[^|]+") do table.insert(pool, id) end
 				if #pool == 0 then table.insert(pool, floorDs:GetCell(i, "MonsterId")) end
+				-- 보스 개편 B2: 층 마지막 보스 = FieldBossId (MonsterTable id), 보스 스테이지 동안 BossBgRUID 배경 (빈칸 = 층 배경), BossTileSetRUID (빈칸 = 층 타일셋)
 				table.insert(self._T.floors, { name = floorDs:GetCell(i, "FloorName"), monsterId = floorDs:GetCell(i, "MonsterId"), pool = pool,
-					bg = floorDs:GetCell(i, "BgRUID") or "", ts = floorDs:GetCell(i, "TileSetRUID") or "" })
+					bg = floorDs:GetCell(i, "BgRUID") or "", ts = floorDs:GetCell(i, "TileSetRUID") or "",
+					fieldBoss = floorDs:GetCell(i, "FieldBossId") or "", bossBg = floorDs:GetCell(i, "BossBgRUID") or "", bossTs = floorDs:GetCell(i, "BossTileSetRUID") or "" })
 			end
 		end
 		local prefixDs = _DataService:GetTable(self.PrefixTableName)
@@ -1476,7 +1497,8 @@ script TowerRunManager extends Component
 		if types ~= nil then
 			for i = 1, types:GetRowCount() do
 				local t = types:GetCell(i, "Type")
-				self._T.typeMul[t] = { hp = tonumber(types:GetCell(i, "HpMul")) or 1, atk = tonumber(types:GetCell(i, "AtkMul")) or 1, evade = tonumber(types:GetCell(i, "EvadeRate")) or 0 }
+				self._T.typeMul[t] = { hp = tonumber(types:GetCell(i, "HpMul")) or 1, atk = tonumber(types:GetCell(i, "AtkMul")) or 1, evade = tonumber(types:GetCell(i, "EvadeRate")) or 0,
+					defP = tonumber(types:GetCell(i, "DefP") or "") or 0, defM = tonumber(types:GetCell(i, "DefM") or "") or 0 }
 			end
 		end
 		local ds = _DataService:GetTable(self.MonsterTableName)
@@ -1501,6 +1523,11 @@ script TowerRunManager extends Component
 					range = math.max(1, math.min(3, math.floor(tonumber(ds:GetCell(i, "AttackRange") or "1") or 1))),
 					-- MonsterTable Ranged = 1 이면 이 몬스터는 웨이브에서 항상 원거리
 					ranged = tonumber(ds:GetCell(i, "Ranged") or "0") == 1,
+					-- 전투 능력치 개편: 몬스터 공격 타입(P/M), 물리·마법 방어(빈칸 = 타입 기본), 속성 상성("Fire:W|Ice:R|Poison:N")
+					atkType = self:DmgTypeOf(ds:GetCell(i, "AtkType") or ""),
+					defP = tonumber(ds:GetCell(i, "DefP") or ""),
+					defM = tonumber(ds:GetCell(i, "DefM") or ""),
+					elem = self:ParseElemTable(ds:GetCell(i, "Elem") or ""),
 				}
 				table.insert(self._T.monsters, entry)
 				self._T.monsterById[ds:GetCell(i, "id")] = entry
@@ -1626,7 +1653,10 @@ script TowerRunManager extends Component
 				local sk = { id = id, job = job, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Proc", pool = js:GetCell(i, "StarPool") or "", cooldown = tonumber(js:GetCell(i, "Cooldown")) or 0,
 					buffTime = tonumber(js:GetCell(i, "BuffTime")) or 0, effects = effects, proc = proc, breaks = {}, max = 30,
 					kind = js:GetCell(i, "SkillType") or "", mana = tonumber(js:GetCell(i, "Mana")) or 0, comboUse = tonumber(js:GetCell(i, "ComboUse")) or 0,
-					comboBonus = tonumber(js:GetCell(i, "ComboBonus")) or 0, bleed = tonumber(js:GetCell(i, "Bleed")) or 0, element = js:GetCell(i, "Element") or "" }
+					comboBonus = tonumber(js:GetCell(i, "ComboBonus")) or 0, bleed = tonumber(js:GetCell(i, "Bleed")) or 0, element = js:GetCell(i, "Element") or "",
+					-- 전투 능력치 개편: 스킬 공격 타입(DmgType P/M, 빈칸 = 직업 값)·속성 Id(Element 빈칸 = 직업 기본 속성)
+					dmgType = self:DmgTypeOf(js:GetCell(i, "DmgType") or ""), elemId = "" }
+				if (sk.element or "") ~= "" then sk.elemId = self:ElemIdOf(sk.element) end
 				if self._T.jobSkills[job] == nil then self._T.jobSkills[job] = {} end
 				table.insert(self._T.jobSkills[job], sk)
 				self._T.skillById[id] = sk
@@ -1759,6 +1789,61 @@ script TowerRunManager extends Component
 		for id, slot in pairs(slotOf or {}) do
 			if slot ~= "" and slot ~= "Passive" then self._T.slotKeyOf[id] = job .. "." .. slot else self._T.slotKeyOf[id] = id end
 		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ResetSkillAlias()
+		-- 스킬 개편: 지난 판에 입힌 새 스킬 이름·속성을 원래 표 값으로 되돌린다.
+		for beh, orig in pairs(self._T.aliasOrig or {}) do
+			local sk = (self._T.skillById or {})[beh]
+			if sk ~= nil then
+				sk.name = orig.name
+				sk.element = orig.element
+				sk.elemId = orig.elemId
+				sk.dmgType = orig.dmgType
+			end
+		end
+		self._T.aliasOrig = {}
+		self._T.aliasOf = {}
+		self.SkillAlias = ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RegisterSkillAlias(string job, table alias)
+		-- 스킬 개편: 전투 컴포넌트가 동작 기준 스킬(beh)에 입힌 새 스킬(alias[beh] = 새 Id)의 이름·속성·공격 타입을 판 스킬 정보에도 입힌다.
+		-- 타격 속성(HitProfile)·돌파 카드 이름·마법의 서가 이 값을 쓴다. 같은 직업의 이전 입힘은 먼저 되돌린다.
+		if self._T.aliasOrig == nil then self._T.aliasOrig = {} end
+		if self._T.aliasOf == nil then self._T.aliasOf = {} end
+		for beh, orig in pairs(self._T.aliasOrig) do
+			local sk = (self._T.skillById or {})[beh]
+			if sk ~= nil and sk.job == job then
+				sk.name = orig.name
+				sk.element = orig.element
+				sk.elemId = orig.elemId
+				sk.dmgType = orig.dmgType
+				self._T.aliasOrig[beh] = nil
+				self._T.aliasOf[beh] = nil
+			end
+		end
+		local n = 0
+		for beh, did in pairs(alias or {}) do
+			local sk = (self._T.skillById or {})[beh]
+			local src = (self._T.skillById or {})[did]
+			if sk ~= nil and src ~= nil and beh ~= did then
+				self._T.aliasOrig[beh] = { name = sk.name, element = sk.element, elemId = sk.elemId, dmgType = sk.dmgType }
+				sk.name = src.name
+				sk.element = src.element
+				sk.elemId = src.elemId
+				sk.dmgType = src.dmgType
+				self._T.aliasOf[beh] = did
+				n = n + 1
+			end
+		end
+		local parts = {}
+		for beh, did in pairs(self._T.aliasOf) do table.insert(parts, beh .. "=" .. did) end
+		table.sort(parts)
+		self.SkillAlias = table.concat(parts, ",")
+		log("[VRF] skill alias registered job=" .. job .. " n=" .. tostring(n) .. " all=" .. self.SkillAlias)
 	end
 
 	@ExecSpace("ServerOnly")
@@ -2221,6 +2306,12 @@ script TowerRunManager extends Component
 			-- 4단계: 각인 '선행 학습'(StartLevel) = 판 시작 돌파 선택 +v회
 			-- 펫 P-C: 초용(판 시작 돌파 +v회)
 			self.PendingPicks = math.max(0, math.floor(self:Bonus("StartLevel") + self:PetEffect("StartBreak") + 0.5))
+			-- 보스 개편 B5: 보스전은 판 안 성장 없음 (판 시작 돌파도 없음)
+			if self.RunMode == "boss" then
+				self.PendingPicks = 0
+				-- 보스 개편(메인 담당 결정): 보스전은 판 안 성장이 없으므로 칸 스킬을 최대 레벨로 시작 (돌파는 없음)
+				self:BossMaxSkills()
+			end
 			log("[VRF] start breaks n=" .. tostring(self.PendingPicks))
 		else
 			for _, sk in ipairs(self:JobSkills()) do self.SkillLv[sk.id] = 0 end
@@ -2574,8 +2665,8 @@ script TowerRunManager extends Component
 	method integer PlayerHitDamage()
 		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
 		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
-		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - (self:Bonus("DefIgnore") + (self._T.castDefIgnore or 0)) / 100)
-		local dmg = self:RollPlayerAtk() * (1 - monDef / (monDef + self.DefConstant))
+		-- 전투 능력치 개편: 메인 기본 공격 타입에 맞는 몬스터 방어 (구성원별 칸 보너스는 넣지 않던 기존 계산 유지)
+		local dmg = self:RollPlayerAtk() * self:DefFactor(self:HitProfile(self._T.player, "").baseAtk, nil)
 		local mul = 1
 		-- 직업 스킬 '투혼': 내 체력 50% 이하일 때 주는 피해 증가
 		if self.PlayerHp < self.PlayerMaxHp * 0.5 then mul = mul + self:Bonus("LowHpAtk") / 100 end
@@ -2794,6 +2885,8 @@ script TowerRunManager extends Component
 		end
 		local pc = self:GetPlayerAttack()
 		for _, r in ipairs(procs) do
+			-- 전투 개편: 연타(타이머) 타격도 공격 타입·속성을 알 수 있게 타격 주인을 기억한다
+			if r.atkActor == nil then r.atkActor = attacker end
 			self._T.dmgCtx = self:DmgCtxOf(r)
 			if r.hero then
 				if hero ~= nil then hero:ApplyCast(self, r, target) end
@@ -2863,12 +2956,18 @@ script TowerRunManager extends Component
 			b.tick = b.tick + 1
 			local dmg = math.max(1, math.floor(self.PlayerAtk * b.pct / 100 + 0.5))
 			local pc = self:GetPlayerAttack()
+			-- 전투 개편: 화상은 불 속성 지속 피해 (불 약점·반감 적용, 방어 없음)
+			-- 보스 개편: 속성·지속 여부는 타격 주인(hitSrc)에 싣고, 이 블록이 끝나면 반드시 이전 값으로 되돌린다
+			-- (dmgCtx가 남아 다음 기본 공격이 불 속성·지속 피해를 이어받던 문제).
+			local prevSrc = self:SetHitSrc(nil, "", true)
+			self._T.hitSrc.elemId = "Fire"
+			self._T.dmgCtx = { dot = true, elem = true, elemId = "Fire" }
 			dmg = self:FinalDouble(dmg)
 			if pc ~= nil and isvalid(self._T.monster) then pc:ShowProcDamage(self._T.monster, dmg, false) end
 			log("[VRF] burn tick dmg=" .. tostring(dmg))
-			self._T.dmgCtx = { dot = true, elem = true }
 			self:ApplyRolledDamage(dmg)
 			self._T.dmgCtx = nil
+			self:ClearHitSrc(prevSrc)
 			if b.heal > 0 then self:HealPlayer(self.PlayerMaxHp * b.heal / 100) end
 			if self.RunState ~= "FIGHT" then return end
 		end
@@ -2936,7 +3035,9 @@ script TowerRunManager extends Component
 		end
 		if r.dmg > 0 then
 			local pc = self:GetPlayerAttack()
+			local prevSrc = self:SetHitSrc(r.atkActor, r.id or (r.sk ~= nil and r.sk.id or ""), false)
 			local hitDmg = self:FinalDouble(r.dmg)
+			self:ClearHitSrc(prevSrc)
 			if pc ~= nil then pc:ShowProcDamage(target, hitDmg, r.crit) end
 			self:ApplyRolledDamage(hitDmg)
 			if r.crit then self:OnPlayerCrit() end
@@ -3449,6 +3550,8 @@ script TowerRunManager extends Component
 		-- 판 시작: 1층 1스테이지, 판 안 성장치(레벨·경험치·메소·강화) 전부 초기화.
         local accountPlayer = self:GetEngrave()
         if accountPlayer == nil or not accountPlayer.AccountLoaded then return end
+		-- 보스 개편 B5: 이번 판이 보스전인지 정한다 (로비 예약 / 다시 도전 / 디버그)
+		self:SetupRunMode()
 		-- 4단계: 편성은 판 시작 때 로스터에서 한 번 정한다 (보정 → 편성 → 전투 컴포넌트 정리 순서)
 		self:LoadRunParty()
 		self:LoadFormation()
@@ -3543,7 +3646,14 @@ script TowerRunManager extends Component
 		end
 		-- 테스트: DebugStartFloor로 정한 층 (열린 층 제한 없음, 한 번 쓰고 지움)
 		-- 4-D 보완(B3): 디버그로 시작한 판은 최고 층·첫 클리어(각인 진행·다이아)·별 기록을 저장하지 않는다
+		-- 보스 개편 B5: 보스전은 해금 층(그 층 보스 수치·배경)을 기준으로 한다
+		local bossDebug = false
+		if self.RunMode == "boss" and self._T.bossRow ~= nil then
+			bossDebug = self._T.bossRun ~= nil and self._T.bossRun.debug == true
+			self._T.debugFloor = self._T.bossRow.unlockFloor
+		end
 		self._T.debugRun = self._T.debugFloor ~= nil
+		if self.RunMode == "boss" then self._T.debugRun = bossDebug end
 		self.ResultDebugRun = self._T.debugRun
 		if self._T.debugFloor ~= nil then
 			stageNo = math.max(1, math.min(maxStage, math.floor((self._T.debugFloor - 1) / self.FloorsPerStage) + 1))
@@ -3567,6 +3677,12 @@ script TowerRunManager extends Component
 		self._T.lastNonCombat = false
 		self._T.dealUsed = false
 		self._T.walk = nil
+		-- 보스 개편 B5: 보스전은 해금 층 마지막(보스) 스테이지 마지막 웨이브 하나만
+		if self.RunMode == "boss" then
+			self.Stage = self.StagesPerFloor
+			self.StageKind = "boss"
+			self._T.waveNo = self.WavesPerStage
+		end
 		self:ClearPortals()
 		self:ClearNpcs()
 		self._T.acc = { {}, {}, {} }
@@ -3594,6 +3710,7 @@ script TowerRunManager extends Component
 		self.CurseText = ""
 		self._T.extraHitTimer = 0
 		-- 직업·직업 스킬 초기화 (직업은 판 시작 화면에서 고름)
+		self:ResetSkillAlias()
 		self.JobId = ""
 		for id, _ in pairs(self._T.skillById) do
 			self.SkillLv[id] = 0
@@ -3668,6 +3785,13 @@ script TowerRunManager extends Component
 			self._T.defaultBg = (isvalid(bgEnt) and isvalid(bgEnt.BackgroundComponent)) and bgEnt.BackgroundComponent.TemplateRUID or ""
 		end
 		local bg = f.bg
+		-- 보스 개편 B2: 층 보스 스테이지(보스전 포함) 동안 필드보스 원본 맵 배경. 타일셋은 BossTileSetRUID가 있을 때만 바꾸고 없으면 층 것 유지
+		local bossStage = self.StageKind == "boss" and (f.bossBg or "") ~= ""
+		if bossStage then bg = f.bossBg end
+		if self.RunMode == "boss" and self._T.bossRow ~= nil and (self._T.bossRow.bg or "") ~= "" then
+			bg = self._T.bossRow.bg
+			bossStage = true
+		end
 		if bg == nil or bg == "" then bg = self._T.defaultBg end
 		local bgEnt = self.Entity:GetChildByName("Background")
 		if isvalid(bgEnt) and isvalid(bgEnt.BackgroundComponent) and bg ~= "" and bgEnt.BackgroundComponent.TemplateRUID ~= bg then
@@ -3675,6 +3799,8 @@ script TowerRunManager extends Component
 			log("[VRF] floor look bg " .. tostring(self.Floor) .. " -> " .. bg)
 		end
 		local ts = f.ts or ""
+		if bossStage and self.StageKind == "boss" and (f.bossTs or "") ~= "" then ts = f.bossTs end
+		if self.RunMode == "boss" and self._T.bossRow ~= nil and (self._T.bossRow.ts or "") ~= "" then ts = self._T.bossRow.ts end
 		if self.FloorTileSet ~= ts then
 			self.FloorTileSet = ts
 			log("[VRF] floor look tileset " .. tostring(self.Floor) .. " -> " .. ts)
@@ -3800,11 +3926,12 @@ script TowerRunManager extends Component
 		if isvalid(monster) and self._T.infoOf ~= nil and self._T.infoOf[monster] ~= nil then
 			info = self._T.infoOf[monster]
 		else
-			info = self:PickFloorInfo(info)
+			info = self:PickWaveInfo(info, (self._T.waveSpawned or 0) + 1)
 		end
 		local kindName = ""
 		if self.StageKind == "elite" then kindName = " (정예)" elseif self.StageKind == "boss" then kindName = " (보스)" end
 		self.FloorTitle = tostring(self.Floor) .. "층 " .. floorName .. "  스테이지 " .. tostring(self.Stage) .. "/" .. tostring(self.StagesPerFloor) .. kindName
+		if self.RunMode == "boss" and self._T.bossRow ~= nil then self.FloorTitle = self._T.bossRow.name .. "  " .. tostring(self.BossRunStep) .. "단계" end
 
 		local mul = self._T.typeMul[info.type] or { hp = 1, atk = 1, evade = 0 }
 		local statLv = self:StageMonsterLevel()
@@ -3815,6 +3942,7 @@ script TowerRunManager extends Component
 		local atk = (self.MonsterAtkBase + self.MonsterAtkPerLevel * statLv) * mul.atk * stageMul
 		local evade = mul.evade
 		local def = 0
+		local defMAdd = 0
 		local crit = 0
 		local interval = self.MonsterAttackInterval
 		local prefix = ""
@@ -3855,14 +3983,20 @@ script TowerRunManager extends Component
 			prefix = p.name .. " "
 			if p.stat == "Atk" then atk = atk * p.value
 			elseif p.stat == "Def" then def = p.value
+			elseif p.stat == "DefM" then defMAdd = p.value
 			elseif p.stat == "Crit" then crit = p.value
 			elseif p.stat == "Speed" then interval = interval / p.value
 			elseif p.stat == "Evade" then evade = evade + p.value
 			end
 		end
-		def = def * rankDef
+		-- 전투 능력치 개편: 물리 방어 = (몬스터·타입 기본 + '단단한') × 등급, 마법 방어 = (기본 + '마력 결계') × 등급
+		local defM = ((info.defM or mul.defM or 0) + defMAdd) * rankDef
+		def = ((info.defP or mul.defP or 0) + def) * rankDef
 		self._T.monsterEvade = evade
 		self._T.monsterDef = def
+		self._T.monsterDefP = def
+		self._T.monsterDefM = defM
+		self._T.monInfo = info
 		self._T.monsterCrit = crit
 		self._T.monsterInterval = interval
 		local rankHp = 1
@@ -3908,6 +4042,8 @@ script TowerRunManager extends Component
 			monster.TransformComponent.Scale = Vector3(self.BossScale, self.BossScale, 1)
 			if self._T.bossOf == nil then self._T.bossOf = {} end
 			self._T.bossOf[monster] = true
+			-- 보스 개편 B3·B5: 보스전 수치·속성 덮어쓰기 + 기믹 시작 (필드보스는 예고 강타만)
+			self:OnBossFront(monster, info)
 		elseif self.MonsterElite and self._T.pendingPrefix ~= nil then
 			if self._T.prefixOf == nil then self._T.prefixOf = {} end
 			if self._T.prefixOf[monster] == nil then
@@ -3927,7 +4063,7 @@ script TowerRunManager extends Component
 		-- 우리 편 공격은 사거리·쿨타임으로 판단 (ActorTryAttack). 몬스터는 걸어 들어오는 동안 공격하지 않는다
 		self.MonsterAttackTimer = interval + walkTime
 		self.RunState = "FIGHT"
-		log("[VRF] " .. self.FloorTitle .. " wave left=" .. tostring(self._T.waveLeft) .. " queue=" .. tostring(#(self._T.queue or {})) .. " monster " .. self.MonsterLabel .. " lv=" .. tostring(info.level) .. " statLv=" .. string.format("%.1f", statLv) .. " (" .. info.type .. ") elite=" .. tostring(self.MonsterElite) .. " hp=" .. tostring(self.MonsterMaxHp) .. " atk=" .. tostring(self.MonsterAtk) .. " def=" .. tostring(def) .. " crit=" .. tostring(crit) .. " interval=" .. tostring(interval) .. " evade=" .. tostring(evade))
+		log("[VRF] " .. self.FloorTitle .. " wave left=" .. tostring(self._T.waveLeft) .. " queue=" .. tostring(#(self._T.queue or {})) .. " monster " .. self.MonsterLabel .. " lv=" .. tostring(info.level) .. " statLv=" .. string.format("%.1f", statLv) .. " (" .. info.type .. ") elite=" .. tostring(self.MonsterElite) .. " hp=" .. tostring(self.MonsterMaxHp) .. " atk=" .. tostring(self.MonsterAtk) .. " def=" .. tostring(def) .. " defM=" .. tostring(defM) .. " elem=" .. self:ElemTableText(info.elem) .. " crit=" .. tostring(crit) .. " interval=" .. tostring(interval) .. " evade=" .. tostring(evade))
 	end
 
 	@ExecSpace("ServerOnly")
@@ -3959,6 +4095,8 @@ script TowerRunManager extends Component
 		self._T.eliteOf = {}
 		-- 웨이브 몬스터 수 = 기본 + 구간당 증가. 강화 웨이브도 같은 수이며 마지막 1마리가 엘리트
 		local size = math.max(1, math.floor(self.WaveSizeBase + self.WaveSizePerSection * (self:SectionNo() - 1) + 0.5))
+		-- 보스 개편 B5: 보스전은 보스 1마리 (소환물은 웨이브 수에 넣지 않음)
+		if self.RunMode == "boss" then size = 1 end
 		self._T.waveSize = size
 		self._T.waveLeft = size
 		self._T.waveSpawned = 0
@@ -4041,7 +4179,7 @@ script TowerRunManager extends Component
 				if isvalid(q) and q.TransformComponent ~= nil then tail = math.max(tail, q.TransformComponent.Position.x) end
 			end
 			x = math.max(x, tail + self.SpawnSpacing + _UtilLogic:RandomDouble() * self.SpawnSpacingRand)
-			local mi = self:PickFloorInfo(info)
+			local mi = self:PickWaveInfo(info, idx)
 			local m = self:SpawnWaveMonster(mi, x)
 			if m == nil then break end
 			local mc = m:GetComponent("script.TowerMonster")
@@ -4081,6 +4219,30 @@ script TowerRunManager extends Component
 		if #pool == 0 then return fallback end
 		local id = pool[_UtilLogic:RandomIntegerRange(1, #pool)]
 		return self._T.monsterById[id] or fallback
+	end
+
+	@ExecSpace("ServerOnly")
+	method table PickWaveInfo(table fallback, integer idx)
+		-- 보스 개편 B2: 웨이브 idx번째 몬스터. 보스 스테이지 마지막 웨이브 마지막 1마리 = 층 FieldBossId (보스전 = BossTable MonsterId), 나머지는 층 몬스터 무작위.
+		local lastOfBoss = self.StageKind == "boss" and (self._T.waveNo or 1) >= self.WavesPerStage and idx >= (self._T.waveSize or 1)
+		if lastOfBoss then
+			local id = ""
+			if self.RunMode == "boss" and self._T.bossRow ~= nil then
+				id = self._T.bossRow.monsterId
+			else
+				local floors = self._T.floors or {}
+				local f = floors[math.min(self.Floor, #floors)]
+				if f ~= nil then id = f.fieldBoss or "" end
+			end
+			local bi = id ~= "" and self._T.monsterById[id] or nil
+			if bi ~= nil then
+				self._T.fieldBossId = id
+				log("[VRF] field boss id=" .. id .. " name=" .. tostring(bi.name) .. " floor=" .. tostring(self.Floor) .. " mode=" .. self.RunMode)
+				return bi
+			end
+			if id ~= "" then log_warning("[VRF] field boss id not in MonsterTable id=" .. id) end
+		end
+		return self:PickFloorInfo(fallback)
 	end
 
 	@ExecSpace("ServerOnly")
@@ -4171,13 +4333,18 @@ script TowerRunManager extends Component
 				if v > blind then blind = v end
 			end
 		end
+		-- 전투 개편: 디버프 빗나감 상한 75%, 회피 상한 50%, 둘을 합친 빗나감도 75%를 넘지 않게
+		local cmc = self:CM()
+		blind = math.min(cmc.missTotalCap, blind)
+		local evadeChance = math.min(cmc.evadeCap, self:Bonus("Evade") + self:SlotMileDelta(player, "Evade"))
+		if blind > 0 and blind < 100 then evadeChance = math.min(evadeChance, math.max(0, (cmc.missTotalCap - blind) / (1 - blind / 100))) end
 		if blind > 0 and _UtilLogic:RandomDouble() * 100 < blind then
 			mc:SetClip(mc.AttackRUID, mc.AttackAnimTime)
 			local pc = self:GetPlayerAttack()
 			if pc ~= nil then pc:ShowMiss(player, missUid) end
 			log("[VRF] monster miss by debuff chance=" .. tostring(blind))
 		-- 각인 '회피': 확률로 몬스터 공격을 피한다
-		elseif _UtilLogic:RandomDouble() * 100 < self:Bonus("Evade") + self:SlotMileDelta(player, "Evade") then
+		elseif _UtilLogic:RandomDouble() * 100 < evadeChance then
 			local pc = self:GetPlayerAttack()
 			if pc ~= nil then pc:ShowMiss(player, missUid) end
 			-- 돌파 '반격 자세': 공격한 몬스터에게 반격
@@ -4195,6 +4362,9 @@ script TowerRunManager extends Component
 			-- 각인 '철벽': 체력 50% 이하일 때 방어력 증가
 			local def = self:ActorDefense(player)
 			if self:ActorHp(player) < self:ActorMaxHp(player) * self.BulwarkHpRatio then def = def * (1 + self:Bonus("Bulwark") / 100) end
+			-- 전투 개편: 몬스터 마법 공격은 방어력의 일부(MagicDefRatio 50%)만 적용
+			local minfo = self:InfoOfTarget(m)
+			if minfo ~= nil and minfo.atkType == "M" then def = def * cmc.magicDef end
 			local reduce = def / (def + self.DefConstant)
 			-- 직업 스킬 '철벽 자세': 받는 피해 감소
 			local reduceSum = self:Bonus("DmgReduce") + self:SlotMileDelta(player, "DmgReduce")
@@ -4273,7 +4443,10 @@ script TowerRunManager extends Component
 		local id = r.sk ~= nil and r.sk.id or r.id
 		local base = id ~= nil and self._T.skillById[id] or nil
 		local elem = base ~= nil and (base.element or "") ~= "" and base.element ~= "출혈"
-		return { aoe = aoe, single = not aoe, elem = elem, dot = false }
+		-- elem(참/거짓)은 유물 '속성 피해' 대상 여부(기존 의미 유지), elemId는 전투 개편 속성 Id
+		local elemId = "None"
+		if base ~= nil and (base.elemId or "") ~= "" then elemId = base.elemId end
+		return { aoe = aoe, single = not aoe, elem = elem, elemId = elemId, dot = false }
 	end
 
 	@ExecSpace("ServerOnly")
@@ -4286,7 +4459,9 @@ script TowerRunManager extends Component
 		if not mc.IsQueued then
 			if e == self._T.monster and self.RunState == "FIGHT" then
 				local pc0 = self:GetPlayerAttack()
+				self._T.cmTarget = e
 				local d0 = self:FinalDouble(dmg)
+				self._T.cmTarget = nil
 				if pc0 ~= nil then pc0:ShowProcDamageAt(e, d0, crit, yOff) end
 				self:ApplyRolledDamage(d0)
 			end
@@ -4297,8 +4472,10 @@ script TowerRunManager extends Component
 		local ctx = self._T.dmgCtx
 		if ctx == nil or not ctx.aoe then relicPct = relicPct + self:Bonus("AoeDmg") end
 		if relicPct ~= 0 then dmg = math.max(1, math.floor(dmg * (1 + relicPct / 100) + 0.5)) end
-		-- 각인 핵심 '섬멸': 숫자를 띄우기 전에 판정
+		-- 각인 핵심 '섬멸': 숫자를 띄우기 전에 판정 (전투 개편: 이 대기열 몬스터의 속성 상성으로 CombatMul)
+		self._T.cmTarget = e
 		dmg = self:FinalDouble(dmg)
+		self._T.cmTarget = nil
 		if self._T.probe ~= nil then self._T.probe.dealt = self._T.probe.dealt + math.max(0, math.min(mc.Hp, dmg)) end
 		mc.Hp = mc.Hp - dmg
 		local pc = self:GetPlayerAttack()
@@ -4317,6 +4494,20 @@ script TowerRunManager extends Component
 		local queue = self._T.queue or {}
 		for i = #queue, 1, -1 do
 			if queue[i] == e then table.remove(queue, i) end
+		end
+		-- 보스 개편 B6: 보스 소환물은 웨이브 수·보상과 무관 (사망 연출만)
+		if self._T.summonOf ~= nil and self._T.summonOf[e] then
+			self._T.summonOf[e] = nil
+			local smc = e:GetComponent("script.TowerMonster")
+			local sdie = 0
+			if smc ~= nil then sdie = smc:PlayDie() end
+			local scorpse = e
+			_TimerService:SetTimerOnce(function()
+				if isvalid(scorpse) then scorpse:Destroy() end
+			end, math.max(0.1, sdie))
+			self:LayoutWave()
+			log("[VRF] boss summon killed alive=" .. tostring(self:BossSummonAlive()))
+			return
 		end
 		local mc = e:GetComponent("script.TowerMonster")
 		local dieDur = 0
@@ -4412,9 +4603,250 @@ script TowerRunManager extends Component
 		log("[VRF] reward meso+" .. tostring(meso) .. " total meso=" .. tostring(self.Meso) .. " picks=" .. tostring(self.PendingPicks))
 	end
 
+	-- ===== 전투 능력치 개편 (Docs/Combat/Stat-Redesign-Spec.md): 물리/마법 · 속성 약점/반감/무효 · 명중 =====
+
+	method string ElemIdOf(string s)
+		-- 속성 표기(Id 또는 한글)를 속성 Id로 바꾼다. 빈칸·무·출혈 = None (출혈은 속성이 아니라 지속 피해).
+		if s == nil or s == "" then return "None" end
+		local map = { None = "None", Fire = "Fire", Ice = "Ice", Lightning = "Lightning", Poison = "Poison", Holy = "Holy", Dark = "Dark",
+			["무"] = "None", ["무속성"] = "None", ["출혈"] = "None", ["불"] = "Fire", ["얼음"] = "Ice", ["번개"] = "Lightning", ["전기"] = "Lightning",
+			["독"] = "Poison", ["성"] = "Holy", ["신성"] = "Holy", ["어둠"] = "Dark", ["암흑"] = "Dark" }
+		return map[s] or "None"
+	end
+
+	method string DmgTypeOf(string s)
+		-- 공격 타입 표기를 "P"(물리)/"M"(마법)으로. 빈칸이나 모르는 값은 "" (= 상위 기본값을 따른다).
+		if s == "M" or s == "m" or s == "마법" or s == "Magic" then return "M" end
+		if s == "P" or s == "p" or s == "물리" or s == "Physical" then return "P" end
+		return ""
+	end
+
+	method table ParseElemTable(string s)
+		-- 몬스터 속성 상성 "Fire:W|Ice:R|Poison:N" → { Fire = "W", Ice = "R", Poison = "N" } (W 약점, R 반감, N 무효).
+		local t = {}
+		if s == nil or s == "" then return t end
+		for part in string.gmatch(s, "[^|]+") do
+			local e, lv = string.match(part, "^%s*([^:]+):([WRN])%s*$")
+			if e ~= nil then t[self:ElemIdOf(e)] = lv end
+		end
+		return t
+	end
+
+	method string ElemTableText(table t)
+		-- 로그용: 속성 상성 표를 "Fire:W|Ice:R" 글자로.
+		if t == nil then return "" end
+		local parts = {}
+		for _, id in ipairs({ "Fire", "Ice", "Lightning", "Poison", "Holy", "Dark" }) do
+			if t[id] ~= nil then table.insert(parts, id .. ":" .. t[id]) end
+		end
+		return table.concat(parts, "|")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadCombatJobs()
+		-- 직업 기본 공격 타입·기본 속성 (CharJobTable.AtkType / Element). 표에 없으면 비숍 = 마법·성, 나머지 = 물리·무속성.
+		self._T.jobCombat = { Hero = { atk = "P", elem = "None" }, Bishop = { atk = "M", elem = "Holy" }, NightLord = { atk = "P", elem = "None" },
+			Bowmaster = { atk = "P", elem = "None" }, Viper = { atk = "P", elem = "None" } }
+		local ds = _DataService:GetTable("CharJobTable")
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local id = ds:GetCell(i, "JobId")
+				if id ~= nil and id ~= "" then
+					local cur = self._T.jobCombat[id] or { atk = "P", elem = "None" }
+					local a = self:DmgTypeOf(ds:GetCell(i, "AtkType") or "")
+					local e = ds:GetCell(i, "Element") or ""
+					if a ~= "" then cur.atk = a end
+					if e ~= "" then cur.elem = self:ElemIdOf(e) end
+					self._T.jobCombat[id] = cur
+				end
+			end
+		end
+		log("[VRF] combat jobs Bishop=" .. self._T.jobCombat.Bishop.atk .. "/" .. self._T.jobCombat.Bishop.elem .. " Hero=" .. self._T.jobCombat.Hero.atk .. "/" .. self._T.jobCombat.Hero.elem)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table CM()
+		-- 전투 개편 설정값 (RunConfig가 없으면 기본값).
+		if self._T.cm == nil then
+			self._T.cm = { weak = 1.5, resist = 0.5, immune = 0.1, magicDef = 0.5, missCap = 60, evadeCap = 50, missTotalCap = 75, magicNeverMiss = true }
+		end
+		return self._T.cm
+	end
+
+	@ExecSpace("ServerOnly")
+	method string ActorJobId(Entity actor)
+		-- 구성원의 지금 직업 Id (편성 직업 전투 컴포넌트 기준). 모르면 "".
+		local h = self:HeroOf(actor)
+		if h == nil then return "" end
+		return h.JobId or ""
+	end
+
+	@ExecSpace("ServerOnly")
+	method table HitProfile(Entity actor, string skillId)
+		-- 타격 하나의 공격 타입·속성: 스킬 표 값(DmgType·Element)이 있으면 그것, 없으면 직업 기본값.
+		-- baseAtk = 구성원 기본 공격 타입 (ActorHitDamage가 방어를 깎을 때 쓴 타입).
+		local job = isvalid(actor) and self:ActorJobId(actor) or ""
+		return self:HitProfileFor(job, skillId)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table HitProfileFor(string job, string skillId)
+		-- 직업 Id 기준 타격 공격 타입·속성 (HitProfile 본체, 테스트에서도 직접 부른다).
+		local jd = (self._T.jobCombat or {})[job] or { atk = "P", elem = "None" }
+		local atk, elem = jd.atk, jd.elem
+		local sk = (skillId ~= nil and skillId ~= "" and self._T.skillById ~= nil) and self._T.skillById[skillId] or nil
+		if sk ~= nil then
+			if (sk.dmgType or "") ~= "" then atk = sk.dmgType end
+			if (sk.elemId or "") ~= "" then elem = sk.elemId end
+		end
+		return { atk = atk, elem = elem, baseAtk = jd.atk, job = job }
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DefFactor(string atkType, Entity actor)
+		-- 몬스터 방어에 의한 피해 비율 = 1 - 방어/(방어+상수). 마법이면 마법 방어, 아니면 물리 방어. 방어 무시(DefIgnore)는 둘 다 적용.
+		local def = self._T.monsterDefP or self._T.monsterDef or 0
+		if atkType == "M" then def = self._T.monsterDefM or 0 end
+		local ignore = self:Bonus("DefIgnore") + (self._T.castDefIgnore or 0)
+		if isvalid(actor) then ignore = ignore + self:SlotMileDelta(actor, "DefIgnore") end
+		def = def * math.max(0, 1 - ignore / 100)
+		return 1 - def / (def + self.DefConstant)
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SetHitSrc(Entity actor, string skillId, boolean isDot)
+		-- 이제부터 FinalDouble로 들어오는 타격의 주인(구성원)·스킬. 같은 호출 흐름 안에서만 쓰고 ClearHitSrc(이전 값)로 되돌린다.
+		local prev = self._T.hitSrc
+		self._T.hitSrc = { actor = actor, skill = skillId or "", dot = isDot == true }
+		return prev
+	end
+
+	@ExecSpace("ServerOnly")
+	method table EnsureHitSrc(Entity actor)
+		-- 같은 구성원의 타격 정보가 이미 있으면 그대로(스킬 유지), 없으면 기본 공격으로 정한다. 이전 값을 돌려준다.
+		local prev = self._T.hitSrc
+		if prev == nil or prev.actor ~= actor then self._T.hitSrc = { actor = actor, skill = "", dot = false } end
+		return prev
+	end
+
+	@ExecSpace("ServerOnly")
+	method table SwapDmgCtx(table ctx)
+		-- 피해 종류(dmgCtx)를 바꾸고 이전 값을 돌려준다 (기본 공격처럼 다른 타격의 종류를 물려받으면 안 되는 경로용).
+		local prev = self._T.dmgCtx
+		self._T.dmgCtx = ctx
+		return prev
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ClearHitSrc(table prev)
+		-- 타격 주인 정보를 SetHitSrc 이전 값으로 되돌린다 (다른 구성원 타격에 섞이지 않게, 겹쳐 불러도 안전).
+		self._T.hitSrc = prev
+	end
+
+	@ExecSpace("ServerOnly")
+	method table InfoOfTarget(Entity target)
+		-- 몬스터 정보 행(속성 상성 등): 맨 앞 몬스터 = 지금 정보, 대기열 몬스터 = 그 몬스터 정보.
+		if isvalid(target) and target ~= self._T.monster and self._T.infoOf ~= nil and self._T.infoOf[target] ~= nil then return self._T.infoOf[target] end
+		return self._T.monInfo
+	end
+
+	@ExecSpace("ServerOnly")
+	method number CombatMul(Entity target)
+		-- 새 배율 하나: 속성(약점 ×1.5 · 반감 ×0.5 · 무효 ×0.1) × 약점 추가 피해(WeakDmg) × 스킬 공격 타입 방어 보정.
+		-- 타격 주인을 모르면(가시·폭발 등) 무속성·보정 없음 = 1.
+		local cm = self:CM()
+		local src = self._T.hitSrc
+		local ctx = self._T.dmgCtx
+		local elem, atk, base = "None", "", ""
+		-- 지속 여부·속성은 타격 주인(hitSrc)만 본다. dmgCtx(유물 피해 종류)는 다른 타격에 남아 있을 수 있어 배율에 쓰지 않는다.
+		local isDot = src ~= nil and src.dot == true
+		if src ~= nil and (src.job ~= nil or isvalid(src.actor)) then
+			local p = nil
+			if src.job ~= nil then p = self:HitProfileFor(src.job, src.skill) else p = self:HitProfile(src.actor, src.skill) end
+			elem, atk, base = p.elem, p.atk, p.baseAtk
+		end
+		-- 지속 피해가 정한 속성 (예: 화상 = Fire)
+		if src ~= nil and (src.elemId or "") ~= "" then elem = src.elemId end
+		local mul = 1
+		local res = ""
+		local info = self:InfoOfTarget(target)
+		if elem ~= "None" and info ~= nil and info.elem ~= nil then
+			res = info.elem[elem] or ""
+			if res == "R" and self:Bonus("ElemPierce") > 0 and _UtilLogic:RandomDouble() * 100 < self:Bonus("ElemPierce") then res = "" end
+			if res == "W" then mul = cm.weak * (1 + self:Bonus("WeakDmg") / 100)
+			elseif res == "R" then mul = cm.resist
+			elseif res == "N" then mul = cm.immune
+			end
+		end
+		-- 기본 피해는 구성원 기본 타입 방어로 이미 깎였다: 이 타격 타입이 다르면 비율만 바꾼다 (지속 피해는 방어 없음)
+		if not isDot and atk ~= "" and base ~= "" and atk ~= base and (target == nil or target == self._T.monster) then
+			local actor = src ~= nil and src.actor or nil
+			mul = mul * self:DefFactor(atk, actor) / math.max(0.01, self:DefFactor(base, actor))
+		end
+		-- 보스 개편 B3·B6: 보스가 받는 피해 배율 하나 (그로기 +50% · 졸개 생존 중 -60%), 맨 앞 보스에게만
+		if self.MonsterBoss and (target == nil or target == self._T.monster) then
+			local mech = self:GetMech()
+			if mech ~= nil and mech:Active() then mul = mul * mech:DamageMul() end
+		end
+		self._T.lastHit = { res = res, elem = elem, atk = atk }
+		if res ~= "" then
+			self._T.elemLogN = (self._T.elemLogN or 0) + 1
+			if self._T.elemLogN <= 12 then log("[VRF] elem hit elem=" .. elem .. " res=" .. res .. " mul=" .. string.format("%.2f", mul) .. " atk=" .. atk) end
+			self:ShowElemMark(target, res, elem)
+		end
+		return mul
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ShowElemMark(Entity target, string res, string elem)
+		-- 약점·반감·무효 표시: 숫자 옆 속성색(약점) / 회색(반감·무효) 빛 (같은 몬스터는 0.3초에 한 번).
+		if not isvalid(target) then target = self._T.monster end
+		if not isvalid(target) or not isvalid(self._T.player) then return end
+		local now = _UtilLogic.ElapsedSeconds
+		if self._T.markAt == nil then self._T.markAt = {} end
+		if (self._T.markAt[target] or -1) > now - 0.3 then return end
+		self._T.markAt[target] = now
+		local pc = self:GetPlayerAttack()
+		if pc ~= nil then pc:ShowElemMark(target, res, elem, self._T.player.PlayerComponent.UserId) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method number DebugCombatMul(string elemTable, string jobId, string skillId)
+		-- 테스트용: 가짜 몬스터 속성표("Fire:W|Holy:R")와 직업·스킬로 CombatMul을 계산해 돌려준다 (원래 정보는 되돌림).
+		local savedInfo = self._T.monInfo
+		local savedSrc = self._T.hitSrc
+		self._T.monInfo = { elem = self:ParseElemTable(elemTable) }
+		self._T.hitSrc = { actor = nil, skill = skillId or "", dot = false, job = jobId }
+		local m = self:CombatMul(nil)
+		self._T.monInfo = savedInfo
+		self._T.hitSrc = savedSrc
+		log("[VRF] debug combatmul elem=" .. elemTable .. " job=" .. jobId .. " skill=" .. tostring(skillId) .. " mul=" .. string.format("%.2f", m))
+		return m
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorAcc(Entity actor)
+		-- 명중 = 자기 편성 칸 망토 명중 + 명중 효과 합계 (구성원별).
+		return self:EquipStatFor("Cape", self:ActorSlotNo(actor)) + self:Bonus("Acc")
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorMissRate(Entity actor)
+		-- 우리 기본 공격 빗나감 %: 마법 = 0 (빗나가지 않음), 물리 = clamp(몬스터 회피 - 자기 명중, 0, 상한 60).
+		local cm = self:CM()
+		local p = self:HitProfile(actor, "")
+		if p.atk == "M" and cm.magicNeverMiss then return 0 end
+		return math.max(0, math.min(cm.missCap, (self._T.monsterEvade or 0) - self:ActorAcc(actor)))
+	end
+
 	@ExecSpace("ServerOnly")
 	method integer FinalDouble(integer damage)
 		-- 각인 핵심 '섬멸': 확률로 최종 피해 2배. 피해 숫자를 띄우기 전에 불러 뜨는 숫자도 2배가 되게 한다.
+		-- 전투 개편: 숫자를 띄우기 직전 관문이므로 속성·공격 타입 배율(CombatMul)도 여기서 한 번 곱한다.
+		if damage > 0 then
+			local cmul = self:CombatMul(self._T.cmTarget or self._T.monster)
+			if cmul ~= 1 then damage = math.max(1, math.floor(damage * cmul + 0.5)) end
+		end
 		local chance = self:Bonus("FinalDouble")
 		if damage > 0 and chance > 0 and _UtilLogic:RandomDouble() * 100 < chance then
 			log("[VRF] talent final double dmg=" .. tostring(damage * 2))
@@ -4449,7 +4881,8 @@ script TowerRunManager extends Component
 		if not preRolled then damage = self:FinalDouble(damage) end
 		-- 각인 상태이상 루트: 지속 피해가 아닌 적중이면 확률로 화상
 		local dctx = self._T.dmgCtx
-		if dctx == nil or not dctx.dot then self:TryTalentBurn(self._T.monster) end
+		local srcDot = self._T.hitSrc ~= nil and self._T.hitSrc.dot == true
+		if (dctx == nil or not dctx.dot) and not srcDot then self:TryTalentBurn(self._T.monster) end
 		-- 처형: HP 20% 이하 몬스터는 확률로 즉시 처치
 		if self.MonsterHp - damage > 0 and self.MonsterHp <= self.MonsterMaxHp * self.ExecuteHpRatio and self:RollSkill("Execute") then
 			damage = math.ceil(self.MonsterHp)
@@ -4460,9 +4893,18 @@ script TowerRunManager extends Component
 			end
 			log("[VRF] proc execute")
 		end
+		-- 보스 개편 B6: 보호막 게이지가 먼저 받는다 (게이지가 있는 동안 체력 피해 0)
+		local bossMech = nil
+		local hitElem = self._T.lastHit ~= nil and self._T.lastHit.elem or "None"
+		if self.MonsterBoss then
+			bossMech = self:GetMech()
+			if bossMech ~= nil and not bossMech:Active() then bossMech = nil end
+		end
+		if bossMech ~= nil then damage = bossMech:Absorb(damage, hitElem) end
 		local dealt = math.min(self.MonsterHp, damage)
 		if self._T.probe ~= nil then self._T.probe.dealt = self._T.probe.dealt + dealt end
 		self.MonsterHp = math.max(0, self.MonsterHp - damage)
+		if bossMech ~= nil and dealt > 0 then bossMech:OnDamaged(math.floor(dealt), hitElem) end
 		-- 각인 '흡혈': 준 피해의 일정 %를 항상 회복
 		local drain = dealt * self:Bonus("LifestealPct") / 100
 		if drain > 0 then self.PlayerHp = math.min(self.PlayerMaxHp, self.PlayerHp + drain * (1 + self:Bonus("HealRecv") / 100)) end
@@ -4494,6 +4936,23 @@ script TowerRunManager extends Component
 		end
 		local bossKilled = self.MonsterElite
 		self._T.waveLeft = math.max(0, (self._T.waveLeft or 1) - 1)
+		-- 보스 개편: 보스를 잡으면 기믹·소환물 정리, 필드보스 첫 처치 기록(보스 탭 해금, 디버그 판 제외)
+		if self.MonsterBoss then
+			local mech = self:GetMech()
+			if mech ~= nil then mech:End() end
+			self:BossClearSummons()
+			if self.RunMode ~= "boss" then
+				local pb = self:GetBoss()
+				if pb ~= nil and not self._T.debugRun then pb:MarkFieldKill(self.Floor) end
+				log("[VRF] field boss killed floor=" .. tostring(self.Floor) .. " id=" .. tostring(self._T.fieldBossId) .. " debugRun=" .. tostring(self._T.debugRun == true))
+			end
+		end
+		if self.RunMode == "boss" then
+			-- 보스전은 처치 보상(깃털·주문서·열쇠)이 없다: 보상은 BossModeClear 정산 한 번
+			self.KillSeq = self.KillSeq + 1
+			log("[VRF] boss mode boss killed " .. self.FloorTitle)
+			return
+		end
 		self:DropSkillStone(self.MonsterBoss, self.MonsterElite)
 		self:GiveKillReward()
 		self:DropFeathers(bossKilled)
@@ -4601,6 +5060,14 @@ script TowerRunManager extends Component
 		-- 4-B 보완: 정산 저장 대기 중 다른 피격이 Defeat를 또 불러도 한 번만 (StartRun에서 해제)
 		if self._T.defeated then return end
 		self._T.defeated = true
+		-- 보스 개편: 보스 기믹·소환물 정리 (보스전 실패는 도전권 차감 없음)
+		local mech = self:GetMech()
+		if mech ~= nil then mech:End() end
+		self:BossClearSummons()
+		if self.RunMode == "boss" then
+			self.BossResult = ""
+			log("[VRF] boss mode defeat boss=" .. self.BossRunId .. " step=" .. tostring(self.BossRunStep) .. " (no ticket used)")
+		end
 		self:SettleAccount(false)
 		self.RunState = "DEFEAT"
 		for _, h in ipairs(self:Heroes()) do h:ClearState() end
@@ -6094,6 +6561,21 @@ script TowerRunManager extends Component
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		if self.RunState ~= "RESULT" or not self.ResultAccountSaved then return end
 		if self._T.retryEntering then return end
+		-- 보스 개편: 보스전 다시 도전은 에너지 대신 도전권 검사(차감은 클리어 때)
+		if self.RunMode == "boss" and self._T.bossRun ~= nil then
+			local pb = self:GetBoss()
+			local br = self._T.bossRun
+			local check = pb ~= nil and pb:CheckEntry(br.id, br.step) or "notready"
+			if self._T.debugRun then check = "ok" end
+			if check ~= "ok" then
+				log("[VRF] boss retry refused " .. check)
+				return
+			end
+			self._T.retryBoss = { id = br.id, step = br.step, debug = self._T.debugRun == true }
+			log("[VRF] boss retry requested " .. br.id .. ":" .. tostring(br.step))
+			self:StartRun()
+			return
+		end
 		local eng = player:GetComponent("script.PlayerEngrave")
 		if eng == nil then return end
 		self._T.retryEntering = true
@@ -6112,6 +6594,9 @@ script TowerRunManager extends Component
 		if not isvalid(player) or player.PlayerComponent.UserId ~= senderUserId then return end
 		self:DestroyMonster()
 		self:DestroyCompanion()
+		local mech = self:GetMech()
+		if mech ~= nil then mech:End() end
+		self:BossClearSummons()
 		self.RunState = "WAIT"
 		self._T.player = nil
 		self.PlayerDown = false
@@ -6127,9 +6612,11 @@ script TowerRunManager extends Component
 		local pc = actor:GetComponent("script.TowerPlayer")
 		if pc == nil then return 0 end
 		local hero = self:HeroOf(actor)
-		-- 명중 판정: 몬스터 회피율 - 명중률 확률로 빗나감
-		local missRate = math.max(0, (self._T.monsterEvade or 0) - self.Accuracy)
-		if _UtilLogic:RandomDouble() * 100 < missRate then
+		-- 명중 판정 (전투 개편): 마법은 빗나가지 않음, 물리 = 몬스터 회피 - 자기 칸 명중 (상한 60%)
+		local missRate = self:ActorMissRate(actor)
+		if missRate > 0 and _UtilLogic:RandomDouble() * 100 < missRate then
+			self._T.missLogN = (self._T.missLogN or 0) + 1
+			if self._T.missLogN <= 8 then log("[VRF] miss actor=" .. actor.Name .. " job=" .. self:ActorJobId(actor) .. " rate=" .. string.format("%.1f", missRate) .. " acc=" .. string.format("%.1f", self:ActorAcc(actor))) end
 			pc:DoMiss(monster)
 			return 0
 		end
@@ -6223,6 +6710,11 @@ script TowerRunManager extends Component
 
 			self:TickSkills(delta)
 			self:CleanupStrays(delta)
+			-- 보스 개편 B3·B6: 맨 앞이 보스면 예고·기믹·제한 시간
+			if self.MonsterBoss and self.RunState == "FIGHT" then
+				local mech = self:GetMech()
+				if mech ~= nil then mech:Tick(delta) end
+			end
 			if self.RunState ~= "FIGHT" or not isvalid(self._T.monster) then return end
 			self:TickUltTime(delta, self._T.monster:GetComponent("script.TowerMonster"))
 
@@ -6281,6 +6773,11 @@ script TowerRunManager extends Component
 		elseif self.RunState == "CLEAR" then
 			self.StateTimer = self.StateTimer - delta
 			if self.StateTimer <= 0 then
+				-- 보스 개편 B5: 보스전은 보스 처치 = 클리어 (다음 웨이브·층·포탈 없음)
+				if self.RunMode == "boss" then
+					self:BossModeClear()
+					return
+				end
 				-- 웨이브가 남았으면 다음 몬스터 (대기열이 한 칸씩 앞으로)
 				if (self._T.waveLeft or 0) > 0 then
 					self:SpawnMonster()
@@ -6396,7 +6893,8 @@ script TowerRunManager extends Component
         local eng = self:GetEngrave()
         if eng == nil then return end
         -- 4-G 보완: 디버그 판은 계정 경험치를 정산·저장하지 않는다 (결과 화면은 "테스트 판: 저장 안 됨")
-        if self._T.debugRun then
+        -- 보스 개편: 보스전은 계정 경험치를 주지 않는다 (보상은 PlayerBoss 정산)
+        if self._T.debugRun or self.RunMode == "boss" then
             self.ResultAccountBeforeLevel = eng.AccountLevel
             self.ResultAccountAfterLevel = eng.AccountLevel
             self.ResultAccountBeforeExp = eng.AccountExp
@@ -6534,6 +7032,9 @@ script TowerRunManager extends Component
 		-- 맨 앞 몬스터가 자기 칸에 도착했는데 살아 있는 우리 편 누구의 사거리에도 닿지 않으면 1칸으로 다가오게 한다 (전투가 멈추지 않게).
 		local mc = isvalid(monster) and monster:GetComponent("script.TowerMonster") or nil
 		if mc == nil or mc.IsDead or mc.Moving or mc.KnockBack then return end
+		-- 보스 개편 B6: 날아오른 보스는 당겨 오지 않는다 (근접 1칸 직업이 못 치는 것이 기믹)
+		local mech = self:GetMech()
+		if mech ~= nil and mech.Flying then return end
 		local cell = self:CellAt(monster.TransformComponent.WorldPosition.x)
 		if cell <= 1 then return end
 		for _, a in ipairs(self:Actors()) do
@@ -6637,17 +7138,22 @@ script TowerRunManager extends Component
 
 	@ExecSpace("ServerOnly")
 	method number ActorInterval(Entity actor)
-		return self.AttackCooldown / math.max(0.1, self.WeaponSpeed * (1 + (self:Bonus("Speed") + self:GoddessBonus(actor, "Speed")) / 100))
+		-- 기본 공격 간격 (보스 개편: 해일 실패 후 잠깐 느려짐)
+		local slow = 1
+		local mech = self:GetMech()
+		if mech ~= nil then slow = mech:ActorIntervalMul() end
+		return slow * self.AttackCooldown / math.max(0.1, self.WeaponSpeed * (1 + (self:Bonus("Speed") + self:GoddessBonus(actor, "Speed")) / 100))
 	end
 
 	@ExecSpace("ServerOnly")
 	method integer ActorHitDamage(Entity actor)
 		-- 이번 타격 피해: 공격력(최소~최대) × 몬스터 방어 감소 × 각인 추가 피해(체력 30% 이하 적 / 엘리트).
 		-- 직업 스킬 '화염 마력': 몬스터 방어력 일부 무시
-		local monDef = (self._T.monsterDef or 0) * math.max(0, 1 - (self:Bonus("DefIgnore") + self:SlotMileDelta(actor, "DefIgnore") + (self._T.castDefIgnore or 0)) / 100)
+		-- 전투 능력치 개편: 구성원 기본 공격 타입(물리/마법)에 맞는 몬스터 방어로 감소 (스킬 타입이 다르면 CombatMul이 비율 보정)
+		local defCut = self:DefFactor(self:HitProfile(actor, "").baseAtk, actor)
 		local atk = self:ActorAtk(actor)
 		local minAtk = math.max(1, math.floor(atk * (0.2 + 0.8 * self.Mastery / 100) + 0.5))
-		local dmg = (minAtk + _UtilLogic:RandomDouble() * (atk - minAtk)) * (1 - monDef / (monDef + self.DefConstant))
+		local dmg = (minAtk + _UtilLogic:RandomDouble() * (atk - minAtk)) * defCut
 		local mul = 1
 		-- 직업 스킬 '투혼': 내 체력 50% 이하일 때 주는 피해 증가
 		if self:ActorHp(actor) < self:ActorMaxHp(actor) * 0.5 then mul = mul + self:Bonus("LowHpAtk") / 100 end
@@ -6728,6 +7234,344 @@ script TowerRunManager extends Component
 
 
 	-- ───────────────────────── 4단계 테스트 함수 (server_main에서 호출) ─────────────────────────
+
+	-- ===== 보스 개편 (Docs/Boss/Boss-Stage-Spec.md): 필드보스·보스전 =====
+
+	@ExecSpace("ServerOnly")
+	method void LoadBossTables()
+		-- BossTable(보스전 5종)·BossStepTable(단계 배율)·BossConfig(제한 시간 등)를 읽는다.
+		self._T.bossRows = {}
+		self._T.bossSteps = {}
+		self._T.bossCfg = {}
+		local bt = _DataService:GetTable("BossTable")
+		if bt ~= nil then
+			for i = 1, bt:GetRowCount() do
+				local id = bt:GetCell(i, "BossId") or ""
+				if id ~= "" then
+					self._T.bossRows[id] = { id = id, name = bt:GetCell(i, "Name") or id, monsterId = bt:GetCell(i, "MonsterId") or "",
+						unlockFloor = math.max(1, math.floor(tonumber(bt:GetCell(i, "UnlockFloor")) or 1)),
+						bg = bt:GetCell(i, "BgRUID") or "", ts = bt:GetCell(i, "TileSetRUID") or "", elem = bt:GetCell(i, "Elem") or "",
+						defP = tonumber(bt:GetCell(i, "DefP") or "") or 0, defM = tonumber(bt:GetCell(i, "DefM") or "") or 0, evade = tonumber(bt:GetCell(i, "Evade") or "") or 0,
+						mech1 = bt:GetCell(i, "Mech1") or "", mech2 = bt:GetCell(i, "Mech2") or "", scale = tonumber(bt:GetCell(i, "Scale") or "") or self.BossScale }
+				end
+			end
+		end
+		local st = _DataService:GetTable("BossStepTable")
+		if st ~= nil then
+			for i = 1, st:GetRowCount() do
+				local n = math.floor(tonumber(st:GetCell(i, "Step")) or i)
+				self._T.bossSteps[n] = { hp = tonumber(st:GetCell(i, "HpMul")) or 1, atk = tonumber(st:GetCell(i, "AtkMul")) or 1 }
+			end
+		end
+		local cf = _DataService:GetTable("BossConfig")
+		if cf ~= nil then
+			for i = 1, cf:GetRowCount() do
+				local k = cf:GetCell(i, "Key")
+				local v = tonumber(cf:GetCell(i, "Value"))
+				if k ~= nil and v ~= nil then self._T.bossCfg[k] = v end
+			end
+		end
+		local n = 0
+		for _, _ in pairs(self._T.bossRows) do n = n + 1 end
+		log("[VRF] boss tables rows=" .. tostring(n) .. " timeLimit=" .. tostring(self._T.bossCfg["TimeLimit"]))
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component GetMech()
+		-- 같은 맵 엔티티의 보스 기믹 컴포넌트 (없으면 nil).
+		return self.Entity:GetComponent("script.BossMechanics")
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component GetBoss()
+		-- 플레이어의 보스전 계정 데이터 (PlayerBoss).
+		local p = self._T.player
+		if not isvalid(p) then p = self:FindPlayer() end
+		if not isvalid(p) then return nil end
+		return p:GetComponent("script.PlayerBoss")
+	end
+
+	@ExecSpace("ServerOnly")
+	method Entity FrontMonster()
+		-- 지금 맨 앞 몬스터.
+		return self._T.monster
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossMaxSkills()
+		-- 보스전 시작: 구성원마다 장착 스킬을 최대 레벨까지 자동 성장 (별 옵션은 기존 자동 성장과 같은 무작위, 돌파 레벨은 돌파 없이 레벨만).
+		local total = 0
+		for _, h in ipairs(self:Heroes()) do
+			for _, sk in ipairs(self._T.jobSkills[h.JobId] or {}) do
+				if h:Equipped(sk.id) then
+					local guard = 0
+					while (self.SkillLv[sk.id] or 0) < sk.max and guard < 50 do
+						guard = guard + 1
+						local mode = self:RollCardOption(sk)
+						if mode ~= "break" and mode ~= "learn" then
+							local o = self._T.starById[mode]
+							if o ~= nil then
+								self:ApplySkillOption(sk, o.effect, o.value)
+								if self._T.starCount[sk.id] == nil then self._T.starCount[sk.id] = {} end
+								self._T.starCount[sk.id][o.id] = (self._T.starCount[sk.id][o.id] or 0) + 1
+							end
+						end
+						self.SkillLv[sk.id] = (self.SkillLv[sk.id] or 0) + 1
+						total = total + 1
+					end
+					self:UpdateSkillInfo(sk)
+				end
+			end
+		end
+		self:RecalcStats()
+		log("[VRF] boss max skills levels+" .. tostring(total))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetupRunMode()
+		-- 이번 판 종류: 다시 도전 > 디버그 > 로비 예약(PlayerBoss.PendingBoss "B1:1") 순서로 보스전을 찾고, 없으면 일반 판.
+		self.RunMode = "normal"
+		self.BossRunId = ""
+		self.BossRunStep = 0
+		self.BossResult = ""
+		self._T.bossRow = nil
+		self._T.bossRun = nil
+		local spec = nil
+		if self._T.retryBoss ~= nil then
+			spec = self._T.retryBoss
+			self._T.retryBoss = nil
+		elseif self._T.debugBoss ~= nil then
+			spec = self._T.debugBoss
+			self._T.debugBoss = nil
+		else
+			local pb = self:GetBoss()
+			if pb ~= nil then
+				local p = pb:TakePending()
+				local id, st = string.match(p or "", "^([^:]+):(%d+)$")
+				if id ~= nil then spec = { id = id, step = math.floor(tonumber(st)), debug = false } end
+			end
+		end
+		if spec == nil then return end
+		local row = (self._T.bossRows or {})[spec.id]
+		if row == nil then
+			log_warning("[VRF] boss run unknown id=" .. tostring(spec.id))
+			return
+		end
+		self.RunMode = "boss"
+		self.BossRunId = spec.id
+		self.BossRunStep = math.max(1, spec.step)
+		self._T.bossRow = row
+		self._T.bossRun = { id = spec.id, step = self.BossRunStep, debug = spec.debug == true }
+		log("[VRF] boss run setup id=" .. spec.id .. " step=" .. tostring(self.BossRunStep) .. " floor=" .. tostring(row.unlockFloor) .. " debug=" .. tostring(spec.debug == true))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string WeakText(table elem)
+		-- 속성 상성 표 → 약점 속성 Id "Holy|Fire" (최대 2개, 정해진 순서).
+		local out = {}
+		if elem == nil then return "" end
+		for _, k in ipairs({ "Fire", "Ice", "Lightning", "Poison", "Holy", "Dark" }) do
+			if elem[k] == "W" and #out < 2 then table.insert(out, k) end
+		end
+		return table.concat(out, "|")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnBossFront(Entity monster, table info)
+		-- 보스가 맨 앞에 섰을 때: 보스전이면 단계 배율·BossTable 방어·회피·속성·크기로 덮어쓰고 기믹 시작, 필드보스면 예고 강타만.
+		local mech = self:GetMech()
+		if self.RunMode == "boss" and self._T.bossRow ~= nil then
+			local row = self._T.bossRow
+			local st = (self._T.bossSteps or {})[self.BossRunStep] or { hp = 1, atk = 1 }
+			self.MonsterMaxHp = math.max(1, math.floor(self.MonsterMaxHp * st.hp + 0.5))
+			self.MonsterHp = self.MonsterMaxHp
+			self.MonsterAtk = math.max(1, math.floor(self.MonsterAtk * st.atk + 0.5))
+			self._T.monsterDefP = row.defP * self.BossDefMul
+			self._T.monsterDef = self._T.monsterDefP
+			self._T.monsterDefM = row.defM * self.BossDefMul
+			self._T.monsterEvade = row.evade
+			local ni = {}
+			for k, v in pairs(info) do ni[k] = v end
+			ni.elem = self:ParseElemTable(row.elem)
+			self._T.monInfo = ni
+			if self._T.infoOf == nil then self._T.infoOf = {} end
+			self._T.infoOf[monster] = ni
+			monster.TransformComponent.Scale = Vector3(row.scale, row.scale, 1)
+			self.MonsterLabel = row.name
+			if mech ~= nil then mech:Begin(true, row.mech1, row.mech2, self:WeakText(ni.elem), (self._T.bossCfg or {})["TimeLimit"] or 180) end
+			log("[VRF] boss mode spawn " .. row.id .. " step=" .. tostring(self.BossRunStep) .. " hp=" .. tostring(self.MonsterMaxHp) .. " atk=" .. tostring(self.MonsterAtk) .. " defP=" .. tostring(self._T.monsterDefP) .. " defM=" .. tostring(self._T.monsterDefM) .. " evade=" .. tostring(row.evade) .. " elem=" .. row.elem)
+			return
+		end
+		if mech ~= nil then mech:Begin(false, "", "", self:WeakText(info.elem), 0) end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossHitActor(Entity a, integer dmg)
+		-- 보스 기믹 피해를 구성원 한 명에게 (숫자 표시 + 보호막·쓰러짐 판정은 기존 경로).
+		if not isvalid(a) or dmg <= 0 then return end
+		if a == self._T.player then
+			local tp = a:GetComponent("script.TowerPlayer")
+			if tp ~= nil then tp:ShowProcDamage(a, dmg, false, tp:Uid()) end
+			self:ApplyPlayerDamage(dmg)
+		else
+			self:ApplyMateDamage(a, dmg)
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer BossSummon(integer n)
+		-- 머쉬맘 소환: 소환물(주황버섯)을 몬스터 2·3칸에 세운다 (살아 있는 소환물 포함 n마리까지). 소환물은 공격하지 않고 보스를 보호한다.
+		local info = self._T.monsterById[self.BossSummonMonsterId]
+		if info == nil then return 0 end
+		if self._T.summonOf == nil then self._T.summonOf = {} end
+		local alive = 0
+		for e, _ in pairs(self._T.summonOf) do
+			if isvalid(e) then alive = alive + 1 end
+		end
+		local spawned = 0
+		local queue = self._T.queue or {}
+		self._T.queue = queue
+		for k = 1, n do
+			if alive >= n then break end
+			self.SpawnSeq = self.SpawnSeq + 1
+			local x = self.MonsterPos.x + self.SpawnOffsetX + k * 0.3
+			local m = _SpawnService:SpawnByModelId(self.MonsterModelId, "TowerSummon_" .. tostring(self.SpawnSeq), Vector3(x, self.MonsterPos.y, self.MonsterPos.z), self.Entity)
+			if m ~= nil then
+				if self._T.infoOf == nil then self._T.infoOf = {} end
+				self._T.infoOf[m] = info
+				self._T.summonOf[m] = true
+				local mc = m:GetComponent("script.TowerMonster")
+				if mc ~= nil then
+					mc.MoveRUID = info.move or ""
+					mc.AttackRange = math.min(3, 1 + alive + 1)
+					mc:ApplyLook(info.stand, info.attack, info.hit, info.die, info.hitSound, info.dieSound)
+					mc.SpeedMul = 1
+					mc.SlotJitter = 0
+					mc.IsQueued = true
+					mc.IsRanged = false
+					local hp = self:MonsterBaseHp(info) * 3
+					mc.MaxHp = hp
+					mc.Hp = hp
+					mc.AtkTimer = 1000000
+				end
+				local sprite = m.SpriteRendererComponent
+				if isvalid(sprite) then sprite.OrderInLayer = 1 end
+				table.insert(queue, m)
+				alive = alive + 1
+				spawned = spawned + 1
+			end
+		end
+		if spawned > 0 then self:LayoutWave() end
+		return spawned
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean BossSummonAlive()
+		-- 살아 있는 보스 소환물이 있는지.
+		for e, _ in pairs(self._T.summonOf or {}) do
+			if isvalid(e) then
+				local mc = e:GetComponent("script.TowerMonster")
+				if mc ~= nil and not mc.IsDead then return true end
+			end
+		end
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossClearSummons()
+		-- 보스 소환물을 모두 없앤다 (보스 처치·판 끝).
+		local list = {}
+		for e, _ in pairs(self._T.summonOf or {}) do table.insert(list, e) end
+		self._T.summonOf = {}
+		if #list == 0 then return end
+		local queue = self._T.queue or {}
+		for _, e in ipairs(list) do
+			for i = #queue, 1, -1 do
+				if queue[i] == e then table.remove(queue, i) end
+			end
+			if isvalid(e) then e:Destroy() end
+		end
+		log("[VRF] boss summons cleared n=" .. tostring(#list))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer BossFrontRange(integer r)
+		-- 맨 앞 보스가 설 칸을 바꾼다 (날아오르기). 이전 칸을 돌려준다.
+		local m = self._T.monster
+		local mc = isvalid(m) and m:GetComponent("script.TowerMonster") or nil
+		if mc == nil then return 1 end
+		local prev = mc.AttackRange
+		mc.AttackRange = math.max(1, math.min(3, r))
+		self:LayoutWave()
+		return prev
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossHoldAttack(number sec)
+		-- 그로기: 보스 다음 공격을 최소 sec초 뒤로 미룬다.
+		self.MonsterAttackTimer = math.max(self.MonsterAttackTimer, sec)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossMulInterval(number m)
+		-- 분노: 보스 공격 간격 배율.
+		self._T.monsterInterval = (self._T.monsterInterval or self.MonsterAttackInterval) * m
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossTimeout()
+		-- 보스전 제한 시간 초과 = 실패.
+		log("[VRF] boss mode timeout")
+		self:Defeat()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void BossModeClear()
+		-- 보스전 클리어: 기믹·소환물 정리 → PlayerBoss 정산(도전권 1장·최고 단계·첫 처치 다이아·보상) → 결과 팝업.
+		if self._T.stageEnding then return end
+		self._T.stageEnding = true
+		local mech = self:GetMech()
+		if mech ~= nil then mech:End() end
+		self:BossClearSummons()
+		self:DestroyMonster()
+		for _, h in ipairs(self:Heroes()) do h:ClearState() end
+		local br = self._T.bossRun or { id = self.BossRunId, step = self.BossRunStep, debug = false }
+		local goldBase = (self.GoldMesoStageBase + self.Floor * self.GoldMesoPerFloor) * self.GoldMesoBossMul
+		local pb = self:GetBoss()
+		local res = ""
+		if pb ~= nil then res = pb:Settle(br.id, br.step, goldBase, self._T.debugRun == true) end
+		self.BossResult = res
+		local v = {}
+		for x in string.gmatch(res, "[^:]+") do table.insert(v, x) end
+		local function n(i) return math.floor(tonumber(v[i] or "0") or 0) end
+		self.RunGoldMeso = n(3)
+		self.RunCubes = n(7)
+		self.RunScrolls = n(8) + n(9) + n(10)
+		self.RunDiamonds = n(11)
+		self:SettleAccount(true)
+		local elapsed = _UtilLogic.ElapsedSeconds - (self._T.runStartAt or _UtilLogic.ElapsedSeconds)
+		local hpRatio = self.PlayerMaxHp > 0 and self.PlayerHp / self.PlayerMaxHp or 0
+		self.ResultFloor = self.Floor
+		self.ResultTime = elapsed
+		self.ResultHpPct = math.floor(hpRatio * 100 + 0.5)
+		self.ResultStarsPrev = 0
+		self.ResultStarsNow = 0
+		self.IsStageClear = true
+		self._T.stageCleared = true
+		self.RunState = "RESULT"
+		if res == "" then log_warning("[VRF] boss mode clear but settle failed boss=" .. tostring(br.id)) end
+		log("[VRF] boss mode clear boss=" .. tostring(br.id) .. " step=" .. tostring(br.step) .. " time=" .. string.format("%.1f", elapsed) .. " result=" .. res .. " debugRun=" .. tostring(self._T.debugRun == true))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugStartBoss(string bossId, integer step)
+		-- 테스트: 해금·도전권 검사 없이 보스전을 시작한다 (디버그 판: 차감·저장·지급 없음). 탑 맵 READY 이후, 다음 틱 타이머 안에서 실행.
+		_TimerService:SetTimerOnce(function()
+			self._T.debugBoss = { id = bossId, step = math.max(1, step), debug = true }
+			log("[VRF] debug start boss=" .. bossId .. " step=" .. tostring(step))
+			self:StartRun()
+		end, 0)
+	end
 
 	@ExecSpace("ServerOnly")
 	method void DebugStartFloor(integer floor)
@@ -6867,6 +7711,10 @@ script TowerRunManager extends Component
 						log_warning("[VRF] debug swap failed " .. job .. "." .. slot .. " old=" .. old .. " new=" .. skillId)
 						return
 					end
+					-- 스킬 개편: 새 스킬 Id는 동작 기준 Id로 장착된다 (돌파 키·표시는 동작 Id 기준)
+					local baseId = (h._T.baseOf or {})[skillId] or ""
+					if baseId ~= "" then skillId = baseId end
+					self:RegisterSkillAlias(job, h._T.dataOf or {})
 					if self._T.slotKeyOf ~= nil then self._T.slotKeyOf[old] = nil end
 					self:RegisterSlots(job, h._T.slotOf)
 					-- 표시용 Sync: 새 스킬 Id 기준으로 칸에 붙은 돌파 목록을 다시 적는다 (새 스킬에 없는 번호는 기록만 남음)

@@ -191,6 +191,40 @@ script TooltipLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method table ElemHex()
+		-- 속성 글자색 (ElementTable.Color 기준, 표가 없으면 기본값). 어둠은 검은 툴팁 바탕에서 읽히게 밝은 남보라 유지.
+		if self._T.elemHex ~= nil then return self._T.elemHex end
+		local t = { Fire = "#F26B2A", Ice = "#4FB6E8", Lightning = "#22C3A6", Poison = "#B07AE0", Holy = "#F2C230", Dark = "#9C8AD6" }
+		local ds = _DataService:GetTable("ElementTable")
+		if ds ~= nil then
+			for i = 1, ds:GetRowCount() do
+				local id = ds:GetCell(i, "Id") or ""
+				local c = ds:GetCell(i, "Color") or ""
+				if t[id] ~= nil and id ~= "Dark" and c ~= "" then
+					if string.sub(c, 1, 1) ~= "#" then c = "#" .. c end
+					t[id] = c
+				end
+			end
+		end
+		self._T.elemHex = t
+		return t
+	end
+
+	@ExecSpace("ClientOnly")
+	method string CombatTag(string atk, string elem)
+		-- 툴팁 한 줄 태그: "마법 · <속성색>성</color>". 무속성은 속성 글자를 생략한다.
+		local parts = {}
+		if atk == "M" or atk == "마법" then table.insert(parts, "마법") elseif atk == "P" or atk == "물리" then table.insert(parts, "물리") end
+		local ids = { Fire = "Fire", Ice = "Ice", Lightning = "Lightning", Poison = "Poison", Holy = "Holy", Dark = "Dark",
+			["불"] = "Fire", ["얼음"] = "Ice", ["번개"] = "Lightning", ["전기"] = "Lightning", ["독"] = "Poison", ["성"] = "Holy", ["신성"] = "Holy", ["어둠"] = "Dark", ["암흑"] = "Dark" }
+		local names = { Fire = "불", Ice = "얼음", Lightning = "번개", Poison = "독", Holy = "성", Dark = "어둠" }
+		local colors = self:ElemHex()
+		local id = ids[elem]
+		if id ~= nil then table.insert(parts, "<color=" .. colors[id] .. ">" .. names[id] .. "</color>") end
+		return table.concat(parts, " · ")
+	end
+
+	@ExecSpace("ClientOnly")
 	method void ShowSkill(Entity target, table data)
 		-- 스킬 상세 툴팁. data = { icon, name, kind(칸 종류), cooldown(초, 0이면 생략), cooldownText(직접 문구), desc, breaks = { "이름: 설명", ... } }
 		if not self:Begin(target, "SkillTip") then return end
@@ -213,6 +247,9 @@ script TooltipLogic extends Logic
 			local s = (math.abs(cd - math.floor(cd)) < 0.05) and tostring(math.floor(cd)) or string.format("%.1f", cd)
 			table.insert(kindParts, "쿨타임 " .. s .. "초")
 		end
+		-- 전투 개편: 공격 타입(물리/마법)·속성을 속성색 글자로 (d.atk = P/M/물리/마법, d.elem = 속성 Id 또는 한글)
+		local tag = self:CombatTag(d.atk or "", d.elem or "")
+		if tag ~= "" then table.insert(kindParts, tag) end
 		self:E("SkillTip/Kind").TextGUIRendererComponent.Text = table.concat(kindParts, "  ·  ")
 		local text = d.desc or ""
 		local breaks = d.breaks or {}
@@ -247,22 +284,41 @@ script TooltipLogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method table TargetRect(Entity target)
-		-- 대상 UI 요소의 사각형을 툴팁 루트 좌표(가운데 원점, UI 픽셀)로 변환. 해상도·UI 배율 차이는 월드 좌표를 거쳐 흡수한다.
-		local root = self:E("")
-		if not isvalid(target) or not isvalid(root) or target.UITransformComponent == nil then return nil end
-		local corners = target.UITransformComponent:GetWorldCorners()
-		if corners == nil then return nil end
-		local rt = root.UITransformComponent
-		local minX, minY, maxX, maxY = nil, nil, nil, nil
-		for _, c in pairs(corners) do
-			local p = rt:ToLocalPoint(Vector3(c.x, c.y, 0))
-			if minX == nil or p.x < minX then minX = p.x end
-			if maxX == nil or p.x > maxX then maxX = p.x end
-			if minY == nil or p.y < minY then minY = p.y end
-			if maxY == nil or p.y > maxY then maxY = p.y end
+		-- 대상 UI 요소의 사각형을 화면 가운데 원점 UI 좌표(1920×1080 기준)로 구한다.
+		-- GetWorldCorners/ToLocalPoint는 창 크기에 따라 어긋나므로, 부모를 따라 올라가며 앵커·피벗·위치·배율을 직접 합산한다.
+		if not isvalid(target) or target.UITransformComponent == nil then return nil end
+		local rt = target.UITransformComponent
+		local sc = rt.Scale
+		local w = rt.RectSize.x * sc.x
+		local h = rt.RectSize.y * sc.y
+		local cx = 0
+		local cy = 0
+		local e = target
+		local guard = 0
+		while isvalid(e) and e.UITransformComponent ~= nil and guard < 32 do
+			guard = guard + 1
+			local t = e.UITransformComponent
+			local parent = e.Parent
+			-- UI 그룹(화면 전체)에 닿으면 멈춘다: 그룹 중심 = 화면 중심
+			if not isvalid(parent) or parent.UITransformComponent == nil then break end
+			local ps = parent.UITransformComponent.RectSize
+			local s = t.Scale
+			local refX = t.AnchorsMin.x + (t.AnchorsMax.x - t.AnchorsMin.x) * t.Pivot.x
+			local refY = t.AnchorsMin.y + (t.AnchorsMax.y - t.AnchorsMin.y) * t.Pivot.y
+			local px = (refX - 0.5) * ps.x + t.anchoredPosition.x + (0.5 - t.Pivot.x) * t.RectSize.x * s.x
+			local py = (refY - 0.5) * ps.y + t.anchoredPosition.y + (0.5 - t.Pivot.y) * t.RectSize.y * s.y
+			-- 지금까지의 좌표(이 요소 기준)를 부모 기준으로: 이 요소 배율을 곱하고 이 요소 중심만큼 이동
+			if e ~= target then
+				cx = cx * s.x
+				cy = cy * s.y
+				w = w * s.x
+				h = h * s.y
+			end
+			cx = cx + px
+			cy = cy + py
+			e = parent
 		end
-		if minX == nil then return nil end
-		return { minX = minX, minY = minY, maxX = maxX, maxY = maxY }
+		return { minX = cx - w / 2, minY = cy - h / 2, maxX = cx + w / 2, maxY = cy + h / 2 }
 	end
 
 	@ExecSpace("ClientOnly")

@@ -152,6 +152,14 @@ script ResultPopupLogic extends Logic
 		self._T.floor = floor
 		self._T.gained = gained
 		self:SetText("resultTitle", self:FloorName(floor) .. (clear and " 클리어!" or " 도전 실패"), nil)
+		-- 보스 개편 B5: 보스전 결과는 보스 이름·단계, 별·미션·구간 보상 칸은 숨긴다
+		local bossRun = mgr.RunMode == "boss"
+		self._T.bossRun = bossRun
+		if bossRun then self:SetText("resultTitle", self:BossName(mgr.BossRunId) .. " " .. tostring(mgr.BossRunStep) .. "단계" .. (clear and " 처치!" or " 실패"), nil) end
+		for _, k in ipairs({ "largeStar0", "largeStar1", "largeStar2", "resultMissions", "resultSectionPanel", "resultSectionPlaque", "resultSectionCount", "resultSectionGauge", "resultChestTile0", "resultChestTile1", "resultChestTile2" }) do
+			self:Show(k, not bossRun)
+		end
+		self:BossLayout(bossRun, mgr.BossRunId)
 		-- 큰 별: 누적 달성, 이번에 새로 얻은 별은 반짝이는 그림
 		for j = 0, 2 do
 			local b = 1 << j
@@ -160,7 +168,10 @@ script ResultPopupLogic extends Logic
 			self:SetImage("largeStar" .. tostring(j), ruid)
 		end
 		local newCount = self:StarCount(gained)
-		self:Show("newStarBadge", newCount > 0)
+		self:Show("newStarBadge", newCount > 0 and not bossRun)
+		if bossRun then
+			for j = 0, 2 do self:Show("largeStar" .. tostring(j), false) end
+		end
 		self:SetText("newStarBadge/newStarCount", "신규 별 +" .. tostring(newCount), nil)
 		local t = math.floor(mgr.ResultTime)
 		self:SetText("combatTimePill/combatTime", string.format("전투 시간  %02d:%02d", math.floor(t / 60), t % 60), nil)
@@ -190,6 +201,16 @@ script ResultPopupLogic extends Logic
 		if mgr.RunDiamonds > 0 then table.insert(items, { icon = self.IconDiamond, name = "다이아", n = mgr.RunDiamonds }) end
 		if mgr.RunFeathers > 0 then table.insert(items, { icon = self.IconFeather, name = "깃털", n = mgr.RunFeathers }) end
 		if mgr.RunScrolls > 0 then table.insert(items, { icon = self.IconScroll, name = "주문서", n = mgr.RunScrolls }) end
+		-- 보스전 경험의 서 (BossResult "id:step:gold:s:m:l:...")
+		if bossRun and mgr.BossResult ~= "" then
+			local v = {}
+			for x in string.gmatch(mgr.BossResult, "[^:]+") do table.insert(v, x) end
+			local books = { { 4, "36ba7694f9444257837ff68207fff885", "경험의 서(소)" }, { 5, "452037cbd8f04bdf810657263aff002b", "경험의 서(중)" }, { 6, "67933b35ef074d58893c1710edeed7f6", "경험의 서(대)" } }
+			for _, bk in ipairs(books) do
+				local cnt = math.floor(tonumber(v[bk[1]] or "0") or 0)
+				if cnt > 0 then table.insert(items, { icon = bk[2], name = bk[3], n = cnt, center = true }) end
+			end
+		end
 		-- 5-F: 이번 판 큐브 (레드 / 무료). 아이콘·이름은 GearCubeTable (PlayerGear.CubeInfo)
 		if mgr.RunCubes > 0 then table.insert(items, self:CubeItem("R", "레드 큐브", mgr.RunCubes)) end
 		if mgr.RunFreeCubes > 0 then table.insert(items, self:CubeItem("F", "무료 큐브", mgr.RunFreeCubes)) end
@@ -222,6 +243,53 @@ script ResultPopupLogic extends Logic
 		-- 늦게 도착한 Sync 값 반영용: 마지막으로 채운 키
 		self._T.fillKey = tostring(floor) .. ":" .. tostring(prev) .. ":" .. tostring(now) .. ":" .. tostring(clear)
 		log("[VRF] result fill floor=" .. tostring(floor) .. " clear=" .. tostring(clear) .. " prev=" .. tostring(prev) .. " now=" .. tostring(now) .. " loot=" .. tostring(#items))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void BossLayout(boolean bossRun, string bossId)
+		-- 보스전 결과: 별 자리에 보스 그림, 보상 묶음을 위로 당겨 빈 공간을 줄인다 (일반 결과는 원래 자리). 다시 도전 비용 아이콘 = 도전권.
+		if self._T.basePos == nil then
+			self._T.basePos = {}
+			for _, k in ipairs({ "battleRewardsPlaque", "battleRewardsPanel", "LootView", "AccountExp" }) do
+				local e = self:E(k)
+				if isvalid(e) then self._T.basePos[k] = e.UITransformComponent.anchoredPosition end
+			end
+		end
+		for k, p in pairs(self._T.basePos) do
+			local e = self:E(k)
+			if isvalid(e) then e.UITransformComponent.anchoredPosition = bossRun and Vector2(p.x, p.y + 100) or p end
+		end
+		local art = self:E("BossArt")
+		if isvalid(art) then
+			local stand = ""
+			if bossRun then
+				local t = _DataService:GetTable("BossTable")
+				if t ~= nil then
+					for i = 1, t:GetRowCount() do
+						if t:GetCell(i, "BossId") == bossId then stand = t:GetCell(i, "StandRUID") or "" end
+					end
+				end
+			end
+			art:SetEnable(stand ~= "")
+			if stand ~= "" then art.SpriteGUIRendererComponent.ImageRUID = "thumbnail://" .. stand end
+		end
+		local icon = self:E("retry/retryCostIcon")
+		if isvalid(icon) then
+			local want = bossRun and "7e932b7340f74fba8372c5b217f93000" or "3d5c35546d4944598ed6e1be129ff12b"
+			if icon.SpriteGUIRendererComponent.ImageRUID.DataId ~= want then icon.SpriteGUIRendererComponent.ImageRUID = DataRef(want) end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method string BossName(string bossId)
+		-- 보스 표 이름.
+		local t = _DataService:GetTable("BossTable")
+		if t ~= nil then
+			for i = 1, t:GetRowCount() do
+				if t:GetCell(i, "BossId") == bossId then return t:GetCell(i, "Name") or bossId end
+			end
+		end
+		return bossId
 	end
 
 	@ExecSpace("ClientOnly")
@@ -327,6 +395,13 @@ script ResultPopupLogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void OnRetry()
 		-- 다시 도전 (에너지 3, 서버가 차감).
+		local mgr0 = self:GetManager()
+		-- 보스전: 에너지 대신 도전권(서버가 검사)
+		if mgr0 ~= nil and mgr0.RunMode == "boss" then
+			if mgr0.ResultAccountSaved then mgr0:RequestRetry() end
+			log("[VRF] boss retry clicked")
+			return
+		end
 		local eng = self:Engrave()
 		if eng == nil or not eng.EnergyLoaded then self:Message("입장 에너지를 불러오는 중입니다") return end
 		if eng.Energy < eng.EnergyCost then self:Message("입장 에너지가 부족합니다") return end
@@ -341,6 +416,8 @@ script ResultPopupLogic extends Logic
 		local mgr = self:GetManager()
 		if mgr == nil then return end
 		if _RegionSelectLogic ~= nil then _RegionSelectLogic.PendingOpenFloor = math.max(1, self._T.floor or mgr.ResultFloor) end
+		-- 보스전이면 지역 선택을 보스 탭으로 연다
+		if _RegionSelectLogic ~= nil then _RegionSelectLogic.PendingBossTab = mgr.RunMode == "boss" end
 		_ScreenFadeLogic:FadeOut(function() mgr:RequestLobby() end)
 		log("[VRF] back to region select floor=" .. tostring(self._T.floor))
 	end
@@ -406,9 +483,20 @@ script ResultPopupLogic extends Logic
         end
         local retry = self:E("retry")
         if isvalid(retry) then retry.ButtonComponent.Enable = mgr.ResultAccountSaved and eng ~= nil and eng.EnergyLoaded and eng.Energy >= cost end
+        -- 보스전: 다시 도전은 도전권이 남았을 때만 (차감은 클리어 때)
+        local pbr = nil
+        if mgr.RunMode == "boss" then
+            local lp = _UserService.LocalPlayer
+            pbr = isvalid(lp) and lp:GetComponent("script.PlayerBoss") or nil
+            if isvalid(retry) then retry.ButtonComponent.Enable = mgr.ResultAccountSaved and pbr ~= nil and (pbr.TicketsLeft > 0 or mgr.ResultDebugRun) end
+        end
         local back = self:E("resultBack")
         if isvalid(back) then back.ButtonComponent.Enable = mgr.ResultAccountSaved end
-		self:SetText("retry/retryCost", "에너지 " .. tostring(cost), nil)
+		if pbr ~= nil then
+			self:SetText("retry/retryCost", tostring(pbr.TicketsLeft) .. "/" .. tostring(pbr.TicketMax), nil)
+		else
+			self:SetText("retry/retryCost", "에너지 " .. tostring(cost), nil)
+		end
 		-- 등장: 큰 별이 차례로 커지며 나타남, 새 별은 더 크게 튀어나옴
 		if self._T.revealT ~= nil then
 			self._T.revealT = self._T.revealT + delta

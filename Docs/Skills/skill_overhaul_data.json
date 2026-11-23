@@ -1,0 +1,6656 @@
+{
+ "meta": {
+  "source": "/Volumes/P7/MapleStoryWorld/최신메이플데이터 (_Strings/Skill.xml 이름·설명·h, _Resources/Skill/_Canvas 아이콘)",
+  "created": "2026-11-24",
+  "numbers": "원본 수치 XML(Skill/<직업>.img)이 외장 SSD에 없어 values는 null. vars는 h 문자열에 쓰인 원본 변수명. gameRef는 같은 이름 스킬의 현재 게임(JobSkillTable) 값.",
+  "ruidRule": "원본 icon.png 와 MSW 썸네일을 32x32 비교, 차이값 26 미만 + 육안 확인 = 같은 그림. 미리보기 output/preview/skill_overhaul_icons.png"
+ },
+ "skills": [
+  {
+   "job": "Hero",
+   "tier": 1,
+   "tierName": "1차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 1001005,
+   "name": "슬래시 블러스트",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "MP를 소비하여 주위의 적 다수를 동시에 공격한다.",
+   "h": "MP #mpCon 소비, #damage% 데미지로 최대 #mobCount명의 적을 공격",
+   "vars": [
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H01",
+    "pct": "120",
+    "hits": "1",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/100.img/skill/1001005/icon.png",
+   "mswRuid": "a5416a5f21aa4a71b39d54a6a5179d14",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H01",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 1101011,
+   "name": "브랜디쉬",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 눈 앞의 적 여러명을 두 번 연속 공격한다.",
+   "h": "MP #mpCon 소비, #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H02",
+    "pct": "110",
+    "hits": "2",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/110.img/skill/1101011/icon.png",
+   "mswRuid": "57886d87b5f54025be7639875f373653",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H02",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 1101014,
+   "name": "플래시 슬래시",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "섬광과 같이 돌진하며 경로에 있는 적을 벤다. 방향키와 조합하여 8방향으로 돌진할 수 있다. 시전 동작 중 어떠한 공격에도 밀리지 않는다.",
+   "h": "MP #mpCon 소비, 적에게 돌진하며 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 플래시 슬래시는 #w2초마다 1개씩 준비되며 최대 #w개까지 충전 가능",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "w",
+    "w2"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "충전식 돌진 베기. 자동 전투에서는 쿨타임형으로 단순화",
+   "iconPath": "_Resources/Skill/_Canvas/110.img/skill/1101014/icon.png",
+   "mswRuid": "ae37b378953b43949791e605d0e3860e",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H20",
+   "gameBase": "H07",
+   "valueSource": "원본없음-차수기준(H07 값)"
+  },
+  {
+   "job": "Hero",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 1111010,
+   "name": "브레이브 슬래시",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 전방의 적 다수를 세번 연속 공격한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/111.img/skill/1111010/icon.png",
+   "mswRuid": "b30bc846136a42ecbb6349f1e21f73da",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H21",
+   "gameBase": "H02",
+   "valueSource": "원본없음-차수기준(H02 값)"
+  },
+  {
+   "job": "Hero",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 1111003,
+   "name": "스카링 소드",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "검에 예기가 더해져 적에게 지워지지 않는 흉터를 남긴다.",
+   "h": "MP #mpCon 소모, #time초 동안 지속 / 지속 중 공격력 #indiePad 증가, 적에게 공격 적중 시 #prop%의 확률로 #v초 동안 지속되는 자상을 새김",
+   "vars": [
+    "indiePad",
+    "mpCon",
+    "prop",
+    "time",
+    "v"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "자상(흉터) 부여 버프. 기존 돌파 이름 \"흉터\"와 연결",
+   "iconPath": "_Resources/Skill/_Canvas/111.img/skill/1111003/icon.png",
+   "mswRuid": "83459bbc508241f4ac0e8e92b6e75aa4",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H22",
+   "gameBase": "H05",
+   "valueSource": "원본없음-차수기준(H05 값)"
+  },
+  {
+   "job": "Hero",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 1111016,
+   "name": "오라 블레이드",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "원하는 방향으로 적을 찢어발기는 검기를 날린다. #c8방향#으로 날릴 수 있어 방향키와 함께 사용하면 해당 방향으로 날린다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검기 발사 / 오라 블레이드의 일반 몬스터 공격 시 데미지 #u%p 증가 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H07",
+    "pct": "260",
+    "hits": "1",
+    "cooldown": "5"
+   },
+   "note": "관통 검기",
+   "iconPath": "_Resources/Skill/_Canvas/111.img/skill/1111016/icon.png",
+   "mswRuid": "483690e55c974444aef84df3a6331d93",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "H07",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 1121008,
+   "name": "레이징 블로우",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 전방의 적 다수를 순식간에 여러 번 베어낸다. 마지막 공격은 반드시 크리티컬로 적용된다. 콤보가 완충되면 스킬이 강화된다. 추가로 오라 블레이드를 강화한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격하고 마지막 공격은 크리티컬 판정 / #c강화 레이징 블로우# : #x%의 데미지로 #y번 공격, 마지막 두 번의 공격은 크리티컬 판정 / [패시브 효과 : 오라 블레이드의 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "c",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H08",
+    "pct": "90",
+    "hits": "3",
+    "cooldown": "10"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1121008/icon.png",
+   "mswRuid": "311da47ba7084f46a18a7d73730dc381",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H08",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 1121015,
+   "name": "인사이징",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 정신을 집중하여 전방으로 검을 크게 내리긋는다. 궁극의 검술로 영혼에 새겨진 검이 실체화되어 공격하는 것처럼 보인다.",
+   "h": "MP #mpCon 소비, #mobCount명의 적에게 #damage%의 데미지로 #attackCount번 공격, 일반 몬스터 공격 시 데미지 #nbdR% 증가",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "nbdR"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H06",
+    "pct": "180",
+    "hits": "1",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1121015/icon.png",
+   "mswRuid": "d6c209d785f04116a357aacc450b0ebf",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H06",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 1121052,
+   "name": "레이지 업라이징",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "고대 전사의 분노를 구현하여 전방의 적을 초토화시킨다.",
+   "h": "MP #mpCon 소비, #mobCount명의 적에게 #damage% 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H09",
+    "pct": "650",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "하이퍼 액티브(긴 쿨 강타)",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1121052/icon.png",
+   "mswRuid": "f73aaa1f54454b0c9fe2df25dedfcc99",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H09",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 1121054,
+   "name": "발할라",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "고대 전사들의 의지가 깃들어 강력한 힘을 발휘한다. 히어로가 #c검술# 스킬 사용 시 일정 시간마다 공격이 발생한 위치에 검격이 잔상처럼 남아 적을 추가 공격한다. 검격은 최대 HP가 가장 높은 보스 몬스터에게 우선적으로 생성된다. 공용 스킬, 5차 스킬에 의해서는 검격이 발생하지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 적의 어떠한 공격에도 밀려나지 않고 콤보 최대치로 완충 / 버프 지속 중 공격력 #indiePad, 크리티컬 확률 #indieCr%, 상태 이상 내성 #x, 모든 속성 내성 #y% 증가 / 일정 시간마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검격 #w개씩 발생, 검격은 최대 #u2회까지 발생하며 검격이 모두 발생하면 더 이상 발생하지 않음 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "indieCr",
+    "indiePad",
+    "mobCount",
+    "mpCon",
+    "time",
+    "u2",
+    "w",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H10",
+    "pct": "150",
+    "hits": "1",
+    "cooldown": "20"
+   },
+   "note": "하이퍼 액티브",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1121054/icon.png",
+   "mswRuid": "8e52272073fa4f8f9229bf6f05af76a3",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H10",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 400011001,
+   "name": "소드 오브 버닝 소울",
+   "kind": "소환",
+   "damageType": "물리",
+   "element": "불",
+   "desc": "불타는 영혼을 검의 형상으로 만들어낸다. 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 아래 방향키와 함께 사용하면 고정 상태로 소환할 수 있다. 커스텀 커맨드를 사용하면 방향키 입력 없이 스킬 키만으로 즉시 고정 상태로 소환할 수 있다. #c커스텀 커맨드 온오프 : 마우스 우클릭#",
+   "h": "MP #mpCon 소비, 시전 시 콤보를 최대치로 완충하며 자신의 주위에 영혼의 검을 생성, 아래 방향키와 함께 스킬을 사용하면 그 자리에 검을 고정 가능, 고정 상태에서 스킬 재사용 시 검이 자신에게로 복귀 / 자신의 공격 스킬 사용 시 일정 시간 마다 적을 공격, 추가 크리티컬 확률 #cr% / #일반 상태# : #time초 동안 지속, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #고정 상태# : #dummyStr4초 동안 지속, 최대 #dummyStr3명의 적을 #s2%의 데미지로 #dummyStr2번 공격 / 재사용 대기시간 #x초",
+   "vars": [
+    "attackCount",
+    "cr",
+    "damage",
+    "dummyStr2",
+    "dummyStr3",
+    "dummyStr4",
+    "mobCount",
+    "mpCon",
+    "s2",
+    "time",
+    "x"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H12",
+    "pct": "200",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "영혼의 검 소환",
+   "iconPath": "_Resources/Skill/_Canvas/40001.img/skill/400011001/icon.png",
+   "mswRuid": "f97f557e480f482db24679f0d53e6e30",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "H12",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V1",
+   "slotName": "5차 칸1",
+   "originalId": 400011027,
+   "name": "콤보 데스폴트",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "검으로 공간을 가른다.",
+   "h": "MP #mpCon, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 시전 동작 중 무적 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H13",
+    "pct": "170",
+    "hits": "6",
+    "cooldown": "20"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40001.img/skill/400011027/icon.png",
+   "mswRuid": "79008d4a85ca4b42bc0b798b7a91bfd6",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H13",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V2",
+   "slotName": "5차 칸2",
+   "originalId": 400011124,
+   "name": "소드 일루전",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "콤보 카운터의 힘을 폭발시키며 눈에 보이지 않는 속도로 전방을 무수히 벤다. 소드 일루전은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 참격 #x회 발동 후 #w%의 데미지로 #y번 공격하는 폭발 #z회 발동 / 콤보 어택 활성화 중 사용 시 #time초 동안 #u개의 콤보 카운터가 증가시키는 최종 데미지와 같은 수치의 최종 데미지 증가, 콤보 카운터가 증가시키는 최종 데미지와 합 적용 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time",
+    "u",
+    "w",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H14",
+    "pct": "150",
+    "hits": "5",
+    "cooldown": "12"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40001.img/skill/400011124/icon.png",
+   "mswRuid": "265d602760164528a4418be4d7e4d39b",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "H14",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V3",
+   "slotName": "5차 칸3",
+   "originalId": 400011073,
+   "name": "콤보 인스팅트",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "콤보 카운터를 무의식의 영역으로 받아들여 잠재된 본능의 힘까지 이끌어낸다. 콤보 카운터로 얻는 능력이 증가하고 #c레이징 블로우 사용# 시 공간에 상처를 남길 수 있게 되며 #c스피릿 칼리버# 적중 시 영혼의 잔흔을 남긴다. 공간의 상처와 영혼의 잔흔은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "콤보 카운터가 1개라도 있어야 사용 가능, MP #mpCon 소비, #time초 동안 지속 / 콤보 카운터로 증가하는 최종 데미지, 보스 몬스터 공격 시 데미지, 공격력 #t% 증가 / 콤보 카운터가 충전될 확률 #x% 감소 / #c공간의 상처# : 일정 시간마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 균열 #s회 발동 / #c영혼의 잔흔# : 스피릿 칼리버에 적중된 모든 적에게 #dummyStr%의 데미지로 공격 / 공간의 상처로는 콤보 카운터 충전 불가 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "dummyStr",
+    "mobCount",
+    "mpCon",
+    "s",
+    "t",
+    "time",
+    "x"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "H15",
+    "pct": "60",
+    "hits": "1",
+    "cooldown": "15"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40001.img/skill/400011073/icon.png",
+   "mswRuid": "941c7381b20d4a92896f34da0a56fe18",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "H15",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 1141000,
+   "name": "레이징 블로우 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 전방의 적 다수를 순식간에 여러 번 베어낸다. 마지막 공격은 반드시 크리티컬로 적용된다. 콤보가 완충되면 스킬이 강화된다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하고 마지막 공격은 크리티컬 판정, 소드 오브 버닝 소울 일반 상태의 공격 범위 증가 / #c강화 레이징 블로우# : #x%의 데미지로 #y번 공격, 마지막 두 번의 공격은 크리티컬 판정, 콤보 인스팅트와 소드 오브 버닝 소울 일반 상태의 공격 범위 증가",
+   "vars": [
+    "attackCount",
+    "c",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 레이징 블로우 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1141000/icon.png",
+   "mswRuid": "7c18c0382eb84240b88266afe3350e01",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H23",
+   "gameBase": "H08",
+   "valueSource": "원본없음-각성기준(H08 ×1.3)"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 1141008,
+   "name": "인사이징 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 정신을 집중하여 전방으로 검을 크게 내리긋는다. 궁극의 검술로 영혼에 새겨진 검이 실체화되어 공격하는 것처럼 보인다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 일반 몬스터 공격 시 데미지 #nbdR% 증가",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "nbdR"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 인사이징 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1141008/icon.png",
+   "mswRuid": "31c2c44034f44f298e0477523d935218",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H24",
+   "gameBase": "H06",
+   "valueSource": "원본없음-각성기준(H06 ×1.3)"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 1141002,
+   "name": "레이지 업라이징 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "고대 전사의 분노를 구현하여 전방의 적을 초토화시킨다.",
+   "h": "MP #mpCon 소비 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 참격 #u회 발동 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 레이징 블로우 VI 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 레이지 업라이징 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1141002/icon.png",
+   "mswRuid": "1cd5c34391ff45348f4200b02fa9a236",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H25",
+   "gameBase": "H09",
+   "valueSource": "원본없음-각성기준(H09 ×1.3)"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 1141006,
+   "name": "발할라 VI",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "고대 전사들의 의지가 깃들어 강력한 힘을 발휘한다. 히어로가 #c검술# 스킬 사용 시 일정 시간마다 공격이 발생한 위치에 검격이 잔상처럼 남아 적을 추가 공격한다. 검격은 최대 HP가 가장 높은 보스 몬스터에게 우선적으로 생성된다. 공용 스킬, 5차 스킬에 의해서는 검격이 발생하지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 적의 어떠한 공격에도 밀려나지 않고 콤보 최대치로 완충 / 버프 지속 중 공격력 #indiePad, 크리티컬 확률 #indieCr%, 상태 이상 내성 #x, 모든 속성 내성 #y% 증가 / 일정 시간마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검격 #w개씩 발생, 검격은 최대 #u2회까지 발생하며 검격이 모두 발생하면 더 이상 발생하지 않음 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "indieCr",
+    "indiePad",
+    "mobCount",
+    "mpCon",
+    "time",
+    "u2",
+    "w",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 발할라 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1141006/icon.png",
+   "mswRuid": "fd84e2ad6474470da79603470fd896be",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H26",
+   "gameBase": "H10",
+   "valueSource": "원본없음-각성기준(H10 ×1.3)"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 1141500,
+   "name": "스피릿 칼리버",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[검술]# 검과 영혼이 하나가 되어 모든 것을 벤다.  #c10레벨 : 몬스터 방어율 무시 20% 증가 20레벨 : 보스 몬스터 공격 시 데미지 20% 증가 30레벨 : 몬스터 방어율 무시 30% 증가, 보스 몬스터 공격 시 데미지 30% 증가#",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 참격이 #u회 발생 후, #u2%의 데미지로 #v번 공격하는 마무리 일격이 #v2회 발생 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u",
+    "u2",
+    "v",
+    "v2"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 오리진 스킬. 궁극기 자리에 추가/교체",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1141500/icon.png",
+   "mswRuid": "c440d6f7f68d46be80f4182b17c08c6d",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "H27",
+   "gameBase": "H12",
+   "valueSource": "원본없음-각성기준(H12 ×1.3)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 1,
+   "tierName": "1차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 2001008,
+   "name": "에너지 볼트",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "적에게 닿으면 폭발하는 에너지 응집체를 발사한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B01",
+    "pct": "120",
+    "hits": "1",
+    "cooldown": "5"
+   },
+   "note": "원본은 무속성 마법 (게임에서는 비숍 통일로 성 처리 제안)",
+   "iconPath": "_Resources/Skill/_Canvas/200.img/skill/2001008/icon.png",
+   "mswRuid": "e153e514bd3d413a9bd66200ce4ce4b6",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B01",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 2301005,
+   "name": "홀리 애로우",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "성스러운 화살을 소환하여 다수의 적에게 발사한다. 언데드나 악마 계열의 몬스터에게 큰 피해를 줄 수 있다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적에게 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B02",
+    "pct": "110",
+    "hits": "2",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/230.img/skill/2301005/icon.png",
+   "mswRuid": "36a3a4e36cc84cbf8ef42cbe3b5a6a1f",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B02",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 2301002,
+   "name": "힐",
+   "kind": "회복",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "주위에 있는 자신을 포함한 파티원 전원의 HP를 회복시키고 그 수에 따라 힐의 재사용 대기시간을 감소시킨다. 스킬 범위 안에 있는 언데드 몬스터는 추가로 데미지를 입는다.",
+   "h": "MP #mpCon 소비, 회복력 #hp%, 회복시킨 파티원 1명마다 힐의 재사용 대기시간 #y초 감소 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "cooltime",
+    "hp",
+    "mpCon",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "케어 역할: 쿨타임 파티 회복",
+   "iconPath": "_Resources/Skill/_Canvas/230.img/skill/2301002/icon.png",
+   "mswRuid": "2df2a094517944f3ae8212750734246b",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B20",
+   "gameBase": "B04",
+   "valueSource": "원본없음-차수기준(B04 값)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 2311004,
+   "name": "샤이닝 레이",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "성스러운 빛으로 적 다수에게 데미지를 주며 일정 확률로 기절시킨다. 언데드나 마족 계열 몬스터에게 큰 피해를 줄 수 있다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격, #prop% 확률로 #time초 동안 기절",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "prop",
+    "time"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B03",
+    "pct": "300",
+    "hits": "1",
+    "cooldown": "7"
+   },
+   "note": "기절 확률",
+   "iconPath": "_Resources/Skill/_Canvas/231.img/skill/2311004/icon.png",
+   "mswRuid": "b7da5dc9ff3b47e88ac52e2032fefa6f",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B03",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 2311009,
+   "name": "홀리 매직쉘",
+   "kind": "보호",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "스킬 사용 시 자신을 포함한 파티원의 HP를 일정 비율 회복시켜주며 일정 시간 동안 모든 피해를 방어하는 성스러운 보호막을 걸어준다. 보호막은 일정 시간 동안 유지되나 버프 지속시간 증가의 효과를 받지 않는다. 한 번 발동되면 홀리 매직쉘을 다시 사용해도 일정 시간 동안 재생성되지 않는다.",
+   "h": "MP #mpCon 소비, 최대 HP의 #z% 회복, #time초 동안 마법의 보호막 생성. 보호막이 유지되는 동안 최대 #x번의 피해를 방어 / 최대 HP의 일정 비율로 피해를 입히는 공격에 피격 시 #w% 피해 감소 / 발동 시 #y초 동안 보호막 재생성 및 홀리 매직쉘으로 회복 불가. 재사용 대기시간 90초",
+   "vars": [
+    "mpCon",
+    "time",
+    "w",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B04",
+    "pct": "0",
+    "hits": "1",
+    "cooldown": "25"
+   },
+   "note": "파티 보호막(케어)",
+   "iconPath": "_Resources/Skill/_Canvas/231.img/skill/2311009/icon.png",
+   "mswRuid": "c71f28b127ec4a18975abd3e594bbb7a",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B04",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 2311015,
+   "name": "트라이엄프 페더",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "승리의 천사의 힘을 강림시킨다. 승리의 힘이 지속 중일 때 스킬 적중 시 천사의 날개 깃털이 생성되어 주변의 적을 추적하여 공격한다. 날개 깃털은 최대 HP가 높은 보스 몬스터를 우선 공격한다. 디스펠과 SP를 공유한다.",
+   "h": "MP #mpCon 소비, #time초 동안 지속 / 지속 중 자신이 직접 공격하는 스킬 적중 시 #w초 동안 적을 찾아 #damage%의 데미지로 #attackCount번 공격하는 천사의 날개 깃털 #bulletCount개 생성 / 날개 깃털 재생성 대기시간 #u2초 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "bulletCount",
+    "cooltime",
+    "damage",
+    "mpCon",
+    "time",
+    "u2",
+    "w"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B05",
+    "pct": "150",
+    "hits": "1",
+    "cooldown": "20"
+   },
+   "note": "직접 공격 적중 시 깃털 추가타",
+   "iconPath": "_Resources/Skill/_Canvas/231.img/skill/2311015/icon.png",
+   "mswRuid": "96d3fac084224a4996b272522f295211",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B05",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 2321007,
+   "name": "엔젤레이",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "성령의 기운으로 충만한 성검을 소환하여 전방을 향해 발사한다. 성검은 최대 HP가 가장 높은 적을 향해 유도된다. 언데드나 악마 계열의 몬스터에게 큰 피해를 줄 수 있으며 #c파티원의 경우 HP를 회복#시킨다. 언데드 상태의 파티원도 회복시킬 수 있다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격하고 나를 포함한 파티원의 HP를 최대 HP의 #hp% 만큼 회복",
+   "vars": [
+    "attackCount",
+    "damage",
+    "hp",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B06",
+    "pct": "130",
+    "hits": "2",
+    "cooldown": "10"
+   },
+   "note": "공격 + 파티 회복",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321007/icon.png",
+   "mswRuid": "931f9da649c345dda350ad555ecf48b2",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B06",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 2321003,
+   "name": "바하뮤트",
+   "kind": "소환",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "일정 시간 동안 성스러운 용 바하뮤트를 소환한다. 바하뮤트는 공격반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 바하뮤트 소환 / 바하뮤트는 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B08",
+    "pct": "200",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "바하뮤트 소환",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321003/icon.png",
+   "mswRuid": "1d9c6d52c2ec48ff939207ae1aca1413",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B08",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 2321008,
+   "name": "제네시스",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "하늘로부터 신성한 빛의 기둥을 떨어뜨려 강력한 성속성 공격을 가한다. 재사용 대기시간 초기화 효과를 적용받지 않는다.",
+   "h": "MP #mpCon 소비, 최대 15명의 적을 #damage%의 데미지로 #attackCount번 공격, 추가 크리티컬 확률 #cr% / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "cr",
+    "damage",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "긴 쿨 강공격",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321008/icon.png",
+   "mswRuid": "7e72f1563765462f9ac454635259c275",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B21",
+   "gameBase": "B07",
+   "valueSource": "원본없음-차수기준(B07 값)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 2321052,
+   "name": "헤븐즈 도어",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "천국의 문을 열어 적을 응징함과 동시에 파티원에게 생명의 축복을 내린다. 효과를 받은 파티원은 일정 시간 동안 헤븐즈 도어의 효과를 다시 받을 수 없다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격, 동시에 주위 파티원에게 HP가 0이 되는 것을 한 번 무시하는 버프 지급 / 재사용 대기시간 #cooltime초 / 버프를 받은 파티원은 #time초 동안 헤븐즈 도어의 버프를 다시 받을 수 없음",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B10",
+    "pct": "650",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "하이퍼 액티브. 파티 사망 1회 무시",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321052/icon.png",
+   "mswRuid": "efad39b41ddb453eb642a6e83fba4431",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B10",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 400021032,
+   "name": "엔젤 오브 제미니",
+   "kind": "소환",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "쌍둥이 천사를 소환하여 적을 응징한다. 직접 사용하는 스킬 적중 시 흑백의 쌍둥이 천사가 나타나 적을 추가 공격한다. 두 천사의 공격을 모두 맞은 적에게는 두 천사가 다시 나타나 추가로 응징을 가한다. 쌍둥이 천사는 최대 HP가 높은 보스 몬스터를 우선 공격한다.",
+   "h": "MP #mpCon 소비, #time초 동안 쌍둥이 천사 최대 #x회 소환 가능 / 스킬 사용 시 바하뮤트 소환 / 천사 등장 시 각 천사가 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 연속 공격, 천사 재등장 대기시간 #t초 / 두 천사의 공격을 모두 맞은 적에게는 #dummyStr%의 데미지로 #dummyStr2번 공격하는 추가 응징 발생 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "dummyStr",
+    "dummyStr2",
+    "mobCount",
+    "mpCon",
+    "t",
+    "time",
+    "x"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B13",
+    "pct": "100",
+    "hits": "4",
+    "cooldown": "12"
+   },
+   "note": "쌍둥이 천사",
+   "iconPath": "_Resources/Skill/_Canvas/40002.img/skill/400021032/icon.png",
+   "mswRuid": "2362dffd5b114227b6434b07b21698b0",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B13",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V1",
+   "slotName": "5차 칸1",
+   "originalId": 400021086,
+   "name": "디바인 퍼니시먼트",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "사악한 자들에게 신의 이름으로 징벌을 내린다. 스킬 사용 중 적의 어떠한 공격에도 밀려나지 않으며 치명적인 상태 이상에 걸리지 않는다.",
+   "h": "MP #mpCon 소비, #dummyStr초 동안 키다운 가능 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 연속 공격 / 키다운 중 최대 HP의 일정 비율로 피해를 입히는 공격을 포함한 피격 데미지 #s5% 감소 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "dummyStr",
+    "mobCount",
+    "mpCon",
+    "s5"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B15",
+    "pct": "170",
+    "hits": "6",
+    "cooldown": "20"
+   },
+   "note": "키다운 연속 공격 → 자동 전투는 지속 시전으로",
+   "iconPath": "_Resources/Skill/_Canvas/40002.img/skill/400021086/icon.png",
+   "mswRuid": "3c1471ba763140878c405f2aefa9047a",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "B15",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V2",
+   "slotName": "5차 칸2",
+   "originalId": 400021070,
+   "name": "피스메이커",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "신성한 힘이 담긴 오브제를 전방으로 날려 보낸다. 오브제는 접촉한 적은 공격하고 #c파티원은 HP를 회복#시킨다. 오브제가 소멸할 때 신성한 빛으로 변하며 주변 적을 공격한다. #c스킬을 한 번 더 사용하거나# 회복 가능 횟수를 소진하면 즉시 오브제를 소멸시킬 수 있다. 오브제는 #c다른 스킬 사용 중 소멸#시킬 수 있다. 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, 일정 시간마다 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격 / 한명의 적에게는 최대 #dummyStr회까지만 공격, 신성한 빛 적중 시 남은 오브제 적중 횟수만큼 추가 타격 발생 / 오브제에 접촉한 자신을 포함한 파티원의 HP를 비숍 최대 HP의 #hp% 만큼 회복, 1명당 1회 회복 가능, 최대 회복 가능 횟수 #s회 / #c신성한 빛# : 최대 #q명의 적을 #dot%의 데미지로 #z번 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "dot",
+    "dummyStr",
+    "hp",
+    "mobCount",
+    "mpCon",
+    "q",
+    "s",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B14",
+    "pct": "90",
+    "hits": "2",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40002.img/skill/400021070/icon.png",
+   "mswRuid": "b7aa516d96af462db2eddb1c370af5e4",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "B14",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V3",
+   "slotName": "5차 칸3",
+   "originalId": 400021003,
+   "name": "프레이",
+   "kind": "버프",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "기도를 통해 성스러운 축복을 받아 강력한 위력을 발휘한다.",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR%, 최종 데미지 #indiePMdR% 증가 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "cooltime",
+    "indieDamR",
+    "indiePMdR",
+    "mpCon",
+    "time"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "B12",
+    "pct": "60",
+    "hits": "1",
+    "cooldown": "15"
+   },
+   "note": "파티 피해 증가",
+   "iconPath": "_Resources/Skill/_Canvas/40002.img/skill/400021003/icon.png",
+   "mswRuid": "b6a70e2189794c05a5a03c9d6eab7112",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B12",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 2341000,
+   "name": "엔젤레이 VI",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "성령의 기운으로 충만한 성검을 소환하여 전방을 향해 발사한다. 성검은 최대 HP가 가장 높은 적을 향해 유도되며 경로에 있는 적을 공격하는 한편, #c파티원의 경우 HP를 회복#시킨다. 언데드 상태의 파티원도 회복시킬 수 있다. 성검, 엔젤릭 터치, 제네시스가 일정 횟수 이상 적중 시 충만해진 성령의 기운에 의해 심판의 천사가 소환되어 적을 추가 공격한다. 심판의 천사는 범위 내에 적이 있을 때만 소환된다. 성 속성의 공격이다.",
+   "h": "MP #mpCon 소비, 최대 #cr명의 적을 #damage%의 데미지로 #attackCount번 공격하고 나를 포함한 파티원의 HP를 최대 HP의 #hp% 만큼 회복 / 성검, 엔젤릭 터치, 제네시스 #y회 적중 시 심판의 천사가 나타나 적을 추가 공격 / #c심판의 천사# : 최대 #s2명의 적을 #s3%의 데미지로 #s4번 공격",
+   "vars": [
+    "attackCount",
+    "c",
+    "cr",
+    "damage",
+    "hp",
+    "mpCon",
+    "s2",
+    "s3",
+    "s4",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 엔젤레이 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341000/icon.png",
+   "mswRuid": "8ae5949c1e5b4a82802c04640ee85837",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B22",
+   "gameBase": "B06",
+   "valueSource": "원본없음-각성기준(B06 ×1.3)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 2341013,
+   "name": "바하뮤트 VI",
+   "kind": "소환",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "일정 시간 동안 성스러운 용 바하뮤트를 소환한다. 바하뮤트는 공격 반사 상태의 적을 공격해도 피해를 입지 않고 소환수 지속시간 증가 효과를 받는다. 또한 엔젤레이 VI를 영구적으로 강화한다.",
+   "h": "MP #mpCon 소비, #time초 동안 바하뮤트 소환 / 바하뮤트는 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / [패시브 효과 : 엔젤레이 VI 데미지 #x%p 증가, 엔젤레이 VI 심판의 천사 데미지 #y%p 증가, 엔젤레이 VI 심판의 천사 발동에 필요한 성검 적중 횟수 #u회 감소]",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time",
+    "u",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 바하뮤트 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341013/icon.png",
+   "mswRuid": "d740abe9e2f34d5dbed403be205c0661",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B23",
+   "gameBase": "B08",
+   "valueSource": "원본없음-각성기준(B08 ×1.3)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 2341009,
+   "name": "제네시스 VI",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "하늘로부터 신성한 빛의 기둥을 떨어뜨려 강력한 성속성 공격을 가한다. 또한 직접 공격하는 스킬 적중 시 #c일정 확률로 적에게 천사의 응징#이 가해진다. 재사용 대기시간 초기화 효과를 적용받지 않는다.",
+   "h": "MP #mpCon 소비, 최대 15명의 적을 #damage%의 데미지로 #attackCount번 공격하는 빛의 심판이 #dummyStr회 발생, 추가 크리티컬 확률 #cr% / 재사용 대기시간 #cooltime초 / [패시브 효과 : #c[파이널 어택류 스킬]# 직접 공격하는 공격 스킬 적중 시 #prop% 확률로 #x%의 데미지로 공격하는 천사의 응징 발생]",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "cr",
+    "damage",
+    "dummyStr",
+    "mpCon",
+    "prop",
+    "x"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 제네시스 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341009/icon.png",
+   "mswRuid": "8fa29a145c2b4568a7351acf77c3ace1",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B24",
+   "gameBase": "B07",
+   "valueSource": "원본없음-각성기준(B07 ×1.3)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 2341011,
+   "name": "헤븐즈 도어 VI",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "천국의 문을 열어 적을 응징함과 동시에 파티원에게 생명의 축복을 내린다. 효과를 받은 파티원은 일정 시간 동안 헤븐즈 도어의 효과를 다시 받을 수 없다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격, 동시에 주위 파티원에게 HP가 0이 되는 것을 한 번 무시하는 버프 지급 / 재사용 대기시간 #cooltime초 / 버프를 받은 파티원은 #time초 동안 헤븐즈 도어의 버프를 다시 받을 수 없음",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 헤븐즈 도어 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341011/icon.png",
+   "mswRuid": "308974a8f70f4285a0c4d6bd72b47dd4",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B25",
+   "gameBase": "B10",
+   "valueSource": "원본없음-각성기준(B10 ×1.3)"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 2341500,
+   "name": "홀리 어드밴트",
+   "kind": "공격",
+   "damageType": "마법",
+   "element": "성",
+   "desc": "모든 신성력을 개방하여 격이 높은 존재를 강림시킨다. 강림한 대천사들은 너무 거대한 존재이기에 석상의 모습으로 일정 시간 동안 현현한다. 스킬키 재입력 시 현재 위치를 기준으로 대천사를 재강림시킬 수 있다. 대천사들의 공격은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.  #c10레벨 : 몬스터 방어율 무시 20% 증가 20레벨 : 보스 몬스터 공격 시 데미지 20% 증가 30레벨 : 몬스터 방어율 무시 30% 증가, 보스 몬스터 공격 시 데미지 30% 증가#",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 대천사들이 강림하며 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 참격이 #s3회, #s4%의 데미지로 #q2번 공격하는 참격이 #q3회 발생 / #time초 동안 최종 데미지 #y% 증가 및 균형, 복수, 자애의 대천사가 현현 / 대천사는 최대 #x명의 적을 공격, 재강림 대기시간 #s2초 / #c균형의 대천사# : 3초마다 #z%의 데미지로 #s번 공격 / #c복수의 대천사# : 5초마다 #q%의 데미지로 #u번 공격 / #c자애의 대천사# : 4초마다 #v%의 데미지로 #w번 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "q",
+    "q2",
+    "q3",
+    "s",
+    "s2",
+    "s3",
+    "s4",
+    "time",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 오리진 스킬",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341500/icon.png",
+   "mswRuid": "a03ae1f8574e43c281e249b49806e150",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "B26",
+   "gameBase": "B13",
+   "valueSource": "원본없음-각성기준(B13 ×1.3)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 1,
+   "tierName": "1차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 4001344,
+   "name": "럭키 세븐",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "행운을 담은 7개의 표창을 던져 전방의 적들을 공격한다. 아대 착용 시에만 사용 가능하다.",
+   "h": "MP #mpCon 소비, 표창 #bulletConsume개 소비, #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "bulletConsume",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N01",
+    "pct": "60",
+    "hits": "2",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/400.img/skill/4001344/icon.png",
+   "mswRuid": "a14d2ff690ee4bbd8d90023070372f91",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N01",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 4101013,
+   "name": "슈리켄 버스트",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "폭발하는 수리검을 세 개 던져 맞은 적과 주변 적들에게 데미지를 입힌다. 수리검은 최초 적중한 적의 위치에서 폭발을 일으킨다.",
+   "h": "MP #mpCon 소비, 표창 #bulletConsume개 소비, 최대 #mobCount명의 적에게 #damage% 데미지를 주는 수리검을 던지고 적중 위치에 #y% 데미지로 최대 #x명의 적을 #u번 공격하는 폭발 발생",
+   "vars": [
+    "bulletConsume",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "적중 위치 폭발(광역)",
+   "iconPath": null,
+   "mswRuid": "3bff9370604c46e98dbd74c4bc3bfc3e",
+   "iconStatus": "MSW 같은 이름(4101008 아이콘)",
+   "mswCandidateUnverified": "3bff9370604c46e98dbd74c4bc3bfc3e",
+   "gameId": "N20",
+   "gameBase": "N03",
+   "valueSource": "원본없음-차수기준(N03 값)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 4101010,
+   "name": "윈드 탈리스만",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "거센 그림자의 힘이 담긴 부적을 던져 적들을 멀리 밀쳐내며 데미지를 입힌다. 일부 몬스터는 저항하여 밀리지 않는다.",
+   "h": "MP #mpCon 소비, 표창 #bulletConsume개 소비, 최대 #mobCount명의 적에게 #damage% 데미지를 주며 #range 거리만큼 밀어냄",
+   "vars": [
+    "bulletConsume",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "range"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "넉백",
+   "iconPath": null,
+   "mswRuid": "2dbfbe5629b54d4bb23709ff0f996976",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "2dbfbe5629b54d4bb23709ff0f996976",
+   "gameId": "N21",
+   "gameBase": "N02",
+   "valueSource": "원본없음-차수기준(N02 값)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 4111015,
+   "name": "슈리켄 챌린지",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "그림자의 힘이 담긴 거대 수리검을 소환하여 적들을 섬멸한다.",
+   "h": "MP #mpCon 소비, 표창 #bulletConsume개 소비, 최대 #mobCount명의 적에게 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "bulletConsume",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": null,
+   "mswRuid": "1f14d3611a4e45528551547f1f1b794b",
+   "iconStatus": "못 찾음 - 임시(기존 트리플 스로우 아이콘)",
+   "mswCandidateUnverified": "6c194db357d94433bbc5261df761af39",
+   "gameId": "N22",
+   "gameBase": "N03",
+   "valueSource": "원본없음-차수기준(N03 값)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 4111002,
+   "name": "쉐도우 파트너",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "어둠",
+   "desc": "일정 시간 동안 자신과 똑같은 행동을 하는 그림자 동료를 소환한다. 별도의 HP는 없으며 모습을 변화시키거나 움직임을 제한하는 공격을 받을 경우 사라진다. 소환 스킬, 전직업 공용 5차 스킬 및 일부 스킬에는 적용되지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 모든 공격에 최종 데미지의 #x%로 추가 타격을 하는 그림자 동료 소환",
+   "vars": [
+    "mpCon",
+    "time",
+    "x"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N04",
+    "pct": "30",
+    "hits": "1",
+    "cooldown": "25"
+   },
+   "note": "그림자 분신 추가타",
+   "iconPath": "_Resources/Skill/_Canvas/411.img/skill/4111002/icon.png",
+   "mswRuid": "51094b0a68474379ab5d392c89afde9d",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N04",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 4111007,
+   "name": "다크 플레어",
+   "kind": "소환",
+   "damageType": "물리",
+   "element": "어둠",
+   "desc": "일정 시간 동안 어두운 기운을 방출하여 주변 적을 공격하는 거대한 수리검을 소환한다. 다크 플레어는 공격반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 거대한 수리검 소환 / 일정 간격마다 최대 #mobCount명의 적을 #damage%의 데미지로 공격",
+   "vars": [
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N05",
+    "pct": "200",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "거대 수리검 소환",
+   "iconPath": null,
+   "mswRuid": "2e459dfac38b463790f45e7b93318dac",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "2e459dfac38b463790f45e7b93318dac",
+   "gameId": "N05",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 4121013,
+   "name": "쿼드러플 스로우",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "4개의 표창을 연속으로 던진다. 표창은 최대 HP가 높은 몬스터를 우선 공격한다.",
+   "h": "MP #mpCon 소비, 표창 #bulletCount개 소비, #damage% 데미지로 4번 공격",
+   "vars": [
+    "bulletCount",
+    "damage",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N06",
+    "pct": "70",
+    "hits": "4",
+    "cooldown": "10"
+   },
+   "note": "원본 아이콘 폴더 없음(이름표만 있음)",
+   "iconPath": null,
+   "mswRuid": "01f07b9ebf474d3eb72be936541a2eaf",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "da7c1ce80f2c44079b2130022212bbbf",
+   "gameId": "N06",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 4121017,
+   "name": "쇼다운 챌린지",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "최대 6명의 적을 공격하며 도발하여 #c부딪히지 않는 상태#로 만든다. 도발당한 적은 경험치 획득량과 아이템 드롭률도 함께 증가하며 보스에게도 절반의 효과가 적용된다. 부적이 폭발할 때 어둠의 수리검이 생성되어 주변의 적을 추적하여 공격한다. 어둠의 수리검은 공격반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon, 표창 #bulletConsume개 소비 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하며 도발 / 도발당한 적은 #time초 동안 #c부딪히지 않는 상태 지속#, 획득 경험치 및 아이템 드롭률 #x% 증가, 보스 몬스터일 경우 효과 절반으로 감소 / 이후 #w%의 데미지로 #z번 공격하는 수리검 #u개 생성, 수리검은 마크 오브 어쌔신을 발동시키지 않음 / 한 명의 적이 여러 개의 수리검에 맞을 경우 두 번째 수리검부터 최종 데미지 #u2% 감소, 일반 몬스터 공격 시 데미지 #w2% 증가 / 수리검 재생성 대기시간 #s2초",
+   "vars": [
+    "attackCount",
+    "bulletConsume",
+    "c",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "s2",
+    "time",
+    "u",
+    "u2",
+    "w",
+    "w2",
+    "x",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N08",
+    "pct": "300",
+    "hits": "1",
+    "cooldown": "7"
+   },
+   "note": "도발",
+   "iconPath": null,
+   "mswRuid": "2e7e0a0666ac464da06f5344ac1fd443",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "956727b76287433c80ddfd9c0dd9dd2f",
+   "gameId": "N08",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 4121016,
+   "name": "써든레이드",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "숨어 있던 동료들을 총동원하여 적들을 공격한다. 써든레이드는 공격반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, 표창 1개 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 일반 몬스터 공격 시 데미지 #x%p 증가 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "x"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N07",
+    "pct": "180",
+    "hits": "1",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": null,
+   "mswRuid": "31093668ecaa469b960926e902d51a45",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "f199155baebe497c87fefbf3c39c7ccb",
+   "gameId": "N07",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 4121052,
+   "name": "포 시즌",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "사방에 네 개의 표창을 소환하여 하나의 거대한 표창을 이룬다.",
+   "h": "MP #mpCon 소비, 표창 1개 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 마크 오브 나이트로드의 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N10",
+    "pct": "400",
+    "hits": "1",
+    "cooldown": "6"
+   },
+   "note": "하이퍼 액티브",
+   "iconPath": null,
+   "mswRuid": "1ba86d9b79a2422f805007284f109bf2",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "ae6ed4be8e0e4c5c9eb19326bb0f8fce",
+   "gameId": "N10",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 400041038,
+   "name": "다크로드의 비전서",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "어둠",
+   "desc": "다크로드의 비전 기술이 담긴 두루마리를 사용한다. 스킬을 재사용하여 즉시 두루마리를 폭발시킬 수 있다. 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 최대 #mobCount명의 적에게 #damage%의 데미지를 주는 표창 적 1명당 #bulletCount개 사출 / 표창 #x개가 적의 수와 관계없이 추가 사출 / 보스 몬스터 공격 시 데미지 #bdR% 증가 / 지속 시간 종료 시 두루마리가 폭발하며 최대 #z명의 적을 #selfDestruction%의 데미지로 #w번 추가 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "bdR",
+    "bulletCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "selfDestruction",
+    "time",
+    "w",
+    "x",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N15",
+    "pct": "35",
+    "hits": "24",
+    "cooldown": "20"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40004.img/skill/400041038/icon.png",
+   "mswRuid": "0bcae39ae28e4f24905bcf33ecd479b6",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "N15",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V1",
+   "slotName": "5차 칸1",
+   "originalId": 400041020,
+   "name": "풍마수리검",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "고대의 도적 일족이 사용했다고 전해지는 거대한 수리검을 던진다. 수리검은 공격 반사 상태의 적을 공격해도 피해를 입지 않으나 마크 오브 어쌔신의 공격 발동 확률이 감소된다.",
+   "h": "MP #mpCon 소비, 표창 1개 소비, 일정 주기마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 거대 수리검 투척 / 거대 수리검은 일정 거리 날아간 후 제자리에 #z초 동안 머물며 추가 공격하고 소멸, 수리검이 날아갈 때 스킬을 재사용하면 즉시 현재 자리에서 멈춤 / 풍마수리검으로는 마크 오브 어쌔신 공격 발동 확률 기존의 #w%만 적용 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "w",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "N14",
+    "pct": "250",
+    "hits": "1",
+    "cooldown": "12"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40004.img/skill/400041020/icon.png",
+   "mswRuid": "459228cf9906473d91d0df063132f3dd",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "N14",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "NightLord",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V2",
+   "slotName": "5차 칸2",
+   "originalId": 400041061,
+   "name": "스로우 블래스팅",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "불",
+   "desc": "수리검에 폭발을 일으키는 부적을 붙여 던진다. 부적은 수리검이 적중하면 잠시 후 폭발하여 주변 적을 추가적으로 공격한다. 폭발은 공격반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "#c폭발 부적# : 수리검을 던지는 공격 스킬이 적중한 적 주위에서 최대 #v명의 적을 #z%의 데미지로 #q번 공격하는 폭발 발생 / #c패시브 효과# : #u초마다 폭발 부적이 1개 준비되고 발동, 액티브 효과와 패시브 효과는 동시에 발동되지 않음 / #c액티브 효과# : MP #mpCon 소비, #time초 동안 #x개의 폭발 부적 사용 가능, 공격 스킬 1회당 최소 #s개에서 최대 #w개의 부적 사용, 사용 개수만큼 표창 소비, 재사용 대기시간 : #cooltime초",
+   "vars": [
+    "c",
+    "cooltime",
+    "mpCon",
+    "q",
+    "s",
+    "time",
+    "u",
+    "v",
+    "w",
+    "x",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "폭발 부적(적중 시 폭발)",
+   "iconPath": "_Resources/Skill/_Canvas/40004.img/skill/400041061/icon.png",
+   "mswRuid": "05cc8b50647743038b09f638efd2a5e4",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "N23",
+   "gameBase": "N03",
+   "valueSource": "원본없음-차수기준(N03 값)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V3",
+   "slotName": "5차 칸3",
+   "originalId": 400041001,
+   "name": "스프레드 스로우",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "일정 시간 동안 표창을 던질 때 여러 방향으로 흩뿌린다. 쉐도우 파트너에는 적용되지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 스로우류 스킬 사용 시 한 번에 여러 방향으로 던짐 / 트리플 스로우 : 4방향 추가, 추가되는 방향은 최대 #dummyStr명의 적을 #u%의 데미지로 공격 / 쿼드러플 스로우 : 3방향 추가, 추가되는 방향은 최대 #dummyStr2명의 적을 #damage%의 데미지로 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "cooltime",
+    "damage",
+    "dummyStr",
+    "dummyStr2",
+    "mpCon",
+    "time",
+    "u"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "스로우 다방향",
+   "iconPath": "_Resources/Skill/_Canvas/40004.img/skill/400041001/icon.png",
+   "mswRuid": "2a37a81410e14d9c8f11419e324c4375",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "N24",
+   "gameBase": "N12",
+   "valueSource": "원본없음-차수기준(N12 값)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 4141000,
+   "name": "쿼드러플 스로우 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "4개의 표창을 연속으로 던진다. 표창은 최대 HP가 가장 높은 보스 몬스터를 우선 공격한다. 일정 횟수 적중 후 사용 시 번개의 힘을 담은 날카로운 수리검을 던진다.",
+   "h": "MP #mpCon 소비, 표창 #bulletCount개 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 4번 공격, 공격 #z번 적중 시 다음 공격 강화 쿼드러플 스로우 VI 발동 / #c강화 쿼드러플 스로우 VI# : 최대 #dummyStr명의 적을 #dummyStr2%의 데미지로 #dummyStr3번 공격",
+   "vars": [
+    "bulletCount",
+    "c",
+    "damage",
+    "dummyStr",
+    "dummyStr2",
+    "dummyStr3",
+    "mobCount",
+    "mpCon",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 쿼드러플 스로우 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141000/icon.png",
+   "mswRuid": "099dfb8f493747d98cbe48861cf1a852",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N25",
+   "gameBase": "N06",
+   "valueSource": "원본없음-각성기준(N06 ×1.3)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 4141005,
+   "name": "쇼다운 챌린지 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "수리검으로 최대 6명의 적을 공격하며 도발하여 #c부딪히지 않는 상태#로 만든다. 도발당한 적은 경험치 획득량과 아이템 드롭률도 함께 증가하며 보스에게도 절반의 효과가 적용된다. 부적이 폭발할 때 어둠의 수리검이 생성되어 주변의 적을 추적하여 공격한다. 어둠의 수리검은 공격반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon, 표창 #bulletConsume개 소비 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하며 도발 / 도발당한 적은 #time초 동안 #c부딪히지 않는 상태 지속#, 획득 경험치 및 아이템 드롭률 #x% 증가, 보스 몬스터일 경우 효과 절반으로 감소 / 이후 #w%의 데미지로 #z번 공격하는 수리검 #u개 생성, 수리검은 마크 오브 어쌔신을 발동시키지 않음 / 한 명의 적이 여러 개의 수리검에 맞을 경우 두 번째 수리검부터 최종 데미지 #u2% 감소, 일반 몬스터 공격 시 데미지 #w2% 증가 / 수리검 재생성 대기시간 #s2초",
+   "vars": [
+    "attackCount",
+    "bulletConsume",
+    "c",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "s2",
+    "time",
+    "u",
+    "u2",
+    "w",
+    "w2",
+    "x",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 쇼다운 챌린지 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141005/icon.png",
+   "mswRuid": "5bb1f6192b7840c2931ed2ad0ea0754f",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N26",
+   "gameBase": "N08",
+   "valueSource": "원본없음-각성기준(N08 ×1.3)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 4141008,
+   "name": "써든레이드 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "숨어 있던 동료들을 총동원하여 적들을 공격한다. 써든레이드는 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 영구적으로 마크 오브 어쌔신 VI의 데미지가 증가한다.",
+   "h": "MP #mpCon 소비, 표창 1개 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 일반 몬스터 공격 시 데미지 #x%p 증가 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 마크 오브 어쌔신 VI의 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "x"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 써든레이드 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141008/icon.png",
+   "mswRuid": "3d9ea2d926724029a1743db596e37234",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N27",
+   "gameBase": "N07",
+   "valueSource": "원본없음-각성기준(N07 ×1.3)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 4141009,
+   "name": "포 시즌 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "사방에 네 개의 표창을 소환하여 하나의 거대한 표창을 이룬다. 일정 횟수 이상 스킬 적중 시 짙은 어둠의 기운이 스며들어 #c포 시즌 VI : 램펀트#로 강화된다.",
+   "h": "MP #mpCon 소비, 표창 1개 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 스킬 #x회 적중 시 다음 공격은 #c포 시즌 VI : 램펀트#로 강화 / #c포 시즌 VI : 램펀트# : 최대 #w명의 적을 #w2%의 데미지로 #w3번 공격 / 이후 #q%의 데미지로 #q2번 공격하는 섬멸 #q3회 발동 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "q",
+    "q2",
+    "q3",
+    "w",
+    "w2",
+    "w3",
+    "x"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 포 시즌 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141009/icon.png",
+   "mswRuid": "0b6a93f0b99440378108272e13e1d50b",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N28",
+   "gameBase": "N10",
+   "valueSource": "원본없음-각성기준(N10 ×1.3)"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 4141500,
+   "name": "생사여탈",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "어둠",
+   "desc": "영겁의 시공에 적을 가두어 모든 생명체의 생사여탈권을 쥔다. 스프레드 스로우 지속 중 위력이 강화된다. 영겁의 시공에서 생성되는 표창은 최대 HP가 가장 높은 보스 몬스터를 우선 추적하며 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. #c색상 연출 및 거대 표창 이동 이펙트 온오프 : 마우스 우클릭#  #c10레벨 : 몬스터 방어율 무시 20% 증가 20레벨 : 보스 몬스터 공격 시 데미지 20% 증가 30레벨 : 몬스터 방어율 무시 30% 증가, 보스 몬스터 공격 시 데미지 30% 증가#",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 스프레드 스로우 지속 중 참격의 최종 데미지 #v2% 증가 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 참격이 #x회 발생 / #time초 동안 임의의 경로를 지나며 #y%의 데미지로 최대 #u명의 적을 #v번 공격하는 거대 표창 #z개 생성 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "time",
+    "u",
+    "v",
+    "v2",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 오리진 스킬",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141500/icon.png",
+   "mswRuid": "32f2a58d064445afbc190dacb9b68b82",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "N29",
+   "gameBase": "N15",
+   "valueSource": "원본없음-각성기준(N15 ×1.3)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 1,
+   "tierName": "1차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 3001004,
+   "name": "애로우 블로우",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "다수의 적을 향해 화살을 연속 발사한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 공격하는 화살을 #x발 발사",
+   "vars": [
+    "damage",
+    "mobCount",
+    "mpCon",
+    "x"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A01",
+    "pct": "70",
+    "hits": "2",
+    "cooldown": "5"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/300.img/skill/3001004/icon.png",
+   "mswRuid": "8d4e4147a8564e5294b1cee3d80306bf",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A01",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 3101005,
+   "name": "바람의 시",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "수 발의 화살을 바람처럼 빠르게 난사한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/310.img/skill/3101005/icon.png",
+   "mswRuid": "9b3b7350e74f4b93b7317c8c542cdb98",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A20",
+   "gameBase": "A02",
+   "valueSource": "원본없음-차수기준(A02 값)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 3101009,
+   "name": "퀴버 카트리지",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "특수 화살촉을 사용한다. #c어드밴스드 퀴버#를 습득하면 사용할 수 있는 화살촉이 추가되며 스킬을 재사용하여 화살촉을 변경할 수 있다.",
+   "h": "#u% 확률로 #damage%의 데미지로 적을 공격하는 마법 화살 발사",
+   "vars": [
+    "damage",
+    "u"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "확률 마법 화살(강화 화살 연결)",
+   "iconPath": "_Resources/Skill/_Canvas/310.img/skill/3101009/icon.png",
+   "mswRuid": "3860f76f6a194780b40ce92eaa419791",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A21",
+   "gameBase": "A13",
+   "valueSource": "원본없음-차수기준(A13 값)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 3111013,
+   "name": "애로우 플래터",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "화살을 곡사로 발사한다. 스킬 키를 누르고 있으면 지속적으로 발사하며, 발사 중 #c↑,↓화살표 키를 이용#해 쏘는 힘을 조절할 수 있다. 스킬 시전 중 채집/NPC 대화키를 눌러 현재 자신의 위치에 애로우 플래터를 설치하여 지속적으로 화살을 발사할 수 있고 보우마스터는 커스텀 커맨드를 사용하면 채집/NPC 대화키 대신 공격키를 사용하여 설치할 수 있다. 설치된 애로우 플래터는 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. #c커스텀 커맨드 온오프 : 마우스 우클릭#",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 공격 / 시전 중 채집/NPC 대화 키로 #v%의 데미지의 화살을 발사하는 애로우 플래터 #u초 동안 설치",
+   "vars": [
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u",
+    "v"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A05",
+    "pct": "60",
+    "hits": "2",
+    "cooldown": "25"
+   },
+   "note": "발사대 설치",
+   "iconPath": "_Resources/Skill/_Canvas/311.img/skill/3111013/icon.png",
+   "mswRuid": "ccd80bd9d23041d0aabb76f6203841de",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A05",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 3111005,
+   "name": "피닉스",
+   "kind": "소환",
+   "damageType": "물리",
+   "element": "불",
+   "desc": "일정 시간 동안 불 속성을 지닌 피닉스를 소환한다. 피닉스는 일정 확률로 적을 기절시킨다. 피닉스의 공격은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 추가로, 영구히 방어력이 증가한다.",
+   "h": "MP #mpCon 소비, #time초 동안 피닉스 소환 / 피닉스는 최대 #mobCount명의 적을 #damage%의 데미지로 공격, #prop% 확률로 기절 / [패시브 효과 : 방어력 #pddR% 증가]",
+   "vars": [
+    "damage",
+    "mobCount",
+    "mpCon",
+    "pddR",
+    "prop",
+    "time"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A04",
+    "pct": "150",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "피닉스 소환, 기절",
+   "iconPath": "_Resources/Skill/_Canvas/311.img/skill/3111005/icon.png",
+   "mswRuid": "e5fa220135234d369654a2652dd16cb2",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A04",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 3111015,
+   "name": "플레시 미라주",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "잔영이 남을 정도로 빠른 궁술을 구사한다. 일정 횟수 이상 자신이 직접 쏜 화살 공격이 적중할 때마다 잔영이 생성되어 적을 추적하는 화살을 쏘고 사라진다. 화살은 잔영의 전방의 적 하나를 추적하며 추적한 적에게 가며 부딪히는 적을 관통하여 공격한다. 설치 애로우 플래터는 자신이 직접 쏜 공격으로 간주되지 않는다. 추가로 바람의 시를 강화한다. 스킬 사용 시 효과가 활성화되고 재사용 시 비활성화되는 #c온오프 스킬#",
+   "h": "MP #mpCon 소비, #u번 공격 적중 시 잔영이 #w개 생성되어 전방의 적 1명을 향해 화살 발사 / 애로우 플래터, 폭풍의 시, 실루엣 미라주, 잔영의 시, 퀴버 풀버스트, 애로우 레인은 #u2번 적중 시 1회 공격으로 간주 / 발사된 화살은 목표한 적까지 가는 경로에 부딪힌 적을 최대 #mobCount명까지 관통하며 #damage%의 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 바람의 시 공격 범위 증가, 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u",
+    "u2",
+    "w"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "적중 누적 시 잔영 화살",
+   "iconPath": "_Resources/Skill/_Canvas/311.img/skill/3111015/icon.png",
+   "mswRuid": "d6ae42a499ef4317aa4ea44ec2586b61",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A22",
+   "gameBase": "A07",
+   "valueSource": "원본없음-차수기준(A07 값)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 3121020,
+   "name": "폭풍의 시",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "폭풍우가 몰아치듯 빠른 속도로 화살을 발사한다. 스킬 키를 누르고 있으면 지속적으로 화살이 발사되며, 사용 중 이동할 수 있다. 화살은 최대 HP가 높은 몬스터를 우선 추적한다. 스킬 사용 중 퀴버 카트리지를 사용할 수 있다.",
+   "h": "MP #mpCon 소비, 발 당 #damage% 데미지 / [패시브 효과 : 언카운터블 애로우의 데미지 #damPlus%p 증가]",
+   "vars": [
+    "damPlus",
+    "damage",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A06",
+    "pct": "40",
+    "hits": "10",
+    "cooldown": "10"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3121020/icon.png",
+   "mswRuid": "5d9a8488ba624e77933cc5de5afd4b68",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A06",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 3121002,
+   "name": "샤프 아이즈",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "일정 시간 동안 적의 약점을 찾아 치명상을 입힐 수 있게 된다.",
+   "h": "MP #mpCon 소비, #time초 동안 크리티컬 확률 #x%, 크리티컬 데미지 #y% 증가",
+   "vars": [
+    "mpCon",
+    "time",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A08",
+    "pct": "0",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "파티 치명타 버프",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3121002/icon.png",
+   "mswRuid": "1c4e8b596fc8492da118daaa619d3b77",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A08",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 3121015,
+   "name": "언카운터블 애로우",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "대상을 특정하지 않은 셀 수 없이 많은 화살을 순간적으로 전방으로 쏜다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적 #damage% 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3121015/icon.png",
+   "mswRuid": "4fd8f2ef4bb34cf899f23c08307ccbd5",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A23",
+   "gameBase": "A07",
+   "valueSource": "원본없음-차수기준(A07 값)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 3121052,
+   "name": "윈드 오브 프레이",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "바람의 결을 읽어 주변을 모두 찢어발기는 충격파를 발산한다. 추가로 애로우 플래터 및 설치 애로우 플래터를 강화한다.",
+   "h": "MP #mpCon 소비, #mobCount명의 적에게 #damage% 데미지로 #attackCount번 공격 / 적중한 적은 #time초 동안 이동속도 #s만큼 감속 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 애로우 플래터와 설치 애로우 플래터의 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "s",
+    "time"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "하이퍼 액티브, 감속",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3121052/icon.png",
+   "mswRuid": "2646e3b54ee846b4b97ca66f3b9daf7c",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A24",
+   "gameBase": "A02",
+   "valueSource": "원본없음-차수기준(하이퍼 공격 평균)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 400031020,
+   "name": "잔영의 시",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "잔영이 남아 활을 발사하는 것처럼 보일 정도로 빠르게 공격한다. 공격 반사 상태의 적을 공격해도 피해를 입지 않고 잔영의 시의 액티브 효과가 지속 중이지 않을 때 일정 횟수 공격하면 잔영이 짧은 시간 발동하여 공격한다.",
+   "h": "MP #mpCon 소비, 최대 #time초 동안 지속, 버프 지속 중 사정거리 안에 적이 있다면 잔영이 #s초 동안 #damage%의 데미지로 #attackCount번 공격하는 화살을 일정 간격마다 발사 / 공격 적중 시 #q2초마다 잔영의 공격 시간 #x초 증가 / 공격 지속 시간이 종료되면 잔영은 공격하지 않음 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 잔영의 시의 액티브 효과가 지속 중이지 않을 때 #u번 직접 공격할 때마다 #q초 동안 잔영이 자동 생성되어 사정거리 안에 적이 있다면 #w%의 데미지로 #z번 공격하는 화살을 일정간격마다 발사] / 액티브 효과와 패시브 효과는 동시에 발동되지 않음",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mpCon",
+    "q",
+    "q2",
+    "s",
+    "time",
+    "u",
+    "w",
+    "x",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A15",
+    "pct": "120",
+    "hits": "12",
+    "cooldown": "20"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40003.img/skill/400031020/icon.png",
+   "mswRuid": "a54a44aadf0b4525b20ba6603cfa1d55",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "A15",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V1",
+   "slotName": "5차 칸1",
+   "originalId": 400031002,
+   "name": "애로우 레인",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "하늘로 날린 화살이 비처럼 쏟아진다. 공격 반사 상태의 적을 공격해도 피해를 입지 않고 마을에서는 영역이 생성되지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR% 증가, 자신의 스킬로 공격 시 #x초 마다 주변에 #t초 동안 화살이 쏟아지는 영역 생성, 영역은 한 번에 최대 #y개까지 생성 가능하나 영역이 중첩되지 않음 / 쏟아지는 화살은 일정 시간마다 최대 #z명의 적을 #q%로 #w번 공격, 현재 공격하는 적이 1명을 초과하면 초과한 적 마다 공격 횟수 #v번 증가하여 최대 #s번까지 추가 증가 / 영역의 공격에는 퀴버 카트리지로 발사되는 마법 화살 확률 2배로 적용 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "cooltime",
+    "indieDamR",
+    "mpCon",
+    "q",
+    "s",
+    "t",
+    "time",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A10",
+    "pct": "80",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "화살비 영역",
+   "iconPath": "_Resources/Skill/_Canvas/40003.img/skill/400031002/icon.png",
+   "mswRuid": "fd767f7da6c147a09c1a41aa28bf3b45",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "A10",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V2",
+   "slotName": "5차 칸2",
+   "originalId": 400031028,
+   "name": "퀴버 풀버스트",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "불",
+   "desc": "모든 종류의 화살촉을 한 번에 사용하며 적에게 닿으면 폭발하는 특별한 화염 화살촉을 추가로 사용한다. 화염 화살촉은 최대 HP가 높은 보스 몬스터를 우선 추적하며 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 화염 화살촉은 한정된 수량만 준비되어 모두 사용 시 더 이상 공격이 발동되지 않는다.",
+   "h": "MP #mpCon 소비, #time초 동안 모든 종류의 화살촉을 한 번에 사용하고 최종 데미지 #indiePMdR%, 공격력 #indiePadR% 증가, 화염 화살촉 추가 사용 / #c화염 화살# : 공격 시 #u초 동안 적을 찾아 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 화염 화살을 #y발 연속 발사, 화염 화살은 #y발씩 총 #u2회까지 발사되며, 준비된 화염 화살촉을 모두 사용하면 버프가 남아있어도 공격 발동하지 않음, 재발동 대기시간 #z초 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "indiePMdR",
+    "indiePadR",
+    "mobCount",
+    "mpCon",
+    "time",
+    "u",
+    "u2",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A12",
+    "pct": "60",
+    "hits": "3",
+    "cooldown": "15"
+   },
+   "note": "화염 화살 포함",
+   "iconPath": "_Resources/Skill/_Canvas/40003.img/skill/400031028/icon.png",
+   "mswRuid": "eb0e10236dcc40b2997ff4c17ba69796",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "A12",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V3",
+   "slotName": "5차 칸3",
+   "originalId": 400031053,
+   "name": "실루엣 미라주",
+   "kind": "보호",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "자신의 형상을 한 환영이 보일 정도로 빠르게 움직여 적의 공격을 회피한다. 환영은 적의 주의를 분산시켜 보우마스터가 입는 피해를 줄이거나 적에게 피해를 입힌다. 죽어있는 상태에선 환영이 생성되는 시간이 차감되지 않는다. 환영의 공격은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 스킬 사용 시 효과가 활성화되고 재사용 시 비활성화되는 #c온오프 스킬#",
+   "h": "#u초 마다 환영 생성, 최대 #x개까지 생성 가능 / 한번에 최대 HP의 #y% 이상의 피해를 입거나 피격 시 사망하는 피해를 입으면 환영 1개 소멸 후 해당 피해 #q% 감소 / 환영이 1개라도 있고 공격 스킬 사용 시 주변에 공격할 적이 있다면 환영으로부터 #damage%의 데미지로 #attackCount번 공격하는 환영 화살 #bulletCount개 발사, MP #v 소비, 재발동 대기시간 #t초 / 재사용 대기시간 #cooltimeMS초",
+   "vars": [
+    "attackCount",
+    "bulletCount",
+    "cooltimeMS",
+    "damage",
+    "q",
+    "t",
+    "u",
+    "v",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "A14",
+    "pct": "120",
+    "hits": "3",
+    "cooldown": "12"
+   },
+   "note": "환영 생성·피해 감소",
+   "iconPath": "_Resources/Skill/_Canvas/40003.img/skill/400031053/icon.png",
+   "mswRuid": "7699857037a048af9951c755e8d1f212",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "A14",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 3141000,
+   "name": "폭풍의 시 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "폭풍우가 몰아치듯 빠른 속도로 화살을 발사한다. 화살은 최대 HP가 높은 몬스터를 우선 추적한다. 화살이 적중할 때마다 적에게서 특수 화살촉을 획득한다. 특수 화살촉이 일정량 이상 모이면 스킬 사용 중 NPC/채집키를 입력하여 한 번에 더 많은 화살을 난사할 수 있는 #c난사 모드#로 변경할 수 있다. 특수 화살촉이 최대 획득 가능한 양만큼 모이면 자동으로 난사 모드로 변경된다. 난사 모드 사용 중 NPC/채집키를 입력해 난사 모드를 해제할 수 있다. 커스텀 커맨드를 사용하면 NPC/채집키 대신 공격키를 사용하여 변경할 수 있다. 스킬 사용 중 이동할 수 있고 퀴버 카트리지를 사용할 수 있다. #c커스텀 커맨드 온오프 : 마우스 우클릭#",
+   "h": "MP #mpCon 소비, 발당 #damage%의 데미지 / 공격 적중 시 특수 화살촉 1개 획득, 최대 획득 가능한 특수 화살촉 #w2개 / 특수 화살촉 #s2개 획득 시 난사 모드 전환 가능 / #c난사 모드# : MP #u2 소비, 공격 적중 시 특수 화살촉을 1개 소모하여 한 번에 더 많은 화살을 발사, 발당 #q3%의 데미지",
+   "vars": [
+    "c",
+    "damage",
+    "mpCon",
+    "q3",
+    "s2",
+    "u2",
+    "w2"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 폭풍의 시 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141000/icon.png",
+   "mswRuid": "a9bd64f0c8bf4deb9e8049f2460fde8b",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A25",
+   "gameBase": "A06",
+   "valueSource": "원본없음-각성기준(A06 ×1.3)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 3141009,
+   "name": "엑스트라 퀴버 카트리지",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "퀴버 카트리지를 확장하여 특수 화살촉을 장전한다. 퀴버 카트리지의 화살 사용 시 특수 화살촉을 현재 사용하지 않는 퀴버 카트리지에 추가 장전한다. 엑스트라 퀴버 카트리지를 사용하면 직접 공격하는 스킬 적중 시 장전된 특수 화살촉이 추가 발사된다. 자동 사용 모드에서는 카트리지 전체에 장전된 화살촉의 개수가 일정 수 이상일 때 스킬이 자동으로 사용된다. 엑스트라 퀴버 카트리지는 스킬 사용 중 사용 가능하며, 적용 중 특수 화살촉을 장전할 수 없다. 특수 화살촉은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. #c자동 사용 모드 온오프 : 마우스 우클릭#",
+   "h": "MP #mpCon 소비, #time초 동안 특수 화살촉 추가 사용, 화살촉 소진 시 자동 종료 / #c마법 화살# : #s%의 데미지로 공격 / #c흡혈 화살# : #dummyStr%의 데미지로 공격 / 퀴버 카트리지 당 최대 #w2개 장전 가능 / 자동 사용 모드에서는 각 카트리지에 장전된 화살의 총합이 #w개 이상일 때 엑스트라 퀴버 카트리지 자동 발동 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "c",
+    "cooltime",
+    "dummyStr",
+    "mpCon",
+    "s",
+    "time",
+    "w",
+    "w2"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 샤프 아이즈는 VI 없음 → 6차 엑스트라 퀴버 카트리지로 교체(확인 필요)",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141009/icon.png",
+   "mswRuid": "d42908e9de51451d85fa9b61bf5ab425",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A26",
+   "gameBase": "A08",
+   "valueSource": "원본없음-각성기준(A08 ×1.3)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 3141002,
+   "name": "언카운터블 애로우 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "대상을 특정하지 않은 셀 수 없이 많은 화살을 순간적으로 전방으로 쏜다. 일정 시간마다 집중력이 증가하여 #c강화된 언카운터블 애로우#가 발동된다. 강화 언카운터블 애로우는 더 많은 화살을 주변을 흐르는 바람에 태워 멀리 날려보낸다. 커스텀 커맨드 사용 시 강화 언카운터블 애로우를 위 방향키와 함께 스킬 사용 시에만 발동시킬 수 있다. 추가로 어드밴스드 파이널 어택의 데미지를 영구히 증가시킨다. #c커스텀 커맨드 온오프 : 마우스 우클릭#",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #c강화 언카운터블 애로우# : MP #u 소비, 최대 #w명의 적을 #v%의 데미지로 #s번 공격 / 재발동 대기시간 #q초 / [패시브 효과 : 어드밴스드 파이널 어택의 데미지 #damPlus%p 증가]",
+   "vars": [
+    "attackCount",
+    "c",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "q",
+    "s",
+    "u",
+    "v",
+    "w"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 언카운터블 애로우 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141002/icon.png",
+   "mswRuid": "186022bb7cba42dbb67909d97ed7f597",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A27",
+   "gameBase": "A07",
+   "valueSource": "원본없음-각성기준(A07 ×1.3)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 3141015,
+   "name": "윈드 오브 프레이 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "바람의 결을 읽어 주변을 모두 찢어발기는 충격파를 발산한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 적중한 적은 #time초 동안 이동속도 #s만큼 감속 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "s",
+    "time"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 윈드 오브 프레이 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141015/icon.png",
+   "mswRuid": "beb903a1b6814fd7a4eeba68e838a895",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A28",
+   "gameBase": "A02",
+   "valueSource": "원본없음-차수기준(하이퍼 공격 평균)"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 3141500,
+   "name": "어센던트 셰이드",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "하늘을 뒤덮어 그늘이 질 정도로 많은 화살을 쏘아 올린다. 일정 시간마다 화살 세례가 적을 강타한다. 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.  #c10레벨 : 몬스터 방어율 무시 20% 증가 20레벨 : 보스 몬스터 공격 시 데미지 20% 증가 30레벨 : 몬스터 방어율 무시 30% 증가, 보스 몬스터 공격 시 데미지 30% 증가#",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 화살 세례가 #q회 발생 / 마지막 화살 세례 후 #time초 동안 공격 적중 시 #s초 마다 최대 #z명의 적을 #x%의 데미지로 #y번 공격하는 화살 세례 #q2회 발동 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "q",
+    "q2",
+    "s",
+    "time",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 오리진 스킬",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141500/icon.png",
+   "mswRuid": "af9e9c70019e4f3b89aea442da24b87b",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "A29",
+   "gameBase": "A15",
+   "valueSource": "원본없음-각성기준(A15 ×1.3)"
+  },
+  {
+   "job": "Viper",
+   "tier": 1,
+   "tierName": "1차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 5001002,
+   "name": "써머솔트 킥",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "점프 후 뒤로 한 바퀴 회전하며 다리로 근접한 적 다수를 공격한다. 건 착용 시 사용 불가능하다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/500.img/skill/5001002/icon.png",
+   "mswRuid": "4abfd60548c84475882e3701bb9df9bd",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V01",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Viper",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 5101012,
+   "name": "쇼크 웨이브",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[격투 스킬]# 점프 후 착지하며 충격파로 적 다수를 공격한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": null,
+   "mswRuid": "35874b318a274653a2e9d27e5d798aca",
+   "iconStatus": "MSW 같은 이름(쇼크웨이브 5111012 아이콘)",
+   "mswCandidateUnverified": "491b23c53868441fa41ddcfc55220659",
+   "gameId": "V20",
+   "gameBase": "V02",
+   "valueSource": "원본없음-차수기준(V02 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 2,
+   "tierName": "2차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 5101019,
+   "name": "씨 서펜트 버스트",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[수룡 스킬]# 수룡의 파동으로 전방의 적을 공격한다.",
+   "h": "최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "수룡 스킬(물 성격, 속성 목록에 없어 무속성)",
+   "iconPath": null,
+   "mswRuid": "368ada66c69c4625b527d8a765214e7a",
+   "iconStatus": "못 찾음 - 임시(원본 씨 서펜트 5100017 아이콘 업로드)",
+   "mswCandidateUnverified": "a1786ec417b642bcab7e6320286b3cba",
+   "gameId": "V21",
+   "gameBase": "V06",
+   "valueSource": "원본없음-차수기준(V06 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 5111009,
+   "name": "스크류 펀치",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "기가 실린 주먹으로 적들을 향해 돌진하며 밀어낸다. 다른 스킬 사용 중에도 사용할 수 있고 함께 사용한 방향키 방향으로 돌진한다. 돌진하는 중 아래 방향키를 입력하면 즉시 돌진을 멈출 수 있다. 일부 몬스터는 저항하여 밀리지 않는다. 피스트 인레이지로 연계하여 사용할 수 있고 연계한 피스트 인레이지는 연계 중 함께 입력한 방향키 방향의 적에게 순간적으로 접근하여 공격한다. ",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하며 이동 / 다른 스킬 사용 중 사용하면 재사용 대기시간 #cooltime초 적용",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "V03",
+    "pct": "70",
+    "hits": "4",
+    "cooldown": "6"
+   },
+   "note": "",
+   "iconPath": null,
+   "mswRuid": "0044bcfcb8574396a50864e622045141",
+   "iconStatus": "MSW 같은 이름(스크류 펀치 5101004 아이콘)",
+   "mswCandidateUnverified": "c06426910ef343ee99dcc0d6ccf61e07",
+   "gameId": "V03",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Viper",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 5111007,
+   "name": "럭키 다이스",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "주사위를 던져 자신의 행운을 시험한다. 주사위의 결과에 따라 일정 시간 동안 랜덤 버프를 획득할 수 있지만, 1이 나올 경우에는 버프를 획득할 수 없고 럭키 다이스의 재사용 대기시간이 감소한다.",
+   "h": "MP #mpCon 소비, 주사위 버프 지속시간 #time초 / 1 : 럭키 다이스 재사용 대기시간 50% 감소 / 2 : 방어력 #pddR% 증가 / 3 : 공격력 #s 증가 / 4 : 크리티컬 확률 #cr% 증가 / 5 : 데미지 #damR% 증가 / 6 : 경험치 획득량 #expR% 증가 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "cooltime",
+    "cr",
+    "damR",
+    "expR",
+    "mpCon",
+    "pddR",
+    "s",
+    "time"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "주사위 무작위 버프",
+   "iconPath": null,
+   "mswRuid": "23d90eb53dcc46bf9b7986ab28712d0c",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "3e95f09d4b18488bb2e157951bc81176",
+   "gameId": "V22",
+   "gameBase": "V05",
+   "valueSource": "원본없음-차수기준(V05 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 3,
+   "tierName": "3차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 5111002,
+   "name": "터닝 킥",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[격투 스킬]# 점프 후 회전하며 다리로 근접한 적 다수를 공격한다. 일정 확률로 대상을 기절시킬 수 있다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #prop%의 확률로 #time초 동안 기절",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "prop",
+    "time"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "기절 확률",
+   "iconPath": null,
+   "mswRuid": "e22e5f4a9ac44089b63d3e1bbb170ff9",
+   "iconStatus": "못 찾음 - 임시(기존 3차 기술 칸 아이콘)",
+   "mswCandidateUnverified": "b4b2dd72c276410b9170e3e84626bcb7",
+   "gameId": "V23",
+   "gameBase": "V02",
+   "valueSource": "원본없음-차수기준(V02 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 5121007,
+   "name": "피스트 인레이지",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[격투 스킬]# 전방으로 소나기와 같은 펀치를 퍼붓는다. #c씨 서펜트 인레이지# 또는 #써펜트 어썰트 인레이지#만을 발동시킨다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": null,
+   "mswRuid": "2b804fbc4bfa4f5a9b725623110503c4",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "1d6b204feacc4a8b8f88a0d6e484b485",
+   "gameId": "V24",
+   "gameBase": "V07",
+   "valueSource": "원본없음-차수기준(V07 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 5121013,
+   "name": "전함 노틸러스",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "전함 노틸러스호에 공격 명령을 내려 적 다수를 동시에 공격한다. 노틸러스는 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 스킬 습득 후 자신이 직접 공격하는 스킬로 공격 시 추가 공격을 한다.",
+   "h": "MP #mpCon 소비, #damage% 데미지로 최대 #mobCount명의 적을 #attackCount번 공격 / #c[파이널 어택류 스킬]# 써머솔트 킥, 스크류 펀치, 피스트 인레이지, 퓨리어스 차지, 하울링 피스트, 리버레이트 넵투누스로 공격 시 단일 적에게 #y% 데미지의 추가 공격 #w번이 #x% 확률로 발동, 넵투누스 인레이지에 의해서는 발동하지 않음 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "w",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "전함 포격",
+   "iconPath": null,
+   "mswRuid": "0effbe1915774a96a54dd538f7971bd5",
+   "iconStatus": "MSW 같은 ID 아이콘",
+   "mswCandidateUnverified": "0439017995b4478c84deb1e54f293e58",
+   "gameId": "V25",
+   "gameBase": "V11",
+   "valueSource": "원본없음-차수기준(V11 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 5121016,
+   "name": "훅 봄버",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[격투 스킬]# 주먹을 내질러 만든 강한 폭발의 기로 전방의 적을 공격한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격",
+   "vars": [
+    "attackCount",
+    "damage",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "",
+   "iconPath": null,
+   "mswRuid": "d8c5e12e2a6640bfa9aa6652ca79660b",
+   "iconStatus": "못 찾음 - 임시(기존 4차 주력기 칸 아이콘)",
+   "mswCandidateUnverified": "bc1ae07e38ce428491d9639aeac9f193",
+   "gameId": "V26",
+   "gameBase": "V04",
+   "valueSource": "원본없음-차수기준(V04 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 5121054,
+   "name": "스티뮬레이트",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "내부의 힘을 격발시켜 일정 시간 동안 데미지가 증가하고 수룡의 힘을 더 자주 사용할 수 있게 된다. 추가로 영구히 보스 몬스터 공격 시 데미지가 증가한다.",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR% 증가 / 지속 중 씨 서펜트 버스트, 씨 서펜트 인레이지, 서펜트 스크류 재사용 대기시간 #y% 감소 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 보스 몬스터 공격 시 데미지 #bdR%증가]",
+   "vars": [
+    "bdR",
+    "cooltime",
+    "indieDamR",
+    "mpCon",
+    "time",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "V10",
+    "pct": "0",
+    "hits": "1",
+    "cooldown": "25"
+   },
+   "note": "하이퍼 액티브",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5121054/icon.png",
+   "mswRuid": "804b3bccbb5047bdbf729c7c6747b072",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V10",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Viper",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 400051070,
+   "name": "하울링 피스트",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "거친 바다의 힘을 모아 강렬한 정권을 내지른다. 스킬 사용 중 적의 어떠한 공격에도 밀려나지 않으며 치명적인 상태 이상에 걸리지 않는다. 힘을 다 모은 후 정권을 내지르는 동작 중에는 무적이다. 힘을 모으는 중 스킬 재사용으로 즉시 정권을 내지를 수 있다.",
+   "h": "MP #mpCon 소비 / 힘을 모으며 일정 간격마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 정권을 내지르며 최대 #w명의 적을 #x%의 데미지로 #y번 공격하는 충격이 #s번 발동 / 지속 시간 중 최대 HP의 일정 비율로 피해를 입히는 공격을 포함한 피격 데미지 #s5% 감소 / 재사용 대기시간 : #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "s",
+    "s5",
+    "w",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "V12",
+    "pct": "90",
+    "hits": "5",
+    "cooldown": "12"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40005.img/skill/400051070/icon.png",
+   "mswRuid": "70632648fdc3445584bd53556873aa1c",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "V12",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Viper",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V1",
+   "slotName": "5차 칸1",
+   "originalId": 400051042,
+   "name": "퓨리어스 차지",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "바다의 기운을 분출하여 힘차게 돌진한다. 함께 사용한 방향키에 따라 위와 아래를 제외한 6방향으로 돌진할 수 있다. #c서펜트 퓨리 모드#에서는 스킬 사용 시 한번에 소지한 모든 바다의 기운을 분출할 수 있다. #c서펜트 퓨리 모드 온오프 : 마우스 우클릭#",
+   "h": "MP #mpCon, 바다의 기운 1개 소비 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 보스 몬스터 공격 시 데미지 #bdR% 증가 / 바다의 기운은 #w초 마다 1개씩 준비되며 최대 #y개까지 소지 가능 / 재사용 대기시간 #cooltimeMS초",
+   "vars": [
+    "attackCount",
+    "bdR",
+    "cooltimeMS",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "w",
+    "y"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "V14",
+    "pct": "150",
+    "hits": "1",
+    "cooldown": "30"
+   },
+   "note": "",
+   "iconPath": "_Resources/Skill/_Canvas/40005.img/skill/400051042/icon.png",
+   "mswRuid": "eeeb4eabaf2f43eab8226214dd3497d0",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "V14",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Viper",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V2",
+   "slotName": "5차 칸2",
+   "originalId": 400051015,
+   "name": "서펜트 스크류",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "거친 바다에 잠들어 있던 수룡의 기운을 몸에 둘러 주변의 적을 공격한다. 수룡은 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 활성화 시 일정 횟수 공격 가능하며 지속 중 재사용 대기시간이 종료되면 공격 횟수와 재사용 대기시간이 자동으로 갱신된다. 스킬 재사용 시 즉시 종료되며 남은 타격 횟수에 비례해 재사용 대기시간이 감소한다. 스킬 사용 시 효과가 활성화되고 재사용 시 비활성화되는 #c온오프 스킬#",
+   "h": "MP #mpCon 소비, 활성화 시 #v회 공격 가능, 보스 몬스터 공격 시 #q회 공격 시 1회 카운트 / 일정 주기마다 주변에 있는 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 자동 공격 / 일반 몬스터 #w2마리 처치 시마다 재사용 대기시간 #y초 감소, 스킬 종료 시 남은 공격 횟수 #u회마다 재사용 대기시간 #x초 감소 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "q",
+    "u",
+    "v",
+    "w2",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "수룡 회오리",
+   "iconPath": "_Resources/Skill/_Canvas/40005.img/skill/400051015/icon.png",
+   "mswRuid": "a1786ec417b642bcab7e6320286b3cba",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "V13",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  },
+  {
+   "job": "Viper",
+   "tier": 5,
+   "tierName": "5차",
+   "slot": "V3",
+   "slotName": "5차 칸3",
+   "originalId": 400051002,
+   "name": "라이트닝 폼",
+   "kind": "버프",
+   "damageType": "물리",
+   "element": "번개",
+   "desc": "바다의 힘을 받아 강력한 힘을 발휘한다. 라이트닝 폼 상태에서는 방향키를 한쪽으로 2번 연속 입력하여 순간적으로 이동할 수 있게 되고 스킬을 한 번 더 사용하여 주변 적을 공격하는 에너지 오브를 사용할 수 있다. 에너지 오브는 공격 반사 상태의 적을 공격해도 피해를 입지 않고 시전 동작 중 무적이다. 커맨드 잠금 시 방향키를 연속 입력해도 순간 이동하지 않는다. #c커맨드 잠금 : 마우스 우클릭#",
+   "h": "MP #mpCon 소비, #time초 동안 최종 데미지 #indiePMdR% 증가 / 에너지 오브 최대 #w회까지 사용 가능 / 에너지 오브는 일정 시간마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 오브 1개당 한명의 적에게는 최대 #s회까지 공격 가능 / 추가 크리티컬 확률 #cr%, 몬스터 방어율 #ignoreMobpdpR% 추가 무시 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "cooltime",
+    "cr",
+    "damage",
+    "ignoreMobpdpR",
+    "indiePMdR",
+    "mobCount",
+    "mpCon",
+    "s",
+    "time",
+    "w"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "에너지 오브 번개",
+   "iconPath": "_Resources/Skill/_Canvas/40005.img/skill/400051002/icon.png",
+   "mswRuid": "40fb05a5c57c4885b7cae076e3fa2859",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V27",
+   "gameBase": "V05",
+   "valueSource": "원본없음-차수기준(V05 값)"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Main",
+   "slotName": "주력기",
+   "originalId": 5141000,
+   "name": "피스트 인레이지 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[격투 스킬]# 전방으로 소나기와 같은 펀치를 퍼붓는다. 서펜트 어썰트 인레이지가 발동할 경우 일정 시간 동안 강력한 충격파를 발생시키는 #c슈퍼 피스트 인레이지#로 변경된다. #c씨 서펜트 인레이지# 또는 #써펜트 어썰트 인레이지#만을 발동시킨다. 충격파는 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, 서펜트 어썰트 인레이지 발동 시 #x초 동안 슈퍼 피스트 인레이지 사용 가능  / #c슈퍼 피스트 인레이지# : MP #y 소비, 최대 #z명의 적을 #s2%의 데미지로 #u2번 공격 이후 최대 #v2명의 적을 #w2%의 데미지로 #q2번 공격하는 충격파 발생 ",
+   "vars": [
+    "attackCount",
+    "c",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "q2",
+    "s2",
+    "u2",
+    "v2",
+    "w2",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 피스트 인레이지 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5141000/icon.png",
+   "mswRuid": "aa25af8fd23147f9abe6754aeba5fd44",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V28",
+   "gameBase": "V07",
+   "valueSource": "원본없음-각성기준(V07 ×1.3)"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Sub",
+   "slotName": "보조기",
+   "originalId": 5141009,
+   "name": "전함 노틸러스 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "전함 노틸러스호에 공격 명령을 내려 다수의 적을 동시에 공격한다. 전함 노틸러스는 공격 반사 상태의 적을 공격해도 피해를 입지 않는다. 스킬 습득 후 자신이 직접 공격하는 스킬로 공격 시 추가 공격을 한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #c[파이널 어택류 스킬]# 써머솔트 킥, 스크류 펀치, 피스트 인레이지, 퓨리어스 차지, 하울링 피스트, 리버레이트 넵투누스로 공격 시 #x% 확률로 #y%의 데미지로 #w번 추가 공격 / 넵투누스 인레이지에 의해서는 발동하지 않음 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "w",
+    "x",
+    "y"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 전함 노틸러스 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5141009/icon.png",
+   "mswRuid": "4c226878b3654b6aba9d521cfa85f3fa",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V29",
+   "gameBase": "V11",
+   "valueSource": "원본없음-각성기준(V11 ×1.3)"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Tech",
+   "slotName": "기술",
+   "originalId": 5141015,
+   "name": "훅 봄버 VI",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "#c[격투 스킬]# 주먹을 내질러 만든 강한 폭발의 기로 전방의 적을 공격한다. 자신의 한계를 뛰어넘어 피스트 인레이지, 슈퍼 피스트 인레이지의 데미지가 증가한다.",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / [패시브 효과 : 피스트 인레이지 VI의 데미지 #u%p 증가, / 슈퍼 피스트 인레이지의 데미지 #damPlus%p 증가, / 슈퍼 피스트 인레이지 충격파의 데미지 #v%p 증가]",
+   "vars": [
+    "attackCount",
+    "damPlus",
+    "damage",
+    "mobCount",
+    "mpCon",
+    "u",
+    "v"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 훅 봄버 → VI",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5141015/icon.png",
+   "mswRuid": "0eb53ce513e14438b8be1e8217cda367",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V30",
+   "gameBase": "V04",
+   "valueSource": "원본없음-각성기준(V04 ×1.3)"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Hyper",
+   "slotName": "하이퍼",
+   "originalId": 5141507,
+   "name": "헤이메이커",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "상대의 급소를 노려 강력한 카운터를 날린다.  #c10레벨 : 몬스터 방어율 무시 10% 증가, 보스 몬스터 공격 시 데미지 10% 증가 20레벨 : 몬스터 방어율 무시 10% 증가, 보스 몬스터 공격 시 데미지 10% 증가 30레벨 : 몬스터 방어율 무시 20% 증가#",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 스트레이트를 내질러 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 피해를 주는 여파가 #dummyStr회 발생하고, 엑스킥으로 연달아 강타해 #dummyStr3%의 데미지로 #dummyStr4번 데미지를 가하는 치명상 #dummyStr5회 발생 / 몬스터 방어율 #dummyStr6% 추가 무시, 보스 몬스터 공격 시 데미지 #dummyStr7% 증가, 크리티컬 확률 #cr%",
+   "vars": [
+    "attackCount",
+    "cr",
+    "damage",
+    "dummyStr",
+    "dummyStr3",
+    "dummyStr4",
+    "dummyStr5",
+    "dummyStr6",
+    "dummyStr7",
+    "mobCount",
+    "mpCon"
+   ],
+   "values": null,
+   "gameRef": null,
+   "note": "각성: 스티뮬레이트는 VI 없음 → 6차 헤이메이커로 교체(확인 필요)",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5141507/icon.png",
+   "mswRuid": "8d06f7c8173e424d8a395de616b8eeb0",
+   "iconStatus": "원본 업로드",
+   "mswCandidateUnverified": null,
+   "gameId": "V31",
+   "gameBase": "V06",
+   "valueSource": "원본없음-차수기준(하이퍼 공격 평균)"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "slot": "Ult",
+   "slotName": "궁극기",
+   "originalId": 5141500,
+   "name": "리버레이트 넵투누스",
+   "kind": "공격",
+   "damageType": "물리",
+   "element": "무",
+   "desc": "심연의 바다에 잠들어 있던 최초의 수룡 넵투누스를 깨운다. #c격투 스킬#과 #c서펜트 스크류를 제외한 5차 스킬# 사용 시 넵투누스가 전방의 적을 휩쓴다. 넵투누스의 공격은 씨 서펜트 활성화 상태에서만 발동하며, 공격 반사 상태의 적을 공격해도 피해를 입지 않는다.  #c10레벨 : 몬스터 방어율 무시 20% 증가 20레벨 : 보스 몬스터 공격 시 데미지 20% 증가 30레벨 : 몬스터 방어율 무시 30% 증가, 보스 몬스터 공격 시 데미지 30% 증가#",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 최초의 수룡 넵투누스가 깨어나며 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 파동이 #x회 발생 후, #y%의 데미지로 #z번 공격하는 바다의 분노가 #u회 발생 / #time초 동안 격투 스킬과 서펜트 스크류를 제외한 5차 스킬 사용 시 #c넵투누스 인레이지# 발동 / #c넵투누스 인레이지# : 재발동 대기시간 #dummyStr초, 최대 #dummyStr2회까지 공격 발동 가능 / 1타 : 최대 #w3명의 적을 #w%의 데미지로 #w2번 공격 / 2타 : 최대 #v3명의 적을 #v%의 데미지로 #v2번 공격 / 3타 : 최대 #s3명의 적을 #s4%의 데미지로 #s2번 공격 / 4타 : 최대 #u4명의 적을 #u2%의 데미지로 #u3번 공격 / 5타 : 최대 #q3명의 적을 #q%의 데미지로 #q2번 공격 / 재사용 대기시간 #cooltime초",
+   "vars": [
+    "attackCount",
+    "c",
+    "cooltime",
+    "damage",
+    "dummyStr",
+    "dummyStr2",
+    "mobCount",
+    "mpCon",
+    "q",
+    "q2",
+    "q3",
+    "s2",
+    "s3",
+    "s4",
+    "time",
+    "u",
+    "u2",
+    "u3",
+    "u4",
+    "v",
+    "v2",
+    "v3",
+    "w",
+    "w2",
+    "w3",
+    "x",
+    "y",
+    "z"
+   ],
+   "values": null,
+   "gameRef": {
+    "skillId": "V15",
+    "pct": "60",
+    "hits": "15",
+    "cooldown": "20"
+   },
+   "note": "각성: 오리진 스킬 (기존 게임 궁극기 이름)",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5141500/icon.png",
+   "mswRuid": "22a3e349b8dc48919f01271633032429",
+   "iconStatus": "RUID 있음",
+   "mswCandidateUnverified": null,
+   "gameId": "V15",
+   "gameBase": "",
+   "valueSource": "원본없음-기존값"
+  }
+ ],
+ "passiveAbsorb": [
+  {
+   "job": "Hero",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 1000003,
+   "name": "아이언 바디",
+   "h": "방어력 #pddX, 최대 HP #mhpR% 증가. 적에게 피격 시 데미지 #damAbsorbShieldR% 감소",
+   "iconPath": "_Resources/Skill/_Canvas/100.img/skill/1000003/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 1000009,
+   "name": "워리어 마스터리",
+   "h": "이동속도 #psdSpeed, 점프력 #psdJump, 최대 이동속도 #speedMax, 레벨당 최대 HP #lv2mhp, 스탠스 확률 #stanceProp% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/100.img/skill/1000009/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 1100013,
+   "name": "콤보 어택",
+   "h": "공격할 때마다 #prop%의 확률로 콤보 카운트 누적 / 콤보 카운터 당 공격력 #y 증가, 최대 콤보 카운트 #x",
+   "iconPath": "_Resources/Skill/_Canvas/110.img/skill/1100013/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 1101006,
+   "name": "스피릿 블레이드",
+   "h": "MP #mpCon 소비, #time초 동안 공격력 #indiePad 증가 / 피격 데미지 #indiePowerGuard% 감소 후 #y% 증폭시켜 반사",
+   "iconPath": "_Resources/Skill/_Canvas/110.img/skill/1101006/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 1100002,
+   "name": "파이널 어택",
+   "h": "#c[파이널 어택류 스킬]# #prop%의 확률로 #damage%의 데미지로 공격하는 파이널 어택 발동",
+   "iconPath": "_Resources/Skill/_Canvas/110.img/skill/1100002/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 1110013,
+   "name": "콤보 시너지",
+   "h": "공격할 때마다 #prop%의 확률로 콤보 카운터 누적. 콤보 카운터 당 최종 데미지 #damR% 증가, 콤보 카운터간에는 합 적용. 피격 시 #subProp% 확률로 콤보 카운터 충전",
+   "iconPath": "_Resources/Skill/_Canvas/111.img/skill/1110013/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 1110009,
+   "name": "찬스 어택",
+   "h": "자상, 행동 불가 상태의 적 공격 시 최종 데미지 #x% 증가 / 영구히 크리티컬 확률 #cr% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/111.img/skill/1110009/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 1120003,
+   "name": "어드밴스드 콤보",
+   "h": "콤보 카운터 개 당 최종 데미지 증가량 #v%로 증가, 최대 콤보 카운터 #x개, #prop% 확률로 콤보 카운터 2개씩 충전, 무기 숙련도 증가량 #mastery%로 증가",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1120003/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 1120010,
+   "name": "인레이지",
+   "h": "최종 데미지 #pdR%, 크리티컬 데미지 #criticaldamage% 증가 / ",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1120010/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 1121053,
+   "name": "에픽 어드벤쳐",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR% 증가 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1121053/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 1121000,
+   "name": "메이플 용사",
+   "h": "MP #mpCon 소비, 메이플 월드의 여신 현신 / [패시브 효과 : AP를 직접 투자한 모든 능력치 #basicStatUp% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1121000/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 1120043,
+   "name": "어드밴스드 콤보-리인포스",
+   "h": "콤보 카운터 1개 당 최종 데미지 #damR% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1120043/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 1120049,
+   "name": "레이징 블로우-리인포스",
+   "h": "데미지 #damR% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/112.img/skill/1120049/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 1140005,
+   "name": "퓨리어스 엣지",
+   "h": "자신이 직접 공격하는 스킬 #v번 적중 시 #c검의 상흔# 발생 / 발할라, 공간의 상처, 스피릿 칼리버는 #w번 적중 시 1회 공격으로 간주\\r /  #c검의 상흔#은 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격, #dummyStr회 발생",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1140005/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 1141003,
+   "name": "오라 블레이드 VI",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검기 발사 / 오라 블레이드 VI의 일반 몬스터 공격 시 데미지 #u%p 증가 / 오라 블레이드는 #v2초마다 1개씩 준비되며 최대 2개까지 충전 가능 / #s초 내 재사용 시 다음 공격 #c파이널 블레이드#로 대체  /  #c파이널 블레이드# : 최대 #s2명의 적을 #s3%의 데미지로 #s4번 공격",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1141003/icon.png"
+  },
+  {
+   "job": "Hero",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 1140009,
+   "name": "파이널 어택 VI",
+   "h": "#c[파이널 어택류 스킬]# #prop%의 확률로 #damage%의 데미지로 #attackCount번 공격하는 파이널 어택 발동",
+   "iconPath": "_Resources/Skill/_Canvas/114.img/skill/1140009/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 2000002,
+   "name": "매직 가드",
+   "h": "받는 데미지의 #x%를 MP로 대신함",
+   "iconPath": "_Resources/Skill/_Canvas/200.img/skill/2000002/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 2000006,
+   "name": "MP 증가",
+   "h": "최대 MP #mmpR% 증가, 공격 속도 1단계 증가, 레벨당 MP #lv2mmp만큼 증가 / 완드 착용 시 크리티컬 확률 5% 추가 증가",
+   "iconPath": "_Resources/Skill/_Canvas/200.img/skill/2000006/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 2301004,
+   "name": "블레스",
+   "h": "MP #mpCon 소비, #time초 동안 공격력 #x, 마력 #y, 방어력 #z 증가",
+   "iconPath": "_Resources/Skill/_Canvas/230.img/skill/2301004/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 2300009,
+   "name": "블레싱 앙상블",
+   "h": "최종 데미지 #x% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/230.img/skill/2300009/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 2300003,
+   "name": "인빈서블",
+   "h": "받는 데미지 #damAbsorbShieldR% 감소",
+   "iconPath": "_Resources/Skill/_Canvas/230.img/skill/2300003/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 2311012,
+   "name": "디바인 프로텍션",
+   "h": "MP #mpCon 소비, 치명적인 상태 이상 #u회 저항 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 상태 이상 내성 #asrR, 모든 속성 내성 #terR% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/231.img/skill/2311012/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 2310008,
+   "name": "홀리 포커스",
+   "h": "모든 공격 마법과 힐 스킬의 크리티컬 확률 #cr%, 마법 숙련도 증가량 #mastery%로 증가",
+   "iconPath": "_Resources/Skill/_Canvas/231.img/skill/2310008/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 2321015,
+   "name": "홀리 워터",
+   "h": "#c패시브 효과# : 엔젤레이 #u번 적중 시 성수 1개 획득, 성수는 최대 #w개까지 획득 가능\r\n#c액티브 효과# : MP #mpCon 소비, 성수 최소 1개 필요, 획득한 성수를 모두 소모하여 주변에 성수 생성, 성수를 소환할 공간이 충분하지 않으면 일부만 생성 / 성수는 #q초 동안 유지되며 지능 #s2 당 지속시간 #q2초 증가 / 성수에 닿으면 최대 HP의 #u2%를 회복하며 지능 #dot 당 회복량 #w2% 증가, 회복량은 합적용되며 #z%까지 증가 가능 / 지속시간이 남아있으나 성수가 소멸했다면 소멸한 성수 개수의 #v2%만큼 성수 획득 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321015/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 2321005,
+   "name": "어드밴스드 블레스",
+   "h": "MP #mpCon 소비, #time초 동안 공격력 #x, 마력 #y, 방어력 #z, 최대 HP #indieMhp, 최대 MP #indieMmp 증가, MP 소비량 #mpConReduce% 감소",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321005/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 2320012,
+   "name": "마스터 매직",
+   "h": "영구적으로 마력 #madX, 최종 데미지 #mdR%, 버프 지속시간 #bufftimeR% 증가  / 스탠스 #stanceProp% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2320012/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 2321016,
+   "name": "홀리 블러드",
+   "h": "MP #mpCon 소비, #time초 동안 최종 데미지 #u% 증가 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321016/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 2321054,
+   "name": "벤전스 오브 엔젤",
+   "h": "MP #mpCon 소비, 지속 중 엔젤레이의 자기 회복량 #y%로 감소하는 대신 최종 데미지 #indiePMdR% 증가 / 재사용 대기시간 #cooltimeMS초 / [패시브 효과 : 마력 #madX, 최종 데미지 #mdR%, 몬스터 방어율 무시 #ignoreMobpdpR%, 속성 내성 무시 #u% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/232.img/skill/2321054/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 2341004,
+   "name": "트라이엄프 페더 VI",
+   "h": "MP #mpCon 소비, #time초 동안 지속 / 자신이 직접 공격하는 스킬 적중 시 #w초 동안 적을 찾아 #damage%의 데미지로 #attackCount번 공격하는 천사의 날개 깃털 #bulletCount개 생성 / 하나의 적에게 여러 개의 날개 깃털 적중 시 두 번째 날개 깃털부터 최종 데미지 #s% 감소 / 날개 깃털 재생성 대기시간 #u2초 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341004/icon.png"
+  },
+  {
+   "job": "Bishop",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 2341006,
+   "name": "파운틴 포 엔젤 VI",
+   "h": "MP #mpCon 소비, #time초 동안 지속 / 일정 시간마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / [패시브 효과 : 마력 #madX 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/234.img/skill/2341006/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 4001003,
+   "name": "다크 사이트",
+   "h": "MP #mpCon 소비, #time초 동안 그림자에 몸을 숨김 / 최대 HP의 일정 비율로 피해를 입히는 공격을 회피하였을 경우 다크 사이트가 해제되었을 때 회피한 횟수당 재사용 대기시간 #cooltime초 적용, 최대 #y번까지 중첩",
+   "iconPath": "_Resources/Skill/_Canvas/400.img/skill/4001003/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 4000012,
+   "name": "사이드 스텝",
+   "h": "회피율 #er% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/400.img/skill/4000012/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 4100011,
+   "name": "마크 오브 어쌔신",
+   "h": "공격 시 #prop% 확률로 암살자의 표식을 남기고 해당 적 다시 공격 시 #damage% 데미지의 표창 #bulletCount개 생성하여 발사",
+   "iconPath": null
+  },
+  {
+   "job": "NightLord",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 4100001,
+   "name": "크리티컬 스로우",
+   "h": "크리티컬 확률 #prop%, 크리티컬 데미지 #criticaldamage% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/410.img/skill/4100001/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 4110011,
+   "name": "베놈",
+   "h": "공격 시 #prop% 확률로, #dotTime초 동안 #dotInterval초 당 #dot% 데미지의 도트 데미지 추가",
+   "iconPath": "_Resources/Skill/_Canvas/411.img/skill/4110011/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 4110012,
+   "name": "숙련된 표창술",
+   "h": "최종 데미지 #pdR% 증가, 크리티컬 확률 #cr% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/411.img/skill/4110012/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 4120018,
+   "name": "마크 오브 나이트로드",
+   "h": "공격 시 #prop% 확률로 암살자의 표식을 남기고 해당 적 다시 공격 시 #damage% 데미지의 표창 #bulletCount개 생성하여 발사",
+   "iconPath": "_Resources/Skill/_Canvas/412.img/skill/4120018/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 4120011,
+   "name": "페이탈 베놈",
+   "h": "공격 시 #prop% 확률로, #dotTime초 동안 #dotInterval초당 #dot% 데미지의 도트 데미지 추가, #dotSuperpos회 중첩 가능",
+   "iconPath": "_Resources/Skill/_Canvas/412.img/skill/4120011/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 4121054,
+   "name": "블리딩 톡신",
+   "h": "MP #mpCon 소비, #time초 동안 공격력 #indiePad 증가 / 공격 시 #prop% 확률로 매 초 #dot% 데미지가 #dotTime초 동안 유지되는 출혈 효과 발생",
+   "iconPath": "_Resources/Skill/_Canvas/412.img/skill/4121054/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 4120014,
+   "name": "다크 세레니티",
+   "h": "공격력 #padX, 몬스터 방어율 무시 #ignoreMobpdpR% 증가, 최종 데미지 #pdR% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/412.img/skill/4120014/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 4121053,
+   "name": "에픽 어드벤쳐",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR% 증가 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/412.img/skill/4121053/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 4141003,
+   "name": "마크 오브 어쌔신 VI",
+   "h": "공격 시 #prop% 확률로 암살자의 표식을 남기고 해당 적 다시 공격 시 #dummyStr% 데미지의 표창 #bulletCount개 생성하여 발사",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141003/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 4141007,
+   "name": "다크 플레어 VI",
+   "h": "MP #mpCon 소비, #time초 동안 거대한 수리검 소환 / 일정 간격마다 최대 #q명의 적을 #damage%의 데미지로 공격 / [패시브 효과 : 쿼드러플 스로우 VI의 데미지 #damPlus%p, 공격력 #padX 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4141007/icon.png"
+  },
+  {
+   "job": "NightLord",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 4140011,
+   "name": "다크니스 슈리켄",
+   "h": "직접 공격하는 스킬 적중 시 #x초 동안 지속되는 어둠의 표창 생성 / 표창은 주변의 적을 #damage%의 데미지로 #attackCount번 공격, 최대 #w2회 공격 / #w초마다 직접 공격하는 스킬 적중 시 지속시간 #y초 증가 / 지속시간은 최대 #z초까지 증가 가능 / 재발동 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/414.img/skill/4140011/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 3000001,
+   "name": "크리티컬 샷",
+   "h": "크리티컬 확률 #prop% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/300.img/skill/3000001/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 3000002,
+   "name": "아처 마스터리",
+   "h": "사정거리 #range, 이동속도 #speed, 공격 속도 1단계 증가 / 최대 이동속도 상한 #u으로 증가",
+   "iconPath": "_Resources/Skill/_Canvas/300.img/skill/3000002/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 3100001,
+   "name": "파이널 어택 : 활",
+   "h": "#c[파이널 어택류 스킬]# #prop% 확률로 #damage% 데미지의 파이널 어택 발동",
+   "iconPath": "_Resources/Skill/_Canvas/310.img/skill/3100001/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 3100011,
+   "name": "소울 애로우 : 활",
+   "h": "공격력 #padX 증가, 화살 소비 없이 공격 가능",
+   "iconPath": "_Resources/Skill/_Canvas/310.img/skill/3100011/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 3110001,
+   "name": "모탈 블로우",
+   "h": "#x번 직접 공격하는 스킬이 적중하면 #time 초 동안 데미지 #y% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/311.img/skill/3110001/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 3110014,
+   "name": "마크맨쉽",
+   "h": "공격 시 몬스터의 물리 방어율 #ignoreMobpdpR% 무시, 공격력 #padR% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/311.img/skill/3110014/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 3110007,
+   "name": "닷지",
+   "h": "#er% 확률로 회피, 회피 성공 후 #time초 동안 이어지는 모든 공격은 크리티컬 판정, 스탠스 #stanceProp% 증가, 최대 HP #mhpR% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/311.img/skill/3110007/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 3120005,
+   "name": "보우 엑스퍼트",
+   "h": "활 숙련도 증가량 #mastery%로 증가, 공격력 #x, 크리티컬 데미지 #criticaldamage% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3120005/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 3120008,
+   "name": "어드밴스드 파이널 어택",
+   "h": "영구적으로 공격력 #padX 증가 / #c[파이널 어택류 스킬]# 공격 시 #prop% 확률로 #damage% 데미지의 파이널 어택 발동",
+   "iconPath": null
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 3120022,
+   "name": "어드밴스드 퀴버",
+   "h": "#c마법 화살# : 마법 화살의 발동 확률 #u%로 증가, 마법 화살의 데미지 #damage%로 증가 / #c흡혈 화살# : #w%의 확률로 최대 HP의 #t%를 회복하는 흡혈 화살촉 사용 / [패시브 효과 : 최종 데미지 #pdR% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3120022/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 3120018,
+   "name": "아머 피어싱",
+   "h": "방어율 무시 #ignoreMobpdpR%, 최종 데미지 #pdR% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3120018/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 3121053,
+   "name": "에픽 어드벤쳐",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR% 증가 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3121053/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 3121054,
+   "name": "프리퍼레이션",
+   "h": "MP #mpCon 소비, #time초 동안 공격력 #indiePad, 보스 몬스터 공격 시 데미지 #y% 증가  / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/312.img/skill/3121054/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 3141005,
+   "name": "퀴버 카트리지 VI",
+   "h": "#c마법 화살# : #u% 확률로 #s%의 데미지로 적을 공격하는 마법 화살 발사 / #흡혈 화살# : #w%의 확률로 최대 HP의 #t%를 회복하는 흡혈 화살촉 사용",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141005/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 3141013,
+   "name": "플레시 미라주 VI",
+   "h": "MP #mpCon 소비, #u번 공격 적중 시 잔영이 #w개 생성되어 전방의 적 1명을 향해 화살 발사 / 애로우 플래터, 폭풍의 시, 실루엣 미라주, 잔영의 시, 퀴버 풀버스트, 애로우 레인은 #u2번 적중 시 1회 공격으로 간주 / 발사된 화살은 목표한 적까지 가는 경로에 부딪힌 적을 최대 #mobCount명까지 관통하며 #damage%의 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141013/icon.png"
+  },
+  {
+   "job": "Bowmaster",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 3141012,
+   "name": "피닉스 VI",
+   "h": "MP #mpCon 소비, #time초 동안 피닉스 소환 / 피닉스는 최대 #mobCount명의 적을 #damage%의 데미지로 공격, #prop% 확률로 기절",
+   "iconPath": "_Resources/Skill/_Canvas/314.img/skill/3141012/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 5000006,
+   "name": "포춘 어택",
+   "h": "공격 시 #prop% 확률로 데미지 #damage% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/500.img/skill/5000006/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 1,
+   "tierName": "1차",
+   "originalId": 5000007,
+   "name": "크리티컬 로어",
+   "h": "크리티컬 확률 #cr%, 크리티컬 데미지 #criticaldamage% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/500.img/skill/5000007/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 5100017,
+   "name": "씨 서펜트",
+   "h": "격투 스킬 트리거로 수룡 스킬 사용 가능 / 수룡 스킬 발동 시 MP #mpCon 소비, 직전 사용한 수룡 스킬의 재사용 대기시간이 지나야 다음 수룡 스킬 발동 가능",
+   "iconPath": "_Resources/Skill/_Canvas/510.img/skill/5100017/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 2,
+   "tierName": "2차",
+   "originalId": 5100013,
+   "name": "인듀어런스",
+   "h": "HP와 MP가 #w초 마다 #x%씩 회복",
+   "iconPath": "_Resources/Skill/_Canvas/510.img/skill/5100013/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 5111017,
+   "name": "서펜트 스톤",
+   "h": "#u개의 서펜트 스톤을 소모하여 #time초 동안 어썰트 스킬 발동 가능 / 수룡 스킬 발동 시 마다 서펜트 스톤 1개 획득, 서펜트 스톤은 최대 #u개까지 소지 가능",
+   "iconPath": "_Resources/Skill/_Canvas/511.img/skill/5111017/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 5110000,
+   "name": "그로기 마스터리",
+   "h": "기절 상태 이상에 대한 상태 이상 내성 #x% 추가 증가, 공격 성공 시 #subProp% 확률로 기절 / 크리티컬 확률 #cr%, 크리티컬 데미지 #criticaldamage% 증가",
+   "iconPath": "_Resources/Skill/_Canvas/511.img/skill/5110000/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 3,
+   "tierName": "3차",
+   "originalId": 5110011,
+   "name": "크리티컬 레이지",
+   "h": "공격력 #padX, 크리티컬 확률 #cr%, 크리티컬 데미지 #criticaldamage% 증가 / 보스에게 추가 크리티컬 확률 #prop% 적용",
+   "iconPath": "_Resources/Skill/_Canvas/511.img/skill/5110011/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 5120028,
+   "name": "오펜스 폼",
+   "h": "공격 적중 시 #time초 동안 데미지 #indieDamR% 증가, 버프 지속 중 공격 적중 시 지속 시간 갱신 가능 / [패시브 효과 : 스크류 펀치 데미지 #damR% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5120028/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 5120014,
+   "name": "가드 크러쉬",
+   "h": "방어율 #ignoreMobpdpR% 무시, 최종 데미지 #pdR% 증가, 공격력 #padX 증가",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5120014/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 5121015,
+   "name": "바이퍼지션",
+   "h": "MP #mpCon 소비, #time초 동안 공격력 #indiePadR% 증가 / [패시브 효과 : 너클 숙련도 증가량 #mastery%로 증가, 최종 데미지 #pdR%, 상태 이상 내성 #asrR, 모든 속성 내성 #terR% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5121015/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 5120022,
+   "name": "씨 서펜트 강화 II",
+   "h": "씨 서펜트 버스트를 씨 서펜트 버스트 II로 강화, 씨 서펜트 인레이지 사용 가능 / [패시브 효과 : 최종 데미지 #pdR% 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5120022/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 5120011,
+   "name": "디펜스 폼",
+   "h": "수룡 스킬, 어썰트 스킬 적중 시 #x초 동안 최대 HP의 일정 비율로 피해를 입히는 공격을 포함하여 피격 데미지 #y% 감소시키는 보호막 생성 / 발동 시 #cooltime초 동안 보호막 재생성 불가",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5120011/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 4,
+   "tierName": "4차",
+   "originalId": 5121053,
+   "name": "에픽 어드벤쳐",
+   "h": "MP #mpCon 소비, #time초 동안 데미지 #indieDamR% 증가 / 재사용 대기시간 #cooltime초",
+   "iconPath": "_Resources/Skill/_Canvas/512.img/skill/5121053/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 5140004,
+   "name": "씨 서펜트 VI",
+   "h": "수룡 스킬 발동 시 MP #s 소비 / #c씨 서펜트 버스트 VI# / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초 / #c씨 서펜트 인레이지 VI# / 최대 #y명의 적을 #z%의 데미지로 #u번 공격, 발동 시 서펜트 마크 활성화 / 재사용 대기시간 #v초",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5140004/icon.png"
+  },
+  {
+   "job": "Viper",
+   "tier": 6,
+   "tierName": "각성(6차)",
+   "originalId": 5141011,
+   "name": "서펜트 스톤 VI",
+   "h": "#u개의 서펜트 스톤을 소모하여 #time초 동안 어썰트 스킬 발동 가능 / 수룡 스킬 발동 시 마다 서펜트 스톤 1개 획득, 서펜트 스톤은 최대 #u개까지 소지 가능 / #c서펜트 어썰트 VI# / MP #v 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #c서펜트 어썰트 인레이지 VI# / MP #y 소비, #x초 동안 수룡 소환 / 수룡은 일정 간격마다 최대 #w명의 적을 #z%의 데미지로 #w2번 공격, 한 명의 적에게 #w3번 공격 발생 시 소멸 / [패시브 효과 : 씨 서펜트 인레이지 VI의 데미지 #damPlus%p 증가]",
+   "iconPath": "_Resources/Skill/_Canvas/514.img/skill/5141011/icon.png"
+  }
+ ],
+ "alternatives": [
+  {
+   "job": "Hero",
+   "originalId": 1001010,
+   "name": "리프 어택",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적에게 #damage%의 데미지로 #attackCount번 공격"
+  },
+  {
+   "job": "Hero",
+   "originalId": 1121016,
+   "name": "매직 크래쉬",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #prop% 확률로 #c일부 버프 해제#, #time초 동안 #mobCount명의 적의 버프 효과 제한 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Hero",
+   "originalId": 1121011,
+   "name": "용사의 의지",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Hero",
+   "originalId": 1141004,
+   "name": "파이널 블레이드",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검기 발사"
+  },
+  {
+   "job": "Hero",
+   "originalId": 1141502,
+   "name": "사일런트 클리브",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검기 공격이 #dummyStr회 발생 / 몬스터 방어율 #dummyStr2% 추가 무시, 보스 몬스터 공격 시 데미지 #dummyStr3% 증가,"
+  },
+  {
+   "job": "Hero",
+   "originalId": 1141503,
+   "name": "레이지 익스플로젼",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 검을 휘둘러 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 검격이 #dummyStr회 발생 후 공간이 양단되며 #dummyStr2%의 데미지로 #dummyStr3번 공격하는 폭발이 #dummyStr4회 발동 / 재사"
+  },
+  {
+   "job": "Hero",
+   "originalId": 400011000,
+   "name": "오라 웨폰",
+   "kind": "공격",
+   "h": "HP #hpCon 소비, #time초 동안 몬스터 방어율 무시 #indieIgnoreMobpdpR%, 최종 데미지 #indiePMdR% 증가 / #q초 마다 자신의 공격 스킬 사용 시 최대 #mobCount명의 적을 #x%의 데미지로 #w번 공격하는 오라 파동 발사 / 재사용 대기시간 "
+  },
+  {
+   "job": "Hero",
+   "originalId": 400011066,
+   "name": "바디 오브 스틸",
+   "kind": "버프/기타",
+   "h": "HP #hpCon 소비, #time초 동안 적의 어떠한 공격에도 밀려나지 않고 상태 이상 내성 #indieAsrR 증가 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 힘 #strX, 최대 HP #mhpX 증가]"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2301010,
+   "name": "엔젤릭 터치",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2311014,
+   "name": "파운틴 포 엔젤",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, #time초 동안 지속 / 일정 시간마다 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2311011,
+   "name": "홀리 파운틴",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #time초 동안 지속, 사용 시 HP #x% 회복, 총 #y번 사용 가능 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2321001,
+   "name": "빅뱅",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격 / 일반 몬스터 공격 시 데미지 #nbdR% 증가"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2321006,
+   "name": "리저렉션",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, 범위 내 사망한 파티원 전원 부활 후 #time초 동안 무적 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 데미지 #damR% 증가]"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2341002,
+   "name": "빅뱅 VI",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #c신성 폭발# : MP #w 소비, 최대 #s명의 적을 #q%의 데미지로 #v번 공격 / 재발동 대기시간 #u초 / 빅뱅 및 신성 폭발의 일반 몬스터 공격 시 데미지 "
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2341007,
+   "name": "엔젤릭 터치 VI",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 천사의 손길이 #dummyStr회 발생 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2341507,
+   "name": "커맨드 오브 헤븐",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 자애와 복수의 힘으로 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 빛이 #dummyStr회 발생, 이후 #dummyStr2%의 데미지로 #dummyStr3번 공격하는 천사의 응징이 #dumm"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 2341509,
+   "name": "엔젤스 플레지",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 정화가 #dummyStr회 발생 / 재사용 대기시간 #cooltime초 / [패시브 효과 : #dummyStr5초 마다 직접 사용하는 스킬 적중 시 속죄의 낙인이 새겨져"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 400021000,
+   "name": "오버로드 마나",
+   "kind": "버프/기타",
+   "h": "일부 스킬을 제외한 자신의 공격 스킬 사용 시 최대 MP의 #x%를 추가로 사용하여 최종 데미지 #z% 증가 / 재사용 대기시간 #cooltimeMS초"
+  },
+  {
+   "job": "Bishop",
+   "originalId": 400021060,
+   "name": "에테리얼 폼",
+   "kind": "버프/기타",
+   "h": "HP #hpCon 소비, #time초 동안 무적 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "NightLord",
+   "originalId": 4001334,
+   "name": "더블 스탭",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, #mobCount명의 적을 #damage% 데미지로 #attackCount번 공격"
+  },
+  {
+   "job": "NightLord",
+   "originalId": 4001013,
+   "name": "샤프 슬래시",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격"
+  },
+  {
+   "job": "NightLord",
+   "originalId": 4121015,
+   "name": "퍼지 에어리어",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #time초 동안 지속, 결계 안의 보스 몬스터를 제외한 적의 이동속도 #y 감소 / [패시브 효과 : 보스 몬스터 공격 시 데미지 #bdR%, 몬스터 방어율 무시 #ignoreMobpdpR% 증가]"
+  },
+  {
+   "job": "NightLord",
+   "originalId": 4121022,
+   "name": "나이트폴 시그닛",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #time초 동안 무적 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "NightLord",
+   "originalId": 4141503,
+   "name": "크루셜 어썰트",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 시전 동작 중 무적 / 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 파동이 #x회 발생 / 이후 #w2%의 데미지로 #w3번 공격하는 폭발이 #w회 발생 / 몬스터 방어율 #u% 추가 무시, 보스 몬스터 공격 시 "
+  },
+  {
+   "job": "NightLord",
+   "originalId": 4141505,
+   "name": "쉐도우 리츄얼",
+   "kind": "공격",
+   "h": "1타당 MP #mpCon 소비, 표창 #bulletConsume개 소비, 스킬 키를 연타하여 최대 2타까지 공격 가능 / #c1타# : 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격 / #c2타# : 최대 #dummyStr명의 적을 #dummy"
+  },
+  {
+   "job": "NightLord",
+   "originalId": 400041032,
+   "name": "레디 투 다이",
+   "kind": "버프/기타",
+   "h": "HP #hpCon 소비, #time초 동안 최종 데미지 증가 / 1단계 지속 중 스킬 재사용 시 2단계 진입하며 남은 지속시간 #u%로 감소, 2단계 지속 중 스킬 재사용 시 스킬 종료 / 1단계 : 최종 데미지 #y% 증가 / 2단계 : 최종 데미지 #q% 증가 / 재사용 대기시간 #"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 3101008,
+   "name": "리트리트 샷",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 일정 거리 뒤로 점프 후 스킬 키를 누르고 있으면 최대 #damage%의 데미지로 #time초 동안 공중에서 적들을 공격"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 3111020,
+   "name": "제피르 배리어",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #time초 동안 무적 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 3141004,
+   "name": "애로우 플래터 VI",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 공격 / 시전 중 채집/NPC 대화 키로 #v%의 데미지의 화살을 발사하는 애로우 플래터 #u초 동안 설치 / [패시브 효과 : 공격력 #padX 증가]"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 3141503,
+   "name": "포인트 제로",
+   "kind": "공격",
+   "h": "#c화살 충격# 시전 후 #dummyStr2초 동안 스킬키를 입력하여 #c일점 폭발# 발동 가능 / #c화살 충격# : MP #mpCon 소비, 시전 동작 중 무적 / 환영과 함께 화살을 발사해 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 3141505,
+   "name": "아이 오브 아퀼라",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCount번 공격하는 폭풍이 #dummyStr회 발생 후, #dummyStr3%의 데미지로 #dummyStr4번 공격하는 더 강력한 충격파가 #dummyStr5회 발생 / 재사용 대기시간 #"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 400031000,
+   "name": "가이디드 애로우",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 자신의 주위에 영혼의 화살을 생성, 화살은 적을 공격하면 주변의 적 1명을 #damage%의 데미지로 공격하며 일반 몬스터 공격 시 데미지 #nbdR% 증가"
+  },
+  {
+   "job": "Bowmaster",
+   "originalId": 400031023,
+   "name": "크리티컬 리인포스",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #time초 동안 크리티컬 확률이 100%를 초과할 수 있게 되며 크리티컬 확률의 #x% 만큼 크리티컬 데미지 증가 / 공격 스킬의 추가 크리티컬 확률은 반영되지 않음 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Viper",
+   "originalId": 5001003,
+   "name": "더블 파이어",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 불릿 #bulletCount개 소비, #damage%의 데미지로 공격하는 탄환을 2발 발사, 적중한 위치에 최대 #mobCount명의 적을 #x%의 데미지로 공격하는 폭발 발생, 최대 사거리 #range"
+  },
+  {
+   "job": "Viper",
+   "originalId": 5111003,
+   "name": "플로우 가드",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, #time초 동안 무적 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Viper",
+   "originalId": 5121010,
+   "name": "타임 리프",
+   "kind": "버프/기타",
+   "h": "MP #mpCon 소비, 스킬의 재사용 대기시간 초기화 / 재사용 대기시간 #cooltime초"
+  },
+  {
+   "job": "Viper",
+   "originalId": 5121052,
+   "name": "서펜트 스피릿",
+   "kind": "버프/기타 (하이퍼)",
+   "h": "MP #mpCon 소비, 수룡의 혼 영현 / [패시브 효과 : 크리티컬 데미지 #criticaldamage% 증가]"
+  },
+  {
+   "job": "Viper",
+   "originalId": 5141509,
+   "name": "넵투누스 어드밴트",
+   "kind": "공격",
+   "h": "MP #mpCon 소비, 사용 시 서펜트 스톤 최대로 획득 / #time초 동안 데미지 #indieDamR% 증가, 넵투누스 인레이지의 데미지 #x% 증가 / #c씨 넵투누스# : 수룡이 적을 향해 돌진하며 최대 #mobCount명의 적을 #damage%의 데미지로 #attackCoun"
+  },
+  {
+   "job": "Viper",
+   "originalId": 400051000,
+   "name": "로디드 다이스",
+   "kind": "버프/기타",
+   "h": "HP #hpCon 소비, 주사위 1개의 눈을 정할 수 있음 / 더블 럭키 다이스가 있는 직업이 주사위 2개의 눈이 같을 경우 마지막 주사위가 같은 눈이 나올 확률이 #x% 감소 / 재사용 대기시간 #cooltime초 / [패시브 효과 : 공격력 #padX 증가]"
+  }
+ ],
+ "originalAll": {
+  "Hero": {
+   "1차": [
+    {
+     "id": 1000003,
+     "name": "아이언 바디",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1000007,
+     "name": "가디언 아머",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1000009,
+     "name": "워리어 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1001005,
+     "name": "슬래시 블러스트",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1001008,
+     "name": "워리어 리프",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1001010,
+     "name": "리프 어택",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1001011,
+     "name": "워리어 리프",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "2차": [
+    {
+     "id": 1100000,
+     "name": "웨폰 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1100002,
+     "name": "파이널 어택",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1100009,
+     "name": "피지컬 트레이닝",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1100013,
+     "name": "콤보 어택",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1100015,
+     "name": "웨폰 액셀레이션",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1101006,
+     "name": "스피릿 블레이드",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1101011,
+     "name": "브랜디쉬",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1101014,
+     "name": "플래시 슬래시",
+     "kind": "공격",
+     "hasIcon": true
+    }
+   ],
+   "3차": [
+    {
+     "id": 1110000,
+     "name": "셀프 리커버리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1110009,
+     "name": "찬스 어택",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1110011,
+     "name": "인듀어",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1110013,
+     "name": "콤보 시너지",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1111003,
+     "name": "스카링 소드",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1111010,
+     "name": "브레이브 슬래시",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1111012,
+     "name": "돌진",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1111016,
+     "name": "오라 블레이드",
+     "kind": "공격",
+     "hasIcon": true
+    }
+   ],
+   "4차": [
+    {
+     "id": 1120003,
+     "name": "어드밴스드 콤보",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1120010,
+     "name": "인레이지",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1120012,
+     "name": "컴뱃 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1120013,
+     "name": "어드밴스드 파이널 어택",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1120014,
+     "name": "스탠스",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1120017,
+     "name": "레이징 블로우",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 1120043,
+     "name": "어드밴스드 콤보-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120044,
+     "name": "어드밴스드 콤보-보너스 찬스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120045,
+     "name": "어드밴스드 콤보-보스 킬러",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120046,
+     "name": "어드밴스드 파이널 어택-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120047,
+     "name": "어드밴스드 파이널 어택-보너스 데미지",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120048,
+     "name": "어드밴스드 파이널 어택-보너스 찬스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120049,
+     "name": "레이징 블로우-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120050,
+     "name": "레이징 블로우-엑스트라 타겟",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1120051,
+     "name": "레이징 블로우-보너스 어택",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1121000,
+     "name": "메이플 용사",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1121008,
+     "name": "레이징 블로우",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1121011,
+     "name": "용사의 의지",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1121015,
+     "name": "인사이징",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1121016,
+     "name": "매직 크래쉬",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 1121052,
+     "name": "레이지 업라이징",
+     "kind": "공격 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1121053,
+     "name": "에픽 어드벤쳐",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1121054,
+     "name": "발할라",
+     "kind": "공격 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 1121055,
+     "name": "발할라",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": false
+    }
+   ],
+   "각성(6차)": [
+    {
+     "id": 1140005,
+     "name": "퓨리어스 엣지",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1140009,
+     "name": "파이널 어택 VI",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 1141000,
+     "name": "레이징 블로우 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141001,
+     "name": "레이징 블로우 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 1141002,
+     "name": "레이지 업라이징 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141003,
+     "name": "오라 블레이드 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141004,
+     "name": "파이널 블레이드",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141006,
+     "name": "발할라 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141007,
+     "name": "발할라 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 1141008,
+     "name": "인사이징 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141500,
+     "name": "스피릿 칼리버",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141502,
+     "name": "사일런트 클리브",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141503,
+     "name": "레이지 익스플로젼",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 1141504,
+     "name": "레이지 익스플로젼",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "5차(직업 고유)": [
+    {
+     "id": 400011001,
+     "name": "소드 오브 버닝 소울",
+     "kind": "소환"
+    },
+    {
+     "id": 400011027,
+     "name": "콤보 데스폴트",
+     "kind": "공격"
+    },
+    {
+     "id": 400011124,
+     "name": "소드 일루전",
+     "kind": "공격"
+    },
+    {
+     "id": 400011073,
+     "name": "콤보 인스팅트",
+     "kind": "버프"
+    }
+   ]
+  },
+  "Bishop": {
+   "1차": [
+    {
+     "id": 2000002,
+     "name": "매직 가드",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2000006,
+     "name": "MP 증가",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2000010,
+     "name": "매직 아머",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2001008,
+     "name": "에너지 볼트",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2001009,
+     "name": "텔레포트",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2001011,
+     "name": "마나 웨이브",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2001012,
+     "name": "마나 웨이브",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "2차": [
+    {
+     "id": 2300000,
+     "name": "MP 이터",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2300003,
+     "name": "인빈서블",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2300006,
+     "name": "스펠 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2300007,
+     "name": "하이 위즈덤",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2300009,
+     "name": "블레싱 앙상블",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2301002,
+     "name": "힐",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2301004,
+     "name": "블레스",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2301005,
+     "name": "홀리 애로우",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2301010,
+     "name": "엔젤릭 터치",
+     "kind": "공격",
+     "hasIcon": true
+    }
+   ],
+   "3차": [
+    {
+     "id": 2310007,
+     "name": "디바인 리파인먼트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2310008,
+     "name": "홀리 포커스",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2310016,
+     "name": "텔레포트 부스트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2311001,
+     "name": "디스펠",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2311002,
+     "name": "미스틱 도어",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2311003,
+     "name": "홀리 심볼",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2311004,
+     "name": "샤이닝 레이",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2311009,
+     "name": "홀리 매직쉘",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2311011,
+     "name": "홀리 파운틴",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2311012,
+     "name": "디바인 프로텍션",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2311014,
+     "name": "파운틴 포 엔젤",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2311015,
+     "name": "트라이엄프 페더",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2311017,
+     "name": "트라이엄프 페더",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "4차": [
+    {
+     "id": 2320012,
+     "name": "마스터 매직",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 2320043,
+     "name": "홀리 매직쉘-엑스트라 가드",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320044,
+     "name": "홀리 매직쉘-퍼시스트",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320045,
+     "name": "홀리 매직쉘-인핸스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320046,
+     "name": "홀리 심볼-익스피리언스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320047,
+     "name": "홀리 심볼-임뷰 바디",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320048,
+     "name": "홀리 심볼-엑스트라 드롭",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320049,
+     "name": "어드밴스드 블레스-보너스 데미지",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320050,
+     "name": "어드밴스드 블레스-보스 킬러",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2320051,
+     "name": "어드밴스드 블레스-엑스트라 포인트",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2321001,
+     "name": "빅뱅",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2321003,
+     "name": "바하뮤트",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2321005,
+     "name": "어드밴스드 블레스",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2321006,
+     "name": "리저렉션",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2321007,
+     "name": "엔젤레이",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2321008,
+     "name": "제네시스",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2321015,
+     "name": "홀리 워터",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2321016,
+     "name": "홀리 블러드",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2321052,
+     "name": "헤븐즈 도어",
+     "kind": "공격 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2321054,
+     "name": "벤전스 오브 엔젤",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 2321055,
+     "name": "헤븐즈 도어",
+     "kind": "공격 (하이퍼)",
+     "hasIcon": false
+    }
+   ],
+   "각성(6차)": [
+    {
+     "id": 2341000,
+     "name": "엔젤레이 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341001,
+     "name": "엔젤레이 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341002,
+     "name": "빅뱅 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341003,
+     "name": "빅뱅 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2341004,
+     "name": "트라이엄프 페더 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341005,
+     "name": "트라이엄프 페더 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341006,
+     "name": "파운틴 포 엔젤 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341007,
+     "name": "엔젤릭 터치 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341009,
+     "name": "제네시스 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341010,
+     "name": "제네시스 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341011,
+     "name": "헤븐즈 도어 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341012,
+     "name": "헤븐즈 도어 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341013,
+     "name": "바하뮤트 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341500,
+     "name": "홀리 어드밴트",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341501,
+     "name": "홀리 어드밴트 : 대천사",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 2341502,
+     "name": "홀리 어드밴트 : 대천사",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341503,
+     "name": "홀리 어드밴트 : 대천사",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341507,
+     "name": "커맨드 오브 헤븐",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341508,
+     "name": "커맨드 오브 헤븐",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 2341509,
+     "name": "엔젤스 플레지",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 2341510,
+     "name": "엔젤스 플레지",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "5차(직업 고유)": [
+    {
+     "id": 400021032,
+     "name": "엔젤 오브 제미니",
+     "kind": "소환"
+    },
+    {
+     "id": 400021086,
+     "name": "디바인 퍼니시먼트",
+     "kind": "공격"
+    },
+    {
+     "id": 400021070,
+     "name": "피스메이커",
+     "kind": "공격"
+    },
+    {
+     "id": 400021003,
+     "name": "프레이",
+     "kind": "버프"
+    }
+   ]
+  },
+  "NightLord": {
+   "1차": [
+    {
+     "id": 4000000,
+     "name": "님블 바디",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4000005,
+     "name": "헤이스트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4000012,
+     "name": "사이드 스텝",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4001003,
+     "name": "다크 사이트",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4001013,
+     "name": "샤프 슬래시",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4001014,
+     "name": "플래시 점프",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4001334,
+     "name": "더블 스탭",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4001344,
+     "name": "럭키 세븐",
+     "kind": "공격",
+     "hasIcon": true
+    }
+   ],
+   "2차": [
+    {
+     "id": 4100000,
+     "name": "자벨린 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4100001,
+     "name": "크리티컬 스로우",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4100007,
+     "name": "피지컬 트레이닝",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4100011,
+     "name": "마크 오브 어쌔신",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 4100017,
+     "name": "자벨린 액셀레이션",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4101010,
+     "name": "윈드 탈리스만",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 4101013,
+     "name": "슈리켄 버스트",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 4101014,
+     "name": "슈리켄 버스트",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4101015,
+     "name": "쉐도우 러쉬",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4101016,
+     "name": "쉐도우 리프",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4101018,
+     "name": "쉐도우 블링크",
+     "kind": "버프/기타",
+     "hasIcon": true
+    }
+   ],
+   "3차": [
+    {
+     "id": 4110008,
+     "name": "래디컬 다크니스",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4110011,
+     "name": "베놈",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4110012,
+     "name": "숙련된 표창술",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4110014,
+     "name": "아드레날린",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4110016,
+     "name": "스피릿 자벨린",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4111002,
+     "name": "쉐도우 파트너",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4111007,
+     "name": "다크 플레어",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 4111015,
+     "name": "슈리켄 챌린지",
+     "kind": "공격",
+     "hasIcon": false
+    }
+   ],
+   "4차": [
+    {
+     "id": 4120002,
+     "name": "페이크",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4120011,
+     "name": "페이탈 베놈",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4120012,
+     "name": "자벨린 엑스퍼트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4120014,
+     "name": "다크 세레니티",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4120018,
+     "name": "마크 오브 나이트로드",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4120043,
+     "name": "쇼다운 챌린지-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120044,
+     "name": "쇼다운 챌린지-엑스트라 타겟",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120045,
+     "name": "쇼다운 챌린지-인핸스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120046,
+     "name": "퍼지 에어리어-인핸스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120047,
+     "name": "퍼지 에어리어-슬로우",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120048,
+     "name": "퍼지 에어리어-보스 킬러",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120049,
+     "name": "쿼드러플 스로우-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120050,
+     "name": "쿼드러플 스로우-보스 킬러",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4120051,
+     "name": "쿼드러플 스로우-보너스 어택",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4121015,
+     "name": "퍼지 에어리어",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4121016,
+     "name": "써든레이드",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 4121017,
+     "name": "쇼다운 챌린지",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 4121020,
+     "name": "쇼다운 챌린지",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4121022,
+     "name": "나이트폴 시그닛",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4121052,
+     "name": "포 시즌",
+     "kind": "공격 (하이퍼)",
+     "hasIcon": false
+    },
+    {
+     "id": 4121053,
+     "name": "에픽 어드벤쳐",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 4121054,
+     "name": "블리딩 톡신",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    }
+   ],
+   "각성(6차)": [
+    {
+     "id": 4140011,
+     "name": "다크니스 슈리켄",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 4140507,
+     "name": "쉐도우 리츄얼",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 4141000,
+     "name": "쿼드러플 스로우 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141001,
+     "name": "쿼드러플 스로우 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141003,
+     "name": "마크 오브 어쌔신 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 4141004,
+     "name": "마크 오브 어쌔신 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4141005,
+     "name": "쇼다운 챌린지 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141006,
+     "name": "쇼다운 챌린지 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4141007,
+     "name": "다크 플레어 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141008,
+     "name": "써든레이드 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141009,
+     "name": "포 시즌 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141010,
+     "name": "포 시즌 VI ",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141500,
+     "name": "생사여탈",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141501,
+     "name": "생사여탈",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4141502,
+     "name": "생사여탈",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4141503,
+     "name": "크루셜 어썰트",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141504,
+     "name": "크루셜 어썰트",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 4141505,
+     "name": "쉐도우 리츄얼",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 4141506,
+     "name": "쉐도우 리츄얼",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "5차(직업 고유)": [
+    {
+     "id": 400041038,
+     "name": "다크로드의 비전서",
+     "kind": "공격"
+    },
+    {
+     "id": 400041020,
+     "name": "풍마수리검",
+     "kind": "공격"
+    },
+    {
+     "id": 400041061,
+     "name": "스로우 블래스팅",
+     "kind": "공격"
+    },
+    {
+     "id": 400041001,
+     "name": "스프레드 스로우",
+     "kind": "버프"
+    }
+   ]
+  },
+  "Bowmaster": {
+   "1차": [
+    {
+     "id": 3000001,
+     "name": "크리티컬 샷",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3000002,
+     "name": "아처 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3000008,
+     "name": "더블 점프",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 3000009,
+     "name": "더블 점프",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 3000010,
+     "name": "더블 점프",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 3001004,
+     "name": "애로우 블로우",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3001007,
+     "name": "더블 점프",
+     "kind": "버프/기타",
+     "hasIcon": true
+    }
+   ],
+   "2차": [
+    {
+     "id": 3100000,
+     "name": "보우 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3100001,
+     "name": "파이널 어택 : 활",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3100002,
+     "name": "보우 액셀레이션",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3100006,
+     "name": "피지컬 트레이닝",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3100011,
+     "name": "소울 애로우 : 활",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3101005,
+     "name": "바람의 시",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3101008,
+     "name": "리트리트 샷",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3101009,
+     "name": "퀴버 카트리지",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3101012,
+     "name": "퀴버 카트리지 (흡혈 화살)",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 3101014,
+     "name": "스위프트 서지",
+     "kind": "버프/기타",
+     "hasIcon": true
+    }
+   ],
+   "3차": [
+    {
+     "id": 3110001,
+     "name": "모탈 블로우",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3110007,
+     "name": "닷지",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3110012,
+     "name": "컨센트레이션",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3110014,
+     "name": "마크맨쉽",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3110019,
+     "name": "익스트림 아쳐리 : 활",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3111005,
+     "name": "피닉스",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3111013,
+     "name": "애로우 플래터",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3111015,
+     "name": "플레시 미라주",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3111016,
+     "name": "플레시 미라주",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 3111017,
+     "name": "퀴버 플로우",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 3111018,
+     "name": "퀴버 플로우",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 3111020,
+     "name": "제피르 배리어",
+     "kind": "버프/기타",
+     "hasIcon": true
+    }
+   ],
+   "4차": [
+    {
+     "id": 3120005,
+     "name": "보우 엑스퍼트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3120007,
+     "name": "일루전 스탭",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3120008,
+     "name": "어드밴스드 파이널 어택",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 3120018,
+     "name": "아머 피어싱",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3120021,
+     "name": "플레시 미라주 II",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3120022,
+     "name": "어드밴스드 퀴버",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3120043,
+     "name": "샤프 아이즈-퍼시스트",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120044,
+     "name": "샤프 아이즈-이그노어 가드",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120045,
+     "name": "샤프 아이즈-크리티컬 레이트",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120046,
+     "name": "언카운터블 애로우-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120047,
+     "name": "언카운터블 애로우-엑스트라 타겟",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120048,
+     "name": "언카운터블 애로우-보너스 어택",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120049,
+     "name": "폭풍의 시-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120050,
+     "name": "폭풍의 시-보스 킬러",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3120051,
+     "name": "폭풍의 시-스플릿 어택",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3121002,
+     "name": "샤프 아이즈",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 3121015,
+     "name": "언카운터블 애로우",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3121020,
+     "name": "폭풍의 시",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3121052,
+     "name": "윈드 오브 프레이",
+     "kind": "공격 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3121053,
+     "name": "에픽 어드벤쳐",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 3121054,
+     "name": "프리퍼레이션",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    }
+   ],
+   "각성(6차)": [
+    {
+     "id": 3140006,
+     "name": "퀴버 카트리지 VI",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 3140008,
+     "name": "퀴버 카트리지 VI (흡혈 화살)",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 3140010,
+     "name": "엑스트라 퀴버 카트리지 (마법 화살)",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3140011,
+     "name": "엑스트라 퀴버 카트리지 (흡혈 화살)",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 3141000,
+     "name": "폭풍의 시 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141001,
+     "name": "폭풍의 시 VI : 난사 모드",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141002,
+     "name": "언카운터블 애로우 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141003,
+     "name": "언카운터블 애로우 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 3141004,
+     "name": "애로우 플래터 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141005,
+     "name": "퀴버 카트리지 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141009,
+     "name": "엑스트라 퀴버 카트리지",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141012,
+     "name": "피닉스 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141013,
+     "name": "플레시 미라주 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141014,
+     "name": "플레시 미라주 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 3141015,
+     "name": "윈드 오브 프레이 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141500,
+     "name": "어센던트 셰이드",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141502,
+     "name": "어센던트 셰이드",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 3141503,
+     "name": "포인트 제로",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141504,
+     "name": "포인트 제로",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 3141505,
+     "name": "아이 오브 아퀼라",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 3141506,
+     "name": "아이 오브 아퀼라",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "5차(직업 고유)": [
+    {
+     "id": 400031020,
+     "name": "잔영의 시",
+     "kind": "공격"
+    },
+    {
+     "id": 400031002,
+     "name": "애로우 레인",
+     "kind": "공격"
+    },
+    {
+     "id": 400031028,
+     "name": "퀴버 풀버스트",
+     "kind": "버프"
+    },
+    {
+     "id": 400031053,
+     "name": "실루엣 미라주",
+     "kind": "보호"
+    }
+   ]
+  },
+  "Viper": {
+   "1차": [
+    {
+     "id": 5000000,
+     "name": "퀵모션",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5000006,
+     "name": "포춘 어택",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5000007,
+     "name": "크리티컬 로어",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5001002,
+     "name": "써머솔트 킥",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5001003,
+     "name": "더블 파이어",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5001005,
+     "name": "대쉬",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5001010,
+     "name": "파이렛 리프",
+     "kind": "버프/기타",
+     "hasIcon": true
+    }
+   ],
+   "2차": [
+    {
+     "id": 5100009,
+     "name": "HP 증가",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 5100011,
+     "name": "멘탈 클리어리티",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5100013,
+     "name": "인듀어런스",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5100016,
+     "name": "어드밴스드 대쉬",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5100017,
+     "name": "씨 서펜트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5100020,
+     "name": "너클 액셀레이션",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 5100021,
+     "name": "볼텍스 점프",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5101000,
+     "name": "플리커 대쉬",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5101012,
+     "name": "쇼크 웨이브",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5101019,
+     "name": "씨 서펜트 버스트",
+     "kind": "공격",
+     "hasIcon": false
+    }
+   ],
+   "3차": [
+    {
+     "id": 5110000,
+     "name": "그로기 마스터리",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5110010,
+     "name": "윌로우 디펜시브",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5110011,
+     "name": "크리티컬 레이지",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5110016,
+     "name": "씨 서펜트 강화 I",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5110018,
+     "name": "서펜트 어썰트",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5110020,
+     "name": "서펜트 스톤",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 5111002,
+     "name": "터닝 킥",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5111003,
+     "name": "플로우 가드",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5111007,
+     "name": "럭키 다이스",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5111009,
+     "name": "스크류 펀치",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5111017,
+     "name": "서펜트 스톤",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5111019,
+     "name": "서펜트 어썰트",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "4차": [
+    {
+     "id": 5120006,
+     "name": "서펜트 마크",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120011,
+     "name": "디펜스 폼",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120014,
+     "name": "가드 크러쉬",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120021,
+     "name": "전함 노틸러스",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 5120022,
+     "name": "씨 서펜트 강화 II",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120026,
+     "name": "서펜트 어썰트 인레이지",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120028,
+     "name": "오펜스 폼",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120029,
+     "name": "씨 서펜트 버스트 II",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5120043,
+     "name": "더블 럭키 다이스-원모어찬스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120044,
+     "name": "더블 럭키 다이스-엑스트라 넘버",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120045,
+     "name": "더블 럭키 다이스-인핸스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120046,
+     "name": "피스트 인레이지-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120047,
+     "name": "피스트 인레이지-보스 킬러",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120048,
+     "name": "피스트 인레이지-보너스 어택",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120049,
+     "name": "훅 봄버-리인포스",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120050,
+     "name": "훅 봄버-엑스트라 타겟",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5120051,
+     "name": "훅 봄버-보너스 어택",
+     "kind": "패시브 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5121007,
+     "name": "피스트 인레이지",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5121010,
+     "name": "타임 리프",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5121013,
+     "name": "전함 노틸러스",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5121015,
+     "name": "바이퍼지션",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5121016,
+     "name": "훅 봄버",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5121023,
+     "name": "씨 서펜트 버스트 II",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5121025,
+     "name": "씨 서펜트 인레이지",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5121027,
+     "name": "서펜트 어썰트 인레이지",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5121052,
+     "name": "서펜트 스피릿",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5121053,
+     "name": "에픽 어드벤쳐",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    },
+    {
+     "id": 5121054,
+     "name": "스티뮬레이트",
+     "kind": "버프/기타 (하이퍼)",
+     "hasIcon": true
+    }
+   ],
+   "각성(6차)": [
+    {
+     "id": 5140004,
+     "name": "씨 서펜트 VI",
+     "kind": "패시브",
+     "hasIcon": true
+    },
+    {
+     "id": 5140010,
+     "name": "전함 노틸러스 VI",
+     "kind": "패시브",
+     "hasIcon": false
+    },
+    {
+     "id": 5141000,
+     "name": "피스트 인레이지 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141001,
+     "name": "슈퍼 피스트 인레이지",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5141002,
+     "name": "슈퍼 피스트 인레이지",
+     "kind": "공격",
+     "hasIcon": false
+    },
+    {
+     "id": 5141003,
+     "name": "슈퍼 피스트 인레이지",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5141006,
+     "name": "씨 서펜트 인레이지 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5141008,
+     "name": "씨 서펜트 버스트 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5141009,
+     "name": "전함 노틸러스 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141011,
+     "name": "서펜트 스톤 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141012,
+     "name": "서펜트 스톤 VI",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5141013,
+     "name": "서펜트 어썰트 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5141014,
+     "name": "서펜트 어썰트 인레이지 VI",
+     "kind": "버프/기타",
+     "hasIcon": true
+    },
+    {
+     "id": 5141015,
+     "name": "훅 봄버 VI",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141500,
+     "name": "리버레이트 넵투누스",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141503,
+     "name": "리버레이트 넵투누스",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5141507,
+     "name": "헤이메이커",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141508,
+     "name": "헤이메이커",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5141509,
+     "name": "넵투누스 어드밴트",
+     "kind": "공격",
+     "hasIcon": true
+    },
+    {
+     "id": 5141510,
+     "name": "넵투누스 어드밴트",
+     "kind": "버프/기타",
+     "hasIcon": false
+    },
+    {
+     "id": 5141511,
+     "name": "넵투누스 어드밴트",
+     "kind": "버프/기타",
+     "hasIcon": false
+    }
+   ],
+   "5차(직업 고유)": [
+    {
+     "id": 400051070,
+     "name": "하울링 피스트",
+     "kind": "공격"
+    },
+    {
+     "id": 400051042,
+     "name": "퓨리어스 차지",
+     "kind": "공격"
+    },
+    {
+     "id": 400051015,
+     "name": "서펜트 스크류",
+     "kind": "공격"
+    },
+    {
+     "id": 400051002,
+     "name": "라이트닝 폼",
+     "kind": "버프"
+    }
+   ]
+  }
+ }
+}

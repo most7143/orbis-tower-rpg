@@ -359,6 +359,26 @@ script TarotLogic extends Logic
 				self._T.skillById[sk.id] = sk
 			end
 		end
+		-- 스킬 개편: 스킬이 들어가는 칸(CharSlotTable T1~T5·Awk, 패시브 흡수 Grant) → 카드 종류 (하이퍼 칸 = 하이퍼, 5차 칸·궁극기 = 5차, 흡수 = 패시브)
+		local cst = _DataService:GetTable("CharSlotTable")
+		if cst ~= nil then
+			for i = 1, cst:GetRowCount() do
+				local key = cst:GetCell(i, "SlotKey") or ""
+				for _, col in ipairs({ "T1", "T2", "T3", "T4", "T5", "Awk" }) do
+					local sk = self._T.skillById[cst:GetCell(i, col) or ""]
+					if sk ~= nil and key ~= "" and key ~= "Passive" then sk.slotKey = key end
+				end
+			end
+		end
+		local cpt = _DataService:GetTable("CharPassiveTable")
+		if cpt ~= nil then
+			for i = 1, cpt:GetRowCount() do
+				for gid in string.gmatch(cpt:GetCell(i, "Grant") or "", "[^|]+") do
+					local sk = self._T.skillById[gid]
+					if sk ~= nil then sk.slotKey = "Passive" end
+				end
+			end
+		end
 		-- 히어로 스킬 등급 (카드 종류: 5 하이퍼, 6 5차)
 		local hs = _DataService:GetTable("HeroSkillTable")
 		if hs ~= nil then
@@ -502,6 +522,12 @@ script TarotLogic extends Logic
 	method string CardVariant(table sk)
 		-- 카드 종류: 패시브 / 하이퍼(히어로 등급 5) / 5차(히어로 등급 6) / 그 외 공격.
 		if sk.trigger == "Passive" then return "passive" end
+		-- 스킬 개편: 칸 표에 있는 스킬은 실제 들어간 칸으로 정한다 (옛 히어로 등급보다 우선)
+		local key = sk.slotKey or ""
+		if key == "Passive" then return "passive" end
+		if key == "Hyper" then return "hyper" end
+		if key == "V1" or key == "V2" or key == "V3" or key == "Ult" then return "fifth" end
+		if key ~= "" then return "active" end
 		if (sk.grade or 0) == 5 then return "hyper" end
 		if (sk.grade or 0) >= 6 then return "fifth" end
 		return "active"
@@ -569,6 +595,28 @@ script TarotLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method table ViewSkill(Component mgr, string id)
+		-- 스킬 개편: 판 매니저 SkillAlias("동작 Id=새 스킬 Id")로 새 스킬 이름·아이콘·설명을 입힌 카드용 정보. Id·레벨·돌파는 동작 Id 그대로.
+		local base = self._T.skillById[id]
+		if base == nil or mgr == nil then return base end
+		local did = ""
+		for entry in string.gmatch(mgr.SkillAlias or "", "[^,]+") do
+			local s = string.find(entry, "=", 1, true)
+			if s ~= nil and string.sub(entry, 1, s - 1) == id then did = string.sub(entry, s + 1) end
+		end
+		local v = self._T.skillById[did]
+		if v == nil then return base end
+		local out = {}
+		for k, x in pairs(base) do out[k] = x end
+		out.name = v.name
+		out.icon = v.icon
+		out.text = v.text
+		out.element = v.element
+		out.slotKey = v.slotKey
+		return out
+	end
+
+	@ExecSpace("ClientOnly")
 	method void FillCard(integer slot, string id, Component mgr, string mode)
 		-- 스킬 카드 한 장 (mode): learn 신규 습득(NEW 배지) / break 돌파 / option 돌파 옵션(한계돌파 반짝임) / 그 외 별 옵션 Id.
 		-- 공통 밝은 프레임을 사용하고 스킬 종류는 상단 표기로 구분한다.
@@ -584,14 +632,14 @@ script TarotLogic extends Logic
 		if mode == "option" then
 			local b = self._T.breakById[id]
 			if b == nil then return end
-			sk = self._T.skillById[b.skill]
+			sk = self:ViewSkill(mgr, b.skill)
 			title = b.name
 			desc = b.desc
 			filled = 3
 			nextStar = false
 			limitBreak = true
 		else
-			sk = self._T.skillById[id]
+			sk = self:ViewSkill(mgr, id)
 			if sk == nil then return end
 			local lv = mgr.SkillLv[sk.id] or 0
 			title = sk.name
@@ -670,7 +718,7 @@ script TarotLogic extends Logic
 		local titleText = "강화할 스킬을 고르세요"
 		local subText = "Lv." .. tostring(mgr.Level) .. " — 스킬 강화"
 		if mgr.RunState == "BREAK" then
-			local sk = self._T.skillById[mgr.BreakSkill]
+			local sk = self:ViewSkill(mgr, mgr.BreakSkill)
 			titleText = "돌파 옵션을 고르세요"
 			if sk ~= nil then subText = sk.name .. " 돌파" else subText = "구성원마다 1장 — 하나를 고르세요" end
 		end

@@ -189,6 +189,9 @@ script PlayerRoster extends Component
 					if self._T.slots[job] == nil then self._T.slots[job] = {} end
 					local s = { key = st:GetCell(i, "SlotKey") or "", name = st:GetCell(i, "SlotName") or "", order = tonumber(st:GetCell(i, "Order")) or i, ids = {} }
 					for t = 1, 5 do s.ids[t] = st:GetCell(i, "T" .. tostring(t)) or "" end
+					-- 스킬 개편: 각성 단계(AwkStage) 이상이면 5차 칸 스킬 대신 각성(6차) 스킬(Awk)
+					s.awk = st:GetCell(i, "Awk") or ""
+					s.awkStage = math.floor(tonumber(st:GetCell(i, "AwkStage")) or 0)
 					table.insert(self._T.slots[job], s)
 				end
 			end
@@ -344,11 +347,22 @@ script PlayerRoster extends Component
 
 	method table SlotsFor(string jobId, integer tier)
 		-- 그 차수에서 칸별 스킬 Id. { slots = {키=Id}, skills = {빈 값 제외, 칸 순서} }
+		return self:SlotsForAwk(jobId, tier, 0)
+	end
+
+	method integer AwakenStage(integer awkLv)
+		-- 스킬 개편: 각성 단계 0~5 (저장된 각성 레벨 awkLv를 단계로 본다, 5 이상은 5). 단계 n이면 주력기·보조기·기술·하이퍼·궁극기 순으로 n칸이 각성 스킬.
+		return math.max(0, math.min(5, math.floor(awkLv or 0)))
+	end
+
+	method table SlotsForAwk(string jobId, integer tier, integer stage)
+		-- 그 차수·각성 단계에서 칸별 스킬 Id (각성은 5차에서만). { slots = {키=Id}, skills = {빈 값 제외, 칸 순서} }
 		self:EnsureTables()
 		local slots = {}
 		local skills = {}
 		for _, s in ipairs(self._T.slots[jobId] or {}) do
 			local id = s.ids[tier] or ""
+			if tier >= 5 and stage > 0 and (s.awk or "") ~= "" and (s.awkStage or 0) > 0 and (s.awkStage or 0) <= stage then id = s.awk end
 			slots[s.key] = id
 			if id ~= "" then table.insert(skills, id) end
 		end
@@ -1130,7 +1144,7 @@ script PlayerRoster extends Component
 			return { loaded = self.RosterLoaded, unlocked = false, jobId = jobId, level = 1, tier = 1, tierName = "", atk = 0, hp = 0, def = 0, awakenLv = 0, slots = {}, skills = {} }
 		end
 		local st = self:CharStat(jobId, c.level, c.tier)
-		local sl = self:SlotsFor(jobId, c.tier)
+		local sl = self:SlotsForAwk(jobId, c.tier, self:AwakenStage(c.awkLv))
 		return {
 			loaded = self.RosterLoaded, unlocked = c.unlocked, jobId = jobId,
 			level = c.level, tier = c.tier, tierName = self:TierName(jobId, c.tier),
@@ -1569,6 +1583,20 @@ script PlayerRoster extends Component
 		self._T.chars[jobId] = c
 		self:SaveRoster()
 		log("[VRF] roster debug char " .. jobId .. " u=" .. tostring(unlocked) .. " lv=" .. tostring(c.level) .. " tier=" .. tostring(c.tier))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DebugSkillSlots(string jobId, integer tier, integer stage)
+		-- 테스트(저장 없음): 그 직업·차수·각성 단계의 칸별 스킬 Id를 로그로. 돌려주는 값 "Main=H08,Sub=H06,..."
+		local sl = self:SlotsForAwk(jobId, tier, stage)
+		local parts = {}
+		for _, s in ipairs(self._T.slots[jobId] or {}) do
+			local id = sl.slots[s.key] or ""
+			if id ~= "" then table.insert(parts, s.key .. "=" .. id) end
+		end
+		local txt = table.concat(parts, ",")
+		log("[VRF] roster skill slots " .. jobId .. " tier=" .. tostring(tier) .. " awk=" .. tostring(stage) .. " " .. txt)
+		return txt
 	end
 
 	@ExecSpace("ServerOnly")

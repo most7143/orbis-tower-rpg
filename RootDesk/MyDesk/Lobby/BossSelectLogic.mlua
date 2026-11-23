@@ -1,0 +1,662 @@
+@Logic
+script BossSelectLogic extends Logic
+
+	-- 지역 선택 화면(LobbyUI Root/RegionSelect)의 [지역]/[보스] 탭과 보스 탭 화면 (Docs/Boss/Boss-Stage-Spec.md §8.1).
+	-- 보스 탭: 왼쪽 보스 5종 목록, 오른쪽 보스 그림·속성 아이콘·공략 아이콘·단계 1~5·보상, 오른쪽 아래 [도전]과 오늘 도전권.
+	-- 글자는 탭 이름·보스 이름·단계 숫자·도전권만, 나머지는 아이콘 + 툴팁. 판정·차감은 서버(LobbyManager.RequestBossPlay / PlayerBoss).
+	property string Base = "/ui/LobbyUI/Root/RegionSelect"
+	property boolean BossTab = false
+	-- 탭 이미지 (기본·호버·누름·선택·선택 호버·선택 누름·비활성)
+	property string TabNormal = "e9221d5678bf46c5b6064979253726ea"
+	property string TabHover = "29be37ae67dc461998acafce9dae2615"
+	property string TabPressed = "7aa605bd606749379769b929a0c0c0aa"
+	property string TabDisabled = "5932ca2f0dc3412093f3b466bea7422c"
+	property string TabSelected = "58f939c5579d4006b2c858cf9b26e98f"
+	property string TabSelectedHover = "38b365b46cf7478b80387deaa67746b1"
+	property string TabSelectedPressed = "a3558fcc8e6747b59ed74fbe27c4e54a"
+	-- 목록 행 이미지 (지역 목록과 같은 card 계열)
+	property string RowNormal = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string RowHover = "e9f1678141ff4a57bf17d5cf52e0a27b"
+	property string RowPressed = "1ee26fe6cab54961b986f0c552838954"
+	property string RowDisabled = "d262f8e8502e4b7b88f381a9b7a4e4fb"
+	property string RowSelected = "1e130afe90a842028aed70edadbfb9f1"
+	property string RowSelectedHover = "9c050999cae047ffb4181315d7f321af"
+	property string RowSelectedPressed = "0049a1c1e17e4ac29de951a509838cd4"
+	-- 단계 버튼 이미지 (button 계열)
+	property string BtnNormal = "65d8340b880940b5b2d2d3342dad63aa"
+	property string BtnHover = "292e7807ec754ea19ff3c28ec4b10311"
+	property string BtnPressed = "7e3db0c2c7944ba29d49c35222ad98b3"
+	property string BtnDisabled = "b5179a32f5c54fabbd757a0d8a2fbe18"
+	property string BtnSelected = "8739b8a9b7e84759abd297cae38822dc"
+	property string BtnSelectedHover = "7680060fe5824db88ccbec16b68ff83c"
+	property string BtnSelectedPressed = "dd5c7090249c4601b00410cead0c846b"
+	-- 보상 아이콘
+	property string IconGold = "02a489cccff24a139a6c3582a5871f58"
+	property string IconBookS = "36ba7694f9444257837ff68207fff885"
+	property string IconBookM = "452037cbd8f04bdf810657263aff002b"
+	property string IconBookL = "67933b35ef074d58893c1710edeed7f6"
+	property string IconCube = "009913f229524a09828296535165b2df"
+	property string IconScroll = "d7d18132057f491181288c2b6038d32c"
+	property string IconDiamond = "81462aeb825b4660991cef05651271cf"
+
+	@HideFromInspector
+	property table handlers = {}
+
+	-- 보스 탭에서 숨길 지역 화면 요소
+	@HideFromInspector
+	property string RegionOnly = "regionFilter,currentRegion,ListView,sectionPrev,sectionNext,monsterLabel,monsterList,missionLabel,missionTable,clearRewardsTitle,possibleRewardsTitle,goldMeso,feather,scroll,extraFeather,sectionTitle,sectionCountPill,sectionHint,sectionGauge,sectionChestButton0,sectionChestButton1,sectionChestButton2,enter,energyPill"
+
+	@ExecSpace("ClientOnly")
+	method Entity E(string sub)
+		-- 지역 선택 화면 안 엔티티.
+		return _EntityService:GetEntityByPath(self.Base .. "/" .. sub)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void On(Entity e, any evt, any fn)
+		-- 이벤트 연결 + 해제용 기록.
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(evt, fn)
+		table.insert(self.handlers, { e = e, evt = evt, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Hover(string sub)
+		-- 직접 칠하는 버튼의 호버·누름 상태 기록 → 다시 칠하기.
+		local e = self:E(sub)
+		if not isvalid(e) then return end
+		self:On(e, UITouchEnterEvent, function() self:SetPress(sub, "hover", true) end)
+		self:On(e, UITouchExitEvent, function() self:SetPress(sub, "hover", false) self:SetPress(sub, "pressed", false) end)
+		self:On(e, UITouchDownEvent, function() self:SetPress(sub, "pressed", true) end)
+		self:On(e, UITouchUpEvent, function() self:SetPress(sub, "pressed", false) end)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetPress(string sub, string key, boolean on)
+		-- 입력 상태 기록 후 화면 다시 칠하기.
+		if self._T.press[sub] == nil then self._T.press[sub] = {} end
+		self._T.press[sub][key] = on
+		self:Paint()
+	end
+
+	@ExecSpace("ClientOnly")
+	method string PickImage(string sub, boolean enabled, boolean selected, table set)
+		-- 상태 이미지 고르기: set = { normal, hover, pressed, disabled, selected, selHover, selPressed }.
+		if not enabled then return set[4] end
+		local st = self._T.press[sub] or {}
+		if selected then
+			if st.pressed then return set[7] elseif st.hover then return set[6] end
+			return set[5]
+		end
+		if st.pressed then return set[3] elseif st.hover then return set[2] end
+		return set[1]
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetImg(Entity e, string ruid)
+		-- 그림 바꾸기 (같으면 그대로).
+		if not isvalid(e) then return end
+		local sp = e.SpriteGUIRendererComponent
+		if sp.ImageRUID.DataId ~= ruid then sp.ImageRUID = DataRef(ruid) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetText(Entity e, string text, Color color)
+		-- 글자 바꾸기 (색은 nil이면 그대로).
+		if not isvalid(e) then return end
+		local t = e.TextGUIRendererComponent
+		if t.Text ~= text then t.Text = text end
+		if color ~= nil then t.FontColor = color end
+	end
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 탭·목록·단계·도전·툴팁 입력 연결.
+		self.handlers = {}
+		self._T.press = {}
+		self._T.sel = 1
+		self._T.step = 1
+		self:On(self:E("TabRegion"), ButtonClickEvent, function() _UISoundLogic:PlayClick() self:SetTab(false) end)
+		self:On(self:E("TabBoss"), ButtonClickEvent, function()
+			local e = self:E("TabBoss")
+			if not isvalid(e) or not e.ButtonComponent.Enable then return end
+			_UISoundLogic:PlayClick()
+			self:SetTab(true)
+		end)
+		self:Hover("TabRegion")
+		self:Hover("TabBoss")
+		-- 잠긴 보스 탭: 누르면 해금 조건 툴팁 (입력은 버튼이 꺼져 있어 탭 전환 없음)
+		local tb = self:E("TabBoss")
+		if isvalid(tb) then
+			local tip = function()
+				if tb.ButtonComponent.Enable then _TooltipLogic:Hide() return end
+				_TooltipLogic:ShowText(tb, "보스", tostring(self:UnlockFloor()) .. "층 보스를 처음 쓰러뜨리면 열립니다.")
+			end
+			self:On(tb, UITouchDownEvent, tip)
+			_TooltipLogic:Register(tb, tip)
+		end
+		for k = 0, 4 do
+			local idx = k + 1
+			local sub = "BossView/BossRow" .. tostring(k)
+			self:On(self:E(sub), ButtonClickEvent, function() _UISoundLogic:PlayClick() self:Select(idx) end)
+			self:Hover(sub)
+			local ssub = "BossView/Step" .. tostring(k)
+			local step = k + 1
+			self:On(self:E(ssub), ButtonClickEvent, function()
+				local e = self:E(ssub)
+				if not isvalid(e) or not e.ButtonComponent.Enable then return end
+				_UISoundLogic:PlayClick()
+				self._T.step = step
+				self:Refresh()
+			end)
+			self:Hover(ssub)
+		end
+		self:On(self:E("BossView/Challenge"), ButtonClickEvent, function()
+			local e = self:E("BossView/Challenge")
+			if not isvalid(e) or not e.ButtonComponent.Enable then return end
+			_UISoundLogic:PlayClick()
+			self:Challenge()
+		end)
+		for i = 0, 2 do
+			local idx = i + 1
+			local e = self:E("BossView/Elem" .. tostring(i))
+			local fn = function() self:ShowElemTip(idx) end
+			self:On(e, UITouchDownEvent, fn)
+			if isvalid(e) then _TooltipLogic:Register(e, fn) end
+		end
+		for i = 0, 1 do
+			local idx = i + 1
+			local e = self:E("BossView/Mech" .. tostring(i))
+			local fn = function() self:ShowMechTip(idx) end
+			self:On(e, UITouchDownEvent, fn)
+			if isvalid(e) then _TooltipLogic:Register(e, fn) end
+		end
+		for i = 0, 5 do
+			local idx = i + 1
+			local e = self:E("BossView/Reward" .. tostring(i))
+			local fn = function() self:ShowRewardTip(idx) end
+			self:On(e, UITouchDownEvent, fn)
+			if isvalid(e) then _TooltipLogic:Register(e, fn) end
+		end
+		log("[VRF] BossSelectLogic begin handlers=" .. tostring(#self.handlers))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 이벤트 해제.
+		for _, r in ipairs(self.handlers) do
+			if isvalid(r.e) then
+				r.e:DisconnectEvent(r.evt, r.h)
+				_TooltipLogic:Unregister(r.e)
+			end
+		end
+		self.handlers = {}
+	end
+
+	-- ───────────────────────── 데이터 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method Component PB()
+		-- 로컬 플레이어 보스전 데이터.
+		local p = _UserService.LocalPlayer
+		if not isvalid(p) then return nil end
+		return p:GetComponent("script.PlayerBoss")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadData()
+		-- 보스 표·몬스터 그림·층 파노라마·금색 메소 설정을 한 번 읽는다.
+		if self._T.bosses ~= nil then return end
+		self._T.bosses = {}
+		local stand = {}
+		local mt = _DataService:GetTable("MonsterTable")
+		if mt ~= nil then
+			for i = 1, mt:GetRowCount() do stand[mt:GetCell(i, "id")] = mt:GetCell(i, "StandRUID") or "" end
+		end
+		self._T.summonStand = stand["8"] or ""
+		local pano = {}
+		local ft = _DataService:GetTable("FloorTable")
+		if ft ~= nil then
+			for i = 1, ft:GetRowCount() do pano[i] = ft:GetCell(i, "PanoRUID") or "" end
+		end
+		local bt = _DataService:GetTable("BossTable")
+		if bt ~= nil then
+			for i = 1, bt:GetRowCount() do
+				local id = bt:GetCell(i, "BossId") or ""
+				if id ~= "" then
+					local uf = math.floor(tonumber(bt:GetCell(i, "UnlockFloor")) or 1)
+					table.insert(self._T.bosses, { id = id, name = bt:GetCell(i, "Name") or id, stand = bt:GetCell(i, "StandRUID") or "", floor = uf, pano = pano[uf] or "",
+						elem = bt:GetCell(i, "Elem") or "", mech1 = bt:GetCell(i, "Mech1") or "", mech2 = bt:GetCell(i, "Mech2") or "",
+						skill = bt:GetCell(i, "SkillRUID") or "", attack = bt:GetCell(i, "AttackRUID") or "", move = bt:GetCell(i, "MoveRUID") or "" })
+				end
+			end
+		end
+		local cfg = {}
+		local rc = _DataService:GetTable("RunConfig")
+		if rc ~= nil then
+			for i = 1, rc:GetRowCount() do cfg[rc:GetCell(i, "Key")] = tonumber(rc:GetCell(i, "Value")) end
+		end
+		self._T.goldCfg = { base = cfg["GoldMesoStageBase"] or 20, per = cfg["GoldMesoPerFloor"] or 3, mul = cfg["GoldMesoBossMul"] or 5 }
+		self._T.elem = {}
+		local et = _DataService:GetTable("ElementTable")
+		if et ~= nil then
+			for i = 1, et:GetRowCount() do
+				local hex = et:GetCell(i, "Color") or "FFFFFF"
+				local r = (tonumber(string.sub(hex, 1, 2), 16) or 255) / 255
+				local g = (tonumber(string.sub(hex, 3, 4), 16) or 255) / 255
+				local b = (tonumber(string.sub(hex, 5, 6), 16) or 255) / 255
+				self._T.elem[et:GetCell(i, "Id")] = { name = et:GetCell(i, "Name") or "", color = Color(r, g, b, 1) }
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer UnlockFloor()
+		-- 보스 탭 해금 층 (BossConfig UnlockFieldBossFloor).
+		local pb = self:PB()
+		if pb ~= nil then return math.floor(pb:Cfg("UnlockFieldBossFloor", 3)) end
+		return 3
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean TabUnlocked()
+		-- 보스 탭이 열렸는지.
+		local pb = self:PB()
+		return pb ~= nil and pb.BossLoaded and pb:TabUnlocked()
+	end
+
+	@ExecSpace("ClientOnly")
+	method table ElemList(string elem)
+		-- "Poison:N|Holy:W" → 약점 먼저, 반감, 무효 순 { {id, lv} } (최대 3개).
+		local out = {}
+		for _, want in ipairs({ "W", "R", "N" }) do
+			for part in string.gmatch(elem or "", "[^|]+") do
+				local id, lv = string.match(part, "^([^:]+):([WRN])$")
+				if lv == want and #out < 3 then table.insert(out, { id = id, lv = lv }) end
+			end
+		end
+		return out
+	end
+
+	@ExecSpace("ClientOnly")
+	method table MechInfo(string mech)
+		-- 기믹 문자열 → 아이콘·툴팁 { title, body, icon } (빈칸이면 nil).
+		if mech == nil or mech == "" then return nil end
+		local kind = string.match(mech, "^([^:]+)")
+		local b = self._T.bosses[self._T.sel] or {}
+		local thumb = function(r) if r == nil or r == "" then return "" end return "thumbnail://" .. r end
+		if kind == "Summon" then return { title = "졸개 소환", body = "버섯이 있으면 단단해집니다.", icon = "5dd6b605d6a1452988313b93badc28cb" } end
+		if kind == "Shield" then return { title = "암흑 장벽", body = "성 속성으로 장벽을 깰 수 있습니다. 깨면 잠시 무력해집니다.", icon = "c71f28b127ec4a18975abd3e594bbb7a" } end
+		if kind == "Interrupt" then return { title = "해일", body = "큰 기술 전에 피해를 모으면 막을 수 있습니다. 불 속성이 잘 통합니다.", icon = thumb(b.skill) } end
+		if kind == "Fly" then return { title = "날아오르기", body = "날아오르면 가까이서 칠 수 없습니다. 회피가 높습니다.", icon = thumb(b.move) } end
+		if kind == "Breath" then return { title = "화염 브레스", body = "맨 뒤를 노립니다.", icon = "ab2bdcbf2bd847918c1ef7a68bdc4459" } end
+		if kind == "Enrage" then return { title = "분노", body = "체력이 낮으면 사나워집니다.", icon = "b7d9fffd7efb4c80958dae821ef4e196" } end
+		return nil
+	end
+
+	@ExecSpace("ClientOnly")
+	method table Rewards(table b, integer step)
+		-- 단계 보상 목록 (서버 PlayerBoss.CalcReward와 같은 규칙): { {icon, name, n, first} }.
+		local pb = self:PB()
+		local out = {}
+		if pb == nil or b == nil then return out end
+		local st = pb:Step(step)
+		if st == nil then return out end
+		local g = self._T.goldCfg
+		local gold = math.floor((g.base + b.floor * g.per) * g.mul * st.gold + 0.5)
+		if gold > 0 then table.insert(out, { icon = self.IconGold, name = "금색 메소", n = gold }) end
+		if st.s > 0 then table.insert(out, { icon = self.IconBookS, name = "경험의 서(소)", n = st.s }) end
+		if st.m > 0 then table.insert(out, { icon = self.IconBookM, name = "경험의 서(중)", n = st.m }) end
+		if st.l > 0 then table.insert(out, { icon = self.IconBookL, name = "경험의 서(대)", n = st.l }) end
+		local cube, sm = st.cube, st.sm
+		if cube > 0 and _UnlockRules:AccountLevelOf(_UserService.LocalPlayer) < _UnlockRules:Level("Cube") then
+			sm = sm + cube
+			cube = 0
+		end
+		if cube > 0 then table.insert(out, { icon = self.IconCube, name = "레드 큐브", n = cube }) end
+		local scrolls = st.sl + sm + st.sh
+		if scrolls > 0 then
+			local nm = "하급 주문서"
+			if st.sh > 0 then nm = "상급 주문서" elseif sm > 0 then nm = "중급 주문서" end
+			table.insert(out, { icon = self.IconScroll, name = nm, n = scrolls })
+		end
+		if st.dia > 0 and not pb:FirstTaken(b.id, step) then table.insert(out, { icon = self.IconDiamond, name = "다이아 (첫 처치)", n = st.dia, first = true }) end
+		return out
+	end
+
+	-- ───────────────────────── 탭 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnRegionOpen(boolean bossTab)
+		-- 지역 선택 화면이 열릴 때: 결과 화면에서 보스전으로 돌아왔으면 보스 탭, 아니면 지역 탭.
+		self._T.entering = false
+		-- 열 때마다 선택을 새로 정한다 (열린 보스 중 가장 뒤, 그 보스의 열린 최고 단계)
+		self._T.selInit = false
+		self:SetTab(bossTab and self:TabUnlocked())
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetTab(boolean boss)
+		-- 탭 전환: 지역 화면 요소와 보스 화면을 서로 켜고 끈다.
+		if boss and not self:TabUnlocked() then boss = false end
+		self.BossTab = boss
+		for k in string.gmatch(self.RegionOnly, "[^,]+") do
+			local e = self:E(k)
+			if isvalid(e) and e.Enable == boss then e:SetEnable(not boss) end
+		end
+		local view = self:E("BossView")
+		if isvalid(view) and view.Enable ~= boss then view:SetEnable(boss) end
+		_TooltipLogic:Hide()
+		if boss then
+			self:LoadData()
+			-- 처음엔 열린 보스 중 가장 뒤 보스
+			if self._T.selInit ~= true then
+				self._T.selInit = true
+				local pb = self:PB()
+				for i, b in ipairs(self._T.bosses) do
+					if pb ~= nil and pb:BossUnlocked(b.id) then self._T.sel = i end
+				end
+				self:PickStep()
+			end
+			self:Refresh()
+		else
+			if _RegionSelectLogic ~= nil then _RegionSelectLogic:Refresh() end
+		end
+		self:Paint()
+		-- 이미지·동기화 값이 늦게 들어와도 다음 틱에 한 번 더 그리고, 남은 툴팁도 한 번 더 닫는다
+		self._T.sig = nil
+		self._T.tick = 0
+		self._T.hideTip = true
+		log("[VRF] boss tab set boss=" .. tostring(boss) .. " unlocked=" .. tostring(self:TabUnlocked()) .. " sel=" .. tostring(self._T.sel))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PickStep()
+		-- 단계 기본값: 열린 가장 높은 단계.
+		local b = self._T.bosses[self._T.sel]
+		local pb = self:PB()
+		if b == nil or pb == nil then self._T.step = 1 return end
+		self._T.step = math.max(1, math.min(pb:StepCount(), pb:BestStep(b.id) + 1))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Select(integer idx)
+		-- 보스 고르기 (잠긴 보스도 그림·기믹은 볼 수 있고 도전만 막힌다).
+		self._T.sel = math.max(1, math.min(#self._T.bosses, idx))
+		self:PickStep()
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Paint()
+		-- 탭·행·단계 버튼 이미지를 선택·입력·비활성 상태로 칠한다.
+		local unlocked = self:TabUnlocked()
+		local tabSet = { self.TabNormal, self.TabHover, self.TabPressed, self.TabDisabled, self.TabSelected, self.TabSelectedHover, self.TabSelectedPressed }
+		local tr = self:E("TabRegion")
+		if isvalid(tr) then
+			self:SetImg(tr, self:PickImage("TabRegion", true, not self.BossTab, tabSet))
+			tr.TextGUIRendererComponent.FontColor = (not self.BossTab) and Color(1, 1, 1, 1) or Color(0.14, 0.17, 0.21, 1)
+		end
+		local tb = self:E("TabBoss")
+		if isvalid(tb) then
+			if tb.ButtonComponent.Enable ~= unlocked then tb.ButtonComponent.Enable = unlocked end
+			self:SetImg(tb, self:PickImage("TabBoss", unlocked, self.BossTab, tabSet))
+			local col = Color(0.14, 0.17, 0.21, 1)
+			if self.BossTab then col = Color(1, 1, 1, 1) elseif not unlocked then col = Color(0.48, 0.52, 0.58, 1) end
+			tb.TextGUIRendererComponent.FontColor = col
+			local lock = self:E("TabBoss/Lock")
+			if isvalid(lock) and lock.Enable == unlocked then lock:SetEnable(not unlocked) end
+		end
+		if not self.BossTab then return end
+		local pb = self:PB()
+		local rowSet = { self.RowNormal, self.RowHover, self.RowPressed, self.RowDisabled, self.RowSelected, self.RowSelectedHover, self.RowSelectedPressed }
+		for k = 0, 4 do
+			local sub = "BossView/BossRow" .. tostring(k)
+			local e = self:E(sub)
+			if isvalid(e) and e.Enable then self:SetImg(e, self:PickImage(sub, true, self._T.sel == k + 1, rowSet)) end
+		end
+		local b = self._T.bosses[self._T.sel]
+		local btnSet = { self.BtnNormal, self.BtnHover, self.BtnPressed, self.BtnDisabled, self.BtnSelected, self.BtnSelectedHover, self.BtnSelectedPressed }
+		for k = 0, 4 do
+			local sub = "BossView/Step" .. tostring(k)
+			local e = self:E(sub)
+			if isvalid(e) then
+				local open = b ~= nil and pb ~= nil and pb:BossUnlocked(b.id) and pb:StepOpen(b.id, k + 1)
+				if e.ButtonComponent.Enable ~= open then e.ButtonComponent.Enable = open end
+				local sel = self._T.step == k + 1
+				self:SetImg(e, self:PickImage(sub, open, sel, btnSet))
+				local col = Color(0.14, 0.17, 0.21, 1)
+				if not open then col = Color(0.48, 0.52, 0.58, 1) elseif sel then col = Color(1, 1, 1, 1) end
+				e.TextGUIRendererComponent.FontColor = col
+			end
+		end
+	end
+
+	-- ───────────────────────── 화면 갱신 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Refresh()
+		-- 보스 목록·그림·속성·기믹·단계·보상·도전 버튼·도전권 전체 갱신.
+		if not self.BossTab then return end
+		self:LoadData()
+		local pb = self:PB()
+		for k = 0, 4 do
+			local row = self:E("BossView/BossRow" .. tostring(k))
+			local b = self._T.bosses[k + 1]
+			if isvalid(row) then
+				row:SetEnable(b ~= nil)
+				if b ~= nil then
+					local open = pb ~= nil and pb:BossUnlocked(b.id)
+					local icon = self:E("BossView/BossRow" .. tostring(k) .. "/Icon")
+					if isvalid(icon) then
+						icon.SpriteGUIRendererComponent.ImageRUID = b.stand ~= "" and ("thumbnail://" .. b.stand) or ""
+						icon.SpriteGUIRendererComponent.Color = open and Color(1, 1, 1, 1) or Color(0.25, 0.27, 0.30, 1)
+					end
+					self:SetText(self:E("BossView/BossRow" .. tostring(k) .. "/Name"), b.name, open and Color(0.14, 0.17, 0.21, 1) or Color(0.48, 0.52, 0.58, 1))
+					local best = pb ~= nil and pb:BestStep(b.id) or 0
+					local cnt = pb ~= nil and pb:StepCount() or 5
+					self:SetText(self:E("BossView/BossRow" .. tostring(k) .. "/Prog"), open and (tostring(best) .. "/" .. tostring(cnt)) or "", nil)
+					local lock = self:E("BossView/BossRow" .. tostring(k) .. "/Lock")
+					if isvalid(lock) and lock.Enable == open then lock:SetEnable(not open) end
+				end
+			end
+		end
+		local b = self._T.bosses[self._T.sel]
+		if b == nil then return end
+		local open = pb ~= nil and pb:BossUnlocked(b.id)
+		-- 파노라마(해금 층 배경 캡처) + 보스 그림
+		local pano = self:E("BossView/Pano")
+		if isvalid(pano) then
+			local r = pano.SpriteGUIRendererComponent
+			if b.pano ~= "" then
+				r.ImageRUID = b.pano
+				r.Color = Color(1, 1, 1, 1)
+			else
+				r.ImageRUID = ""
+				r.Color = Color(0.33, 0.46, 0.72, 1)
+			end
+		end
+		local art = self:E("BossView/BossArt")
+		if isvalid(art) then
+			art.SpriteGUIRendererComponent.ImageRUID = b.stand ~= "" and ("thumbnail://" .. b.stand) or ""
+			art.SpriteGUIRendererComponent.Color = open and Color(1, 1, 1, 1) or Color(0.2, 0.22, 0.25, 1)
+		end
+		-- 속성 아이콘: 약점(속성색 + ▲), 반감(흐린 속성색 + ▼), 무효(회색 + ×)
+		local elems = self:ElemList(b.elem)
+		self._T.elemShown = elems
+		for i = 0, 2 do
+			local e = self:E("BossView/Elem" .. tostring(i))
+			local it = elems[i + 1]
+			if isvalid(e) then
+				e:SetEnable(it ~= nil)
+				if it ~= nil then
+					local info = self._T.elem[it.id] or { color = Color(0.6, 0.6, 0.6, 1) }
+					local c = info.color
+					local mark = "▲"
+					if it.lv == "R" then
+						c = Color(c.r, c.g, c.b, 0.45)
+						mark = "▼"
+					elseif it.lv == "N" then
+						c = Color(0.55, 0.57, 0.60, 1)
+						mark = "×"
+					end
+					e.SpriteGUIRendererComponent.Color = c
+					self:SetText(self:E("BossView/Elem" .. tostring(i) .. "/Mark"), mark, nil)
+				end
+			end
+		end
+		-- 공략 포인트 아이콘 1~2개
+		local mechs = {}
+		for _, m in ipairs({ b.mech1, b.mech2 }) do
+			local mi = self:MechInfo(m)
+			if mi ~= nil then table.insert(mechs, mi) end
+		end
+		self._T.mechShown = mechs
+		for i = 0, 1 do
+			local e = self:E("BossView/Mech" .. tostring(i))
+			local mi = mechs[i + 1]
+			if isvalid(e) then
+				e:SetEnable(mi ~= nil)
+				if mi ~= nil then
+					local icon = self:E("BossView/Mech" .. tostring(i) .. "/Icon")
+					if isvalid(icon) then icon.SpriteGUIRendererComponent.ImageRUID = mi.icon end
+				end
+			end
+		end
+		-- 단계: 클리어한 단계 체크
+		local best = pb ~= nil and pb:BestStep(b.id) or 0
+		for k = 0, 4 do
+			local chk = self:E("BossView/Step" .. tostring(k) .. "/Check")
+			if isvalid(chk) then
+				local done = open and k + 1 <= best
+				if chk.Enable ~= done then chk:SetEnable(done) end
+			end
+		end
+		-- 보상
+		local rewards = self:Rewards(b, self._T.step)
+		self._T.rewardShown = rewards
+		for i = 0, 5 do
+			local e = self:E("BossView/Reward" .. tostring(i))
+			local it = rewards[i + 1]
+			if isvalid(e) then
+				e:SetEnable(it ~= nil)
+				if it ~= nil then
+					self:SetImg(e, it.icon)
+					self:SetText(self:E("BossView/Reward" .. tostring(i) .. "/Count"), "x" .. tostring(it.n), nil)
+					local hl = self:E("BossView/Reward" .. tostring(i) .. "/Hl")
+					if isvalid(hl) and hl.Enable ~= (it.first == true) then hl:SetEnable(it.first == true) end
+				end
+			end
+		end
+		self:RefreshTicket()
+		self:Paint()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshTicket()
+		-- 도전 버튼 활성(해금·단계·도전권·요청 중) + "오늘 2/3 · 05:12:00".
+		local pb = self:PB()
+		local b = self._T.bosses ~= nil and self._T.bosses[self._T.sel] or nil
+		local can = pb ~= nil and b ~= nil and pb.BossLoaded and pb:BossUnlocked(b.id) and pb:StepOpen(b.id, self._T.step) and pb.TicketsLeft > 0 and not self._T.entering
+		local btn = self:E("BossView/Challenge")
+		if isvalid(btn) then
+			if btn.ButtonComponent.Enable ~= can then btn.ButtonComponent.Enable = can end
+			btn.TextGUIRendererComponent.FontColor = can and Color(1, 1, 1, 1) or Color(0.42, 0.46, 0.51, 1)
+		end
+		local line = "불러오는 중"
+		if pb ~= nil and pb.BossLoaded then
+			local s = math.max(0, pb.TicketResetSec)
+			line = "오늘 " .. tostring(pb.TicketsLeft) .. "/" .. tostring(pb.TicketMax) .. string.format(" · %02d:%02d:%02d", math.floor(s / 3600), math.floor(s / 60) % 60, s % 60)
+		end
+		local col = (pb ~= nil and pb.TicketsLeft > 0) and Color(0.14, 0.17, 0.21, 1) or Color(0.75, 0.22, 0.18, 1)
+		self:SetText(self:E("BossView/TicketPill/Text"), line, col)
+	end
+
+	-- ───────────────────────── 툴팁 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void ShowElemTip(integer idx)
+		-- 속성 아이콘 툴팁: "불 약점" 등.
+		local it = (self._T.elemShown or {})[idx]
+		if it == nil then return end
+		local info = self._T.elem[it.id] or { name = it.id }
+		local word = "약점"
+		local body = "이 속성 공격에 약합니다."
+		if it.lv == "R" then word = "반감" body = "이 속성 공격은 피해가 줄어듭니다." elseif it.lv == "N" then word = "무효" body = "이 속성 공격이 거의 통하지 않습니다." end
+		_TooltipLogic:ShowText(self:E("BossView/Elem" .. tostring(idx - 1)), info.name .. " " .. word, body)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowMechTip(integer idx)
+		-- 공략 포인트 툴팁.
+		local mi = (self._T.mechShown or {})[idx]
+		if mi == nil then return end
+		_TooltipLogic:ShowText(self:E("BossView/Mech" .. tostring(idx - 1)), mi.title, mi.body)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowRewardTip(integer idx)
+		-- 보상 아이콘 툴팁.
+		local it = (self._T.rewardShown or {})[idx]
+		if it == nil then return end
+		local body = "클리어할 때마다 받습니다."
+		if it.first then body = "이 단계를 처음 클리어하면 한 번 받습니다." end
+		_TooltipLogic:ShowText(self:E("BossView/Reward" .. tostring(idx - 1)), it.name .. " x" .. tostring(it.n), body)
+	end
+
+	-- ───────────────────────── 도전 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Challenge()
+		-- 도전: 로비 서버에 보스전 요청 (검사·예약은 서버, 도전권은 클리어 때 차감).
+		local b = self._T.bosses[self._T.sel]
+		local pb = self:PB()
+		if b == nil or pb == nil or self._T.entering then return end
+		if not pb:BossUnlocked(b.id) or not pb:StepOpen(b.id, self._T.step) or pb.TicketsLeft <= 0 then return end
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return end
+		local lobby = player.CurrentMap:GetComponent("script.LobbyManager")
+		if lobby == nil then return end
+		self._T.entering = true
+		self._T.enterTimeout = 8
+		self:RefreshTicket()
+		local id = b.id
+		local step = self._T.step
+		_ScreenFadeLogic:FadeOut(function()
+			if _RegionSelectLogic ~= nil then _RegionSelectLogic:Close() end
+			lobby:RequestBossPlay(id, step)
+		end)
+		log("[VRF] boss challenge request boss=" .. id .. " step=" .. tostring(step))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 보스 탭이 열려 있으면 0.5초마다 도전권 줄 갱신, 저장값이 바뀌면 전체 갱신. 탭 잠금 표시도 따라간다.
+		if _RegionSelectLogic == nil or not _RegionSelectLogic:IsOpen() then return end
+		if self._T.enterTimeout ~= nil then
+			self._T.enterTimeout = self._T.enterTimeout - delta
+			if self._T.enterTimeout <= 0 then
+				self._T.enterTimeout = nil
+				self._T.entering = false
+			end
+		end
+		if self._T.hideTip then
+			self._T.hideTip = false
+			_TooltipLogic:Hide()
+		end
+		self._T.tick = (self._T.tick or 0) - delta
+		if self._T.tick > 0 then return end
+		self._T.tick = 0.5
+		local pb = self:PB()
+		local sig = pb ~= nil and (tostring(pb.BossLoaded) .. ":" .. tostring(pb.BossSeq) .. ":" .. tostring(pb.TicketsLeft) .. ":" .. pb.FieldKills .. ":" .. pb.BossBest) or "-"
+		if sig ~= self._T.sig then
+			self._T.sig = sig
+			if self.BossTab then self:Refresh() else self:Paint() end
+		elseif self.BossTab then
+			self:RefreshTicket()
+		end
+	end
+
+end

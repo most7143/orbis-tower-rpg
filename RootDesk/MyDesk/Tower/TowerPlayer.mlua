@@ -333,6 +333,39 @@ script TowerPlayer extends AttackComponent
 	end
 
 	@ExecSpace("Client")
+	method void ShowElemMark(Entity target, string res, string elem)
+		-- 전투 개편: 속성 약점/반감/무효 표시 (글자 없이 빛으로). 약점 = 속성색 큰 빛, 반감 = 회색 작은 빛, 무효 = 더 작은 회색 빛.
+		if not isvalid(target) then return end
+		-- 속성색은 ElementTable.Color 기준 (한 번 읽어 둔다)
+		if self._T.elemCol == nil then
+			self._T.elemCol = { Fire = Color(0.95, 0.42, 0.16, 1), Ice = Color(0.31, 0.71, 0.91, 1), Lightning = Color(0.13, 0.76, 0.65, 1),
+				Poison = Color(0.6, 0.36, 0.82, 1), Holy = Color(0.95, 0.76, 0.19, 1), Dark = Color(0.29, 0.25, 0.4, 1) }
+			local ds = _DataService:GetTable("ElementTable")
+			if ds ~= nil then
+				for i = 1, ds:GetRowCount() do
+					local id = ds:GetCell(i, "Id") or ""
+					local c = ds:GetCell(i, "Color") or ""
+					if self._T.elemCol[id] ~= nil and c ~= "" then
+						if string.sub(c, 1, 1) ~= "#" then c = "#" .. c end
+						self._T.elemCol[id] = Color.FromHexCode(c)
+					end
+				end
+			end
+		end
+		local colors = self._T.elemCol
+		local col = Color(0.54, 0.56, 0.6, 0.8)
+		local sc = 0.35
+		if res == "W" then
+			col = colors[elem] or Color(1, 1, 1, 1)
+			sc = 0.6
+		elseif res == "N" then
+			sc = 0.25
+		end
+		local wp = target.TransformComponent.WorldPosition
+		_ParticleService:PlayBasicParticle(BasicParticleType.CircleBurst, target, Vector3(wp.x, wp.y + 0.55, wp.z), 0, Vector3(sc, sc, 1), false, { Color = col })
+	end
+
+	@ExecSpace("Client")
 	method void ShowProcDamage(Entity target, integer amount, boolean crit)
 		-- 직업 스킬 추가 피해 숫자 (몬스터 위, 기본 타격 숫자보다 조금 위).
 		if not isvalid(target) then return end
@@ -513,7 +546,15 @@ script TowerPlayer extends AttackComponent
 		local dmg = self.CurrentDamage
 		local map = self.Entity.CurrentMap
 		local mgr = isvalid(map) and map:GetComponent("script.TowerRunManager") or nil
-		if mgr ~= nil and dmg > 0 then dmg = mgr:FinalDouble(dmg) end
+		if mgr ~= nil and dmg > 0 then
+			-- 전투 개편: 기본 공격 = 이 구성원의 기본 공격 타입·속성 (비숍 = 마법·성)
+			-- 기본 공격은 지속 피해·스킬 피해 종류(dmgCtx)를 물려받지 않는다 (끝나면 원래 값 복구)
+			local prevSrc = mgr:SetHitSrc(self.Entity, "", false)
+			local prevCtx = mgr:SwapDmgCtx(nil)
+			dmg = mgr:FinalDouble(dmg)
+			mgr:SwapDmgCtx(prevCtx)
+			mgr:ClearHitSrc(prevSrc)
+		end
 		return dmg
 	end
 

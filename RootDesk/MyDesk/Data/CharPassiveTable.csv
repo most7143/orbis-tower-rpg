@@ -1,26 +1,26 @@
 ﻿JobId,Tier,PassiveLv,Grant,Extra,#Desc
-Hero,1,1,,,콤보 어택 Lv1
-Hero,2,3,,,콤보 어택 Lv3
-Hero,3,5,H15,,콤보 어택 Lv5 + 콤보 인스팅트(확률 발동)
-Hero,4,7,H15,ComboCap10,콤보 어택 Lv7 + 콤보 최대 10
-Hero,5,9,H15,ComboCap10|ComboGain50,콤보 어택 Lv9 + 콤보 획득 확률 +50%
-Bishop,1,1,,,성수 Lv1
-Bishop,2,3,,,성수 Lv3
-Bishop,3,5,B12,,성수 Lv5 + 프레이(확률 발동)
-Bishop,4,7,B12|B04,,성수 Lv7 + 홀리 매직쉘(위기 자동)
-Bishop,5,9,B12|B04,HolyMax10,성수 Lv9 + 성수 최대 10
-NightLord,1,1,,,표식 Lv1
-NightLord,2,3,,,표식 Lv3
-NightLord,3,5,N13,,표식 Lv5 + 쉐도우 스피어(확률 발동)
-NightLord,4,7,N13|N09,,표식 Lv7 + 다크 사이트(위기 자동)
-NightLord,5,9,N13|N09,ResMax8,표식 Lv9 + 표식 최대 8
-Bowmaster,1,1,,,강화 화살 Lv1
-Bowmaster,2,3,,,강화 화살 Lv3
-Bowmaster,3,5,A13,,강화 화살 Lv5 + 가이디드 애로우(확률 발동)
-Bowmaster,4,7,A13|A09,,강화 화살 Lv7 + 일루전 스텝(위기 자동)
-Bowmaster,5,9,A13|A09,ResMax15,강화 화살 Lv9 + 강화 화살 최대 15
-Viper,1,1,,,에너지 Lv1
-Viper,2,3,,,에너지 Lv3
-Viper,3,5,V13,,에너지 Lv5 + 서펀트 스크류(확률 발동)
-Viper,4,7,V13|V09,,에너지 Lv7 + 언위어링 넥타(위기 자동)
-Viper,5,9,V13|V09,EnergyPlus3,에너지 Lv9 + 타격당 에너지 +3
+Hero,1,1,,,콤보 어택 Lv1 (흡수: 아이언 바디·워리어 마스터리)
+Hero,2,3,,,콤보 어택 Lv3 (흡수: 콤보 어택·스피릿 블레이드·파이널 어택)
+Hero,3,5,,,콤보 어택 Lv5 (흡수: 콤보 시너지·찬스 어택)
+Hero,4,7,,ComboCap10,콤보 어택 Lv7 (흡수: 어드밴스드 콤보·인레이지·에픽 어드벤쳐·메이플 용사·어드밴스드 콤보-리인포스·레이징 블로우-리인포스)
+Hero,5,9,,ComboCap10|ComboGain50,콤보 어택 Lv9
+Bishop,1,1,,,성수 Lv1 (흡수: 매직 가드·MP 증가)
+Bishop,2,3,,,성수 Lv3 (흡수: 블레스·블레싱 앙상블·인빈서블)
+Bishop,3,5,,,성수 Lv5 (흡수: 디바인 프로텍션·홀리 포커스)
+Bishop,4,7,,,성수 Lv7 (흡수: 홀리 워터·어드밴스드 블레스·마스터 매직·홀리 블러드·벤전스 오브 엔젤)
+Bishop,5,9,,HolyMax10,성수 Lv9
+NightLord,1,1,,,표식 Lv1 (흡수: 다크 사이트·사이드 스텝)
+NightLord,2,3,,,표식 Lv3 (흡수: 마크 오브 어쌔신·크리티컬 스로우)
+NightLord,3,5,,,표식 Lv5 (흡수: 베놈·숙련된 표창술)
+NightLord,4,7,N09,,표식 Lv7 + 다크 사이트 (흡수: 마크 오브 나이트로드·페이탈 베놈·블리딩 톡신·다크 세레니티·에픽 어드벤쳐)
+NightLord,5,9,N09,ResMax8,표식 Lv9 + 다크 사이트
+Bowmaster,1,1,,,강화 화살 Lv1 (흡수: 크리티컬 샷·아처 마스터리)
+Bowmaster,2,3,,,강화 화살 Lv3 (흡수: 파이널 어택 : 활·소울 애로우 : 활)
+Bowmaster,3,5,,,강화 화살 Lv5 (흡수: 모탈 블로우·마크맨쉽·닷지)
+Bowmaster,4,7,A30,,강화 화살 Lv7 + 닷지 (흡수: 보우 엑스퍼트·어드밴스드 파이널 어택·어드밴스드 퀴버·아머 피어싱·에픽 어드벤쳐·프리퍼레이션)
+Bowmaster,5,9,A30,ResMax15,강화 화살 Lv9 + 닷지
+Viper,1,1,,,에너지 Lv1 (흡수: 포춘 어택·크리티컬 로어)
+Viper,2,3,,,에너지 Lv3 (흡수: 씨 서펜트·인듀어런스)
+Viper,3,5,,,에너지 Lv5 (흡수: 서펜트 스톤·그로기 마스터리·크리티컬 레이지)
+Viper,4,7,V32,,에너지 Lv7 + 인듀어런스 (흡수: 오펜스 폼·가드 크러쉬·바이퍼지션·씨 서펜트 강화 II·디펜스 폼·에픽 어드벤쳐)
+Viper,5,9,V32,EnergyPlus3,에너지 Lv9 + 인듀어런스

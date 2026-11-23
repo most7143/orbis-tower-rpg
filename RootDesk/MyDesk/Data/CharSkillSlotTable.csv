@@ -1,76 +1,91 @@
 ﻿JobId,SlotKey,Tier,SkillId,PctMul,CdSec,Mana,TriggerAs,#Desc
 Hero,Main,1,H01,1,0,-1,,슬래시 블러스트
 Hero,Main,2,H02,1,0,-1,,브랜디쉬
-Hero,Main,3,H02,1,0,-1,,브랜디쉬
-Hero,Main,4,H08,1.15,5,-1,,레이징 블로우 (쿨 10→5: 진화 후 약해지지 않게)
+Hero,Main,3,H21,1,0,-1,,브레이브 슬래시
+Hero,Main,4,H08,1.15,5,-1,,레이징 블로우
 Hero,Main,5,H08,1.15,5,-1,,레이징 블로우
-Hero,Sub,2,H05,1,0,-1,,인레이지
-Hero,Sub,3,H11,1,0,-1,,에픽 어드벤쳐
-Hero,Sub,4,H11,1,0,-1,,에픽 어드벤쳐
-Hero,Sub,5,H11,1,0,-1,,에픽 어드벤쳐
-Hero,Tech,3,H03,1,0,-1,,패닉
-Hero,Tech,4,H03,1,0,-1,,패닉
-Hero,Tech,5,H13,1.6,0,-1,,콤보 데스폴트
+Hero,Sub,2,H20,1,0,-1,,플래시 슬래시
+Hero,Sub,3,H22,1,0,-1,,스카링 소드
+Hero,Sub,4,H06,1,0,-1,,인사이징
+Hero,Sub,5,H06,1,0,-1,,인사이징
+Hero,Tech,3,H07,1,0,-1,,오라 블레이드
+Hero,Tech,4,H09,1,0,-1,,레이지 업라이징
+Hero,Tech,5,H09,1,0,-1,,레이지 업라이징
 Hero,Hyper,4,H10,1.5,40,0,Cooldown,발할라 (하이퍼)
 Hero,Hyper,5,H10,1.5,40,0,Cooldown,발할라 (하이퍼)
+Hero,V1,5,H13,1.6,0,-1,,콤보 데스폴트 (5차)
+Hero,V2,5,H14,1,0,-1,,소드 일루전 (5차)
+Hero,V3,5,H15,1,0,-1,,콤보 인스팅트 (5차)
 Hero,Ult,5,H12,1.5,0,0,Ult,소드 오브 버닝 소울 (궁극기)
 Bishop,Main,1,B01,1,0,-1,,에너지 볼트
 Bishop,Main,2,B02,1,0,-1,,홀리 애로우
-Bishop,Main,3,B02,1,0,-1,,홀리 애로우
-Bishop,Main,4,B06,1.25,5,-1,,엔젤레이 (쿨 10→5)
+Bishop,Main,3,B03,1,0,-1,,샤이닝 레이
+Bishop,Main,4,B06,1.25,5,-1,,엔젤레이
 Bishop,Main,5,B06,1.25,5,-1,,엔젤레이
-Bishop,Sub,2,B11,1,0,-1,,어드밴스드 블레스
-Bishop,Sub,3,B09,1,0,-1,,인피니티
-Bishop,Sub,4,B09,1,0,-1,,인피니티
-Bishop,Sub,5,B09,1,0,-1,,인피니티
-Bishop,Tech,3,B03,1,0,-1,,샤이닝 레이
-Bishop,Tech,4,B03,1,0,-1,,샤이닝 레이
-Bishop,Tech,5,B15,1.3,0,-1,,디바인 퍼니시먼트
+Bishop,Sub,2,B20,1,0,-1,,힐
+Bishop,Sub,3,B04,1,0,-1,,홀리 매직쉘
+Bishop,Sub,4,B08,1,0,-1,,바하뮤트
+Bishop,Sub,5,B08,1,0,-1,,바하뮤트
+Bishop,Tech,3,B05,1,0,-1,,트라이엄프 페더
+Bishop,Tech,4,B21,1,0,-1,,제네시스
+Bishop,Tech,5,B21,1,0,-1,,제네시스
 Bishop,Hyper,4,B10,2,40,0,Cooldown,헤븐즈 도어 (하이퍼)
 Bishop,Hyper,5,B10,2,40,0,Cooldown,헤븐즈 도어 (하이퍼)
+Bishop,V1,5,B15,1.3,0,-1,,디바인 퍼니시먼트 (5차)
+Bishop,V2,5,B14,1,0,-1,,피스메이커 (5차)
+Bishop,V3,5,B12,1,0,-1,,프레이 (5차)
 Bishop,Ult,5,B13,1.5,0,0,Ult,엔젤 오브 제미니 (궁극기)
 NightLord,Main,1,N01,1,0,-1,,럭키 세븐
-NightLord,Main,2,N03,1,0,-1,,트리플 스로우
-NightLord,Main,3,N03,1,0,-1,,트리플 스로우
-NightLord,Main,4,N06,1.2,5,-1,,쿼드러플 스로우 (쿨 10→5)
+NightLord,Main,2,N20,1,0,-1,,슈리켄 버스트
+NightLord,Main,3,N22,1,0,-1,,슈리켄 챌린지
+NightLord,Main,4,N06,1.2,5,-1,,쿼드러플 스로우
 NightLord,Main,5,N06,1.2,5,-1,,쿼드러플 스로우
-NightLord,Sub,2,N02,1,0,-1,,드레인
+NightLord,Sub,2,N21,1,0,-1,,윈드 탈리스만
 NightLord,Sub,3,N04,1,0,-1,,쉐도우 파트너
-NightLord,Sub,4,N04,1,0,-1,,쉐도우 파트너
-NightLord,Sub,5,N04,1,0,-1,,쉐도우 파트너
-NightLord,Tech,3,N07,1,0,-1,,써든레이드
+NightLord,Sub,4,N08,1,0,-1,,쇼다운 챌린지
+NightLord,Sub,5,N08,1,0,-1,,쇼다운 챌린지
+NightLord,Tech,3,N05,1,0,-1,,다크 플레어
 NightLord,Tech,4,N07,1,0,-1,,써든레이드
-NightLord,Tech,5,N14,1.6,8,-1,,풍마수리검 (쿨 12→8)
-NightLord,Hyper,4,N11,1,40,0,Cooldown,블리딩 톡신 (하이퍼)
-NightLord,Hyper,5,N11,1,40,0,Cooldown,블리딩 톡신 (하이퍼)
+NightLord,Tech,5,N07,1,0,-1,,써든레이드
+NightLord,Hyper,4,N10,1,40,0,Cooldown,포 시즌 (하이퍼)
+NightLord,Hyper,5,N10,1,40,0,Cooldown,포 시즌 (하이퍼)
+NightLord,V1,5,N14,1.6,8,-1,,풍마수리검 (5차)
+NightLord,V2,5,N23,1,0,-1,,스로우 블래스팅 (5차)
+NightLord,V3,5,N24,1,0,-1,,스프레드 스로우 (5차)
 NightLord,Ult,5,N15,1.5,0,0,Ult,다크로드의 비전서 (궁극기)
 Bowmaster,Main,1,A01,1,0,-1,,애로우 블로우
-Bowmaster,Main,2,A02,1.5,0,-1,,애로우 봄
-Bowmaster,Main,3,A02,1.5,0,-1,,애로우 봄
+Bowmaster,Main,2,A20,1.5,0,-1,,바람의 시
+Bowmaster,Main,3,A05,1.5,0,-1,,애로우 플래터
 Bowmaster,Main,4,A06,1.5,0,-1,,폭풍의 시
 Bowmaster,Main,5,A06,1.5,0,-1,,폭풍의 시
-Bowmaster,Sub,2,A05,1,0,-1,,애로우 플래터
+Bowmaster,Sub,2,A21,1,0,-1,,퀴버 카트리지
 Bowmaster,Sub,3,A04,1,0,-1,,피닉스
-Bowmaster,Sub,4,A04,1,0,-1,,피닉스
-Bowmaster,Sub,5,A04,1,0,-1,,피닉스
-Bowmaster,Tech,3,A07,1,0,-1,,애로우 일루전
-Bowmaster,Tech,4,A07,1,0,-1,,애로우 일루전
-Bowmaster,Tech,5,A14,1.5,0,-1,,실루엣 미라주
-Bowmaster,Hyper,4,A10,1.5,40,0,Cooldown,애로우 레인 (하이퍼)
-Bowmaster,Hyper,5,A10,1.5,40,0,Cooldown,애로우 레인 (하이퍼)
+Bowmaster,Sub,4,A08,1,0,-1,,샤프 아이즈
+Bowmaster,Sub,5,A08,1,0,-1,,샤프 아이즈
+Bowmaster,Tech,3,A22,1,0,-1,,플레시 미라주
+Bowmaster,Tech,4,A23,1,0,-1,,언카운터블 애로우
+Bowmaster,Tech,5,A23,1,0,-1,,언카운터블 애로우
+Bowmaster,Hyper,4,A24,1.5,40,0,Cooldown,윈드 오브 프레이 (하이퍼)
+Bowmaster,Hyper,5,A24,1.5,40,0,Cooldown,윈드 오브 프레이 (하이퍼)
+Bowmaster,V1,5,A10,1,0,-1,,애로우 레인 (5차)
+Bowmaster,V2,5,A12,1,0,-1,,퀴버 풀버스트 (5차)
+Bowmaster,V3,5,A14,1.5,0,-1,,실루엣 미라주 (5차)
 Bowmaster,Ult,5,A15,1.5,0,0,Ult,잔영의 시 (궁극기)
-Viper,Main,1,V01,1,0,-1,,서머솔트 킥
-Viper,Main,2,V02,1.4,0,-1,,백 스핀 블로우
-Viper,Main,3,V02,1.4,0,-1,,백 스핀 블로우
-Viper,Main,4,V07,1.4,0,-1,,데몰리션
-Viper,Main,5,V07,1.4,0,-1,,데몰리션
-Viper,Sub,2,V05,1,0,-1,,트랜스폼
-Viper,Sub,3,V14,1,0,-1,,퓨리어스 차지
-Viper,Sub,4,V14,1,0,-1,,퓨리어스 차지
-Viper,Sub,5,V14,1,0,-1,,퓨리어스 차지
-Viper,Tech,3,V04,1,0,-1,,에너지 버스트
-Viper,Tech,4,V04,1,0,-1,,에너지 버스트
-Viper,Tech,5,V12,1.2,0,-1,,하울링 피스트
-Viper,Hyper,4,V10,1,40,0,,스티뮬레이트 (하이퍼. Auto 그대로 + 쿨 40)
+Viper,Main,1,V01,1,0,-1,,써머솔트 킥
+Viper,Main,2,V20,1.4,0,-1,,쇼크 웨이브
+Viper,Main,3,V03,1.4,0,-1,,스크류 펀치
+Viper,Main,4,V24,1.4,0,-1,,피스트 인레이지
+Viper,Main,5,V24,1.4,0,-1,,피스트 인레이지
+Viper,Sub,2,V21,1,0,-1,,씨 서펜트 버스트
+Viper,Sub,3,V22,1,0,-1,,럭키 다이스
+Viper,Sub,4,V25,1,0,-1,,전함 노틸러스
+Viper,Sub,5,V25,1,0,-1,,전함 노틸러스
+Viper,Tech,3,V23,1,0,-1,,터닝 킥
+Viper,Tech,4,V26,1,0,-1,,훅 봄버
+Viper,Tech,5,V26,1,0,-1,,훅 봄버
+Viper,Hyper,4,V10,1,40,0,,스티뮬레이트 (하이퍼)
 Viper,Hyper,5,V10,1,40,0,,스티뮬레이트 (하이퍼)
-Viper,Ult,5,V15,1.5,0,0,Ult,리버레이트 넵투누스 (궁극기)
+Viper,V1,5,V14,1,0,-1,,퓨리어스 차지 (5차)
+Viper,V2,5,V13,1,0,-1,,서펜트 스크류 (5차)
+Viper,V3,5,V27,1,0,-1,,라이트닝 폼 (5차)
+Viper,Ult,5,V12,1.5,0,0,Ult,하울링 피스트 (궁극기)

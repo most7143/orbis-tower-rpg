@@ -1,7 +1,8 @@
 @Logic
 script CharacterUILogic extends Logic
 
-	-- 로비 캐릭터 화면 (CharacterUI.ui): 왼쪽 위 편성 칸 3개(차수 외형 아바타), 왼쪽 아래 직업 목록, 오른쪽 상세(능력치·레벨업·전직), 위쪽 재화.
+	-- 로비 캐릭터 화면 (CharacterUI.ui): 왼쪽 위 편성 칸 3개(차수 외형 아바타), 왼쪽 아래 직업 목록, 오른쪽 상세(능력치·경험의 서·레벨업·스킬 칸 6개·전직), 위쪽 재화.
+	-- 스킬 칸: 현재 차수 기준 고유 패시브·주력기·보조기·기술·하이퍼·궁극기. 누르면 스킬 상세 툴팁(_TooltipLogic:ShowSkill), 미해금 칸은 어둡게 + "n차 해금".
 	-- 편성 변경: 편성 칸을 누르면 그 칸이 선택되고 나머지 두 칸 오른쪽 위에 누르기 표시가 깜박인다 → 그 칸을 누르면 두 칸이 자리를 바꾼다.
 	-- 목록에서 편성 밖(해금된) 직업을 누르면 세 칸 모두에 같은 표시 → 누른 칸의 직업과 교체. 칸끼리 자리 바꾸기는 칸 안에서만 한다.
 	-- 계산은 PlayerRoster의 실행 공간 지정 없는 함수(CharStat·PlanBooksFor·CapLevel 등)를 그대로 쓰고, 변경은 Request* 서버 요청으로만 한다.
@@ -16,11 +17,26 @@ script CharacterUILogic extends Logic
 	property Color BadColor = Color(0.78, 0.20, 0.20, 1)
 	-- 미리보기에서 두손 무기 대기 자세(stand2)를 쓰는 직업 (쉼표 구분)
 	property string PreviewStand2Jobs = "Hero"
-	property string HintIdle = "칸을 누르면 다른 칸과 자리를 바꾸고, 편성 밖 직업을 누르면 칸에 넣을 수 있습니다"
+	property string HintIdle = ""
 	-- 누르기 표시: 두 이미지(눌림·안 눌림)를 HintFlipTime초마다 번갈아 보여 준다
 	property string HintPressedRUID = "79819392249746f88952f3b2321f2f17"
 	property string HintIdleRUID = "3930c5d2e85b4bff8467aada64fda7f5"
 	property number HintFlipTime = 0.5
+	-- 스킬 칸 배경: 해금 = 밝은 카드, 미해금 = 비활성 카드
+	property string SkillCellRUID = "a88cfe62e8e64c39bf14d682a77ef4a0"
+	property string SkillCellLockedRUID = "d262f8e8502e4b7b88f381a9b7a4e4fb"
+	-- 스킬 아이콘 등급 테두리 0~3 (원본 UISkill icon/Force 0~3 2배): 칸 1 패시브=0, 칸 2~4 주력기=1, 칸 5 하이퍼=2, 칸 6~8 5차=1, 칸 9 궁극기=3
+	property string SkillGradeRUIDs = "b0aea354214c40c8a71269d940ad6868,b9c549ddcb2a44c0b28961b2274db165,cc8d408b6a55452f9494bc144940c0c9,b83e437513e848dc88dbd862bb340925"
+	-- 차수 표시 아이콘 1~5차 (원본 스킬창 차수 책, 5차는 H 책을 V로 고친 그림) — output/ui/tier_icons
+	property string TierIconRUIDs = "3d7d4fdc889d4938994304396e833adb,87e41576fc1347efa3ba9d492863cfe4,51a5ceb7fc26402c9002cc21d3d2c9bd,d59a0eaf90e54978828f2607c12e2281,7e1f0979bcb14e76a8c99d8216a2457b"
+	-- 차수 탭 상태 이미지 (기본·하이라이트·눌림·잠김·선택), 숫자는 글자로 표시
+	property string TierTabNormalRUID = "58baa5f5aa614003b021eb110f98770f"
+	property string TierTabHoverRUID = "228665eefc6f4635b9c23367df918746"
+	property string TierTabPressedRUID = "4be3ea370ced4ecc99eb21ece0688b7d"
+	property string TierTabDisabledRUID = "5977e74633d14e62b021c6e4a09acf82"
+	property string TierTabSelectedRUID = "17a47e7564b64a8c96efd60c6de3d926"
+	-- 경험의 서 이름 (툴팁용). 아이콘은 CharacterUI.ui의 Book1~3/Icon에 지정 (부서진 경험치 조각·빛나는 경험치 조각·쓸만한 경험치 주머니)
+	property string BookNames = "경험의 서 (소),경험의 서 (중),경험의 서 (대)"
 
 	@HideFromInspector
 	property table clickHandlers = {}
@@ -68,7 +84,45 @@ script CharacterUILogic extends Logic
 		self:Bind(self:E("Detail/BtnPromoteCommon"), function() self:OnPromote(true) end)
 		self:Bind(self:E("Detail/BtnUnlock"), function() self:OnUnlock() end)
 		self:Bind(self:E("Close"), function() self:Close() end)
-		local root = _EntityService:GetEntityByPath(self.RootPath)
+		-- 스킬 칸 9개(고유 패시브·주력기·보조기·기술·하이퍼·5차 칸 3개·궁극기)·경험의 서 3칸: 누르면 툴팁 (정보 칸이라 상태 이미지 없음)
+		self._T.tipTargets = {}
+		self._T.skillCells = {}
+		for i = 1, 9 do
+			local idx = i
+			local cell = self:E("Detail/Skills/Skill" .. tostring(i))
+			self:Bind(cell, function() self:ShowSkillTip(idx) end)
+			if isvalid(cell) then
+				_TooltipLogic:Register(cell, function() self:ShowSkillTip(idx) end)
+				table.insert(self._T.tipTargets, cell)
+			end
+		end
+		for k = 1, 3 do
+			local idx = k
+			local book = self:E("Detail/Book" .. tostring(k))
+			self:Bind(book, function() self:ShowBookTip(idx) end)
+			if isvalid(book) then
+				_TooltipLogic:Register(book, function() self:ShowBookTip(idx) end)
+				table.insert(self._T.tipTargets, book)
+			end
+		end
+		-- 차수 탭 1~5: 누르면 그 차수 기준 스킬 칸을 본다 (현재 차수보다 높은 탭은 잠김)
+		self._T.viewTier = 0
+		self._T.viewJob = ""
+		self._T.gradeFrames = {}
+		for id in string.gmatch(self.SkillGradeRUIDs, "[^,]+") do table.insert(self._T.gradeFrames, id) end
+		self._T.tierIcons = {}
+		for id in string.gmatch(self.TierIconRUIDs, "[^,]+") do table.insert(self._T.tierIcons, id) end
+		local tabSkin = { normal = self.TierTabNormalRUID, hover = self.TierTabHoverRUID, pressed = self.TierTabPressedRUID,
+			disabled = self.TierTabDisabledRUID, selected = self.TierTabSelectedRUID, selectedHover = self.TierTabSelectedRUID, selectedPressed = self.TierTabSelectedRUID,
+			textNormal = Color(0.86, 0.89, 0.93, 1), textHover = Color(1, 1, 1, 1), textSelected = Color(1, 1, 1, 1), textDisabled = Color(0.55, 0.58, 0.62, 1) }
+		for t = 1, 5 do
+			local tt = t
+			local tab = self:E("Detail/TierTab" .. tostring(t))
+			_UIButtonLogic:SetSkin(tab, tabSkin)
+			self:Bind(tab, function() self:OnTierTab(tt) end)
+		end
+		self:LoadSkillData()
+		local root =_EntityService:GetEntityByPath(self.RootPath)
 		if isvalid(root) then root:SetEnable(false) end
 		log("[VRF] CharacterUILogic begin jobs=" .. tostring(#self._T.jobs))
 	end
@@ -80,6 +134,10 @@ script CharacterUILogic extends Logic
 			if isvalid(rec.entity) then rec.entity:DisconnectEvent(ButtonClickEvent, rec.eventHandler) end
 		end
 		self.clickHandlers = {}
+		for _, t in ipairs(self._T.tipTargets or {}) do
+			if isvalid(t) then _TooltipLogic:Unregister(t) end
+		end
+		self._T.tipTargets = {}
 	end
 
 	@ExecSpace("ClientOnly")
@@ -125,6 +183,7 @@ script CharacterUILogic extends Logic
 		root:SetEnable(true)
 		self._T.open = true
 		self._T.pendingAt = nil
+		self._T.viewJob = ""
 		self._T.msgUntil = nil
 		self._T.partySel = 0
 		self._T.placeJob = ""
@@ -206,6 +265,8 @@ script CharacterUILogic extends Logic
 				table.insert(self._T.jobs, {
 					id = id, order = tonumber(jt:GetCell(i, "Order")) or i, group = jt:GetCell(i, "JobGroup") or "",
 					name4 = jt:GetCell(i, "Name4") or id, icon = jt:GetCell(i, "IconRUID") or "",
+					-- 전투 개편: 직업 기본 공격 타입(P/M)·기본 속성
+					atkType = jt:GetCell(i, "AtkType") or "", element = jt:GetCell(i, "Element") or "",
 				})
 			end
 		end
@@ -348,11 +409,11 @@ script CharacterUILogic extends Logic
 				local tier = c.tier
 				self:SetText(cardRel .. "/Name", roster:TierName(j.id, tier), nil)
 				if c.unlocked then
-					self:SetText(cardRel .. "/Sub", j.group .. " · Lv." .. tostring(c.level) .. " · " .. tostring(tier) .. "차", nil)
+					self:SetText(cardRel .. "/Sub", "Lv." .. tostring(c.level) .. " · " .. tostring(tier) .. "차", nil)
 				else
-					self:SetText(cardRel .. "/Sub", j.group .. " · 잠김", nil)
+					self:SetText(cardRel .. "/Sub", "잠김", nil)
 				end
-				self:SetText(cardRel .. "/Cards", "전용 카드 " .. tostring(cards[j.id] or 0) .. "장", nil)
+				self:SetText(cardRel .. "/Cards", "카드 " .. tostring(cards[j.id] or 0), nil)
 				local icon = self:E(cardRel .. "/Icon")
 				if isvalid(icon) then
 					icon.SpriteGUIRendererComponent.ImageRUID = DataRef(j.icon)
@@ -375,11 +436,11 @@ script CharacterUILogic extends Logic
 			self:RefreshPartySlot(roster, chars, k, party[k], busy)
 		end
 		if self._T.partySel > 0 then
-			self:SetText("List/Hint", tostring(self._T.partySel) .. "번 칸 선택됨 — 자리를 바꿀 칸을 누르세요 (같은 칸을 다시 누르면 취소)", self.TextColor)
+			self:SetText("List/Hint", "바꿀 칸을 누르세요", self.TextColor)
 		elseif self._T.placeJob ~= "" then
-			self:SetText("List/Hint", roster:TierName(self._T.placeJob, self:CharOf(chars, self._T.placeJob).tier) .. " — 넣을 칸을 누르세요 (그 칸의 직업은 편성에서 빠집니다)", self.TextColor)
+			self:SetText("List/Hint", "넣을 칸을 누르세요", self.TextColor)
 		elseif self._T.lockedSel then
-			self:SetText("List/Hint", "잠긴 직업입니다 — 해금하면 편성할 수 있습니다", self.BadColor)
+			self:SetText("List/Hint", "잠긴 직업", self.BadColor)
 		else
 			self:SetText("List/Hint", self.HintIdle, self.SubColor)
 		end
@@ -400,8 +461,11 @@ script CharacterUILogic extends Logic
 		local tierName = roster:TierName(job, tier)
 		local tierLabel = tierName .. " (" .. tostring(tier) .. "차)"
 		if tier >= maxTier then tierLabel = tierName end
-		self:SetText("Detail/Group", j.group .. " · " .. j.name4 .. " 계열", nil)
+		self:SetText("Detail/Group", "", nil)
 		self:SetText("Detail/TierName", tierLabel, nil)
+		local tierIcon = self:E("Detail/TierIcon")
+		local tierRuid = self._T.tierIcons[math.max(1, math.min(#self._T.tierIcons, tier))] or ""
+		if isvalid(tierIcon) and tierIcon.SpriteGUIRendererComponent.ImageRUID.DataId ~= tierRuid then tierIcon.SpriteGUIRendererComponent.ImageRUID = DataRef(tierRuid) end
 		local atMax = tier >= maxTier and level >= roster:MaxLevel()
 		if atMax then
 			self:SetText("Detail/LevelText", "Lv." .. tostring(level) .. " (최고)", nil)
@@ -418,9 +482,9 @@ script CharacterUILogic extends Logic
 			if fill.Enable ~= (width >= 24) then fill:SetEnable(width >= 24) end
 		end
 		if atMax then
-			self:SetText("Detail/ExpText", "최고 레벨·최고 차수입니다", nil)
+			self:SetText("Detail/ExpText", "최고 레벨", nil)
 		elseif level >= cap then
-			self:SetText("Detail/ExpText", "관문 도달 — 전직하면 계속 성장합니다", nil)
+			self:SetText("Detail/ExpText", "관문 도달 — 전직 필요", nil)
 		else
 			self:SetText("Detail/ExpText", "경험치 " .. self:Comma(c.exp) .. " / " .. self:Comma(need), nil)
 		end
@@ -431,40 +495,45 @@ script CharacterUILogic extends Logic
 		self:SetText("Detail/StatDef", "방어력  " .. tostring(st.def), nil)
 		local pctNow = math.floor(roster:StatPct(tier) + 0.5)
 		if tier >= maxTier then
-			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%", nil)
+			self:SetText("Detail/StatNote", "", nil)
 		else
 			local pctNext = math.floor(roster:StatPct(tier + 1) + 0.5)
-			self:SetText("Detail/StatNote", "차수 보너스 +" .. tostring(pctNow) .. "%  ·  전직하면 +" .. tostring(pctNext) .. "%", nil)
+			self:SetText("Detail/StatNote", "", nil)
 		end
 		-- 경험의 서
 		local have = { roster.BookS, roster.BookM, roster.BookL }
 		local per = { math.floor(roster:Cfg("BookExpS", 100)), math.floor(roster:Cfg("BookExpM", 500)), math.floor(roster:Cfg("BookExpL", 2000)) }
+		self._T.bookHave = have
+		self._T.bookPer = per
 		for k = 1, 3 do
-			local color = self.SubColor
+			local color = self.TextColor
 			if have[k] <= 0 then color = self.BadColor end
-			self:SetText("Detail/Book" .. tostring(k) .. "/Count", self:Comma(have[k]) .. "권 · 권당 " .. self:Comma(per[k]), color)
+			self:SetText("Detail/Book" .. tostring(k) .. "/Count", self:Comma(have[k]) .. "권", color)
+			self:SetText("Detail/Book" .. tostring(k) .. "/Per", "+" .. self:Comma(per[k]), self.SubColor)
 		end
+		-- 스킬 칸 (현재 차수 기준)
+		self:RefreshSkills(job, tier, maxTier)
 		-- 레벨업 미리보기·버튼
 		local canOne = false
 		local canMax = false
 		local maxLabel = "최대 레벨업"
 		if not c.unlocked then
-			self:SetText("Detail/PreviewOne", "잠긴 직업입니다", self.SubColor)
+			self:SetText("Detail/PreviewOne", "", nil)
 			self:SetText("Detail/PreviewMax", "", nil)
 		elseif atMax then
-			self:SetText("Detail/PreviewOne", "최고 레벨입니다", self.SubColor)
+			self:SetText("Detail/PreviewOne", "", nil)
 			self:SetText("Detail/PreviewMax", "", nil)
 		elseif level >= cap then
-			self:SetText("Detail/PreviewOne", "관문 도달 — 전직이 필요합니다", self.SubColor)
+			self:SetText("Detail/PreviewOne", "", nil)
 			self:SetText("Detail/PreviewMax", "", nil)
 		else
 			local one = roster:PlanBooksFor(level, c.exp, tier, have[1], have[2], have[3], level + 1)
 			local mx = roster:PlanBooksFor(level, c.exp, tier, have[1], have[2], have[3], cap)
 			canOne = one.s + one.m + one.l > 0
 			canMax = mx.s + mx.m + mx.l > 0
-			self:SetText("Detail/PreviewOne", self:PlanLine("1레벨업", level, level + 1, one, per), self.TextColor)
-			self:SetText("Detail/PreviewMax", self:PlanLine("최대", level, cap, mx, per), self.TextColor)
-			if canMax then maxLabel = "최대 레벨업 (Lv." .. tostring(mx.newLevel) .. ")" end
+			self:SetText("Detail/PreviewOne", "", nil)
+			self:SetText("Detail/PreviewMax", "", nil)
+			if canMax then maxLabel = "최대 → Lv." .. tostring(mx.newLevel) end
 		end
 		self:SetText("Detail/BtnLvMax", maxLabel, nil)
 		self:SetButton("Detail/BtnLv1", canOne and not busy)
@@ -473,9 +542,9 @@ script CharacterUILogic extends Logic
 		local jobCards = cards[job] or 0
 		local cc = roster.CommonCards
 		if not c.unlocked then
-			self:SetText("Detail/PromoteTitle", "잠긴 직업 — 캐릭터 뽑기에서 전용 카드를 얻으면 해금됩니다", nil)
-			self:SetText("Detail/PromoteInfo", "공용 카드 " .. tostring(cc) .. "장 보유", self.TextColor)
-			self:SetText("Detail/PromoteNote", "공용 전직 카드 1장으로 바로 해금할 수도 있습니다", nil)
+			self:SetText("Detail/PromoteTitle", "잠긴 직업", nil)
+			self:SetText("Detail/PromoteInfo", "공용 카드 " .. tostring(cc) .. "장", self.TextColor)
+			self:SetText("Detail/PromoteNote", "", nil)
 			self:SetShown("Detail/BtnPromote", false)
 			self:SetShown("Detail/BtnPromoteCommon", false)
 			self:SetShown("Detail/BtnUnlock", true)
@@ -497,13 +566,13 @@ script CharacterUILogic extends Logic
 			local nextName = roster:TierName(job, nextTier)
 			local nextLabel = nextName .. " (" .. tostring(nextTier) .. "차)"
 			if nextTier >= maxTier then nextLabel = nextName end
-			self:SetText("Detail/PromoteTitle", "전직 — 다음 차수: " .. nextLabel, nil)
+			self:SetText("Detail/PromoteTitle", "다음 차수: " .. nextLabel, nil)
 			local atCap = level >= cap
 			local ok = atCap and jobCards + cc >= needCards
 			local infoColor = self.BadColor
 			if ok then infoColor = self.GoodColor end
-			self:SetText("Detail/PromoteInfo", "필요 레벨 Lv." .. tostring(cap) .. " (현재 " .. tostring(level) .. ") · 전용 카드 " .. tostring(jobCards) .. " / " .. tostring(needCards) .. "장 · 공용 카드 " .. tostring(cc) .. "장", infoColor)
-			self:SetText("Detail/PromoteNote", "전직하면 같은 레벨에서 다음 차수가 시작되고 능력치 보너스가 오릅니다", nil)
+			self:SetText("Detail/PromoteInfo", "Lv." .. tostring(cap) .. " 필요 · 전용 카드 " .. tostring(jobCards) .. "/" .. tostring(needCards) .. " · 공용 " .. tostring(cc), infoColor)
+			self:SetText("Detail/PromoteNote", "", nil)
 			self:SetShown("Detail/BtnUnlock", false)
 			self:SetShown("Detail/BtnPromote", true)
 			self:SetShown("Detail/BtnPromoteCommon", true)
@@ -612,6 +681,343 @@ script CharacterUILogic extends Logic
 		end
 		av:SendEvent(BodyActionTypeChangeEvent(true, stand))
 		log("[VRF] charui slot" .. tostring(k) .. " avatar job=" .. job .. " tier=" .. tostring(tier) .. " stand=" .. stand)
+	end
+
+	-- ───────────────────────── 스킬 칸 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void LoadSkillData()
+		-- 스킬 이름·아이콘·설명(자리표시자 치환)·쿨타임, 직업·칸·차수별 스킬(CharSkillSlotTable), 고유 패시브 차수별 효과(CharPassiveTable).
+		self._T.skills = {}
+		self._T.slotRows = {}
+		self._T.passiveRows = {}
+		local js = _DataService:GetTable("JobSkillTable")
+		if js ~= nil then
+			for i = 1, js:GetRowCount() do
+				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
+				local text = js:GetCell(i, "Desc") or ""
+				local vals = { c = num("Chance"), p = num("Pct"), h = num("ProcHits"), cd = num("Cooldown"), bt = num("BuffTime"), v1 = num("V1"), v2 = num("V2"), dp = num("DotPct"), dt = num("DotTime") }
+				for key, v in pairs(vals) do text = (string.gsub(text, "{" .. key .. "}", tostring(math.floor(v)))) end
+				local id = js:GetCell(i, "SkillId")
+				if id ~= nil and id ~= "" and self._T.skills[id] == nil then
+					-- 전투 개편: 스킬 속성(Element)·공격 타입(DmgType) — 빈칸이면 직업 기본값 (툴팁 종류 줄에 표시)
+					self._T.skills[id] = { name = js:GetCell(i, "Name") or id, icon = js:GetCell(i, "IconRUID") or "", desc = text, cd = num("Cooldown"),
+						elem = js:GetCell(i, "Element") or "", dmgType = js:GetCell(i, "DmgType") or "", kind = js:GetCell(i, "Kind") or "", pct = num("Pct") }
+				end
+			end
+		end
+		local hs = _DataService:GetTable("HeroSkillTable")
+		if hs ~= nil then
+			for i = 1, hs:GetRowCount() do
+				local id = hs:GetCell(i, "SkillId")
+				if id ~= nil and id ~= "" and self._T.skills[id] == nil then
+					self._T.skills[id] = { name = hs:GetCell(i, "Name") or id, icon = hs:GetCell(i, "IconRUID") or "", desc = hs:GetCell(i, "Desc") or "", cd = tonumber(hs:GetCell(i, "Cooldown")) or 0 }
+				end
+			end
+		end
+		local ss = _DataService:GetTable("CharSkillSlotTable")
+		if ss ~= nil then
+			for i = 1, ss:GetRowCount() do
+				local job = ss:GetCell(i, "JobId") or ""
+				local key = ss:GetCell(i, "SlotKey") or ""
+				local tier = math.floor(tonumber(ss:GetCell(i, "Tier")) or 0)
+				local id = ss:GetCell(i, "SkillId") or ""
+				if job ~= "" and key ~= "" and tier > 0 and id ~= "" then
+					self._T.slotRows[job] = self._T.slotRows[job] or {}
+					self._T.slotRows[job][key] = self._T.slotRows[job][key] or {}
+					self._T.slotRows[job][key][tier] = { id = id, cd = tonumber(ss:GetCell(i, "CdSec")) or 0 }
+				end
+			end
+		end
+		-- 스킬 개편: 각성(6차) 칸 스킬 awkRows[직업][칸] = { id, stage } (CharSlotTable Awk·AwkStage)
+		self._T.awkRows = {}
+		local cs = _DataService:GetTable("CharSlotTable")
+		if cs ~= nil then
+			for i = 1, cs:GetRowCount() do
+				local job = cs:GetCell(i, "JobId") or ""
+				local key = cs:GetCell(i, "SlotKey") or ""
+				local aid = cs:GetCell(i, "Awk") or ""
+				local st = math.floor(tonumber(cs:GetCell(i, "AwkStage")) or 0)
+				if job ~= "" and aid ~= "" and st > 0 then
+					self._T.awkRows[job] = self._T.awkRows[job] or {}
+					self._T.awkRows[job][key] = { id = aid, stage = st }
+				end
+			end
+		end
+		local ps = _DataService:GetTable("CharPassiveTable")
+		if ps ~= nil then
+			for i = 1, ps:GetRowCount() do
+				local job = ps:GetCell(i, "JobId") or ""
+				local tier = math.floor(tonumber(ps:GetCell(i, "Tier")) or 0)
+				if job ~= "" and tier > 0 then
+					self._T.passiveRows[job] = self._T.passiveRows[job] or {}
+					self._T.passiveRows[job][tier] = { lv = math.floor(tonumber(ps:GetCell(i, "PassiveLv")) or 0), grant = ps:GetCell(i, "Grant") or "", extra = ps:GetCell(i, "Extra") or "" }
+				end
+			end
+		end
+		log("[VRF] charui skill data skills=" .. tostring(self:CountKeys(self._T.skills)) .. " jobs=" .. tostring(self:CountKeys(self._T.slotRows)) .. " passive=" .. tostring(self:CountKeys(self._T.passiveRows)))
+	end
+
+	@ExecSpace("ClientOnly")
+	method integer CountKeys(table t)
+		-- 표의 키 개수.
+		local n = 0
+		for _, _ in pairs(t or {}) do n = n + 1 end
+		return n
+	end
+
+	@ExecSpace("ClientOnly")
+	method table PassiveDef(string job)
+		-- 직업 고유 패시브 이름·아이콘·설명 (스킬 화면 HeroSkillUILogic과 같은 아이콘).
+		if job == "Hero" then return { name = "콤보 어택", icon = "7328c199a3494a2ab0c12335f637c762", desc = "콤보를 소비하지 않는 직접 공격이 맞으면 확률로 콤보 1 획득 (자연 감소 없음). 콤보당 기본 공격력 증가" } end
+		if job == "Bishop" then return { name = "성수", icon = "7bb47f821c4541e2aea1359865193fe2", desc = "직접 공격이 맞을 때 확률로 성수 1개 획득. 성수 1개당 기본 공격력 증가. 샤이닝 레이·빅뱅·디바인 퍼니시먼트가 성수를 써서 강해진다" } end
+		if job == "NightLord" then return { name = "마크 오브 나이트로드", icon = "cdbd9959dee2488b923d01636d71327c", desc = "직접 공격 타수마다 확률로 맞은 몬스터에게 표식 1. 표식 1개당 그 몬스터가 나이트로드에게 받는 피해 증가. 가득 차면 약점 노출: 파티 치명타 증가, 표창 추가" } end
+		if job == "Bowmaster" then return { name = "퀴버 카트리지", icon = "b98c590c48bc4456be86af5f5ec25777", desc = "직접 공격 타수마다 확률로 강화 화살 1개. 화살 1개당 기본 공격력 증가. 가득 차면 다음 공격에 화살 폭풍" } end
+		if job == "Viper" then return { name = "에너지 차지", icon = "06ea89f3087349e39587db13f7f82a49", desc = "직접 공격 타수마다 에너지 획득 (최대 100). 50 이상이면 받는 피해 감소, 100이면 기본 공격력 증가와 충전 완료(직접 공격마다 체력 회복)" } end
+		return { name = "고유 패시브", icon = "", desc = "" }
+	end
+
+	@ExecSpace("ClientOnly")
+	method string PassiveLine(table row)
+		-- 패시브 한 차수 효과 문구: "Lv.5 · 콤보 인스팅트 · 콤보 최대 10".
+		if row == nil then return "" end
+		local extraNames = { ComboCap10 = "콤보 최대 10", ComboGain50 = "콤보 획득 확률 +50%", HolyMax10 = "성수 최대 10", ResMax8 = "표식 최대 8", ResMax15 = "강화 화살 최대 15", EnergyPlus3 = "타격당 에너지 +3" }
+		local parts = { "Lv." .. tostring(row.lv) }
+		for gid in string.gmatch(row.grant or "", "[^|]+") do
+			local sk = self._T.skills[gid]
+			if sk ~= nil then table.insert(parts, sk.name) else table.insert(parts, gid) end
+		end
+		for ex in string.gmatch(row.extra or "", "[^|]+") do table.insert(parts, extraNames[ex] or ex) end
+		return table.concat(parts, " · ")
+	end
+
+	@ExecSpace("ClientOnly")
+	method table SkillCellInfo(string job, integer tier, integer maxTier, integer i)
+		-- i번째 칸(1 고유 패시브, 2 주력기, 3 보조기, 4 기술, 5 하이퍼, 6~8 5차 칸, 9 궁극기) 정보: 해금·스킬·해금 차수·다음 차수 진화.
+		-- 5차 화면에서 각성 단계가 있으면 그 단계까지의 칸(주력기→보조기→기술→하이퍼→궁극기)은 각성(6차) 스킬로 보인다.
+		local keys = { "Passive", "Main", "Sub", "Tech", "Hyper", "V1", "V2", "V3", "Ult" }
+		local kinds = { "고유 패시브", "주력기", "보조기", "기술", "하이퍼", "5차", "5차", "5차", "궁극기" }
+		local info = { key = keys[i], kind = kinds[i], unlocked = false, unlockTier = 0, id = "", cd = 0, nextId = "", nextTier = 0 }
+		if i == 1 then
+			local rows = self._T.passiveRows[job] or {}
+			local p = self:PassiveDef(job)
+			info.unlocked = true
+			info.unlockTier = 1
+			info.name = p.name
+			info.icon = p.icon
+			info.desc = p.desc
+			info.row = rows[tier]
+			if tier < maxTier then
+				info.nextRow = rows[tier + 1]
+				info.nextTier = tier + 1
+			end
+			return info
+		end
+		local rows = (self._T.slotRows[job] or {})[keys[i]] or {}
+		local cur = rows[tier]
+		if cur ~= nil then
+			info.unlocked = true
+			info.id = cur.id
+			info.cd = cur.cd
+		else
+			for t = tier + 1, maxTier do
+				if rows[t] ~= nil then
+					info.unlockTier = t
+					info.id = rows[t].id
+					info.cd = rows[t].cd
+					break
+				end
+			end
+		end
+		if info.unlocked and tier < maxTier and rows[tier + 1] ~= nil and rows[tier + 1].id ~= cur.id then
+			info.nextId = rows[tier + 1].id
+			info.nextTier = tier + 1
+		end
+		local awk = ((self._T.awkRows or {})[job] or {})[keys[i]]
+		if awk ~= nil and info.unlocked and tier >= 5 then
+			if (self._T.skillAwk or 0) >= awk.stage then
+				info.id = awk.id
+				info.awakened = true
+			else
+				info.nextAwkId = awk.id
+				info.nextAwkStage = awk.stage
+			end
+		end
+		local sk = self._T.skills[info.id] or { name = info.id, icon = "", desc = "", cd = 0 }
+		info.name = sk.name
+		info.icon = sk.icon
+		info.desc = sk.desc
+		if info.cd <= 0 then info.cd = sk.cd end
+		return info
+	end
+
+	@ExecSpace("ClientOnly")
+	method void RefreshSkills(string job, integer tier, integer maxTier)
+		-- 스킬 칸 6개: 아이콘(칸 가운데)·칸 이름·스킬 이름. 미해금 칸은 어둡게 + "n차 해금".
+		-- 차수 탭으로 고른 차수(viewTier, 현재 차수 이하) 기준으로 보여 준다. 직업이 바뀌면 현재 차수로 돌아간다.
+		local curTier = tier
+		if self._T.viewJob ~= job or self._T.viewTier < 1 or self._T.viewTier > curTier then
+			self._T.viewJob = job
+			self._T.viewTier = curTier
+		end
+		tier = self._T.viewTier
+		for t = 1, 5 do
+			local rel = "Detail/TierTab" .. tostring(t)
+			self:SetShown(rel, t <= maxTier)
+			local tab = self:E(rel)
+			if isvalid(tab) then
+				_UIButtonLogic:SetSelected(tab, t == tier)
+				_UIButtonLogic:SetDisabled(tab, t > curTier)
+			end
+		end
+		self._T.skillJob = job
+		self._T.skillTier = tier
+		self._T.skillMaxTier = maxTier
+		self:SetText("Detail/SkillTitle", "스킬", nil)
+		local names = {}
+		-- 각성 단계 (5차에서만 의미): 저장된 각성 레벨을 단계 0~5로
+		self._T.skillAwk = 0
+		local roster = self:Roster()
+		if roster ~= nil then
+			local c = self:CharOf(roster:ParseCharData(roster.CharData), job)
+			self._T.skillAwk = roster:AwakenStage(c.awkLv or 0)
+		end
+		local gradeOfCell = { 0, 1, 1, 1, 2, 1, 1, 1, 3 }
+		for i = 1, 9 do
+			local info = self:SkillCellInfo(job, tier, maxTier, i)
+			local rel = "Detail/Skills/Skill" .. tostring(i)
+			-- 아직 배우지 않은 스킬 칸은 통째로 숨긴다 (칸 이름 글자 없이 등급 테두리로 구분)
+			self:SetShown(rel, info.unlocked)
+			local frame = self:E(rel .. "/Frame")
+			if isvalid(frame) then
+				local fid = self._T.gradeFrames[gradeOfCell[i] + 1] or ""
+				if frame.SpriteGUIRendererComponent.ImageRUID.DataId ~= fid then frame.SpriteGUIRendererComponent.ImageRUID = DataRef(fid) end
+			end
+			local icon = self:E(rel .. "/Icon")
+			if isvalid(icon) then
+				local spr = icon.SpriteGUIRendererComponent
+				if spr.PreserveSprite ~= PreserveSpriteType.None then spr.PreserveSprite = PreserveSpriteType.None end
+				spr.ImageRUID = DataRef(info.icon or "")
+				if info.unlocked then spr.Color = Color(1, 1, 1, 1) else spr.Color = Color(0.35, 0.35, 0.38, 0.75) end
+				if icon.Enable ~= ((info.icon or "") ~= "") then icon:SetEnable((info.icon or "") ~= "") end
+			end
+			if info.unlocked then
+				self:SetText(rel .. "/Name", self:SkillLabel(info.name or ""), self.TextColor)
+				table.insert(names, info.name or "")
+			elseif info.unlockTier > 0 then
+				self:SetText(rel .. "/Name", tostring(info.unlockTier) .. "차 해금", self.SubColor)
+				table.insert(names, "(" .. tostring(info.unlockTier) .. "차)")
+			else
+				self:SetText(rel .. "/Name", "없음", self.SubColor)
+				table.insert(names, "-")
+			end
+		end
+		local key = job .. ":" .. tostring(tier)
+		if self._T.skillLogKey ~= key then
+			self._T.skillLogKey = key
+			log("[VRF] charui skills job=" .. job .. " tier=" .. tostring(tier) .. " " .. table.concat(names, ","))
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method string SkillLabel(string name)
+		-- 칸 이름: 6글자 넘는 이름은 가운데에 가장 가까운 띄어쓰기에서 두 줄로 나눈다 (단어 중간 줄바꿈 방지). 띄어쓰기가 없으면 그대로(글자 크기 자동 축소).
+		local total = utf8.len(name) or #name
+		if total <= 6 then return name end
+		local best = nil
+		local bestScore = 999
+		local pos = 1
+		while true do
+			local a = string.find(name, " ", pos, true)
+			if a == nil then break end
+			local left = utf8.len(string.sub(name, 1, a - 1)) or (a - 1)
+			local right = total - left - 1
+			local score = math.max(left, right)
+			if score < bestScore then
+				bestScore = score
+				best = a
+			end
+			pos = a + 1
+		end
+		if best == nil then return name end
+		return string.sub(name, 1, best - 1) .. "\n" .. string.sub(name, best + 1)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnTierTab(integer t)
+		-- 차수 탭: 그 차수 기준 스킬 칸으로 다시 그린다 (잠긴 탭은 입력이 막혀 있다).
+		if self._T.viewTier == t then return end
+		self._T.viewTier = t
+		log("[VRF] charui tier tab=" .. tostring(t))
+		self:Refresh()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowSkillTip(integer i)
+		-- 스킬 칸 툴팁: 이름·칸 종류·쿨타임·설명, 다음 차수 진화·해금 차수.
+		local cell = self:E("Detail/Skills/Skill" .. tostring(i))
+		local job = self._T.skillJob
+		if not isvalid(cell) or job == nil or job == "" then return end
+		local info = self:SkillCellInfo(job, self._T.skillTier or 1, self._T.skillMaxTier or 5, i)
+		local data = { icon = info.icon or "", name = info.name or "", kind = info.kind, desc = info.desc or "" }
+		-- 전투 개편: 공격 타입·속성 (스킬 값, 빈칸이면 직업 기본값)
+		local jobRow = nil
+		for _, j in ipairs(self._T.jobs or {}) do if j.id == job then jobRow = j end end
+		local sk = (info.id or "") ~= "" and self._T.skills[info.id] or nil
+		data.atk = (sk ~= nil and (sk.dmgType or "") ~= "") and sk.dmgType or (jobRow ~= nil and jobRow.atkType or "")
+		data.elem = (sk ~= nil and (sk.elem or "") ~= "") and sk.elem or (jobRow ~= nil and jobRow.element or "")
+		-- 공격하지 않는 스킬(회복·보호, 또는 계수 0인 버프)과 고유 패시브는 공격 타입·속성을 표시하지 않는다
+		if i == 1 or sk == nil or sk.kind == "회복" or sk.kind == "보호" or (sk.pct or 0) <= 0 then
+			data.atk = ""
+			data.elem = ""
+		end
+		local notes = {}
+		if i == 1 then
+			data.cooldownText = "장착 칸 없음"
+			if info.row ~= nil then table.insert(notes, "<b><color=#8FBFFF>현재</color></b>  " .. self:PassiveLine(info.row)) end
+			if info.nextRow ~= nil then table.insert(notes, "<b><color=#8FBFFF>다음 차수 (" .. tostring(info.nextTier) .. "차)</color></b>  " .. self:PassiveLine(info.nextRow)) end
+		else
+			if info.awakened then data.kind = info.kind .. " · 각성" end
+			if info.key == "Ult" then
+				data.cooldownText = "궁극기 게이지"
+			elseif info.cd > 0 then
+				data.cooldown = info.cd
+			end
+			if not info.unlocked and info.unlockTier > 0 then
+				data.kind = info.kind .. " (" .. tostring(info.unlockTier) .. "차 해금)"
+				table.insert(notes, "<b><color=#8FBFFF>" .. tostring(info.unlockTier) .. "차 전직 시 해금</color></b>")
+			end
+			if info.nextId ~= "" then
+				local nx = self._T.skills[info.nextId]
+				local nname = info.nextId
+				if nx ~= nil then nname = nx.name end
+				table.insert(notes, "<b><color=#8FBFFF>다음 차수 (" .. tostring(info.nextTier) .. "차)</color></b>  " .. nname .. self:Euro(nname) .. " 진화")
+			end
+			if (info.nextAwkId or "") ~= "" then
+				local ax = self._T.skills[info.nextAwkId]
+				local aname = ax ~= nil and ax.name or info.nextAwkId
+				table.insert(notes, "<b><color=#8FBFFF>각성 " .. tostring(info.nextAwkStage) .. "단계</color></b>  " .. aname .. self:Euro(aname) .. " 강화")
+			end
+		end
+		if #notes > 0 then
+			if data.desc ~= "" then data.desc = data.desc .. "\n\n" end
+			data.desc = data.desc .. table.concat(notes, "\n")
+		end
+		_TooltipLogic:ShowSkill(cell, data)
+		log("[VRF] charui skill tip " .. tostring(i) .. " " .. (info.name or "") .. " next=" .. info.nextId)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowBookTip(integer k)
+		-- 경험의 서 툴팁: 이름·권당 경험치·보유 수.
+		local book = self:E("Detail/Book" .. tostring(k))
+		if not isvalid(book) then return end
+		local roster = self:Roster()
+		local names = {}
+		if roster ~= nil then names = roster:Split(self.BookNames, ",") end
+		local have = (self._T.bookHave or {})[k] or 0
+		local per = (self._T.bookPer or {})[k] or 0
+		_TooltipLogic:ShowText(book, names[k] or "경험의 서", "캐릭터 경험치 +" .. self:Comma(per) .. " (권당)\n보유 " .. self:Comma(have) .. "권")
 	end
 
 	-- ───────────────────────── 입력 ─────────────────────────
@@ -752,7 +1158,8 @@ script CharacterUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void HandleResult(any roster)
-		-- RosterMsg·RosterResult → 한국어 결과 문구.
+		-- RosterMsg·RosterResult → 한국어 결과 문구. (전직 등 결과 뒤에는 스킬 탭을 현재 차수로 되돌린다)
+		self._T.viewJob = ""
 		local code = roster.RosterMsg
 		local result = roster.RosterResult
 		local f = roster:Split(result, ":")
@@ -787,7 +1194,7 @@ script CharacterUILogic extends Logic
 		elseif code == "err_cap" then
 			msg = "관문 레벨입니다. 전직하면 계속 성장합니다"
 		elseif code == "err_max" then
-			msg = "최고 레벨·최고 차수입니다"
+			msg = "최고 레벨"
 		elseif code == "err_books" then
 			msg = "경험의 서가 부족합니다"
 		elseif code == "err_level" then

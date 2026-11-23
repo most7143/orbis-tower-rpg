@@ -87,3 +87,11 @@ GoldMesoStageBase,20,금색 메소: 전투 스테이지 클리어 기본
 GoldMesoPerFloor,3,금색 메소: 층마다 스테이지 클리어 지급 증가
 GoldMesoEliteMul,2,금색 메소: 강화 몬스터(정예) 스테이지 배율
 GoldMesoBossMul,5,금색 메소: 보스 스테이지(층 클리어) 배율
+ElemWeakMul,1.5,속성 약점 배율
+ElemResistMul,0.5,속성 반감 배율
+ElemImmuneMul,0.1,속성 무효 배율 (전투가 멈추지 않게 0이 아님)
+MagicDefRatio,0.5,캐릭터 방어력이 몬스터 마법 공격에 적용되는 비율
+MissCap,60,물리 빗나감 상한(%)
+PlayerEvadeCap,50,캐릭터 회피 상한(%)
+PlayerMissTotalCap,75,몬스터 공격 빗나감 합계 상한(%)
+MagicNeverMiss,1,1이면 마법 공격은 빗나가지 않음

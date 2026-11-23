@@ -1,0 +1,435 @@
+@Component
+script PlayerBoss extends Component
+
+	-- 보스 탭 보스전 계정 데이터 (Docs/Boss/Boss-Stage-Spec.md §6·§7, 저장 키 OrbisBossV1).
+	-- 저장: 필드보스 첫 처치 층 목록, 보스별 최고 클리어 단계, 단계별 첫 처치 다이아 수령 비트, 오늘 쓴 도전권(UTC+9 날짜).
+	-- 도전권은 하루 DailyTickets회(모든 보스 공용), 클리어할 때만 1장 차감. 실패는 무료.
+	-- 모든 판정·지급은 서버에서 한다. 클라이언트(보스 탭)는 Sync 값만 읽고, 입장 요청은 LobbyManager.RequestBossPlay로 보낸다.
+	property string BossKey = "OrbisBossV1"
+	property number LoadRetryDelay = 10
+
+	@Sync
+	property boolean BossLoaded = false
+	-- 필드보스를 처음 처치한 층 "3,12,29"
+	@Sync
+	property string FieldKills = ""
+	-- 보스별 최고 클리어 단계 "B1:2|B3:1"
+	@Sync
+	property string BossBest = ""
+	-- 보스별 첫 처치 다이아 받은 단계 비트 "B1:3|B2:1" (단계 n = 1 << (n-1))
+	@Sync
+	property string BossFirst = ""
+	-- 오늘 남은 도전권 / 하루 최대
+	@Sync
+	property integer TicketsLeft = 3
+	@Sync
+	property integer TicketMax = 3
+	-- 도전권 초기화까지 남은 초 (UTC+9 0시)
+	@Sync
+	property integer TicketResetSec = 0
+	-- 마지막 보스전 정산 결과 "bossId:step:gold:s:m:l:cube:sl:sm:sh:dia" (결과 화면용) / 처리 순번
+	@Sync
+	property string LastSettle = ""
+	@Sync
+	property integer BossSeq = 0
+
+	-- 로비가 정한 다음 보스전 "B1:1" (탑 입장 때 TowerRunManager가 TakePending으로 꺼낸다, 저장 안 함)
+	@HideFromInspector
+	property string PendingBoss = ""
+	@HideFromInspector
+	property number RetryTimer = 0
+	@HideFromInspector
+	property number TickTimer = 0
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 설정·보스 표를 읽고 저장값을 불러온다.
+		self._T.busy = false
+		self:LoadTables()
+		self:LoadBoss()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기 실패 시 재시도, 1초마다 날짜가 바뀌었는지(도전권 초기화)와 남은 초를 갱신 (저장 호출 없음).
+		if not self.BossLoaded then
+			self.RetryTimer = self.RetryTimer - delta
+			if self.RetryTimer <= 0 then self:LoadBoss() end
+			return
+		end
+		self.TickTimer = self.TickTimer - delta
+		if self.TickTimer <= 0 then
+			self.TickTimer = 1
+			self:RefreshTickets()
+		end
+	end
+
+	-- ───────────────────────── 표 ─────────────────────────
+
+	method void LoadTables()
+		-- BossConfig(Key,Value) · BossTable · BossStepTable을 캐시한다 (서버·클라이언트 공용).
+		if self._T.cfg ~= nil then return end
+		self._T.cfg = {}
+		local cf = _DataService:GetTable("BossConfig")
+		if cf ~= nil then
+			for i = 1, cf:GetRowCount() do
+				local k = cf:GetCell(i, "Key")
+				local v = tonumber(cf:GetCell(i, "Value"))
+				if k ~= nil and k ~= "" and v ~= nil then self._T.cfg[k] = v end
+			end
+		end
+		self._T.bosses = {}
+		self._T.bossById = {}
+		local bt = _DataService:GetTable("BossTable")
+		if bt ~= nil then
+			for i = 1, bt:GetRowCount() do
+				local id = bt:GetCell(i, "BossId")
+				if id ~= nil and id ~= "" then
+					local r = { id = id, order = tonumber(bt:GetCell(i, "Order")) or i, name = bt:GetCell(i, "Name") or id, monsterId = bt:GetCell(i, "MonsterId") or "",
+						unlockFloor = math.floor(tonumber(bt:GetCell(i, "UnlockFloor")) or 1) }
+					table.insert(self._T.bosses, r)
+					self._T.bossById[id] = r
+				end
+			end
+		end
+		self._T.steps = {}
+		local st = _DataService:GetTable("BossStepTable")
+		if st ~= nil then
+			for i = 1, st:GetRowCount() do
+				local n = math.floor(tonumber(st:GetCell(i, "Step")) or i)
+				local function num(k) return tonumber(st:GetCell(i, k) or "") or 0 end
+				self._T.steps[n] = { hp = num("HpMul"), atk = num("AtkMul"), gold = num("GoldMul"), s = math.floor(num("BookS")), m = math.floor(num("BookM")), l = math.floor(num("BookL")),
+					cube = math.floor(num("Cube")), sl = math.floor(num("ScrollLow")), sm = math.floor(num("ScrollMid")), sh = math.floor(num("ScrollHigh")), dia = math.floor(num("FirstDia")) }
+			end
+		end
+		if self:IsServer() then self.TicketMax = math.max(1, math.floor(self:Cfg("DailyTickets", 3))) end
+	end
+
+	method number Cfg(string key, number fallback)
+		-- BossConfig 값 (없으면 fallback).
+		self:LoadTables()
+		local v = self._T.cfg[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	method any Boss(string bossId)
+		-- 보스 표 한 줄 (없으면 nil).
+		self:LoadTables()
+		return self._T.bossById[bossId]
+	end
+
+	method any Step(integer step)
+		-- 단계 표 한 줄 (없으면 nil).
+		self:LoadTables()
+		return self._T.steps[step]
+	end
+
+	method integer StepCount()
+		-- 단계 수 (표가 없으면 5).
+		self:LoadTables()
+		local n = 0
+		for k, _ in pairs(self._T.steps) do if k > n then n = k end end
+		if n <= 0 then return 5 end
+		return n
+	end
+
+	-- ───────────────────────── 문자열 표 ─────────────────────────
+
+	method table ParseMap(string s)
+		-- "B1:2|B3:1" → { B1 = 2, B3 = 1 }.
+		local t = {}
+		for part in string.gmatch(s or "", "[^|]+") do
+			local k, v = string.match(part, "^([^:]+):(%-?%d+)$")
+			if k ~= nil then t[k] = math.floor(tonumber(v)) end
+		end
+		return t
+	end
+
+	method string EncodeMap(table t)
+		-- { B1 = 2 } → "B1:2" (보스 표 순서, 0은 뺀다).
+		self:LoadTables()
+		local out = {}
+		for _, b in ipairs(self._T.bosses) do
+			local v = t[b.id]
+			if v ~= nil and v ~= 0 then table.insert(out, b.id .. ":" .. tostring(v)) end
+		end
+		return table.concat(out, "|")
+	end
+
+	method boolean HasFieldKill(integer floor)
+		-- 그 층 필드보스를 처치한 적이 있는지.
+		for v in string.gmatch(self.FieldKills or "", "[^,]+") do
+			if math.floor(tonumber(v) or -1) == floor then return true end
+		end
+		return false
+	end
+
+	method boolean TabUnlocked()
+		-- 보스 탭 열림: UnlockFieldBossFloor(3)층 필드보스 첫 처치.
+		return self:HasFieldKill(math.floor(self:Cfg("UnlockFieldBossFloor", 3)))
+	end
+
+	method boolean BossUnlocked(string bossId)
+		-- 그 보스가 열렸는지: 탭이 열렸고, 그 보스의 해금 층 필드보스를 처치함.
+		local b = self:Boss(bossId)
+		if b == nil then return false end
+		return self:TabUnlocked() and self:HasFieldKill(b.unlockFloor)
+	end
+
+	method integer BestStep(string bossId)
+		-- 그 보스의 최고 클리어 단계 (0 = 없음).
+		return self:ParseMap(self.BossBest)[bossId] or 0
+	end
+
+	method boolean StepOpen(string bossId, integer step)
+		-- 단계 열림: 1단계 또는 앞 단계 클리어.
+		if step < 1 or step > self:StepCount() then return false end
+		return step <= self:BestStep(bossId) + 1
+	end
+
+	method boolean FirstTaken(string bossId, integer step)
+		-- 그 보스·단계 첫 처치 다이아를 받았는지.
+		local bits = self:ParseMap(self.BossFirst)[bossId] or 0
+		return (bits & (1 << (step - 1))) ~= 0
+	end
+
+	-- ───────────────────────── 시각·도전권 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method integer Now()
+		-- 서버 UTC 초.
+		return math.floor(DateTime.UtcNow.Elapsed / 1000)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer DayOf(integer sec)
+		-- UTC+9 날짜 번호 (0시 기준).
+		return math.floor((sec + 9 * 3600) / 86400)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RefreshTickets()
+		-- 날짜가 바뀌었으면 쓴 도전권을 0으로 (저장은 다음 정산 때), 남은 장수·초기화까지 초 갱신.
+		local now = self:Now()
+		local day = self:DayOf(now)
+		if (self._T.day or 0) ~= day then
+			self._T.day = day
+			self._T.used = 0
+		end
+		local left = math.max(0, self.TicketMax - (self._T.used or 0))
+		if self.TicketsLeft ~= left then self.TicketsLeft = left end
+		local nextDay = (day + 1) * 86400 - 9 * 3600
+		local remain = math.max(0, nextDay - now)
+		if self.TicketResetSec ~= remain then self.TicketResetSec = remain end
+	end
+
+	-- ───────────────────────── 저장 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 JSON {v, fk, best, first, day, used}. 값은 모두 문자열·정수 (빈 표 인코딩 문제 없음).
+		local t = { v = 1, fk = self.FieldKills or "", best = self.BossBest or "", first = self.BossFirst or "", day = math.floor(self._T.day or 0), used = math.floor(self._T.used or 0) }
+		return _HttpService:JSONEncode(t)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadBoss()
+		-- OrbisBossV1을 불러온다. 저장이 없으면 빈 값으로 시작(첫 저장은 처음 바뀔 때). 실패·형식 오류면 10초 뒤 재시도.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.BossKey)
+		if code == 0 and raw ~= nil and raw ~= "" then
+			local ok, t = pcall(function() return _HttpService:JSONDecode(raw) end)
+			if not ok or type(t) ~= "table" then
+				log_warning("[VRF] boss load bad format raw=" .. tostring(raw))
+				self.BossLoaded = false
+				self.RetryTimer = self.LoadRetryDelay
+				return
+			end
+			self.FieldKills = tostring(t["fk"] or "")
+			self.BossBest = tostring(t["best"] or "")
+			self.BossFirst = tostring(t["first"] or "")
+			self._T.day = math.floor(tonumber(t["day"]) or 0)
+			self._T.used = math.floor(tonumber(t["used"]) or 0)
+			self:RefreshTickets()
+			self.BossLoaded = true
+			log("[VRF] boss loaded fk=" .. self.FieldKills .. " best=" .. self.BossBest .. " first=" .. self.BossFirst .. " tickets=" .. tostring(self.TicketsLeft))
+			return
+		end
+		if code == 1000002 or (code == 0 and (raw == nil or raw == "")) then
+			self.FieldKills = ""
+			self.BossBest = ""
+			self.BossFirst = ""
+			self._T.day = 0
+			self._T.used = 0
+			self:RefreshTickets()
+			self.BossLoaded = true
+			log("[VRF] boss loaded new tickets=" .. tostring(self.TicketsLeft))
+			return
+		end
+		log_warning("[VRF] boss load failed code=" .. tostring(code))
+		self.BossLoaded = false
+		self.RetryTimer = self.LoadRetryDelay
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer Save()
+		-- 지금 값을 저장한다 (결과 코드 반환, 0 = 성공). 디버그 상태(메이커 전용 잠금 해제)면 저장하지 않는다.
+		if self._T.debugNoSave == true then
+			log("[VRF] boss save skipped (debug state)")
+			return 0
+		end
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code = ds:SetAndWait(self.BossKey, self:Encode())
+		if code ~= 0 then log_warning("[VRF] boss save failed code=" .. tostring(code)) end
+		return code
+	end
+
+	-- ───────────────────────── 필드보스 처치 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void MarkFieldKill(integer floor)
+		-- 탑 층 필드보스를 처음 처치하면 그 층을 기록하고 저장한다 (이미 있으면 아무것도 안 함).
+		if not self.BossLoaded or floor < 1 or self:HasFieldKill(floor) then return end
+		local wasTab = self:TabUnlocked()
+		if self.FieldKills == "" then self.FieldKills = tostring(floor) else self.FieldKills = self.FieldKills .. "," .. tostring(floor) end
+		local code = self:Save()
+		self.BossSeq = self.BossSeq + 1
+		log("[VRF] boss field kill floor=" .. tostring(floor) .. " fk=" .. self.FieldKills .. " tab=" .. tostring(self:TabUnlocked()) .. " newTab=" .. tostring((not wasTab) and self:TabUnlocked()) .. " save=" .. tostring(code))
+	end
+
+	-- ───────────────────────── 입장·정산 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method string CheckEntry(string bossId, integer step)
+		-- 보스전 입장 검사: "ok" 또는 거절 코드 (notready / locked / step / ticket).
+		if not self.BossLoaded then return "notready" end
+		if self:Boss(bossId) == nil or not self:BossUnlocked(bossId) then return "locked" end
+		if not self:StepOpen(bossId, step) then return "step" end
+		self:RefreshTickets()
+		if self.TicketsLeft <= 0 then return "ticket" end
+		return "ok"
+	end
+
+	@ExecSpace("ServerOnly")
+	method string TakePending()
+		-- 로비가 정한 보스전을 꺼내고 비운다 ("" = 없음).
+		local p = self.PendingBoss or ""
+		self.PendingBoss = ""
+		return p
+	end
+
+	@ExecSpace("ServerOnly")
+	method table CalcReward(string bossId, integer step, number goldBase)
+		-- 단계 보상 계산: 금색 메소 = 해금 층 클리어 금색 메소 × GoldMul, 경험의 서·큐브(큐브 해금 전이면 같은 수의 중급 주문서)·주문서, 첫 처치 다이아.
+		local st = self:Step(step) or { gold = 0, s = 0, m = 0, l = 0, cube = 0, sl = 0, sm = 0, sh = 0, dia = 0 }
+		local r = { gold = math.floor(goldBase * st.gold + 0.5), s = st.s, m = st.m, l = st.l, cube = st.cube, sl = st.sl, sm = st.sm, sh = st.sh, dia = 0 }
+		if r.cube > 0 and _UnlockRules:AccountLevelOf(self.Entity) < _UnlockRules:Level("Cube") then
+			r.sm = r.sm + r.cube
+			r.cube = 0
+		end
+		if not self:FirstTaken(bossId, step) then r.dia = st.dia end
+		return r
+	end
+
+	@ExecSpace("ServerOnly")
+	method string RewardStr(string bossId, integer step, table r)
+		-- 결과 문자열 "bossId:step:gold:s:m:l:cube:sl:sm:sh:dia".
+		return bossId .. ":" .. tostring(step) .. ":" .. tostring(r.gold) .. ":" .. tostring(r.s) .. ":" .. tostring(r.m) .. ":" .. tostring(r.l) .. ":" .. tostring(r.cube) .. ":" .. tostring(r.sl) .. ":" .. tostring(r.sm) .. ":" .. tostring(r.sh) .. ":" .. tostring(r.dia)
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Settle(string bossId, integer step, number goldBase, boolean debugRun)
+		-- 보스전 클리어 정산: 도전권 1장 차감·최고 단계·첫 처치 비트를 먼저 저장하고, 성공했을 때만 보상을 지급한다.
+		-- 디버그 판은 계산 결과만 돌려주고 차감·저장·지급하지 않는다. 돌려주는 값 = 결과 문자열 (실패면 "").
+		if self._T.busy == true or not self.BossLoaded then return "" end
+		local r = self:CalcReward(bossId, step, goldBase)
+		local out = self:RewardStr(bossId, step, r)
+		if debugRun then
+			self.LastSettle = out
+			self.BossSeq = self.BossSeq + 1
+			log("[VRF] boss settle debug (no save) " .. out)
+			return out
+		end
+		self._T.busy = true
+		self:RefreshTickets()
+		local prev = { used = self._T.used, best = self.BossBest, first = self.BossFirst }
+		self._T.used = (self._T.used or 0) + 1
+		local best = self:ParseMap(self.BossBest)
+		if (best[bossId] or 0) < step then best[bossId] = step end
+		self.BossBest = self:EncodeMap(best)
+		if r.dia > 0 then
+			local first = self:ParseMap(self.BossFirst)
+			first[bossId] = (first[bossId] or 0) | (1 << (step - 1))
+			self.BossFirst = self:EncodeMap(first)
+		end
+		local code = self:Save()
+		if code ~= 0 then
+			self._T.used = prev.used
+			self.BossBest = prev.best
+			self.BossFirst = prev.first
+			self._T.busy = false
+			self:RefreshTickets()
+			log_warning("[VRF] boss settle save failed code=" .. tostring(code))
+			return ""
+		end
+		self:RefreshTickets()
+		---@type PlayerGear
+		local gear = self.Entity:GetComponent("script.PlayerGear")
+		---@type PlayerRoster
+		local roster = self.Entity:GetComponent("script.PlayerRoster")
+		if gear ~= nil then
+			if r.gold > 0 then gear:AddGoldMeso(r.gold) end
+			if r.cube > 0 then gear:AddCubes("R", r.cube) end
+			if r.sl > 0 then gear:AddScrolls("Any", 1, r.sl) end
+			if r.sm > 0 then gear:AddScrolls("Any", 2, r.sm) end
+			if r.sh > 0 then gear:AddScrolls("Any", 3, r.sh) end
+			gear:Flush()
+		end
+		if roster ~= nil then
+			if r.s > 0 or r.m > 0 or r.l > 0 then roster:GiveBooks(r.s, r.m, r.l) end
+			if r.dia > 0 then roster:GiveDiamonds(r.dia) end
+		end
+		self._T.busy = false
+		self.LastSettle = out
+		self.BossSeq = self.BossSeq + 1
+		log("[VRF] boss settle " .. out .. " tickets=" .. tostring(self.TicketsLeft) .. "/" .. tostring(self.TicketMax) .. " best=" .. self.BossBest .. " first=" .. self.BossFirst)
+		return out
+	end
+
+	-- ───────────────────────── 테스트 전용 (메이커 플레이에서만) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method boolean DebugAllowed()
+		-- 디버그 메서드는 메이커 플레이에서만 동작한다.
+		if Environment:IsMakerPlay() then return true end
+		log_warning("[VRF] boss debug blocked (not maker play)")
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugUnlockAll()
+		-- 테스트: 보스 5종 해금 층을 모두 처치한 것으로 (메모리만, 이후 이 접속 동안 저장 안 함).
+		if not self:DebugAllowed() or not self.BossLoaded then return end
+		self._T.debugNoSave = true
+		local list = {}
+		for _, b in ipairs(self._T.bosses) do table.insert(list, tostring(b.unlockFloor)) end
+		table.insert(list, tostring(math.floor(self:Cfg("UnlockFieldBossFloor", 3))))
+		self.FieldKills = table.concat(list, ",")
+		self.BossSeq = self.BossSeq + 1
+		log("[VRF] boss debug unlock all fk=" .. self.FieldKills .. " (no save)")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetUsed(integer used)
+		-- 테스트: 오늘 쓴 도전권 수 (메모리만, 이후 저장 안 함).
+		if not self:DebugAllowed() or not self.BossLoaded then return end
+		self._T.debugNoSave = true
+		self._T.used = math.max(0, used)
+		self:RefreshTickets()
+		log("[VRF] boss debug used=" .. tostring(used) .. " left=" .. tostring(self.TicketsLeft) .. " (no save)")
+	end
+
+end

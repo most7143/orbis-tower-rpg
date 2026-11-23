@@ -29,6 +29,8 @@ script RegionSelectLogic extends Logic
 	property string CompactDisabled = "d262f8e8502e4b7b88f381a9b7a4e4fb"
 	-- 결과 화면 '지역 선택으로'에서 로비에 도착하면 이 층을 골라 연다 (0 = 없음)
 	property integer PendingOpenFloor = 0
+	-- 보스 개편 B7: 결과 화면에서 보스전으로 돌아오면 보스 탭으로 연다
+	property boolean PendingBossTab = false
 
 	@HideFromInspector
 	property table handlers = {}
@@ -168,7 +170,8 @@ script RegionSelectLogic extends Logic
 		local mons = {}
 		local mt = _DataService:GetTable("MonsterTable")
 		if mt ~= nil then
-			for i = 1, mt:GetRowCount() do mons[mt:GetCell(i, "id")] = { name = mt:GetCell(i, "Name") or "", stand = mt:GetCell(i, "StandRUID") or "" } end
+			-- 전투 개편: 속성 상성(Elem "Fire:W|Ice:R")도 함께 (등장 몬스터 칸에 약점 점 표시)
+			for i = 1, mt:GetRowCount() do mons[mt:GetCell(i, "id")] = { name = mt:GetCell(i, "Name") or "", stand = mt:GetCell(i, "StandRUID") or "", elem = mt:GetCell(i, "Elem") or "" } end
 		end
 		local ft = _DataService:GetTable("FloorTable")
 		if ft ~= nil then
@@ -259,6 +262,9 @@ script RegionSelectLogic extends Logic
 		self._T.claiming = false
 		self._T.entering = false
 		self:Refresh()
+		-- 보스 개편 B7: [지역]/[보스] 탭 (보스 탭 화면은 BossSelectLogic)
+		if _BossSelectLogic ~= nil then _BossSelectLogic:OnRegionOpen(self.PendingBossTab) end
+		self.PendingBossTab = false
 		self._T.openT = 0
 		self:ApplyOpen(0)
 		log("[VRF] region select open floor=" .. tostring(self._T.sel) .. " section=" .. tostring(self._T.sec) .. " unlocked=" .. tostring(self:Unlocked()) .. " count=" .. tostring(self:Count()))
@@ -432,6 +438,23 @@ script RegionSelectLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method string WeakDots(string elem)
+		-- "Fire:W|Ice:R" → 약점 속성마다 속성색 "●" (최대 2개, 이름 앞에 붙임). 약점이 없으면 "". 색은 ElementTable.Color와 같게.
+		local colors = { Fire = "#F26B2A", Ice = "#4FB6E8", Lightning = "#22C3A6", Poison = "#9A5BD0", Holy = "#F2C230", Dark = "#4A3F66" }
+		local out = ""
+		local n = 0
+		for part in string.gmatch(elem, "[^|]+") do
+			local e, lv = string.match(part, "^([^:]+):([WRN])$")
+			if lv == "W" and colors[e] ~= nil and n < 2 then
+				out = out .. "<color=" .. colors[e] .. ">●</color>"
+				n = n + 1
+			end
+		end
+		if out ~= "" then out = out .. " " end
+		return out
+	end
+
+	@ExecSpace("ClientOnly")
 	method void FillMonsters(integer n, table list)
 		-- 등장 몬스터: 층에 나올 수 있는 몬스터를 모두 칸에 채운다 (6마리가 넘으면 가로로 스크롤). 층이 바뀌면 맨 앞으로.
 		if self._T.monFloor == n then return end
@@ -445,7 +468,8 @@ script RegionSelectLogic extends Logic
 					local icon = slot:GetChildByName("Icon")
 					icon.SpriteGUIRendererComponent.ImageRUID = m.stand ~= "" and ("thumbnail://" .. m.stand) or ""
 					icon.SpriteGUIRendererComponent.Color = Color(1, 1, 1, m.stand ~= "" and 1 or 0)
-					slot:GetChildByName("Name").TextGUIRendererComponent.Text = m.name
+					-- 전투 개편: 약점 속성(최대 2개)을 이름 앞 속성색 점으로 (긴 이름은 뒤쪽이 잘려도 점은 항상 보임, 반감·무효는 표시 안 함)
+					slot:GetChildByName("Name").TextGUIRendererComponent.Text = self:WeakDots(m.elem or "") .. m.name
 				end
 			end
 		end

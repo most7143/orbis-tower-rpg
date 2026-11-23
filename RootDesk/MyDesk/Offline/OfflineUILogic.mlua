@@ -1,0 +1,542 @@
+@Logic
+script OfflineUILogic extends Logic
+
+	-- 방치 보상 화면 (ui/OfflineUI, 그룹 정렬 26) + 로비 왼쪽 위 상자 버튼 (ui/LobbyUI Root/BtnOffline).
+	-- 서버 PlayerOffline의 Sync 값을 읽어 표시만 한다. 받기는 PlayerOffline:RequestClaim() 요청 → OfflineSeq 변화로 결과 처리.
+	-- 화면 글자는 아이콘+수량+시간뿐이고 설명은 _TooltipLogic 툴팁으로 보여 준다.
+	-- 자동 팝업: 접속 후 로비에 처음 들어왔을 때 1회만, 최고 층 1 이상이고 AutoPopupSec 이상 쌓였으면 (레벨업 연출이 닫힌 뒤).
+
+	-- OfflineUI 바인딩
+	property Entity root = "5cb77423-bd44-4e27-bb80-3ae59d920bf6"
+	property SpriteGUIRendererComponent chest = "3da80d7e-d94b-4cf3-b8db-8f7302b262ed"
+	property Entity gauge = "c27bbc53-fe22-4a46-8754-024493666e95"
+	property Entity gaugeFill = "157f1ce1-2f11-41d1-9ec9-7567150df07b"
+	property TextGUIRendererComponent timeText = "50ea754c-f78f-43d8-90b1-9811b15a5247"
+	property Entity rewards = "2738453e-c1b0-4bbd-b0bb-c38f557224cc"
+	property ButtonComponent btnClaim = "4bd622cd-e930-44ff-8eb2-07b2593dca53"
+	property ButtonComponent btnClose = "68ae1091-f16b-4d36-b3d3-6944f7b69958"
+	property TextGUIRendererComponent noticeText = "9086e88d-8a1b-4da5-b068-59810c00aafc"
+	-- LobbyUI 바인딩 (상자 버튼, 층·지역 선택 창이 열리면 버튼을 숨긴다)
+	property ButtonComponent btnOffline = "adfa29a7-861a-44d2-8c20-b45a69a9aa22"
+	property Entity lobbyStage = "7349262b-7dfe-4296-87a2-479c8c772bdf"
+	property Entity lobbyRegion = "978f4f66-bf4a-48aa-bb6d-f9678a9d4bd3"
+
+	property string LobbyMapName = "Lobby"
+	-- 보상 칸 순서와 아이콘 (금색 메소 · 경험의 서 대·중·소 · 다이아)
+	property string GoldIcon = "02a489cccff24a139a6c3582a5871f58"
+	property string BookSIcon = "36ba7694f9444257837ff68207fff885"
+	property string BookMIcon = "452037cbd8f04bdf810657263aff002b"
+	property string BookLIcon = "67933b35ef074d58893c1710edeed7f6"
+	property string DiaIcon = "81462aeb825b4660991cef05651271cf"
+	-- 상자 열림 10프레임 (output/animations/chest_open_glow/runtime_manifest.json)
+	property string ChestFrames = "35d6753b40ab48bf93f7c734b4634de3,edc2129dec8e40d4b66b01f229e7e8ea,3dbb94192dea4a19b2ea60800e1a47a9,ef1f24aad19d464587f3c4539b825adf,c1f89dc6e6414f328aad16ab91127148,5849943f535d4433b0feceec2aec0b8d,f84d9d094a54405586250dd1131b9d35,d937666f27e54dbdbf9b6bdcb881245c,bdea221cd6a14c4780391ae85c2b3af1,09f299e5e7c54fd1adcd1925bde00a7a"
+	property string ChestFrameMs = "100,80,60,60,90,110,130,130,150,290"
+	-- 닫힌 상자 여백 자른 그림 (chest_open_01의 (52,94)~(136,178) 84px 영역, output/ui/offline/chest_closed_crop.png)
+	property string ChestIdleRUID = "69df9102d27a495bbd4a003f9668bf3f"
+	-- 팝업 상자 칸 크기·위치, 자른 영역 크기(원본 픽셀)와 192 캔버스 중심 - 자른 영역 중심 (원본 픽셀, UI 위쪽 +)
+	property number ChestBox = 160
+	property Vector2 ChestPos = Vector2(0, 128)
+	property number ChestCropPx = 84
+	property number ChestCanvasPx = 192
+	property Vector2 ChestCanvasOffset = Vector2(2, 40)
+	property number CloseDelay = 0.6
+	property number CellWidth = 96
+	property number CellGap = 16
+	property number PopupGaugeWidth = 520
+	property number ButtonGaugeWidth = 96
+	property Color GaugeColor = Color(0.24, 0.51, 0.78, 1)
+	property Color GaugeFullColor = Color(0.20, 0.48, 0.12, 1)
+	property number NoticeDuration = 1.8
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 처음에는 팝업을 숨기고 버튼·툴팁을 연결한다.
+		self._T.handlers = {}
+		self._T.autoDone = false
+		self._T.lastSeq = nil
+		self._T.waiting = false
+		self._T.anim = -1
+		self._T.noticeT = 0
+		self._T.frames = {}
+		for id in string.gmatch(self.ChestFrames, "[^,]+") do table.insert(self._T.frames, id) end
+		self._T.frameMs = {}
+		for ms in string.gmatch(self.ChestFrameMs, "[^,]+") do table.insert(self._T.frameMs, (tonumber(ms) or 100) / 1000) end
+		self:LoadConfig()
+		if isvalid(self.root) then self.root:SetEnable(false) end
+		if isvalid(self.noticeText) then self.noticeText.Entity:SetEnable(false) end
+		self:Bind(self.btnClaim, function() self:OnClaim() end)
+		self:Bind(self.btnClose, function() self:Close() end)
+		self:Bind(self.btnOffline, function() self:Open() end)
+		if isvalid(self.btnClaim) then _UIButtonLogic:UseTheme(self.btnClaim.Entity, "action") end
+		if isvalid(self.btnClose) then _UIButtonLogic:UseTheme(self.btnClose.Entity, "close") end
+		if isvalid(self.btnOffline) then
+			_UIButtonLogic:UseTheme(self.btnOffline.Entity, "button")
+			-- 잠긴 버튼은 클릭 대신 누름으로 툴팁을 띄운다
+			self:On(self.btnOffline.Entity, UITouchDownEvent, function() self:OnLobbyButtonDown() end)
+			_TooltipLogic:Register(self.btnOffline.Entity, function() self:OnLobbyButtonTip() end)
+		end
+		-- 보상 칸·진행 막대 툴팁
+		for _, key in ipairs({ "Gold", "BookL", "BookM", "BookS", "Dia" }) do
+			local k = key
+			local cell = self:Cell(k)
+			if isvalid(cell) then
+				local show = function() self:ShowCellTip(k) end
+				self:On(cell, UITouchDownEvent, show)
+				_TooltipLogic:Register(cell, show)
+			end
+		end
+		if isvalid(self.gauge) then
+			local show = function() self:ShowGaugeTip(self.gauge) end
+			self:On(self.gauge, UITouchDownEvent, show)
+			_TooltipLogic:Register(self.gauge, show)
+		end
+		log("[VRF] OfflineUILogic begin (client) frames=" .. tostring(#self._T.frames))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnEndPlay()
+		-- 연결한 이벤트 해제.
+		for _, rec in ipairs(self._T.handlers or {}) do
+			if isvalid(rec.entity) then rec.entity:DisconnectEvent(rec.evt, rec.h) end
+		end
+		self._T.handlers = {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void On(Entity e, any evt, any fn)
+		-- 이벤트 연결 + 해제용 기록.
+		if not isvalid(e) then return end
+		local h = e:ConnectEvent(evt, fn)
+		table.insert(self._T.handlers, { entity = e, evt = evt, h = h })
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Bind(ButtonComponent button, any fn)
+		-- 버튼 클릭 연결 (클릭음 포함).
+		if not isvalid(button) then return end
+		self:On(button.Entity, ButtonClickEvent, function() _UISoundLogic:PlayClick() fn() end)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void LoadConfig()
+		-- 클라이언트 표시용 설정 (자동 팝업·받기 최소 초).
+		self._T.cfg = {}
+		local cf = _DataService:GetTable("OfflineConfig")
+		if cf == nil then return end
+		for i = 1, cf:GetRowCount() do
+			local k = cf:GetCell(i, "Key")
+			local v = tonumber(cf:GetCell(i, "Value"))
+			if k ~= nil and k ~= "" and v ~= nil then self._T.cfg[k] = v end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method number Cfg(string key, number fallback)
+		-- 설정 상수 (없으면 fallback).
+		local v = (self._T.cfg or {})[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	-- ───────────────────────── 조회 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method Component Comp()
+		-- 내 플레이어의 PlayerOffline (없으면 nil).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) then return nil end
+		return player:GetComponent("script.PlayerOffline")
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean InLobby()
+		-- 내 플레이어가 로비 맵에 있는지.
+		local player = _UserService.LocalPlayer
+		return isvalid(player) and isvalid(player.CurrentMap) and player.CurrentMap.Name == self.LobbyMapName
+	end
+
+	@ExecSpace("ClientOnly")
+	method Entity Cell(string key)
+		-- 보상 칸 엔티티.
+		if not isvalid(self.rewards) then return nil end
+		return self.rewards:GetChildByName(key)
+	end
+
+	@ExecSpace("ClientOnly")
+	method table Nums(string s)
+		-- "a:b:c" → 정수 목록.
+		local out = {}
+		for v in string.gmatch(s or "", "[^:]+") do table.insert(out, math.floor(tonumber(v) or 0)) end
+		return out
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Comma(integer n)
+		-- 1234567 → "1,234,567".
+		local s = tostring(math.floor(n or 0))
+		local out = ""
+		while string.len(s) > 3 do
+			out = "," .. string.sub(s, -3) .. out
+			s = string.sub(s, 1, string.len(s) - 3)
+		end
+		return s .. out
+	end
+
+	@ExecSpace("ClientOnly")
+	method string Hm(integer sec)
+		-- 초 → "h:mm".
+		local m = math.floor(math.max(0, sec) / 60)
+		return tostring(math.floor(m / 60)) .. ":" .. string.format("%02d", m % 60)
+	end
+
+	-- ───────────────────────── 팝업 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void Open()
+		-- 보상 팝업 열기 (잠금·미로드면 열지 않음).
+		local comp = self:Comp()
+		if comp == nil or not comp.OfflineLoaded or comp.OfflineFloor < 1 then return end
+		if not isvalid(self.root) then return end
+		self._T.anim = -1
+		self._T.waiting = false
+		self._T.sig = nil
+		self:SetChestIdle()
+		if isvalid(self.noticeText) then self.noticeText.Entity:SetEnable(false) end
+		self.root:SetEnable(true)
+		self:Refresh(true)
+		log("[VRF] offline popup open sec=" .. tostring(comp.OfflineSec) .. " preview=" .. comp.OfflinePreview)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetChestIdle()
+		-- 대기: 여백을 자른 닫힌 상자를 칸 크기 그대로 표시.
+		if not isvalid(self.chest) then return end
+		self.chest.ImageRUID = DataRef(self.ChestIdleRUID)
+		local tr = self.chest.Entity.UITransformComponent
+		tr.RectSize = Vector2(self.ChestBox, self.ChestBox)
+		tr.anchoredPosition = self.ChestPos
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetChestAnim()
+		-- 열림 연출: 192 캔버스 프레임을 닫힌 상자와 같은 배율·위치로 맞춘다 (상자가 튀지 않게).
+		if not isvalid(self.chest) or #self._T.frames == 0 then return end
+		local k = self.ChestBox / self.ChestCropPx
+		local size = self.ChestCanvasPx * k
+		local tr = self.chest.Entity.UITransformComponent
+		tr.RectSize = Vector2(size, size)
+		tr.anchoredPosition = self.ChestPos + self.ChestCanvasOffset * k
+		self.chest.ImageRUID = DataRef(self._T.frames[1])
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Close()
+		-- 팝업 닫기 (연출 중이어도 화면만 닫고 서버 지급은 유지).
+		if not isvalid(self.root) or not self.root.Enable then return end
+		_TooltipLogic:Hide()
+		self.root:SetEnable(false)
+		self._T.anim = -1
+		self._T.waiting = false
+		log("[VRF] offline popup close")
+	end
+
+	@ExecSpace("ClientOnly")
+	method boolean IsOpen()
+		-- 팝업이 열려 있는지.
+		return isvalid(self.root) and self.root.Enable
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnClaim()
+		-- 받기: 버튼을 막고 서버에 요청.
+		local comp = self:Comp()
+		if comp == nil or self._T.waiting or self._T.anim >= 0 then return end
+		self._T.waiting = true
+		if isvalid(self.btnClaim) then _UIButtonLogic:SetDisabled(self.btnClaim.Entity, true) end
+		---@type PlayerOffline
+		local po = comp
+		po:RequestClaim()
+		log("[VRF] offline claim request")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void HandleReply(Component comp)
+		-- 서버 결과 처리: 성공이면 상자 열림 연출, 실패면 안내.
+		local wasWaiting = self._T.waiting
+		self._T.waiting = false
+		local msg = comp.OfflineMsg
+		log("[VRF] offline reply client msg=" .. msg .. " result=" .. comp.OfflineResult .. " waiting=" .. tostring(wasWaiting))
+		if not wasWaiting or not self:IsOpen() then return end
+		if msg == "ok" then
+			local n = self:Nums(comp.OfflineResult)
+			self:ShowRewards(n[1] or 0, n[2] or 0, n[3] or 0, n[4] or 0, n[5] or 0)
+			self:SetChestAnim()
+			self._T.anim = 0
+			self._T.frame = 1
+			return
+		end
+		local texts = {
+			short = "아직 받을 보상이 없습니다",
+			notready = "불러오는 중입니다",
+			lobby = "로비에서만 받을 수 있습니다",
+			locked = "1층 클리어 시 열립니다",
+			save_fail = "저장에 실패했습니다. 잠시 후 다시 시도해 주세요",
+		}
+		if msg ~= "busy" then self:Notice(texts[msg] or "받기에 실패했습니다") end
+		self._T.sig = nil
+		self:Refresh(true)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Notice(string text)
+		-- 팝업 안 짧은 안내.
+		if not isvalid(self.noticeText) then return end
+		self.noticeText.Text = text
+		self.noticeText.Entity:SetEnable(true)
+		self._T.noticeT = self.NoticeDuration
+		log("[VRF] offline notice " .. text)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowRewards(integer gold, integer s, integer m, integer l, integer dia)
+		-- 보상 칸 채우기: 0인 칸은 숨기고 보이는 칸을 가운데 정렬.
+		if not isvalid(self.rewards) then return end
+		local list = { { "Gold", gold }, { "BookL", l }, { "BookM", m }, { "BookS", s }, { "Dia", dia } }
+		local shown = {}
+		for _, it in ipairs(list) do
+			local cell = self:Cell(it[1])
+			if isvalid(cell) then
+				local on = it[2] > 0
+				if cell.Enable ~= on then cell:SetEnable(on) end
+				if on then
+					local cnt = cell:GetChildByName("Count")
+					if isvalid(cnt) then cnt.TextGUIRendererComponent.Text = self:Comma(it[2]) end
+					table.insert(shown, cell)
+				end
+			end
+		end
+		local total = #shown * self.CellWidth + math.max(0, #shown - 1) * self.CellGap
+		local x = -total / 2 + self.CellWidth / 2
+		for _, cell in ipairs(shown) do
+			cell.UITransformComponent.anchoredPosition = Vector2(x, 0)
+			x = x + self.CellWidth + self.CellGap
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void Refresh(boolean force)
+		-- 열린 팝업 갱신 (값이 바뀔 때만). 연출 중에는 지급 결과를 그대로 둔다.
+		local comp = self:Comp()
+		if comp == nil or self._T.anim >= 0 then return end
+		local sig = tostring(comp.OfflineSec) .. "|" .. comp.OfflinePreview .. "|" .. tostring(comp.OfflineFloor) .. "|" .. tostring(self._T.waiting)
+		if not force and self._T.sig == sig then return end
+		self._T.sig = sig
+		local sec = comp.OfflineSec
+		local maxSec = math.max(1, comp.OfflineMaxSec)
+		local full = sec >= maxSec
+		if isvalid(self.gaugeFill) then
+			self.gaugeFill.UITransformComponent.RectSize = Vector2(math.max(0, self.PopupGaugeWidth * math.min(1, sec / maxSec)), 16)
+			if full then self.gaugeFill.SpriteGUIRendererComponent.Color = self.GaugeFullColor else self.gaugeFill.SpriteGUIRendererComponent.Color = self.GaugeColor end
+		end
+		if isvalid(self.timeText) then self.timeText.Text = self:Hm(sec) .. " / " .. self:Hm(maxSec) end
+		local n = self:Nums(comp.OfflinePreview)
+		self:ShowRewards(n[1] or 0, n[2] or 0, n[3] or 0, n[4] or 0, n[5] or 0)
+		local canClaim = comp.OfflineLoaded and comp.OfflineFloor >= 1 and sec >= math.floor(self:Cfg("MinClaimSec", 60)) and not self._T.waiting
+		if isvalid(self.btnClaim) then _UIButtonLogic:SetDisabled(self.btnClaim.Entity, not canClaim) end
+	end
+
+	-- ───────────────────────── 로비 버튼 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void RefreshLobbyButton(Component comp)
+		-- 로비 상자 버튼: 잠금(1층 클리어 전)·게이지·시간·빨간 점. 층·지역 선택 창이 열리면 숨긴다.
+		if not isvalid(self.btnOffline) then return end
+		local e = self.btnOffline.Entity
+		local cover = (isvalid(self.lobbyStage) and self.lobbyStage.Enable) or (isvalid(self.lobbyRegion) and self.lobbyRegion.Enable)
+		if e.Enable == cover then e:SetEnable(not cover) end
+		local loaded = comp ~= nil and comp.OfflineLoaded
+		local floor = 0
+		local sec = 0
+		local maxSec = 1
+		if loaded then
+			floor = comp.OfflineFloor
+			sec = comp.OfflineSec
+			maxSec = math.max(1, comp.OfflineMaxSec)
+		end
+		local locked = (not loaded) or floor < 1
+		local full = sec >= maxSec
+		local sig = tostring(locked) .. "|" .. tostring(math.floor(sec / 60)) .. "|" .. tostring(full)
+		if self._T.btnSig == sig then return end
+		self._T.btnSig = sig
+		_UIButtonLogic:SetDisabled(e, locked)
+		local fill = e:GetChildByName("Gauge")
+		if isvalid(fill) then fill = fill:GetChildByName("Fill") end
+		if isvalid(fill) then
+			local w = 0
+			if not locked then w = self.ButtonGaugeWidth * math.min(1, sec / maxSec) end
+			fill.UITransformComponent.RectSize = Vector2(w, 8)
+			if full then fill.SpriteGUIRendererComponent.Color = self.GaugeFullColor else fill.SpriteGUIRendererComponent.Color = self.GaugeColor end
+		end
+		local t = e:GetChildByName("Time")
+		if isvalid(t) then
+			if locked then t.TextGUIRendererComponent.Text = "" else t.TextGUIRendererComponent.Text = self:Hm(sec) end
+		end
+		local icon = e:GetChildByName("Icon")
+		if isvalid(icon) then
+			local c = 1
+			if locked then c = 0.55 end
+			icon.SpriteGUIRendererComponent.Color = Color(c, c, c, 1)
+		end
+		local dot = e:GetChildByName("Dot")
+		if isvalid(dot) then
+			local on = (not locked) and (sec >= 3600 or full)
+			if dot.Enable ~= on then dot:SetEnable(on) end
+		end
+		log("[VRF] offline lobby button locked=" .. tostring(locked) .. " sec=" .. tostring(sec) .. " full=" .. tostring(full))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnLobbyButtonDown()
+		-- 잠긴 상자 버튼을 누르면 해금 조건 툴팁.
+		local comp = self:Comp()
+		if comp ~= nil and comp.OfflineLoaded and comp.OfflineFloor >= 1 then return end
+		self:ShowLockTip()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnLobbyButtonTip()
+		-- 다른 툴팁이 떠 있을 때 상자 버튼을 누름: 잠겼으면 잠금 툴팁, 열렸으면 툴팁을 닫고 팝업.
+		local comp = self:Comp()
+		if comp ~= nil and comp.OfflineLoaded and comp.OfflineFloor >= 1 then
+			_TooltipLogic:Hide()
+			self:Open()
+			return
+		end
+		self:ShowLockTip()
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowLockTip()
+		-- 잠금 툴팁.
+		if not isvalid(self.btnOffline) then return end
+		_TooltipLogic:ShowText(self.btnOffline.Entity, "방치 보상", "1층 클리어 시 열림")
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowGaugeTip(Entity target)
+		-- 진행 막대 툴팁: 기준 층·상한·시간당 양.
+		local comp = self:Comp()
+		if comp == nil then return end
+		local r = self:Nums(comp.OfflineRate)
+		local hours = math.floor(math.max(1, comp.OfflineMaxSec) / 3600)
+		local body = "최고 " .. tostring(comp.OfflineFloor) .. "층 기준 · 최대 " .. tostring(hours) .. "시간\n시간당 금색 메소 " .. self:Comma(r[1] or 0) .. "\n시간당 경험치 " .. self:Comma(r[2] or 0) .. "\n1시간마다 다이아 " .. tostring(r[3] or 0)
+		_TooltipLogic:ShowText(target, "방치 보상", body)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowCellTip(string key)
+		-- 보상 칸 툴팁: 이름과 시간당 양.
+		local comp = self:Comp()
+		local cell = self:Cell(key)
+		if comp == nil or not isvalid(cell) then return end
+		local r = self:Nums(comp.OfflineRate)
+		local title = "금색 메소"
+		local body = "시간당 " .. self:Comma(r[1] or 0)
+		if key == "Dia" then
+			title = "다이아"
+			body = "꽉 찬 1시간마다 " .. tostring(r[3] or 0)
+		elseif key == "BookL" or key == "BookM" or key == "BookS" then
+			local names = { BookS = "경험의 서 (소)", BookM = "경험의 서 (중)", BookL = "경험의 서 (대)" }
+			local per = { BookS = self:Cfg("BookExpS", 100), BookM = self:Cfg("BookExpM", 500), BookL = self:Cfg("BookExpL", 2000) }
+			title = names[key]
+			body = "캐릭터 경험치 +" .. self:Comma(per[key]) .. " (권당)\n방치 경험치 시간당 " .. self:Comma(r[2] or 0)
+		end
+		_TooltipLogic:ShowText(cell, title, body)
+	end
+
+	-- ───────────────────────── 매 프레임 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 결과 감시, 상자 연출, 팝업·로비 버튼 갱신, 자동 팝업.
+		local comp = self:Comp()
+		if comp ~= nil and comp.OfflineLoaded then
+			if self._T.lastSeq == nil then
+				self._T.lastSeq = comp.OfflineSeq
+			elseif comp.OfflineSeq ~= self._T.lastSeq then
+				-- 순번이 먼저 도착할 수 있어 Msg·Result 동기화를 잠깐 기다린 뒤 읽는다
+				self._T.lastSeq = comp.OfflineSeq
+				self._T.replyT = 0.15
+			end
+			if self._T.replyT ~= nil then
+				self._T.replyT = self._T.replyT - delta
+				if self._T.replyT <= 0 then
+					self._T.replyT = nil
+					self:HandleReply(comp)
+				end
+			end
+		end
+		local inLobby = self:InLobby()
+		if self:IsOpen() then
+			if not inLobby then self:Close() end
+			self:UpdateAnim(delta)
+			if self:IsOpen() then self:Refresh(false) end
+			if self._T.noticeT > 0 then
+				self._T.noticeT = self._T.noticeT - delta
+				if self._T.noticeT <= 0 and isvalid(self.noticeText) then self.noticeText.Entity:SetEnable(false) end
+			end
+		end
+		if inLobby then
+			self._T.tick = (self._T.tick or 0) - delta
+			if self._T.tick <= 0 then
+				self._T.tick = 0.2
+				self:RefreshLobbyButton(comp)
+				self:CheckAutoPopup(comp)
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateAnim(number delta)
+		-- 받기 성공: 상자 10프레임 열림(1.2초) → CloseDelay초 뒤 자동 닫힘.
+		if self._T.anim < 0 then return end
+		self._T.anim = self._T.anim + delta
+		local t = self._T.anim
+		local acc = 0
+		local idx = #self._T.frames
+		for i, d in ipairs(self._T.frameMs) do
+			acc = acc + d
+			if t < acc then idx = i break end
+		end
+		idx = math.min(idx, #self._T.frames)
+		if idx ~= self._T.frame and isvalid(self.chest) then
+			self._T.frame = idx
+			self.chest.ImageRUID = DataRef(self._T.frames[idx])
+		end
+		if t >= acc + self.CloseDelay then
+			log("[VRF] offline chest anim done")
+			self:Close()
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void CheckAutoPopup(Component comp)
+		-- 접속 후 로비 첫 진입 1회: 층 1 이상 + AutoPopupSec 이상이면 연다. 레벨업 연출이 떠 있으면 닫힐 때까지 기다린다.
+		if self._T.autoDone then return end
+		if comp == nil or not comp.OfflineLoaded then return end
+		local player = _UserService.LocalPlayer
+		---@type PlayerEngrave
+		local eng = player:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.Loaded then return end
+		-- 서버 미리보기가 층을 반영할 때까지 (1초 주기) 기다린다
+		if comp.OfflineFloor ~= math.max(0, math.floor(eng.ClearedFloor or 0)) then return end
+		local levelUp = _LevelUpUILogic.root
+		if isvalid(levelUp) and levelUp.Enable then return end
+		self._T.autoDone = true
+		local need = math.floor(self:Cfg("AutoPopupSec", 600))
+		local open = comp.OfflineFloor >= 1 and comp.OfflineSec >= need
+		log("[VRF] offline auto popup check floor=" .. tostring(comp.OfflineFloor) .. " sec=" .. tostring(comp.OfflineSec) .. " need=" .. tostring(need) .. " open=" .. tostring(open))
+		if open then self:Open() end
+	end
+
+end

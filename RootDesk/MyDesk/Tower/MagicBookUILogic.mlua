@@ -14,7 +14,8 @@ script MagicBookUILogic extends Logic
 	method void OnBeginPlay()
 		-- 스킬 표 읽기, 버튼 연결, 화면 숨기기.
 		self._T.skills = {}
-		for _, name in ipairs({ "HeroSkillTable", "JobSkillTable" }) do
+		-- 스킬 개편: 직업 스킬표(JobSkillTable)를 먼저 읽어 새 이름·아이콘이 옛 HeroSkillTable보다 우선
+		for _, name in ipairs({ "JobSkillTable", "HeroSkillTable" }) do
 			local t = _DataService:GetTable(name)
 			if t ~= nil then
 				for i = 1, t:GetRowCount() do
@@ -128,6 +129,17 @@ script MagicBookUILogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method table SkillDef(Component mgr, string id)
+		-- 스킬 개편: 동작 Id에 새 스킬이 입혀져 있으면(판 매니저 SkillAlias "동작=새 스킬") 새 스킬 이름·아이콘.
+		local did = id
+		for entry in string.gmatch(mgr.SkillAlias or "", "[^,]+") do
+			local p = string.find(entry, "=", 1, true)
+			if p ~= nil and string.sub(entry, 1, p - 1) == id then did = string.sub(entry, p + 1) end
+		end
+		return self._T.skills[did] or self._T.skills[id] or { name = id, icon = "" }
+	end
+
+	@ExecSpace("ClientOnly")
 	method void Refresh(Component mgr)
 		-- 탭·스킬 목록·사용하기 버튼·보유 스킬석을 다시 그린다.
 		local members = self:Parse(mgr.BookInfo)
@@ -153,7 +165,7 @@ script MagicBookUILogic extends Logic
 			if isvalid(row) then
 				row:SetEnable(s ~= nil)
 				if s ~= nil then
-					local def = self._T.skills[s.id] or { name = s.id, icon = "" }
+					local def = self:SkillDef(mgr, s.id)
 					local name = self:Find("Win/Body/Row" .. i .. "/Name")
 					if isvalid(name) then name.TextGUIRendererComponent.Text = def.name end
 					local brk = self:Find("Win/Body/Row" .. i .. "/Breaks")
@@ -187,7 +199,7 @@ script MagicBookUILogic extends Logic
 			if sel ~= nil and mgr.SkillStone < mgr.StoneCost then
 				txt = "<color=#FF6B6B>스킬석이 부족합니다</color> (필요 " .. tostring(mgr.StoneCost) .. "개)"
 			elseif sel ~= nil then
-				local def = self._T.skills[sel.id] or { name = sel.id }
+				local def = self:SkillDef(mgr, sel.id)
 				txt = def.name .. " — 남은 돌파 " .. tostring(sel.remain) .. "개 중 무작위 " .. tostring(math.min(2, sel.remain)) .. "개를 보여 줍니다"
 			end
 			desc.TextGUIRendererComponent.Text = txt

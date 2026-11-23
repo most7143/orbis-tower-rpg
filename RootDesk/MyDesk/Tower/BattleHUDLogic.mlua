@@ -61,15 +61,16 @@ script BattleHUDLogic extends Logic
 			end
 		end
 		self:ConnectSlotTips()
+		self:ConnectBossHud()
 		log("[VRF] BattleHUDLogic begin (client) coins=" .. tostring(#self._T.coins))
 	end
 
 	@ExecSpace("ClientOnly")
 	method void ConnectSlotTips()
-		-- 구성원 패널 스킬 칸(P1~P3 / S1~S5)을 누르면 스킬 상세 툴팁. 전투는 계속 진행된다.
+		-- 구성원 패널 스킬 칸(P1~P3 / S1~S8)을 누르면 스킬 상세 툴팁. 전투는 계속 진행된다.
 		self._T.slotTipHandlers = {}
 		for k = 1, 3 do
-			for i = 1, 5 do
+			for i = 1, 8 do
 				local e = _EntityService:GetEntityByPath("/ui/BattleHUD/Members/P" .. tostring(k) .. "/S" .. tostring(i))
 				if isvalid(e) then
 					local ck = k
@@ -92,6 +93,175 @@ script BattleHUDLogic extends Logic
 			end
 		end
 		self._T.slotTipHandlers = {}
+		for _, rec in ipairs(self._T.bossHandlers or {}) do
+			if isvalid(rec.entity) then
+				rec.entity:DisconnectEvent(rec.evt, rec.fn)
+				_TooltipLogic:Unregister(rec.entity)
+			end
+		end
+		self._T.bossHandlers = {}
+	end
+
+	-- ===== 보스 개편 B3: 보스 HUD (보호막·그로기·예고 띠·제한 시간·약점 점·방어 버튼) =====
+
+	@ExecSpace("ClientOnly")
+	method void ConnectBossHud()
+		-- 방어 버튼 클릭(비활성이면 입력 차단) + 약점·졸개 오라 아이콘 툴팁.
+		self._T.bossHandlers = {}
+		local btn = _EntityService:GetEntityByPath("/ui/BattleHUD/GuardBtn")
+		if isvalid(btn) then
+			local h = btn:ConnectEvent(ButtonClickEvent, function()
+				if not btn.EnabledInHierarchy or not btn.ButtonComponent.Enable then return end
+				local mech = self:BossMech()
+				if mech == nil then return end
+				_UISoundLogic:PlayClick()
+				mech:RequestGuard()
+				log("[VRF] guard button clicked")
+			end)
+			table.insert(self._T.bossHandlers, { entity = btn, evt = ButtonClickEvent, fn = h })
+			_TooltipLogic:Register(btn, function() _TooltipLogic:ShowText(btn, "방어", "예고(빨간 띠)가 떠 있을 때 누르면 그 공격의 피해가 크게 줄어듭니다. 쓰고 나면 잠시 기다려야 합니다.") end)
+		end
+		for i = 0, 1 do
+			local idx = i
+			local e = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar/Weak" .. tostring(i))
+			if isvalid(e) then
+				local show = function()
+					local id = (self._T.weakIds or {})[idx + 1] or ""
+					_TooltipLogic:ShowText(e, "약점", self:ElemName(id) .. " 속성 공격에 약합니다.")
+				end
+				local h = e:ConnectEvent(UITouchDownEvent, show)
+				table.insert(self._T.bossHandlers, { entity = e, evt = UITouchDownEvent, fn = h })
+				_TooltipLogic:Register(e, show)
+			end
+		end
+		-- 보스 바를 누르면 보호막 설명 (보호막이 있을 때만)
+		local bar = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar")
+		if isvalid(bar) then
+			local showBar = function()
+				local mech = self:BossMech()
+				if mech == nil or mech.ShieldRatio < 0 then _TooltipLogic:Hide() return end
+				_TooltipLogic:ShowText(bar, "보호막", "흰 게이지가 남아 있는 동안 체력이 줄지 않습니다. 약점 속성으로 빨리 깎이고, 깨면 잠시 무력해집니다.")
+			end
+			local h = bar:ConnectEvent(UITouchDownEvent, showBar)
+			table.insert(self._T.bossHandlers, { entity = bar, evt = UITouchDownEvent, fn = h })
+			_TooltipLogic:Register(bar, showBar)
+		end
+		local aura = _EntityService:GetEntityByPath("/ui/BattleHUD/BossBar/Aura")
+		if isvalid(aura) then
+			local show = function() _TooltipLogic:ShowText(aura, "보호", "졸개가 살아 있는 동안 보스가 받는 피해가 줄어듭니다.") end
+			local h = aura:ConnectEvent(UITouchDownEvent, show)
+			table.insert(self._T.bossHandlers, { entity = aura, evt = UITouchDownEvent, fn = h })
+			_TooltipLogic:Register(aura, show)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method Component BossMech()
+		-- 지금 맵의 보스 기믹 컴포넌트 (탑 맵이 아니면 nil).
+		local player = _UserService.LocalPlayer
+		if not isvalid(player) or not isvalid(player.CurrentMap) then return nil end
+		return player.CurrentMap:GetComponent("script.BossMechanics")
+	end
+
+	@ExecSpace("ClientOnly")
+	method string ElemName(string id)
+		-- 속성 Id → 표시 이름 (ElementTable).
+		if self._T.elemInfo == nil then
+			self._T.elemInfo = {}
+			local t = _DataService:GetTable("ElementTable")
+			if t ~= nil then
+				for i = 1, t:GetRowCount() do
+					local hex = t:GetCell(i, "Color") or "FFFFFF"
+					local r = (tonumber(string.sub(hex, 1, 2), 16) or 255) / 255
+					local g = (tonumber(string.sub(hex, 3, 4), 16) or 255) / 255
+					local b = (tonumber(string.sub(hex, 5, 6), 16) or 255) / 255
+					self._T.elemInfo[t:GetCell(i, "Id")] = { name = t:GetCell(i, "Name") or "", color = Color(r, g, b, 1) }
+				end
+			end
+		end
+		local e = self._T.elemInfo[id]
+		return e ~= nil and e.name or id
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SetOn(string path, boolean on)
+		-- HUD 엔티티 켜기/끄기 (바뀔 때만).
+		local e = _EntityService:GetEntityByPath(path)
+		if isvalid(e) and e.Enable ~= on then e:SetEnable(on) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateBossHud(Component mgr, Component mech)
+		-- 보스 기믹 HUD: 보스가 맨 앞이고 전투 중일 때만. 보호막·시간은 보스전 전용, 방어 버튼은 필드보스·보스전 공통.
+		local on = mgr ~= nil and mech ~= nil and mech.BossOn and mgr.MonsterBoss and (mgr.RunState == "FIGHT" or mgr.RunState == "CLEAR")
+		local base = "/ui/BattleHUD/"
+		self:SetOn(base .. "GuardBtn", on)
+		if not on then
+			self:SetOn(base .. "BossWarn", false)
+			return
+		end
+		-- 보호막 (흰 게이지)
+		local shield = _EntityService:GetEntityByPath(base .. "BossBar/Shield")
+		if isvalid(shield) then
+			local show = mech.ShieldRatio >= 0
+			if shield.Enable ~= show then shield:SetEnable(show) end
+			if show then shield.UITransformComponent.RectSize = Vector2(math.max(1, 880 * mech.ShieldRatio), 12) end
+		end
+		self:SetOn(base .. "BossBar/Groggy", mech.Groggy)
+		self:SetOn(base .. "BossBar/Aura", mech.SummonAura)
+		-- 제한 시간 (보스전): 보스전은 체력 숫자 대신 시간
+		local timer = _EntityService:GetEntityByPath(base .. "BossBar/Timer")
+		if isvalid(timer) then
+			local show = mech.BossMode and mech.TimeLeft >= 0
+			if timer.Enable ~= show then timer:SetEnable(show) end
+			if show then
+				local t = mech.TimeLeft
+				local txt = string.format("%d:%02d", math.floor(t / 60), t % 60)
+				if timer.TextGUIRendererComponent.Text ~= txt then timer.TextGUIRendererComponent.Text = txt end
+				timer.TextGUIRendererComponent.FontColor = t <= 30 and Color(1, 0.4, 0.35, 1) or Color(1, 1, 1, 1)
+			end
+		end
+		self:SetOn(base .. "BossBar/HpText", not mech.BossMode)
+		-- 약점 점 (속성색)
+		if self._T.weakRaw ~= mech.WeakElems then
+			self._T.weakRaw = mech.WeakElems
+			local ids = {}
+			for id in string.gmatch(mech.WeakElems or "", "[^|]+") do table.insert(ids, id) end
+			self._T.weakIds = ids
+			self:ElemName("")
+			for i = 0, 1 do
+				local e = _EntityService:GetEntityByPath(base .. "BossBar/Weak" .. tostring(i))
+				if isvalid(e) then
+					local id = ids[i + 1]
+					e:SetEnable(id ~= nil)
+					if id ~= nil and self._T.elemInfo[id] ~= nil then e.SpriteGUIRendererComponent.Color = self._T.elemInfo[id].color end
+				end
+			end
+		end
+		-- 예고 띠: 줄어드는 빨간 띠, 저지 게이지(파랑)
+		local warnOn = mech.WarnRatio > 0
+		self:SetOn(base .. "BossWarn", warnOn)
+		if warnOn then
+			local fill = _EntityService:GetEntityByPath(base .. "BossWarn/Fill")
+			if isvalid(fill) then fill.UITransformComponent.RectSize = Vector2(math.max(1, 580 * mech.WarnRatio), 14) end
+			local gauge = _EntityService:GetEntityByPath(base .. "BossWarn/Gauge")
+			if isvalid(gauge) then
+				local gs = mech.GaugeRatio >= 0
+				if gauge.Enable ~= gs then gauge:SetEnable(gs) end
+				if gs then gauge.UITransformComponent.RectSize = Vector2(math.max(1, 580 * mech.GaugeRatio), 8) end
+			end
+		end
+		-- 방어 버튼: 쿨타임 원형 채움, 예고 중(아직 안 씀) 테두리 빛남, 쿨타임 중 비활성(입력 차단)
+		local btn = _EntityService:GetEntityByPath(base .. "GuardBtn")
+		if isvalid(btn) then
+			local ready = mech.GuardCd <= 0
+			if btn.ButtonComponent.Enable ~= ready then btn.ButtonComponent.Enable = ready end
+			local cd = _EntityService:GetEntityByPath(base .. "GuardBtn/Cd")
+			if isvalid(cd) then cd.SpriteGUIRendererComponent.FillAmount = ready and 0 or math.min(1, mech.GuardCd / math.max(1, mech.GuardCdMax)) end
+			self:SetOn(base .. "GuardBtn/Glow", warnOn and ready and not mech.GuardArmed)
+			local icon = _EntityService:GetEntityByPath(base .. "GuardBtn/Icon")
+			if isvalid(icon) then icon.SpriteGUIRendererComponent.Color = ready and Color(1, 1, 1, 1) or Color(0.6, 0.6, 0.6, 1) end
+		end
 	end
 
 	@ExecSpace("ClientOnly")
@@ -123,7 +293,7 @@ script BattleHUDLogic extends Logic
 				end
 			end
 		end
-		local kinds = { Main = "주력기", Sub = "보조기", Tech = "기술", Hyper = "하이퍼", Ult = "궁극기" }
+		local kinds = { Main = "주력기", Sub = "보조기", Tech = "기술", Hyper = "하이퍼", V1 = "5차", V2 = "5차", V3 = "5차", Ult = "궁극기" }
 		local ss = _DataService:GetTable("CharSkillSlotTable")
 		if ss ~= nil then
 			for i = 1, ss:GetRowCount() do
@@ -166,7 +336,13 @@ script BattleHUDLogic extends Logic
 		local player = _UserService.LocalPlayer
 		local mgr = (isvalid(player) and isvalid(player.CurrentMap)) and player.CurrentMap:GetComponent("script.TowerRunManager") or nil
 		if mgr ~= nil and mgr.SkillBreaks ~= nil then
-			local raw = mgr.SkillBreaks[info.id] or ""
+			-- 스킬 개편: 칸에는 새 스킬 Id가 보이고 돌파는 동작 기준 Id로 저장된다 (SkillAlias "동작=새 스킬")
+			local behId = info.id
+			for entry in string.gmatch(mgr.SkillAlias or "", "[^,]+") do
+				local p = string.find(entry, "=", 1, true)
+				if p ~= nil and string.sub(entry, p + 1) == info.id then behId = string.sub(entry, 1, p - 1) end
+			end
+			local raw = mgr.SkillBreaks[behId] or ""
 			for oid in string.gmatch(raw, "[^,]+") do
 				local b = self._T.tipBreaks[oid]
 				if b ~= nil then
@@ -585,6 +761,7 @@ script BattleHUDLogic extends Logic
 			if isvalid(self.monsterHpRoot) then self.monsterHpRoot.Entity:SetEnable(false) end
 			if isvalid(self.monsterTagRoot) then self.monsterTagRoot.Entity:SetEnable(false) end
 			self:UpdateBossBar(nil, nil)
+			self:UpdateBossHud(nil, nil)
 			for _, qb in ipairs(self._T.qbars or {}) do
 				if isvalid(qb) and qb.Enable then qb:SetEnable(false) end
 			end
@@ -627,6 +804,7 @@ script BattleHUDLogic extends Logic
 		self:PlaceMonsterBar(barTarget, mgr.MonsterHp, mgr.MonsterMaxHp)
 		self:PlaceNameTag(tagTarget, mgr.MonsterLabel, mgr.MonsterElite)
 		self:UpdateBossBar(mgr, monster)
+		self:UpdateBossHud(mgr, map:GetComponent("script.BossMechanics"))
 		self:UpdateQueueBars(map, monster)
 
 		-- 몬스터 처치(KillSeq 증가) 시 메소 드롭 연출. 강화 몬스터는 동전을 더 많이.
@@ -740,7 +918,8 @@ script BattleHUDLogic extends Logic
 		end
 		if self._T.mateIcons == nil then
 			self._T.mateIcons = {}
-			for _, name in ipairs({ "HeroSkillTable", "JobSkillTable" }) do
+			-- 스킬 개편: JobSkillTable(새 이름·아이콘)을 먼저 읽어 우선한다. HeroSkillTable은 JobSkillTable에 없는 옛 Id만 채운다.
+			for _, name in ipairs({ "JobSkillTable", "HeroSkillTable" }) do
 				local t = _DataService:GetTable(name)
 				if t ~= nil then
 					for i = 1, t:GetRowCount() do
@@ -791,7 +970,8 @@ script BattleHUDLogic extends Logic
 		-- 스킬 칸 툴팁용으로 이번 프레임 칸 정보를 보관
 		self._T.slotTips = self._T.slotTips or {}
 		self._T.slotTips[k] = list
-		for i = 1, 5 do
+		-- 스킬 개편: 칸 8개 (주력기·보조기·기술·하이퍼·5차 3칸·궁극기). 칸 크기는 UI에서 읽어 덮개 높이에 쓴다
+		for i = 1, 8 do
 			local slot = "S" .. tostring(i)
 			local info = list[i]
 			local icon = get(slot .. "/Icon")
@@ -820,9 +1000,11 @@ script BattleHUDLogic extends Logic
 			end
 			local cd = get(slot .. "/Cd")
 			if isvalid(cd) then
-				local h = 72 * ratio
+				local box = get(slot)
+				local full = isvalid(box) and box.UITransformComponent.RectSize.x or 72
+				local h = full * ratio
 				local sz = cd.UITransformComponent.RectSize
-				if math.abs(sz.y - h) > 0.5 then cd.UITransformComponent.RectSize = Vector2(72, h) end
+				if math.abs(sz.y - h) > 0.5 or math.abs(sz.x - full) > 0.5 then cd.UITransformComponent.RectSize = Vector2(full, h) end
 			end
 			setText(slot .. "/CdText", cdText)
 			local lvText = ""

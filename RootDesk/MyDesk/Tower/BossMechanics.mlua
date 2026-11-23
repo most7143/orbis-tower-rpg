@@ -1,0 +1,492 @@
+@Component
+script BossMechanics extends Component
+
+	-- 보스 기믹 (Docs/Boss/Boss-Stage-Spec.md §3.3·§5). OrbisTower 맵 엔티티에 TowerRunManager와 함께 붙는다.
+	-- 필드보스(층 마지막 보스)와 보스전(보스 탭) 공통: 예고 강타 + 방어 버튼. 보스전은 BossTable Mech1/Mech2 기믹을 더한다.
+	-- 판 진행·피해 적용은 TowerRunManager가 하고, 이 컴포넌트는 타이머·게이지·예고와 HUD 표시 값(@Sync)만 맡는다.
+	-- 기믹 형식: Summon(주기:마리:피해감소%), Shield(게이지%:속성:깨기제한초:폭발%), Interrupt(주기:예고초:게이지%:속성:실패피해%),
+	--           Fly(주기:지속:이동칸), Breath(주기:예고초:대상칸:피해%), Enrage(체력%:공격간격배율).
+
+	-- HUD 표시 값 (서버가 쓰고 클라이언트 BattleHUDLogic이 읽는다)
+	@Sync
+	property boolean BossOn = false
+	@Sync
+	property boolean BossMode = false
+	-- 약점 속성 Id "Holy|Fire" (최대 2개)
+	@Sync
+	property string WeakElems = ""
+	-- 보호막 게이지 비율 (음수 = 숨김)
+	@Sync
+	property number ShieldRatio = -1
+	@Sync
+	property boolean Groggy = false
+	-- 예고: 남은 비율(1→0, 0 = 예고 없음), 종류(smash/blast/wave/breath)
+	@Sync
+	property number WarnRatio = 0
+	@Sync
+	property string WarnKind = ""
+	-- 저지 게이지 채움 비율 (음수 = 숨김, 피아누스 해일 예고 중)
+	@Sync
+	property number GaugeRatio = -1
+	-- 보스전 남은 초 (음수 = 숨김)
+	@Sync
+	property integer TimeLeft = -1
+	-- 방어 버튼 쿨타임 남은 초 / 전체, 이번 예고에 방어를 썼는지
+	@Sync
+	property number GuardCd = 0
+	@Sync
+	property number GuardCdMax = 20
+	@Sync
+	property boolean GuardArmed = false
+	@Sync
+	property boolean Flying = false
+	-- 졸개 보호 오라(머쉬맘 소환물 생존 중 피해 감소)
+	@Sync
+	property boolean SummonAura = false
+	-- 방어 버튼 처리 순번 (클라이언트 연출용)
+	@Sync
+	property integer GuardSeq = 0
+
+	@HideFromInspector
+	property number SyncTimer = 0
+
+	-- ───────────────────────── 설정 ─────────────────────────
+
+	method number Cfg(string key, number fallback)
+		-- BossConfig 값 (서버 캐시, 없으면 fallback).
+		if self._T.cfg == nil then
+			self._T.cfg = {}
+			local cf = _DataService:GetTable("BossConfig")
+			if cf ~= nil then
+				for i = 1, cf:GetRowCount() do
+					local k = cf:GetCell(i, "Key")
+					local v = tonumber(cf:GetCell(i, "Value"))
+					if k ~= nil and k ~= "" and v ~= nil then self._T.cfg[k] = v end
+				end
+			end
+		end
+		local v = self._T.cfg[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	@ExecSpace("ServerOnly")
+	method Component Mgr()
+		-- 같은 맵 엔티티의 판 매니저.
+		return self.Entity:GetComponent("script.TowerRunManager")
+	end
+
+	@ExecSpace("ServerOnly")
+	method table ParseMech(string s)
+		-- "Summon:20:2:60" → { kind = "Summon", a = {20, 2, 60}, s = {"20","2","60"} } (빈칸이면 nil).
+		if s == nil or s == "" then return nil end
+		local parts = {}
+		for p in string.gmatch(s, "[^:]+") do table.insert(parts, p) end
+		if #parts == 0 then return nil end
+		local m = { kind = parts[1], a = {}, s = {} }
+		for i = 2, #parts do
+			table.insert(m.s, parts[i])
+			table.insert(m.a, tonumber(parts[i]) or 0)
+		end
+		return m
+	end
+
+	-- ───────────────────────── 시작·끝 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void Begin(boolean bossMode, string mech1, string mech2, string weak, number timeLimit)
+		-- 보스가 맨 앞에 섰을 때: 기믹 상태를 새로 만든다. bossMode = 보스 탭 보스전(제한 시간·기믹), 아니면 필드보스(예고 강타만).
+		self:End()
+		local st = { bossMode = bossMode, mechs = {}, smashT = self:Cfg("TelegraphInterval", 12), groggy = 0, slow = 0, time = timeLimit }
+		if bossMode then
+			for _, s in ipairs({ mech1 or "", mech2 or "" }) do
+				local m = self:ParseMech(s)
+				if m ~= nil then st.mechs[m.kind] = m end
+			end
+		end
+		local mm = st.mechs
+		if mm.Summon ~= nil then st.summonT = mm.Summon.a[1] * 0.5 end
+		if mm.Interrupt ~= nil then st.waveT = mm.Interrupt.a[1] end
+		if mm.Fly ~= nil then st.flyT = mm.Fly.a[1] end
+		if mm.Breath ~= nil then st.breathT = mm.Breath.a[1] end
+		self._T.st = st
+		self._T.warn = nil
+		self.BossOn = true
+		self.BossMode = bossMode
+		self.WeakElems = weak or ""
+		self.GuardCd = 0
+		self.GuardCdMax = self:Cfg("GuardCooldown", 20)
+		self.GuardArmed = false
+		self.Groggy = false
+		self.Flying = false
+		self.SummonAura = false
+		self.WarnRatio = 0
+		self.WarnKind = ""
+		self.GaugeRatio = -1
+		self.ShieldRatio = -1
+		self.TimeLeft = bossMode and math.ceil(timeLimit) or -1
+		if mm.Shield ~= nil then self:MakeShield() end
+		local kinds = {}
+		for k, _ in pairs(mm) do table.insert(kinds, k) end
+		log("[VRF] boss mech begin mode=" .. (bossMode and "boss" or "field") .. " mechs=" .. table.concat(kinds, ",") .. " weak=" .. tostring(weak) .. " time=" .. tostring(timeLimit))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void End()
+		-- 보스 처치·판 끝: 상태와 HUD 값을 지우고 보스 틴트·사거리를 되돌린다.
+		local st = self._T.st
+		if st ~= nil then
+			self:SetTint(false)
+			if st.flyLeft ~= nil then self:EndFly() end
+		end
+		self._T.st = nil
+		self._T.warn = nil
+		if self.BossOn then self.BossOn = false end
+		self.BossMode = false
+		self.ShieldRatio = -1
+		self.Groggy = false
+		self.WarnRatio = 0
+		self.WarnKind = ""
+		self.GaugeRatio = -1
+		self.TimeLeft = -1
+		self.GuardArmed = false
+		self.Flying = false
+		self.SummonAura = false
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean Active()
+		-- 기믹이 돌고 있는지.
+		return self._T.st ~= nil
+	end
+
+	-- ───────────────────────── 매 프레임 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void Tick(number delta)
+		-- 전투 중(맨 앞 = 보스)일 때 매니저가 부른다: 제한 시간·그로기·예고·기믹 타이머.
+		local st = self._T.st
+		if st == nil then return end
+		local mgr = self:Mgr()
+		if mgr == nil then return end
+		-- 제한 시간 (보스전만)
+		if st.bossMode then
+			st.time = st.time - delta
+			if st.time <= 0 then
+				log("[VRF] boss mech time over")
+				self:End()
+				mgr:BossTimeout()
+				return
+			end
+		end
+		if self.GuardCd > 0 then self.GuardCd = math.max(0, self.GuardCd - delta) end
+		if st.slow > 0 then st.slow = math.max(0, st.slow - delta) end
+		-- 그로기: 보스는 공격하지 않는다
+		if st.groggy > 0 then
+			st.groggy = st.groggy - delta
+			mgr:BossHoldAttack(0.3)
+			if st.groggy <= 0 then
+				st.groggy = 0
+				log("[VRF] boss groggy end")
+			end
+		end
+		local mm = st.mechs
+		local hpRatio = mgr.MonsterMaxHp > 0 and mgr.MonsterHp / mgr.MonsterMaxHp or 1
+		-- 분노: 체력 % 이하에서 공격 간격 배율 (한 번)
+		if mm.Enrage ~= nil and not st.enraged and hpRatio * 100 <= mm.Enrage.a[1] then
+			st.enraged = true
+			mgr:BossMulInterval(mm.Enrage.a[2])
+			log("[VRF] boss mech enrage hp=" .. string.format("%.2f", hpRatio) .. " intervalMul=" .. tostring(mm.Enrage.a[2]))
+		end
+		-- 보호막: 체력 50%에서 다시 생성, 깨기 제한 시간이 다 되면 장벽 폭발 예고
+		if mm.Shield ~= nil then
+			if not st.shieldHalf and hpRatio <= 0.5 and (st.shield or 0) <= 0 and st.groggy <= 0 then
+				st.shieldHalf = true
+				self:MakeShield()
+			end
+			if (st.shield or 0) > 0 then
+				st.shieldT = st.shieldT - delta
+				local warnSec = 3
+				if st.shieldT <= warnSec and self._T.warn == nil then self:StartWarn("blast", math.max(0.5, st.shieldT), nil) end
+			end
+		end
+		-- 날아오르기: 지속이 끝나면 내려온다 (예고와 별개로 진행)
+		if mm.Fly ~= nil then
+			if st.flyLeft ~= nil then
+				st.flyLeft = st.flyLeft - delta
+				if st.flyLeft <= 0 then self:EndFly() end
+			else
+				st.flyT = st.flyT - delta
+				if st.flyT <= 0 then self:StartFly() end
+			end
+		end
+		-- 소환: 주기마다 (예고 없음)
+		if mm.Summon ~= nil then
+			st.summonT = st.summonT - delta
+			if st.summonT <= 0 then
+				st.summonT = mm.Summon.a[1]
+				local n = mgr:BossSummon(math.floor(mm.Summon.a[2]))
+				log("[VRF] boss mech summon n=" .. tostring(n))
+			end
+			local aura = mgr:BossSummonAlive()
+			if self.SummonAura ~= aura then self.SummonAura = aura end
+		end
+		-- 예고 진행 / 새 예고 (예고는 한 번에 하나)
+		local w = self._T.warn
+		if w ~= nil then
+			w.left = w.left - delta
+			if w.left <= 0 then self:Resolve(w) end
+		elseif st.groggy <= 0 then
+			if mm.Interrupt ~= nil then st.waveT = st.waveT - delta end
+			if mm.Breath ~= nil then st.breathT = st.breathT - delta end
+			st.smashT = st.smashT - delta
+			if mm.Interrupt ~= nil and st.waveT <= 0 then
+				st.waveT = mm.Interrupt.a[1]
+				local need = math.max(1, mgr.MonsterMaxHp * mm.Interrupt.a[3] / 100)
+				self:StartWarn("wave", mm.Interrupt.a[2], { need = need, got = 0, elem = mm.Interrupt.s[4] or "Fire", fail = mm.Interrupt.a[5] })
+			elseif mm.Breath ~= nil and st.breathT <= 0 then
+				st.breathT = mm.Breath.a[1]
+				self:StartWarn("breath", mm.Breath.a[2], { cell = math.floor(mm.Breath.a[3]), pct = mm.Breath.a[4] })
+			elseif st.smashT <= 0 then
+				st.smashT = self:Cfg("TelegraphInterval", 12)
+				self:StartWarn("smash", self:Cfg("TelegraphWarnSec", 2), nil)
+			end
+		end
+		self:SyncHud(delta)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SyncHud(number delta)
+		-- HUD 값은 0.1초마다 바뀐 것만 보낸다 (매 프레임 동기화 방지).
+		self.SyncTimer = self.SyncTimer - delta
+		if self.SyncTimer > 0 then return end
+		self.SyncTimer = 0.1
+		local st = self._T.st
+		if st == nil then return end
+		local w = self._T.warn
+		local wr = 0
+		if w ~= nil and w.total > 0 then wr = math.floor(math.max(0.02, w.left / w.total) * 50 + 0.5) / 50 end
+		if self.WarnRatio ~= wr then self.WarnRatio = wr end
+		local wk = w ~= nil and w.kind or ""
+		if self.WarnKind ~= wk then self.WarnKind = wk end
+		local gr = -1
+		if w ~= nil and w.kind == "wave" and w.data ~= nil then gr = math.floor(math.min(1, w.data.got / math.max(1, w.data.need)) * 50 + 0.5) / 50 end
+		if self.GaugeRatio ~= gr then self.GaugeRatio = gr end
+		local sr = -1
+		if st.mechs.Shield ~= nil and (st.shield or 0) > 0 then sr = math.floor(st.shield / math.max(1, st.shieldMax) * 50 + 0.5) / 50 end
+		if self.ShieldRatio ~= sr then self.ShieldRatio = sr end
+		local g = st.groggy > 0
+		if self.Groggy ~= g then self.Groggy = g end
+		if st.bossMode then
+			local tl = math.max(0, math.ceil(st.time))
+			if self.TimeLeft ~= tl then self.TimeLeft = tl end
+		end
+	end
+
+	-- ───────────────────────── 예고·방어 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void StartWarn(string kind, number sec, table data)
+		-- 예고 시작: 보스가 붉게 깜빡이고 HUD에 줄어드는 띠. 방어 버튼은 예고 중에만 통한다.
+		self._T.warn = { kind = kind, left = sec, total = sec, guarded = false, data = data }
+		self.GuardArmed = false
+		self:SetTint(true)
+		self.SyncTimer = 0
+		log("[VRF] boss telegraph start kind=" .. kind .. " sec=" .. tostring(sec))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void CancelWarn(string why)
+		-- 예고 취소 (저지 성공·보호막 파괴 등).
+		local w = self._T.warn
+		if w == nil then return end
+		self._T.warn = nil
+		self.GuardArmed = false
+		self:SetTint(false)
+		self.SyncTimer = 0
+		log("[VRF] boss telegraph cancel kind=" .. w.kind .. " why=" .. why)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void Resolve(table w)
+		-- 예고 끝: 패턴 피해 (방어를 썼으면 GuardReduce% 감소).
+		self._T.warn = nil
+		self:SetTint(false)
+		self.SyncTimer = 0
+		local mgr = self:Mgr()
+		local st = self._T.st
+		if mgr == nil or st == nil then return end
+		local cut = 1
+		if w.guarded then cut = math.max(0, 1 - self:Cfg("GuardReduce", 70) / 100) end
+		self.GuardArmed = false
+		local actors = {}
+		for _, a in ipairs(mgr:Actors()) do
+			if not mgr:IsDown(a) then table.insert(actors, a) end
+		end
+		if #actors == 0 then return end
+		if w.kind == "smash" then
+			-- 1번 칸(살아 있는 맨 앞) 캐릭터에게 보스 공격 × TelegraphMul (필중, 방어력 적용)
+			local a = actors[1]
+			local def = mgr:ActorDefense(a)
+			local dmg = math.max(1, math.floor(mgr.MonsterAtk * self:Cfg("TelegraphMul", 2.5) * (1 - def / (def + mgr.DefConstant)) * cut + 0.5))
+			mgr:BossHitActor(a, dmg)
+			log("[VRF] boss telegraph hit kind=smash dmg=" .. tostring(dmg) .. " guarded=" .. tostring(w.guarded) .. " cut=" .. string.format("%.2f", cut))
+		elseif w.kind == "blast" then
+			-- 장벽 폭발: 파티 전체 최대 체력 폭발% (필중), 게이지 다시 가득
+			local pct = st.mechs.Shield ~= nil and st.mechs.Shield.a[4] or 30
+			for _, a in ipairs(actors) do mgr:BossHitActor(a, math.max(1, math.floor(mgr:ActorMaxHp(a) * pct / 100 * cut + 0.5))) end
+			-- 메인 담당 결정: 폭발 뒤 게이지는 절반만 다시 채운다 (성 속성 없이도 어렵게 깰 수 있게)
+			self:MakeShieldPct(self:Cfg("ShieldRefillPct", 50))
+			log("[VRF] boss telegraph hit kind=blast pct=" .. tostring(pct) .. " guarded=" .. tostring(w.guarded))
+		elseif w.kind == "wave" then
+			-- 해일: 파티 전체 최대 체력 실패피해% + 3초 공격 속도 -30%
+			local pct = w.data ~= nil and w.data.fail or 40
+			for _, a in ipairs(actors) do mgr:BossHitActor(a, math.max(1, math.floor(mgr:ActorMaxHp(a) * pct / 100 * cut + 0.5))) end
+			st.slow = 3
+			log("[VRF] boss telegraph hit kind=wave pct=" .. tostring(pct) .. " guarded=" .. tostring(w.guarded) .. " gauge=" .. string.format("%.0f/%.0f", w.data.got, w.data.need))
+		elseif w.kind == "breath" then
+			-- 화염 브레스: 우리 편 대상 칸(3 = 맨 뒤)의 살아 있는 캐릭터
+			local cell = w.data ~= nil and w.data.cell or 3
+			local a = actors[math.min(#actors, math.max(1, cell))]
+			local pct = w.data ~= nil and w.data.pct or 55
+			local dmg = math.max(1, math.floor(mgr:ActorMaxHp(a) * pct / 100 * cut + 0.5))
+			mgr:BossHitActor(a, dmg)
+			log("[VRF] boss telegraph hit kind=breath target=" .. a.Name .. " dmg=" .. tostring(dmg) .. " guarded=" .. tostring(w.guarded))
+		end
+	end
+
+	@ExecSpace("Server")
+	method void RequestGuard()
+		-- 방어 버튼 (클라이언트): 예고 중이고 쿨타임이 끝났으면 이번 패턴 피해 감소. 예고가 없으면 아무 일 없음(쿨타임도 안 돎).
+		local player = _UserService:GetUserEntityByUserId(senderUserId)
+		if not isvalid(player) or player.CurrentMap ~= self.Entity then return end
+		local w = self._T.warn
+		if self._T.st == nil or w == nil or w.guarded or self.GuardCd > 0 then
+			log("[VRF] boss guard ignored warn=" .. tostring(w ~= nil) .. " cd=" .. string.format("%.1f", self.GuardCd))
+			return
+		end
+		w.guarded = true
+		self.GuardArmed = true
+		self.GuardCd = self.GuardCdMax
+		self.GuardSeq = self.GuardSeq + 1
+		log("[VRF] boss guard used kind=" .. w.kind .. " reduce=" .. tostring(self:Cfg("GuardReduce", 70)) .. " cd=" .. tostring(self.GuardCdMax))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetTint(boolean on)
+		-- 예고 중 보스를 붉게 (끝나면 원래 색).
+		local mgr = self:Mgr()
+		if mgr == nil then return end
+		local m = mgr:FrontMonster()
+		if not isvalid(m) or not isvalid(m.SpriteRendererComponent) then return end
+		if on then m.SpriteRendererComponent.Color = Color(1, 0.45, 0.45, 1) else m.SpriteRendererComponent.Color = Color(1, 1, 1, 1) end
+	end
+
+	-- ───────────────────────── 보호막·저지·날기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void MakeShield()
+		-- 보호막 게이지 생성 (보스 최대 체력의 게이지%) + 깨기 제한 시간.
+		self:MakeShieldPct(100)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MakeShieldPct(number pct)
+		-- 보호막 게이지를 최대치의 pct%로 만든다 (장벽 폭발 뒤에는 ShieldRefillPct%만).
+		local st = self._T.st
+		local mgr = self:Mgr()
+		if st == nil or mgr == nil or st.mechs.Shield == nil then return end
+		local m = st.mechs.Shield
+		st.shieldMax = math.max(1, mgr.MonsterMaxHp * m.a[1] / 100)
+		st.shield = math.max(1, st.shieldMax * pct / 100)
+		st.shieldT = m.a[3]
+		self.SyncTimer = 0
+		log("[VRF] boss mech shield up gauge=" .. string.format("%.0f", st.shield) .. " elem=" .. tostring(m.s[2]) .. " limit=" .. tostring(m.a[3]))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer Absorb(integer damage, string elem)
+		-- 보스가 받는 피해를 보호막이 먼저 받는다: 약점 속성 100%, 다른 속성 ShieldOtherRate%만 게이지를 깎고, 게이지가 있는 동안 체력은 깎이지 않는다.
+		-- 돌려주는 값 = 체력에 들어갈 피해.
+		local st = self._T.st
+		if st == nil or st.mechs.Shield == nil or (st.shield or 0) <= 0 or damage <= 0 then return damage end
+		local m = st.mechs.Shield
+		local rate = self:Cfg("ShieldOtherRate", 40) / 100
+		if elem == (m.s[2] or "Holy") then rate = 1 end
+		st.shield = st.shield - damage * rate
+		st.shieldLogN = (st.shieldLogN or 0) + 1
+		if st.shieldLogN <= 6 then log("[VRF] boss shield hit dmg=" .. tostring(damage) .. " elem=" .. tostring(elem) .. " rate=" .. string.format("%.2f", rate) .. " left=" .. string.format("%.0f", math.max(0, st.shield))) end
+		if st.shield <= 0 then
+			st.shield = 0
+			st.groggy = self:Cfg("GroggySec", 5)
+			if self._T.warn ~= nil and self._T.warn.kind == "blast" then self:CancelWarn("shield broken") end
+			self.SyncTimer = 0
+			log("[VRF] boss shield broken -> groggy " .. tostring(st.groggy))
+		end
+		return 0
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnDamaged(integer dealt, string elem)
+		-- 체력 피해가 들어간 뒤: 해일 예고 중이면 저지 게이지를 채운다 (지정 속성은 2배). 다 차면 해일 취소 + 그로기 3초.
+		local w = self._T.warn
+		local st = self._T.st
+		if st == nil or w == nil or w.kind ~= "wave" or w.data == nil or dealt <= 0 then return end
+		local add = dealt
+		if elem == w.data.elem then add = add * 2 end
+		w.data.got = w.data.got + add
+		if w.data.got >= w.data.need then
+			self:CancelWarn("interrupted")
+			st.groggy = 3
+			log("[VRF] boss interrupt success got=" .. string.format("%.0f", w.data.got) .. " need=" .. string.format("%.0f", w.data.need) .. " -> groggy 3")
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void StartFly()
+		-- 날아오르기: 보스가 몬스터 이동칸으로 물러나 그동안 사거리 1칸 직업은 닿지 않는다 (기존 칸 전투 CanReach).
+		local st = self._T.st
+		local mgr = self:Mgr()
+		if st == nil or mgr == nil then return end
+		local m = st.mechs.Fly
+		st.flyLeft = m.a[2]
+		st.flyT = m.a[1]
+		st.flyPrev = mgr:BossFrontRange(math.floor(m.a[3]))
+		self.Flying = true
+		log("[VRF] boss mech fly start cell=" .. tostring(m.a[3]) .. " sec=" .. tostring(m.a[2]))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void EndFly()
+		-- 날기 끝: 원래 칸으로 돌아온다.
+		local st = self._T.st
+		local mgr = self:Mgr()
+		if st == nil then return end
+		st.flyLeft = nil
+		self.Flying = false
+		if mgr ~= nil and st.flyPrev ~= nil then mgr:BossFrontRange(st.flyPrev) end
+		log("[VRF] boss mech fly end")
+	end
+
+	-- ───────────────────────── 매니저가 묻는 배율 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method number DamageMul()
+		-- 보스가 받는 피해 배율 (CombatMul에 곱 하나): 그로기 +GroggyDmg%, 졸개 생존 중 -피해감소%.
+		local st = self._T.st
+		if st == nil then return 1 end
+		local mul = 1
+		if st.groggy > 0 then mul = mul * (1 + self:Cfg("GroggyDmg", 50) / 100) end
+		if st.mechs.Summon ~= nil and self.SummonAura then mul = mul * math.max(0, 1 - st.mechs.Summon.a[3] / 100) end
+		return mul
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ActorIntervalMul()
+		-- 해일 실패 후 3초 공격 속도 -30% (공격 간격 ÷ 0.7).
+		local st = self._T.st
+		if st == nil or st.slow <= 0 then return 1 end
+		return 1 / 0.7
+	end
+
+end

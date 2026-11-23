@@ -1,0 +1,345 @@
+@Component
+script PlayerOffline extends Component
+
+	-- 방치(오프라인) 보상 (Docs/Offline/Offline-Reward-Spec.md, 저장 키 OrbisOfflineV1).
+	-- 마지막 수령(또는 시작) 서버 UTC 초부터 최대 MaxHours시간까지 쌓이고, 수령 순간의 PlayerEngrave.ClearedFloor로 양을 계산한다.
+	-- 보상: 금색 메소(PlayerGear) · 경험의 서 소·중·대(PlayerRoster) · 다이아(PlayerRoster, 꽉 찬 시간만).
+	-- 모든 계산·지급은 서버에서 한다. 클라이언트는 RequestClaim()으로 요청만 보내고 Sync 값으로 결과를 읽는다(OfflineUILogic).
+	-- 수령 순서: 검사 → 계산 → last=now 먼저 저장(SetAndWait) → 성공 시에만 지급 → 결과 Sync (중복 지급 방지 우선).
+	property string OfflineKey = "OrbisOfflineV1"
+	property string ConfigName = "OfflineConfig"
+	property string LobbyMapName = "Lobby"
+	property number LoadRetryDelay = 10
+
+	-- 불러오기 완료
+	@Sync
+	property boolean OfflineLoaded = false
+	-- 지금 쌓인 초 (상한 적용)
+	@Sync
+	property integer OfflineSec = 0
+	-- 상한 초
+	@Sync
+	property integer OfflineMaxSec = 43200
+	-- 계산에 쓰는 최고 층 (PlayerEngrave.ClearedFloor, 불러오기 전 0)
+	@Sync
+	property integer OfflineFloor = 0
+	-- 지금 받으면 얻는 양 "gold:s:m:l:dia"
+	@Sync
+	property string OfflinePreview = "0:0:0:0:0"
+	-- 시간당 "gold:exp:dia" (툴팁용)
+	@Sync
+	property string OfflineRate = "0:0:0"
+	-- 받기 요청 처리마다 +1
+	@Sync
+	property integer OfflineSeq = 0
+	-- 마지막 결과 코드: ok / short / busy / notready / lobby / save_fail / locked
+	@Sync
+	property string OfflineMsg = ""
+	-- 실제 지급량 "gold:s:m:l:dia:sec"
+	@Sync
+	property string OfflineResult = ""
+
+	@HideFromInspector
+	property number RetryTimer = 0
+	@HideFromInspector
+	property number PreviewTimer = 0
+
+	-- ───────────────────────── 생명주기 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void OnBeginPlay()
+		-- 설정 표를 읽고 저장된 수령 시각을 불러온다.
+		self._T.busy = false
+		self:LoadConfig()
+		self:LoadOffline()
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnUpdate(number delta)
+		-- 불러오기 실패 시 재시도, 불러온 뒤에는 1초마다 미리보기 갱신 (저장 호출 없음).
+		if not self.OfflineLoaded then
+			self.RetryTimer = self.RetryTimer - delta
+			if self.RetryTimer <= 0 then self:LoadOffline() end
+			return
+		end
+		self.PreviewTimer = self.PreviewTimer - delta
+		if self.PreviewTimer <= 0 then
+			self.PreviewTimer = 1
+			self:RefreshPreview()
+		end
+	end
+
+	-- ───────────────────────── 설정 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method void LoadConfig()
+		-- OfflineConfig 표(Key,Value)를 self._T.cfg에 캐시한다. 없으면 기본값을 쓴다.
+		self._T.cfg = {}
+		local cf = _DataService:GetTable(self.ConfigName)
+		if cf ~= nil then
+			for i = 1, cf:GetRowCount() do
+				local k = cf:GetCell(i, "Key")
+				local v = tonumber(cf:GetCell(i, "Value"))
+				if k ~= nil and k ~= "" and v ~= nil then self._T.cfg[k] = v end
+			end
+		else
+			log_warning("[VRF] offline OfflineConfig missing, defaults")
+		end
+		self.OfflineMaxSec = self:MaxSec()
+		log("[VRF] offline config maxH=" .. tostring(self:Cfg("MaxHours", 12)) .. " gold=" .. tostring(self:Cfg("GoldBase", 600)) .. "+" .. tostring(self:Cfg("GoldPerFloor", 60)))
+	end
+
+	method number Cfg(string key, number fallback)
+		-- 설정 상수 읽기 (없으면 fallback).
+		local cfg = self._T.cfg
+		if cfg == nil then return fallback end
+		local v = cfg[key]
+		if v == nil then return fallback end
+		return v
+	end
+
+	method integer MaxSec()
+		-- 상한 초.
+		return math.max(60, math.floor(self:Cfg("MaxHours", 12) * 3600))
+	end
+
+	-- ───────────────────────── 시각·계산 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method integer Now()
+		-- 서버 UTC 초 (에너지와 같은 기준).
+		return math.floor(DateTime.UtcNow.Elapsed / 1000)
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer Floor()
+		-- 계산에 쓰는 최고 층 (PlayerEngrave 읽기만). 불러오기 전이면 -1.
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		if eng == nil or not eng.Loaded then return -1 end
+		return math.max(0, math.floor(eng.ClearedFloor or 0))
+	end
+
+	@ExecSpace("ServerOnly")
+	method integer Accum(integer now)
+		-- 쌓인 초 T = min(now - last, 상한). 시계가 되감겼으면 0.
+		local last = self._T.last
+		if last == nil then return 0 end
+		local d = now - last
+		if d <= 0 then return 0 end
+		return math.min(d, self:MaxSec())
+	end
+
+	method table Rate(integer floor)
+		-- 시간당 { gold, exp, dia } (층이 0 이하면 모두 0).
+		if floor <= 0 then return { gold = 0, exp = 0, dia = 0 } end
+		local gold = self:Cfg("GoldBase", 600) + self:Cfg("GoldPerFloor", 60) * floor
+		local exp = self:Cfg("ExpBase", 300) + self:Cfg("ExpPerFloor", 30) * floor
+		local step = math.max(1, math.floor(self:Cfg("DiaFloorStep", 20)))
+		local dia = math.floor(self:Cfg("DiaBase", 2)) + math.floor(floor / step)
+		return { gold = gold, exp = exp, dia = dia }
+	end
+
+	method table Calc(integer floor, integer sec)
+		-- 보상 계산 → { gold, s, m, l, dia, exp }. 금색 메소·경험치는 실수 시간 비례, 다이아는 꽉 찬 시간만. 경험치는 큰 책부터 나누고 100 미만은 버린다.
+		local out = { gold = 0, s = 0, m = 0, l = 0, dia = 0, exp = 0 }
+		if floor <= 0 or sec <= 0 then return out end
+		local r = self:Rate(floor)
+		local h = sec / 3600
+		out.gold = math.floor(r.gold * h)
+		out.exp = math.floor(r.exp * h)
+		out.dia = r.dia * math.floor(sec / 3600)
+		local rem = out.exp
+		local expL = math.max(1, math.floor(self:Cfg("BookExpL", 2000)))
+		local expM = math.max(1, math.floor(self:Cfg("BookExpM", 500)))
+		local expS = math.max(1, math.floor(self:Cfg("BookExpS", 100)))
+		if floor >= math.floor(self:Cfg("BookLFloor", 30)) then
+			out.l = math.floor(rem / expL)
+			rem = rem - out.l * expL
+		end
+		if floor >= math.floor(self:Cfg("BookMFloor", 10)) then
+			out.m = math.floor(rem / expM)
+			rem = rem - out.m * expM
+		end
+		out.s = math.floor(rem / expS)
+		return out
+	end
+
+	method string CalcStr(table c)
+		-- 계산 결과 → "gold:s:m:l:dia".
+		return tostring(c.gold) .. ":" .. tostring(c.s) .. ":" .. tostring(c.m) .. ":" .. tostring(c.l) .. ":" .. tostring(c.dia)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void RefreshPreview()
+		-- Sync 표시 값 갱신 (값이 바뀔 때만 대입).
+		local floor = math.max(0, self:Floor())
+		local sec = self:Accum(self:Now())
+		local maxSec = self:MaxSec()
+		local preview = self:CalcStr(self:Calc(floor, sec))
+		local r = self:Rate(floor)
+		local rate = tostring(math.floor(r.gold)) .. ":" .. tostring(math.floor(r.exp)) .. ":" .. tostring(math.floor(r.dia))
+		if self.OfflineFloor ~= floor then self.OfflineFloor = floor end
+		if self.OfflineSec ~= sec then self.OfflineSec = sec end
+		if self.OfflineMaxSec ~= maxSec then self.OfflineMaxSec = maxSec end
+		if self.OfflinePreview ~= preview then self.OfflinePreview = preview end
+		if self.OfflineRate ~= rate then self.OfflineRate = rate end
+	end
+
+	-- ───────────────────────── 저장 ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method string Encode()
+		-- 저장 JSON {v, last, fd, fu}. fd·fu는 2단계(빠른 정산)용 자리로 원래 값을 보존한다.
+		local t = { v = 1, last = math.floor(self._T.last or 0), fd = self._T.fd or "", fu = math.floor(self._T.fu or 0) }
+		return _HttpService:JSONEncode(t)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void LoadOffline()
+		-- OrbisOfflineV1을 불러온다. 저장이 없으면 last=now로 시작(소급 없음). 실패·형식 오류면 10초 뒤 재시도하며 그동안 수령 차단.
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code, raw = ds:GetAndWait(self.OfflineKey)
+		if code == 0 and raw ~= nil and raw ~= "" then
+			local ok, t = pcall(function() return _HttpService:JSONDecode(raw) end)
+			local last = nil
+			if ok and type(t) == "table" then last = tonumber(t["last"]) end
+			if last == nil then
+				log_warning("[VRF] offline load bad format raw=" .. tostring(raw))
+				self.OfflineLoaded = false
+				self.RetryTimer = self.LoadRetryDelay
+				return
+			end
+			self._T.last = math.floor(last)
+			self._T.fd = tostring(t["fd"] or "")
+			self._T.fu = math.floor(tonumber(t["fu"]) or 0)
+			self.OfflineLoaded = true
+			self:RefreshPreview()
+			log("[VRF] offline loaded last=" .. tostring(self._T.last) .. " sec=" .. tostring(self.OfflineSec))
+			return
+		end
+		if code == 1000002 or (code == 0 and (raw == nil or raw == "")) then
+			self._T.last = self:Now()
+			self._T.fd = ""
+			self._T.fu = 0
+			local sc = ds:SetAndWait(self.OfflineKey, self:Encode())
+			if sc ~= 0 then log_warning("[VRF] offline first save failed code=" .. tostring(sc)) end
+			self.OfflineLoaded = true
+			self:RefreshPreview()
+			log("[VRF] offline loaded new last=" .. tostring(self._T.last) .. " sec=" .. tostring(self.OfflineSec))
+			return
+		end
+		log_warning("[VRF] offline load failed code=" .. tostring(code))
+		self.OfflineLoaded = false
+		self.RetryTimer = self.LoadRetryDelay
+	end
+
+	-- ───────────────────────── 수령 ─────────────────────────
+
+	@ExecSpace("Server")
+	method void RequestClaim()
+		-- 클라이언트 받기 요청 (본인 확인 후 처리).
+		if senderUserId ~= self.Entity.PlayerComponent.UserId then return end
+		self:DoClaim()
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean InLobby()
+		-- 로비 맵에 있는지.
+		local map = self.Entity.CurrentMap
+		return isvalid(map) and map.Name == self.LobbyMapName
+	end
+
+	@ExecSpace("ServerOnly")
+	method string DoClaim()
+		-- 수령 처리: 검사 → 계산 → last 먼저 저장 → 성공 시 지급 → 결과 Sync. 돌려주는 값은 결과 코드.
+		if self._T.busy == true then return self:Reply("busy", "") end
+		---@type PlayerEngrave
+		local eng = self.Entity:GetComponent("script.PlayerEngrave")
+		---@type PlayerRoster
+		local roster = self.Entity:GetComponent("script.PlayerRoster")
+		---@type PlayerGear
+		local gear = self.Entity:GetComponent("script.PlayerGear")
+		if not self.OfflineLoaded or eng == nil or not eng.Loaded or roster == nil or not roster.RosterLoaded or gear == nil or not gear.GearLoaded then
+			return self:Reply("notready", "")
+		end
+		if not self:InLobby() then return self:Reply("lobby", "") end
+		local floor = self:Floor()
+		if floor < 1 then return self:Reply("locked", "") end
+		local now = self:Now()
+		local sec = self:Accum(now)
+		if sec < math.floor(self:Cfg("MinClaimSec", 60)) then return self:Reply("short", tostring(sec)) end
+		self._T.busy = true
+		local c = self:Calc(floor, sec)
+		local prevLast = self._T.last
+		self._T.last = now
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code = ds:SetAndWait(self.OfflineKey, self:Encode())
+		if code ~= 0 then
+			self._T.last = prevLast
+			self._T.busy = false
+			log_warning("[VRF] offline claim save failed code=" .. tostring(code))
+			return self:Reply("save_fail", tostring(code))
+		end
+		if c.gold > 0 then
+			gear:AddGoldMeso(c.gold)
+			gear:Flush()
+		end
+		if c.s > 0 or c.m > 0 or c.l > 0 then roster:GiveBooks(c.s, c.m, c.l) end
+		if c.dia > 0 then roster:GiveDiamonds(c.dia) end
+		self._T.busy = false
+		self:RefreshPreview()
+		return self:Reply("ok", self:CalcStr(c) .. ":" .. tostring(sec))
+	end
+
+	@ExecSpace("ServerOnly")
+	method string Reply(string code, string result)
+		-- 결과를 Sync 값에 쓰고 로그를 남긴 뒤 코드를 돌려준다. 순번은 마지막에 올린다(클라이언트가 순번 변화를 보고 Msg·Result를 읽음).
+		self.OfflineMsg = code
+		self.OfflineResult = result
+		self.OfflineSeq = self.OfflineSeq + 1
+		log("[VRF] offline reply " .. code .. " " .. result)
+		return code
+	end
+
+	-- ───────────────────────── 테스트 전용 (메이커 플레이에서만) ─────────────────────────
+
+	@ExecSpace("ServerOnly")
+	method boolean DebugAllowed()
+		-- 디버그 메서드는 메이커 플레이에서만 동작한다.
+		if Environment:IsMakerPlay() then return true end
+		log_warning("[VRF] offline debug blocked (not maker play)")
+		return false
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugShift(integer sec)
+		-- 테스트: last를 sec초 앞으로 당겨 저장 (그만큼 시간이 흐른 효과).
+		if not self:DebugAllowed() or not self.OfflineLoaded then return end
+		self._T.last = (self._T.last or self:Now()) - sec
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code = ds:SetAndWait(self.OfflineKey, self:Encode())
+		self:RefreshPreview()
+		log("[VRF] offline debug shift " .. tostring(sec) .. " code=" .. tostring(code) .. " sec=" .. tostring(self.OfflineSec))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugSetLast(integer agoSec)
+		-- 테스트: last = 지금 - agoSec 으로 저장.
+		if not self:DebugAllowed() or not self.OfflineLoaded then return end
+		self._T.last = self:Now() - agoSec
+		local ds = _DataStorageService:GetUserDataStorage(self.Entity.PlayerComponent.ProfileCode)
+		local code = ds:SetAndWait(self.OfflineKey, self:Encode())
+		self:RefreshPreview()
+		log("[VRF] offline debug setlast ago=" .. tostring(agoSec) .. " code=" .. tostring(code) .. " sec=" .. tostring(self.OfflineSec))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void DebugClaimCalc(integer floor, integer sec)
+		-- 테스트: 지급 없이 공식 결과만 로그.
+		if not self:DebugAllowed() then return end
+		local c = self:Calc(floor, sec)
+		log("[VRF] offline calc floor=" .. tostring(floor) .. " sec=" .. tostring(sec) .. " gold=" .. tostring(c.gold) .. " exp=" .. tostring(c.exp) .. " s=" .. tostring(c.s) .. " m=" .. tostring(c.m) .. " l=" .. tostring(c.l) .. " dia=" .. tostring(c.dia))
+	end
+
+end
