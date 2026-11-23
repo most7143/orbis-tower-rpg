@@ -8,3 +8,10 @@
 <!-- >>> managed by mswai >>> -->
 @AGENTS.md
 <!-- <<< managed by mswai <<< -->
+
+## 사용자 확정: 메이플 데이터·리소스 기준 위치 (2026-11-23)
+
+- 게임 개발에 쓰는 메이플 원본 데이터·리소스는 **외장 SSD `/Volumes/P7/MapleStoryWorld/최신메이플데이터`** 를 기준으로 한다.
+  - 데이터(XML): `Character/`, `Item/`, `Mob/`, `Npc/`, `Skill/`, `String/`, `Map/`, `UI/` 등. 리소스(그림·소리): `_Resources/<분류>/...`.
+- 예전 `~/Downloads/MapleStory_Data`, `~/Downloads/XML`보다 이 폴더를 우선한다. 외장 SSD가 연결돼 있지 않으면 예전 폴더로 대신하지 말고 사용자에게 연결을 요청한다.
+- MSW에 넣는 RUID는 계속 msw-search로 찾는다(이 폴더는 원본 수치·이름·그림 확인용).
