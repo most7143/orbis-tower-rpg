@@ -237,29 +237,29 @@
               "ActivePlatform": 255,
               "AlignmentOption": 15,
               "AnchorsMax": {
-                "x": 1,
-                "y": 1
+                "x": 0.5,
+                "y": 0.5
               },
               "AnchorsMin": {
-                "x": 0,
-                "y": 0
+                "x": 0.5,
+                "y": 0.5
               },
               "MobileOnly": false,
               "OffsetMax": {
-                "x": 0,
-                "y": 0
+                "x": 3000,
+                "y": 2000
               },
               "OffsetMin": {
-                "x": 0,
-                "y": 0
+                "x": -3000,
+                "y": -2000
               },
               "Pivot": {
                 "x": 0.5,
                 "y": 0.5
               },
               "RectSize": {
-                "x": 1920,
-                "y": 1080
+                "x": 6000,
+                "y": 4000
               },
               "UIMode": 1,
               "UIScale": {
@@ -302,7 +302,7 @@
               "EndFrameIndex": 2147483647,
               "IgnoreMapLayerCheck": false,
               "ImageRUID": {
-                "DataId": "2860136c06ab075439721c027de365af"
+                "DataId": "52639fbce17a4414b50437531bde68ff"
               },
               "LocalPosition": {
                 "x": 0,
@@ -323,7 +323,7 @@
                 "r": 0,
                 "g": 0,
                 "b": 0,
-                "a": 0.55
+                "a": 0.6
               },
               "DropShadow": false,
               "DropShadowAngle": 120,
@@ -353,7 +353,7 @@
               },
               "OutlineWidth": 3,
               "RaycastTarget": true,
-              "Type": 0,
+              "Type": 1,
               "Enable": true
             },
             {

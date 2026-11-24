@@ -463,6 +463,9 @@ script TowerRunManager extends Component
 	-- 층 모습: FloorTable의 원작 맵 배경 템플릿·바닥 타일셋 (비어 있으면 탑 맵 기본). 타일셋은 동기화되지 않아 클라이언트(BattleHUDLogic)가 바꾼다
 	@Sync
 	property string FloorTileSet = ""
+	-- 2026-11-24: 지금 적용해야 할 배경 템플릿 (클라이언트 페이드가 배경 교체 완료를 확인할 때 씀, ApplyFloorLook이 채움)
+	@Sync
+	property string FloorBgRUID = ""
 	@Sync
 	property integer StageNo = 1
 	@Sync
@@ -3770,6 +3773,8 @@ script TowerRunManager extends Component
 		self.SkillStone = math.floor(self:Bonus("StartStone") + 0.5)
 		self.StoneCost = self.StoneCostStart
 		log("[VRF] run start stage=" .. tostring(self.StageNo) .. " floor=" .. tostring(self.Floor) .. " lv=" .. tostring(self.Level) .. " meso=" .. tostring(self.Meso) .. " rerolls=" .. tostring(self.Rerolls) .. " atk=" .. tostring(self.PlayerAtk) .. " hp=" .. tostring(self.PlayerHp) .. " stars=" .. tostring(self._T.startStars))
+		-- 2026-11-24: 탑 입장(판 시작) 화면이 검은 동안 이 층 배경·타일셋으로 바꿔 둔다
+		self:ApplyFloorLook()
 		-- 직업 선택 카드를 보여주고, 고르면(RequestPickJob) 스킬 카드 → 전투 시작
 		self:RollJobChoices()
 	end
@@ -3793,6 +3798,7 @@ script TowerRunManager extends Component
 			bossStage = true
 		end
 		if bg == nil or bg == "" then bg = self._T.defaultBg end
+		if self.FloorBgRUID ~= (bg or "") then self.FloorBgRUID = bg or "" end
 		local bgEnt = self.Entity:GetChildByName("Background")
 		if isvalid(bgEnt) and isvalid(bgEnt.BackgroundComponent) and bg ~= "" and bgEnt.BackgroundComponent.TemplateRUID ~= bg then
 			bgEnt.BackgroundComponent:ChangeBackgroundByTemplateRUID(bg)
@@ -6050,6 +6056,8 @@ script TowerRunManager extends Component
 	method void BeginStageEntry()
 		-- 전투 스테이지 시작: 구성원을 자리보다 EntryDist 왼쪽에 세우고 자리로 걸어 들어오게 한다. 모두 도착하면 몬스터 등장.
 		self._T.needEntry = false
+		-- 2026-11-24: 배경·타일셋은 화면이 검은 동안(입장 준비) 미리 바꾼다 (예전엔 몬스터 등장 때 바뀌어 밝아진 뒤 교체가 보였다)
+		self:ApplyFloorLook()
 		local player = self._T.player
 		if not isvalid(player) then
 			self:SpawnMonster()
@@ -7067,6 +7075,17 @@ script TowerRunManager extends Component
 		if not self:CanReach(actor, monster) then
 			self:TryFreeCasts(actor, monster)
 			return timer
+		end
+		-- 2026-11-24 수정: 새 맨 앞 몬스터가 이 캐릭터 사거리에 처음 닿으면 기본 공격 대기를 비워 바로 기본 공격한다.
+		-- 예전엔 앞 몬스터에게 쓴 기본 공격 간격(약 3초)이 그대로 남아, 몬스터가 도착해도 한동안 서 있기만 했다.
+		if self._T.arrivedAt == nil then self._T.arrivedAt = {} end
+		if self._T.arrivedAt[actor] ~= monster then
+			self._T.arrivedAt[actor] = monster
+			if timer > 0 then
+				self._T.arriveLogN = (self._T.arriveLogN or 0) + 1
+				if self._T.arriveLogN <= 12 then log("[VRF] arrive basic attack actor=" .. actor.Name .. " monster=" .. monster.Name .. " cdLeft=" .. string.format("%.2f", timer)) end
+				timer = 0
+			end
 		end
 		if timer <= 0 then
 			local wait = self:ActorAttack(actor, monster, main)

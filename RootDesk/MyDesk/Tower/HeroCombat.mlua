@@ -1371,30 +1371,49 @@ script HeroCombat extends Component
 		local step = self.ShotSpeed * delta
 		for i = #list, 1, -1 do
 			local s = list[i]
+			local prevX = s.x
 			s.x = s.x + s.dir.x * step
 			s.moved = s.moved + step
 			local hit = false
 			if alive and not s.hitSet[mon] then
+				-- 2026-11-24 수정: 이번 프레임에 발사체가 실제로 지나간 구간이 몬스터 몸(±ShotReach)과 겹칠 때만 타격.
+				-- 예전 판정(s.x >= mx - reach)은 발사체가 이미 지나간 자리로 새로 나온 맨 앞 몬스터도 즉시 맞혀
+				-- 관통 검기 한 발이 처치 → 다음 몬스터 승격 → 즉시 타격을 사거리 끝까지 반복해 웨이브가 한꺼번에 죽었다.
 				local mx = mon.TransformComponent.WorldPosition.x
-				if s.dir.x >= 0 then hit = s.x >= mx - self.ShotReach else hit = s.x <= mx + self.ShotReach end
+				local lo = math.min(prevX, s.x)
+				local hi = math.max(prevX, s.x)
+				hit = hi >= mx - self.ShotReach and lo <= mx + self.ShotReach
 			end
 			if hit then
 				s.hitSet[mon] = true
 				s.hits = (s.hits or 0) + 1
 				log("[VRF] hero shot hit " .. tostring(s.r.id) .. " sid=" .. tostring(s.sid) .. " moved=" .. string.format("%.2f", s.moved) .. " pierce=" .. tostring(s.pierce))
 				local r = s.r
+				-- 2026-11-24 수정: 관통 발사체 한 발이 맞힐 수 있는 몬스터 수 = 스킬 대상 수(Targets, 범위로 같이 맞은 대기열 포함).
+				-- 예전엔 한 발이 사거리 끝(화면 밖)까지 새로 나오는 맨 앞 몬스터를 계속 맞혀 웨이브가 한꺼번에 죽고 처치 메소가 쏟아졌다.
+				if s.left == nil then s.left = math.max(1, s.r.targets or 1) end
 				-- 관통해서 두 번째 몬스터부터는 타격만 (재발동·추가 공격은 첫 적중 1회)
 				if s.hits > 1 then
 					r = {}
 					for k, v in pairs(s.r) do r[k] = v end
 					r.hitsOnly = true
 					r.carryFxHit = nil
+					r.splashHit = nil
+					r.targets = s.left
 				end
 				if not s.pierce then
 					table.remove(list, i)
 					self:EndShotFor(s.sid)
 				end
 				self:ApplyStrikes(mgr, r, mon)
+				if s.pierce then
+					s.left = s.left - 1 - #(r.splashHit or {})
+					if s.left <= 0 then
+						table.remove(list, i)
+						self:EndShotFor(s.sid)
+						log("[VRF] hero shot spent sid=" .. tostring(s.sid) .. " hits=" .. tostring(s.hits))
+					end
+				end
 			elseif s.moved >= self.ShotRange then
 				table.remove(list, i)
 				log("[VRF] hero shot end sid=" .. tostring(s.sid) .. " hits=" .. tostring(s.hits or 0))
