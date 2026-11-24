@@ -52,11 +52,126 @@ script UIButtonLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method table CommonInfo(string ruid)
+		-- 공용 버튼(초록·파랑·회색 × short/medium/long) RUID → 색·길이·상태 이미지. 공용 버튼이 아니면 nil.
+		if self._T.commonMap == nil then
+			local sets = {
+				green = { short = { "5a3a050f4e254e8ab412e47831475691", "6d649e1bde7345589b4cff4ac28e48e4", "c6c27efcdfda424aa058df97c2f2021f" },
+					medium = { "df970cf07cd7487a9517555be18b3996", "3a6d601e37074447869409735414c74c", "f11f66c602a14e3e8aff826943384b6d" },
+					long = { "99c979fefe50485b9f181264f46a2d97", "0f8dcc8c3c8c454c86b5276a60d2cbf7", "e234eeb824f94e93a4704223d11354a1" } },
+				blue = { short = { "a64baed9deb54249a51453b13fd8df97", "e935df47697344f0a7bea247d15f2216", "6d46edcc75e24347b2cf292a208292be" },
+					medium = { "758dbb9a4203468d80534e7a9151cab8", "c774e96baade43b093d864abbbf9e48c", "d0ba6be0e5a14c1cba7d39dc692cec67" },
+					long = { "570650554d2244c7815fa5110e8da65f", "14c37e8d02dc4332a748cc6d151cc679", "f1f97b95643c48f9ac17d0a90076c8c1" } },
+				gray = { short = { "3c1db66db90141179a2e2801fd4ef991", "c96f9c2441ce4a3f8eb6d7c1ebb7f8ca", "2a8f5802c4eb4a50bed90daaafab99e4" },
+					medium = { "5f6971cedc8f432c98d04dd4385e2d90", "0d6c90c9a80345c58b3b38082639e574", "0064001fecc04588bb70c85882c51a11" },
+					long = { "164aa623fdfa4e2bb811773557b8ccfb", "5eb6f4b0aad444e8906429aa511b23f0", "1c2dfba7b7dd40dfafe68ceef5b2e65b" } }
+			}
+			local map = {}
+			for color, bySize in pairs(sets) do
+				for size, s in pairs(bySize) do
+					-- 비활성 배경은 normal과 같은 그림(글자 알파만 낮춘다)
+					local info = { color = color, size = size, normal = s[1], hover = s[2], pressed = s[3], disabled = s[1] }
+					for _, id in ipairs(s) do map[id] = info end
+				end
+			end
+			self._T.commonMap = map
+		end
+		return self._T.commonMap[ruid]
+	end
+
+	@ExecSpace("ClientOnly")
+	method table RegisterCommon(Entity entity, table info)
+		-- 공용 버튼 등록: Labels/Glow/Front 글자 레이어와 원본 글자(꺼진 TextGUIRenderer)를 찾고 상태 이벤트를 연결한다.
+		local button = entity.ButtonComponent
+		local rec = { entity = entity, common = info, hover = false, pressed = false, disabled = not button.Enable, state = nil }
+		local labels = entity:GetChildByName("Labels")
+		rec.labels = labels
+		if isvalid(labels) then
+			rec.baseY = labels.UITransformComponent.anchoredPosition.y
+			rec.glow = labels:GetChildByName("Glow")
+			rec.front = labels:GetChildByName("Front")
+		end
+		local src = entity.TextGUIRendererComponent
+		if not isvalid(src) or src.Enable then
+			src = nil
+			for _, child in ipairs(entity.Children) do
+				local t = child.TextGUIRendererComponent
+				if child.Name ~= "Labels" and isvalid(t) and not t.Enable then src = t break end
+			end
+		end
+		rec.src = src
+		self._T.recs[entity.Id] = rec
+		if self._T.commonRecs == nil then self._T.commonRecs = {} end
+		table.insert(self._T.commonRecs, rec)
+		button.Transition = TransitionType.None
+		button.Selectable = false
+		rec.hState = entity:ConnectEvent(ButtonStateChangeEvent, function(e)
+			local s = e.state
+			if s == ButtonState.Hover then rec.hover = true rec.pressed = false
+			elseif s == ButtonState.Pressed then rec.pressed = true
+			elseif s == ButtonState.Normal then rec.hover = false rec.pressed = false
+			else rec.pressed = false end
+			self:ApplyCommon(rec)
+		end)
+		rec.hEnter = entity:ConnectEvent(UITouchEnterEvent, function(e) rec.hover = true self:ApplyCommon(rec) end)
+		rec.hExit = entity:ConnectEvent(UITouchExitEvent, function(e) rec.hover = false rec.pressed = false self:ApplyCommon(rec) end)
+		rec.hDown = entity:ConnectEvent(UITouchDownEvent, function(e) rec.pressed = true self:ApplyCommon(rec) end)
+		rec.hUp = entity:ConnectEvent(UITouchUpEvent, function(e) rec.pressed = false self:ApplyCommon(rec) end)
+		self:SyncCommonText(rec)
+		self:ApplyCommon(rec)
+		return rec
+	end
+
+	@ExecSpace("ClientOnly")
+	method void SyncCommonText(table rec)
+		-- 화면 스크립트가 원본 글자에 쓴 문자열을 Front·Glow에 같이 반영한다.
+		local src = rec.src
+		if src == nil or not isvalid(src) then return end
+		local s = src.Text
+		if s == rec.lastText then return end
+		rec.lastText = s
+		if isvalid(rec.front) then rec.front.TextGUIRendererComponent.Text = s end
+		if isvalid(rec.glow) then rec.glow.TextGUIRendererComponent.Text = s end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ApplyCommon(table rec)
+		-- 공용 버튼 네 상태 (비활성 > 눌림 > 하이라이트 > 기본): 배경 교체, 글자 알파·발광·눌림 Y−2, 비활성 입력 차단.
+		local e = rec.entity
+		if not isvalid(e) then return end
+		local button = e.ButtonComponent
+		rec.disabled = not button.Enable
+		local st = "normal"
+		if rec.disabled then st = "disabled" elseif rec.pressed then st = "pressed" elseif rec.hover then st = "hover" end
+		if rec.state == st then return end
+		rec.state = st
+		local spr = e.SpriteGUIRendererComponent
+		local ruid = rec.common[st]
+		if spr.ImageRUID.DataId ~= ruid then spr.ImageRUID = DataRef(ruid) end
+		spr.Color = Color(1, 1, 1, 1)
+		local labels = rec.labels
+		if isvalid(labels) then
+			local lg = labels.CanvasGroupComponent
+			if isvalid(lg) then
+				if st == "disabled" then lg.GroupAlpha = 0.35 else lg.GroupAlpha = 1 end
+			end
+			local ut = labels.UITransformComponent
+			local y = rec.baseY or 0
+			if st == "pressed" then y = y - 2 end
+			local p = ut.anchoredPosition
+			if p.y ~= y then ut.anchoredPosition = Vector2(p.x, y) end
+		end
+		if isvalid(rec.glow) and rec.glow.Enable ~= (st == "hover") then rec.glow:SetEnable(st == "hover") end
+		local cg = e.CanvasGroupComponent
+		if isvalid(cg) then cg.Interactable = not rec.disabled end
+	end
+
+	@ExecSpace("ClientOnly")
 	method void UseTheme(Entity entity, string role)
 		-- 기존 화면의 런타임 전용 스킨도 공통 규칙에 맞춰 연결한다.
 		if not isvalid(entity) then return end
 		local rec = self:GetRec(entity)
-		if rec == nil then return end
+		if rec == nil or rec.common ~= nil then return end
 		rec.themeRole = role
 		self:SetSkin(entity, self:ThemeSkin(role))
 	end
@@ -68,7 +183,9 @@ script UIButtonLogic extends Logic
 		self:Scan(_EntityService:GetEntityByPath("/ui"))
 		local n = 0
 		for _, rec in pairs(self._T.recs) do n = n + 1 end
-		log("[VRF] UIButtonLogic common theme ready buttons=" .. tostring(n))
+		local c = 0
+		for _, rec in ipairs(self._T.commonRecs or {}) do c = c + 1 end
+		log("[VRF] UIButtonLogic common theme ready buttons=" .. tostring(n) .. " commonButtons=" .. tostring(c))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -88,7 +205,10 @@ script UIButtonLogic extends Logic
 		if rec ~= nil then return rec end
 		local button = entity.ButtonComponent
 		local sprite = entity.SpriteGUIRendererComponent
-		if not isvalid(button) or not isvalid(sprite) or button.Transition ~= TransitionType.SpriteSwap then return nil end
+		if not isvalid(button) or not isvalid(sprite) then return nil end
+		local info = self:CommonInfo(sprite.ImageRUID.DataId)
+		if info ~= nil then return self:RegisterCommon(entity, info) end
+		if button.Transition ~= TransitionType.SpriteSwap then return nil end
 		local images = button.ImageRUIDs
 		local function id(ref, fallback)
 			if ref == nil or ref.DataId == nil or ref.DataId == "" then return fallback end
@@ -178,6 +298,11 @@ script UIButtonLogic extends Logic
 		if not isvalid(entity) then return end
 		local rec = self:GetRec(entity)
 		if rec == nil then return end
+		if rec.common ~= nil then
+			-- 공용 버튼은 화면별 전용 스킨보다 공용 그림을 우선한다.
+			self:ApplyCommon(rec)
+			return
+		end
 		if rec.themeRole ~= nil then skin = self:ThemeSkin(rec.themeRole) end
 		rec.skin = skin
 		self:ApplySprite(rec)
@@ -190,6 +315,13 @@ script UIButtonLogic extends Logic
 		if not isvalid(entity) then return end
 		local rec = self:GetRec(entity)
 		if rec == nil then return end
+		if rec.common ~= nil then
+			-- 공용 버튼: ButtonComponent.Enable 하나로 상태를 관리한다.
+			entity.ButtonComponent.Enable = not disabled
+			if disabled then rec.hover = false rec.pressed = false end
+			self:ApplyCommon(rec)
+			return
+		end
 		if rec.disabled == disabled and entity.ButtonComponent.Enable == (not disabled) then return end
 		rec.disabled = disabled
 		if disabled then self:ClearHover(rec) end
@@ -202,7 +334,7 @@ script UIButtonLogic extends Logic
 		-- 열린 탭·현재 프리셋 표시.
 		if not isvalid(entity) then return end
 		local rec = self:GetRec(entity)
-		if rec == nil or rec.selected == selected then return end
+		if rec == nil or rec.common ~= nil or rec.selected == selected then return end
 		rec.selected = selected
 		self:ApplySprite(rec)
 		self:ApplyText(rec)
@@ -213,19 +345,45 @@ script UIButtonLogic extends Logic
 		-- 화면 버튼에 연결한 호버 이벤트를 해제한다.
 		for _, rec in pairs(self._T.recs or {}) do
 			if isvalid(rec.entity) then
-				rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
-				rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+				if rec.common ~= nil then
+					rec.entity:DisconnectEvent(ButtonStateChangeEvent, rec.hState)
+					rec.entity:DisconnectEvent(UITouchEnterEvent, rec.hEnter)
+					rec.entity:DisconnectEvent(UITouchExitEvent, rec.hExit)
+					rec.entity:DisconnectEvent(UITouchDownEvent, rec.hDown)
+					rec.entity:DisconnectEvent(UITouchUpEvent, rec.hUp)
+				else
+					rec.entity:DisconnectEvent(UITouchEnterEvent, rec.enter)
+					rec.entity:DisconnectEvent(UITouchExitEvent, rec.exit)
+				end
 			end
 		end
 		self._T.recs = {}
+		self._T.commonRecs = {}
 		self._T.hoverRec = nil
 	end
 
 	@ExecSpace("ClientOnly")
 	method void OnUpdate(number delta)
-		-- 호버 중 화면이 닫히면 나감 이벤트가 오지 않으므로 직접 해제한다.
+		-- 호버 중 화면이 닫히면 나감 이벤트가 오지 않으므로 직접 해제한다. 공용 버튼은 글자·활성 상태를 따라간다.
 		local rec = self._T.hoverRec
 		if rec ~= nil and (not isvalid(rec.entity) or not rec.entity.EnabledInHierarchy) then self:ClearHover(rec) end
+		for _, c in ipairs(self._T.commonRecs or {}) do
+			local e = c.entity
+			if isvalid(e) then
+				if e.EnabledInHierarchy then
+					self:SyncCommonText(c)
+					local dis = not e.ButtonComponent.Enable
+					if dis ~= c.disabled then
+						if dis then c.hover = false c.pressed = false end
+						self:ApplyCommon(c)
+					end
+				elseif c.hover or c.pressed then
+					c.hover = false
+					c.pressed = false
+					self:ApplyCommon(c)
+				end
+			end
+		end
 	end
 
 end

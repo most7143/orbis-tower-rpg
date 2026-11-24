@@ -39,13 +39,23 @@ script OfflineUILogic extends Logic
 	property number ChestCropPx = 84
 	property number ChestCanvasPx = 192
 	property Vector2 ChestCanvasOffset = Vector2(2, 40)
-	property number CloseDelay = 0.6
+	-- 보상 등장 연출: 상자가 열리기 시작한 뒤 RevealStart초부터 RevealGap 간격으로 한 칸씩 상자에서 튀어나와 자리로 날아간다
+	property number RevealStart = 0.35
+	property number RevealGap = 0.2
+	property number FlyTime = 0.45
+	property Vector2 RevealFrom = Vector2(0, 170)
+	property number ConfirmDelay = 0.35
+	property number LandVolume = 0.5
+	property string ClaimLabel = "받기"
+	property string ConfirmLabel = "확인"
 	property number CellWidth = 96
 	property number CellGap = 16
 	property number PopupGaugeWidth = 520
 	property number ButtonGaugeWidth = 96
-	property Color GaugeColor = Color(0.24, 0.51, 0.78, 1)
-	property Color GaugeFullColor = Color(0.20, 0.48, 0.12, 1)
+	-- 게이지 채움: 원본 초록 게이지(offline_gauge_green, 좌우 9분할 6px). 진행 중은 살짝 어둡게, 가득 차면 원본 밝기
+	property Color GaugeColor = Color(0.86, 0.86, 0.86, 1)
+	property Color GaugeFullColor = Color(1, 1, 1, 1)
+	property number GaugeMinWidth = 12
 	property number NoticeDuration = 1.8
 
 	@ExecSpace("ClientOnly")
@@ -69,6 +79,8 @@ script OfflineUILogic extends Logic
 		self:Bind(self.btnOffline, function() self:Open() end)
 		if isvalid(self.btnClaim) then _UIButtonLogic:UseTheme(self.btnClaim.Entity, "action") end
 		if isvalid(self.btnClose) then _UIButtonLogic:UseTheme(self.btnClose.Entity, "close") end
+		-- 상자를 눌러도 받기(연출이 끝난 뒤에는 확인)와 같게 동작
+		if isvalid(self.chest) then self:On(self.chest.Entity, UITouchDownEvent, function() self:OnChestTouch() end) end
 		if isvalid(self.btnOffline) then
 			_UIButtonLogic:UseTheme(self.btnOffline.Entity, "button")
 			-- 잠긴 버튼은 클릭 대신 누름으로 툴팁을 띄운다
@@ -200,6 +212,7 @@ script OfflineUILogic extends Logic
 		self._T.anim = -1
 		self._T.waiting = false
 		self._T.sig = nil
+		self:ResetReveal()
 		self:SetChestIdle()
 		if isvalid(self.noticeText) then self.noticeText.Entity:SetEnable(false) end
 		self.root:SetEnable(true)
@@ -234,10 +247,12 @@ script OfflineUILogic extends Logic
 		-- 팝업 닫기 (연출 중이어도 화면만 닫고 서버 지급은 유지).
 		if not isvalid(self.root) or not self.root.Enable then return end
 		_TooltipLogic:Hide()
+		local skipped = self._T.anim >= 0 and not self._T.done
 		self.root:SetEnable(false)
 		self._T.anim = -1
 		self._T.waiting = false
-		log("[VRF] offline popup close")
+		self:ResetReveal()
+		log("[VRF] offline popup close skipped=" .. tostring(skipped))
 	end
 
 	@ExecSpace("ClientOnly")
@@ -249,6 +264,11 @@ script OfflineUILogic extends Logic
 	@ExecSpace("ClientOnly")
 	method void OnClaim()
 		-- 받기: 버튼을 막고 서버에 요청.
+		if self._T.done then
+			-- 연출이 끝난 뒤의 확인 버튼
+			self:Close()
+			return
+		end
 		local comp = self:Comp()
 		if comp == nil or self._T.waiting or self._T.anim >= 0 then return end
 		self._T.waiting = true
@@ -270,6 +290,7 @@ script OfflineUILogic extends Logic
 		if msg == "ok" then
 			local n = self:Nums(comp.OfflineResult)
 			self:ShowRewards(n[1] or 0, n[2] or 0, n[3] or 0, n[4] or 0, n[5] or 0)
+			self:PrepareReveal(n[1] or 0, n[2] or 0, n[3] or 0, n[4] or 0, n[5] or 0)
 			self:SetChestAnim()
 			self._T.anim = 0
 			self._T.frame = 1
@@ -325,9 +346,9 @@ script OfflineUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void Refresh(boolean force)
-		-- 열린 팝업 갱신 (값이 바뀔 때만). 연출 중에는 지급 결과를 그대로 둔다.
+		-- 열린 팝업 갱신 (값이 바뀔 때만). 받기 응답 대기·연출 중에는 화면을 그대로 둔다 (미리보기가 0으로 먼저 바뀌어 칸이 깜빡이는 것 방지).
 		local comp = self:Comp()
-		if comp == nil or self._T.anim >= 0 then return end
+		if comp == nil or self._T.anim >= 0 or self._T.waiting then return end
 		local sig = tostring(comp.OfflineSec) .. "|" .. comp.OfflinePreview .. "|" .. tostring(comp.OfflineFloor) .. "|" .. tostring(self._T.waiting)
 		if not force and self._T.sig == sig then return end
 		self._T.sig = sig
@@ -335,14 +356,141 @@ script OfflineUILogic extends Logic
 		local maxSec = math.max(1, comp.OfflineMaxSec)
 		local full = sec >= maxSec
 		if isvalid(self.gaugeFill) then
-			self.gaugeFill.UITransformComponent.RectSize = Vector2(math.max(0, self.PopupGaugeWidth * math.min(1, sec / maxSec)), 16)
+			self.gaugeFill.UITransformComponent.RectSize = Vector2(self:GaugeWidth(self.PopupGaugeWidth, sec / maxSec), 16)
 			if full then self.gaugeFill.SpriteGUIRendererComponent.Color = self.GaugeFullColor else self.gaugeFill.SpriteGUIRendererComponent.Color = self.GaugeColor end
 		end
 		if isvalid(self.timeText) then self.timeText.Text = self:Hm(sec) .. " / " .. self:Hm(maxSec) end
 		local n = self:Nums(comp.OfflinePreview)
 		self:ShowRewards(n[1] or 0, n[2] or 0, n[3] or 0, n[4] or 0, n[5] or 0)
 		local canClaim = comp.OfflineLoaded and comp.OfflineFloor >= 1 and sec >= math.floor(self:Cfg("MinClaimSec", 60)) and not self._T.waiting
+		self._T.canClaim = canClaim
 		if isvalid(self.btnClaim) then _UIButtonLogic:SetDisabled(self.btnClaim.Entity, not canClaim) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnChestTouch()
+		-- 상자 누름: 받을 수 있으면 받기, 연출이 끝났으면 확인(닫기)과 같게.
+		if not self:IsOpen() then return end
+		if self._T.done then
+			_UISoundLogic:PlayClick()
+			self:Close()
+			return
+		end
+		if not self._T.canClaim or self._T.waiting or self._T.anim >= 0 then return end
+		_UISoundLogic:PlayClick()
+		self:OnClaim()
+	end
+
+	-- ───────────────────────── 보상 등장 연출 ─────────────────────────
+
+	@ExecSpace("ClientOnly")
+	method void PrepareReveal(integer gold, integer s, integer m, integer l, integer dia)
+		-- 받은 보상 칸만 순서대로 기록하고, 처음에는 상자 위치에 작고 투명하게 숨겨 둔다.
+		self:ResetReveal()
+		local list = { { "Gold", gold }, { "BookL", l }, { "BookM", m }, { "BookS", s }, { "Dia", dia } }
+		local recs = {}
+		for _, it in ipairs(list) do
+			local cell = self:Cell(it[1])
+			if isvalid(cell) and it[2] > 0 then
+				local icon = cell:GetChildByName("Icon")
+				local cnt = cell:GetChildByName("Count")
+				local rec = { cell = cell, key = it[1], value = it[2], target = cell.UITransformComponent.anchoredPosition, icon = icon, cnt = cnt, landed = false }
+				rec.bgC = cell.SpriteGUIRendererComponent.Color
+				if isvalid(icon) then rec.iconC = icon.SpriteGUIRendererComponent.Color end
+				if isvalid(cnt) then rec.cntC = cnt.TextGUIRendererComponent.FontColor end
+				table.insert(recs, rec)
+				self:PoseCell(rec, self.RevealFrom, 0.2, 0)
+				if isvalid(cnt) then cnt.TextGUIRendererComponent.Text = "0" end
+			end
+		end
+		self._T.reveal = recs
+		self._T.done = false
+		local lastLand = self.RevealStart + math.max(0, #recs - 1) * self.RevealGap + self.FlyTime
+		self._T.revealEnd = lastLand
+		log("[VRF] offline reveal prepare n=" .. tostring(#recs) .. " lastLand=" .. tostring(lastLand))
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PoseCell(table rec, Vector2 pos, number scale, number alpha)
+		-- 칸 위치·크기·투명도를 한 번에 적용 (바탕·아이콘·수량 색의 알파만 바꾼다).
+		local cell = rec.cell
+		if not isvalid(cell) then return end
+		local tr = cell.UITransformComponent
+		tr.anchoredPosition = pos
+		tr.UIScale = Vector3(scale, scale, 1)
+		local c = rec.bgC
+		cell.SpriteGUIRendererComponent.Color = Color(c.r, c.g, c.b, c.a * alpha)
+		if rec.iconC ~= nil and isvalid(rec.icon) then
+			local ic = rec.iconC
+			rec.icon.SpriteGUIRendererComponent.Color = Color(ic.r, ic.g, ic.b, ic.a * alpha)
+		end
+		if rec.cntC ~= nil and isvalid(rec.cnt) then
+			local tc = rec.cntC
+			rec.cnt.TextGUIRendererComponent.FontColor = Color(tc.r, tc.g, tc.b, tc.a * alpha)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ResetReveal()
+		-- 연출 중이던 칸을 원래 위치·크기·색으로 되돌린다 (닫기·다시 열기).
+		for _, rec in ipairs(self._T.reveal or {}) do
+			self:PoseCell(rec, rec.target, 1, 1)
+			if isvalid(rec.cnt) then rec.cnt.TextGUIRendererComponent.Text = self:Comma(rec.value) end
+		end
+		self._T.reveal = {}
+		self._T.done = false
+		if isvalid(self.btnClaim) and isvalid(self.btnClaim.Entity.TextGUIRendererComponent) then
+			self.btnClaim.Entity.TextGUIRendererComponent.Text = self.ClaimLabel
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void UpdateReveal(number t)
+		-- 칸마다 시작 시각을 늦춰 상자 위치에서 자리로 이동 + 커졌다가 제자리 크기로 안착 + 투명도, 수량은 0부터 올라간다.
+		for i, rec in ipairs(self._T.reveal or {}) do
+			if not rec.landed then
+				local t0 = self.RevealStart + (i - 1) * self.RevealGap
+				local p = (t - t0) / self.FlyTime
+				if p >= 1 then
+					rec.landed = true
+					self:PoseCell(rec, rec.target, 1, 1)
+					if isvalid(rec.cnt) then rec.cnt.TextGUIRendererComponent.Text = self:Comma(rec.value) end
+					if _UISoundLogic.ClickSoundRUID ~= "" then _SoundService:PlaySound(_UISoundLogic.ClickSoundRUID, self.LandVolume) end
+					log("[VRF] offline reveal land i=" .. tostring(i) .. " key=" .. rec.key .. " value=" .. tostring(rec.value) .. " t=" .. string.format("%.2f", t))
+				elseif p > 0 then
+					-- 위치: 감속 이동 + 살짝 위로 솟는 호
+					local e = 1 - (1 - p) * (1 - p) * (1 - p)
+					local from = self.RevealFrom
+					local x = from.x + (rec.target.x - from.x) * e
+					local y = from.y + (rec.target.y - from.y) * e + math.sin(p * math.pi) * 40
+					-- 크기: 0.2 → 1.25 (70%) → 1.0
+					local sc = 1
+					if p < 0.7 then sc = 0.2 + 1.05 * (p / 0.7) else sc = 1.25 - 0.25 * ((p - 0.7) / 0.3) end
+					local a = math.min(1, p / 0.3)
+					self:PoseCell(rec, Vector2(x, y), sc, a)
+					if isvalid(rec.cnt) then rec.cnt.TextGUIRendererComponent.Text = self:Comma(math.floor(rec.value * e)) end
+				end
+			end
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void ShowConfirm()
+		-- 모든 보상 안착 후: 받기 버튼 자리를 초록 "확인"으로 바꾸고 누르면 닫는다.
+		self._T.done = true
+		if isvalid(self.btnClaim) then
+			if isvalid(self.btnClaim.Entity.TextGUIRendererComponent) then self.btnClaim.Entity.TextGUIRendererComponent.Text = self.ConfirmLabel end
+			_UIButtonLogic:SetDisabled(self.btnClaim.Entity, false)
+		end
+		log("[VRF] offline reveal done -> confirm")
+	end
+
+	@ExecSpace("ClientOnly")
+	method number GaugeWidth(number full, number ratio)
+		-- 채움 너비: 0이면 0, 아니면 둥근 양 끝(6+6px)이 깨지지 않게 최소 너비 보장.
+		local w = full * math.max(0, math.min(1, ratio))
+		if w <= 0 then return 0 end
+		return math.max(self.GaugeMinWidth, w)
 	end
 
 	-- ───────────────────────── 로비 버튼 ─────────────────────────
@@ -373,7 +521,7 @@ script OfflineUILogic extends Logic
 		if isvalid(fill) then fill = fill:GetChildByName("Fill") end
 		if isvalid(fill) then
 			local w = 0
-			if not locked then w = self.ButtonGaugeWidth * math.min(1, sec / maxSec) end
+			if not locked then w = self:GaugeWidth(self.ButtonGaugeWidth, sec / maxSec) end
 			fill.UITransformComponent.RectSize = Vector2(w, 8)
 			if full then fill.SpriteGUIRendererComponent.Color = self.GaugeFullColor else fill.SpriteGUIRendererComponent.Color = self.GaugeColor end
 		end
@@ -498,8 +646,8 @@ script OfflineUILogic extends Logic
 
 	@ExecSpace("ClientOnly")
 	method void UpdateAnim(number delta)
-		-- 받기 성공: 상자 10프레임 열림(1.2초) → CloseDelay초 뒤 자동 닫힘.
-		if self._T.anim < 0 then return end
+		-- 받기 성공: 상자 10프레임 열림(1.2초) + 보상 순서 등장 → 확인 버튼으로 전환 (자동으로 닫지 않음).
+		if self._T.anim < 0 or self._T.done then return end
 		self._T.anim = self._T.anim + delta
 		local t = self._T.anim
 		local acc = 0
@@ -513,9 +661,10 @@ script OfflineUILogic extends Logic
 			self._T.frame = idx
 			self.chest.ImageRUID = DataRef(self._T.frames[idx])
 		end
-		if t >= acc + self.CloseDelay then
+		self:UpdateReveal(t)
+		if t >= math.max(acc, self._T.revealEnd or 0) + self.ConfirmDelay then
 			log("[VRF] offline chest anim done")
-			self:Close()
+			self:ShowConfirm()
 		end
 	end
 
