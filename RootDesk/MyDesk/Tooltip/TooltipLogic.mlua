@@ -2,6 +2,7 @@
 script TooltipLogic extends Logic
 
 	-- 공용 툴팁 (ui/TooltipUI). 항상 1개만, 모든 화면보다 위에 띄운다.
+	-- 바탕은 메이플 장비 툴팁 틀(9-슬라이스) 하나 + 구분선. 구분선 위 = 타이틀, 아래 = 본문 (내용 길이에 따라 동적 배치).
 	-- 종류: 글자(ShowText) / 아이템 목록(ShowItems) / 스킬 상세(ShowSkill). 닫기는 Hide().
 	-- 떠 있는 동안 전체 화면 투명 판이 입력을 흡수한다: 다른 곳을 누르면 닫기만 하고 아래 버튼은 눌리지 않는다.
 	-- Register(대상, 함수)로 등록한 대상을 누르면 닫는 대신 그 함수를 불러 툴팁을 바로 바꾼다 (같은 대상이면 닫힘).
@@ -17,6 +18,12 @@ script TooltipLogic extends Logic
 	property number ItemGap = 8
 	property integer ItemPerRow = 6
 	property number SkillWidth = 480
+	-- 메이플 장비 툴팁 틀(9-슬라이스) 안쪽 배치: 위 여백 → 타이틀 → 간격 → 구분선 → 간격 → 본문 → 아래 여백
+	property number PadTop = 16
+	property number PadBottom = 18
+	property number TitleGap = 10
+	property number LineHeight = 6
+	property number BodyGap = 12
 
 	@ExecSpace("ClientOnly")
 	method void OnBeginPlay()
@@ -133,20 +140,43 @@ script TooltipLogic extends Logic
 	end
 
 	@ExecSpace("ClientOnly")
+	method void Layout(Entity target, string kind, number w, number headerH, number bodyH)
+		-- 공통 배치: 타이틀 높이로 구분선 y를, 본문 높이로 전체 높이를 정한 뒤 표시한다.
+		local lineY = self.PadTop + headerH + self.TitleGap
+		local line = self:E(kind .. "/Line")
+		if isvalid(line) then
+			line.UITransformComponent.RectSize = Vector2(w, self.LineHeight)
+			line.UITransformComponent.anchoredPosition = Vector2(0, -lineY)
+		end
+		local bodyY = lineY + self.LineHeight + self.BodyGap
+		local body = self:E(kind .. "/Body")
+		body.UITransformComponent.anchoredPosition = Vector2(0, -bodyY)
+		body.UITransformComponent.RectSize = Vector2(w - 8, bodyH)
+		self:Finish(target, kind, w, bodyY + bodyH + self.PadBottom)
+	end
+
+	@ExecSpace("ClientOnly")
+	method number FitText(Entity e, string text, number width, number minH)
+		-- 글자 높이를 재서 칸 크기를 맞춘다 (폭 고정, 길면 줄바꿈).
+		local tg = e.TextGUIRendererComponent
+		tg.Text = text or ""
+		local h = math.max(minH, tg:GetPreferredHeight(text or "", width))
+		e.UITransformComponent.RectSize = Vector2(width, h)
+		return h
+	end
+
+	@ExecSpace("ClientOnly")
 	method void ShowText(Entity target, string title, string body)
-		-- 글자 툴팁: 폭 고정, 높이는 설명 길이에 맞춘다.
+		-- 글자 툴팁: 폭 고정, 타이틀·설명 길이에 맞춰 구분선 위치와 높이를 정한다.
 		if not self:Begin(target, "TextTip") then return end
 		local w = self.TextWidth
-		local textW = w - 36
+		local titleE = self:E("TextTip/Title")
+		local titleH = self:FitText(titleE, title or "", w - 36, 30)
+		titleE.UITransformComponent.anchoredPosition = Vector2(18, -self.PadTop)
 		local te = self:E("TextTip/Body/Text")
-		local tg = te.TextGUIRendererComponent
-		tg.Text = body or ""
-		local th = math.max(24, tg:GetPreferredHeight(body or "", textW))
-		te.UITransformComponent.RectSize = Vector2(textW, th)
-		self:E("TextTip/Title").TextGUIRendererComponent.Text = title or ""
-		local bodyH = th + 24
-		self:E("TextTip/Body").UITransformComponent.RectSize = Vector2(w - 8, bodyH)
-		self:Finish(target, "TextTip", w, 52 + bodyH + 4)
+		local th = self:FitText(te, body or "", w - 36, 24)
+		te.UITransformComponent.anchoredPosition = Vector2(14, 0)
+		self:Layout(target, "TextTip", w, titleH, th)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -161,10 +191,11 @@ script TooltipLogic extends Logic
 		local innerW = cols * self.ItemCell + (cols - 1) * self.ItemGap + 28
 		local titleE = self:E("ItemTip/Title")
 		titleE.TextGUIRendererComponent.Text = title or ""
-		-- 제목이 길면 폭을 늘린다 (아이콘 칸은 가운데 정렬)
+		-- 제목이 길면 폭을 늘린다 (최대 화면 절반, 넘치면 두 줄). 아이콘 칸은 가운데 정렬
 		local titleW = titleE.TextGUIRendererComponent:GetPreferredWidth(title or "") + 36
-		local w = math.max(innerW + 8, titleW, 240)
-		titleE.UITransformComponent.RectSize = Vector2(w - 36, 40)
+		local w = math.max(innerW + 8, math.min(titleW, 600), 240)
+		local titleH = self:FitText(titleE, title or "", w - 36, 30)
+		titleE.UITransformComponent.anchoredPosition = Vector2(18, -self.PadTop)
 		local offX = (w - 8 - innerW) / 2
 		for i = 1, 12 do
 			local slot = self:E("ItemTip/Body/Slot" .. tostring(i))
@@ -174,7 +205,7 @@ script TooltipLogic extends Logic
 				if on then
 					local c = (i - 1) % self.ItemPerRow
 					local r = math.floor((i - 1) / self.ItemPerRow)
-					slot.UITransformComponent.anchoredPosition = Vector2(offX + 14 + c * step, -12 - r * step)
+					slot.UITransformComponent.anchoredPosition = Vector2(offX + 14 + c * step, -r * step)
 					local icon = slot:GetChildByName("Icon")
 					if isvalid(icon) then
 						local spr = icon.SpriteGUIRendererComponent
@@ -185,9 +216,8 @@ script TooltipLogic extends Logic
 				end
 			end
 		end
-		local bodyH = rows * self.ItemCell + (rows - 1) * self.ItemGap + 24
-		self:E("ItemTip/Body").UITransformComponent.RectSize = Vector2(w - 8, bodyH)
-		self:Finish(target, "ItemTip", w, 52 + bodyH + 4)
+		local bodyH = rows * self.ItemCell + (rows - 1) * self.ItemGap
+		self:Layout(target, "ItemTip", w, titleH, bodyH)
 	end
 
 	@ExecSpace("ClientOnly")
@@ -237,7 +267,6 @@ script TooltipLogic extends Logic
 			spr.ImageRUID = DataRef(d.icon or "")
 			spr.Color = Color(1, 1, 1, 1)
 		end
-		self:E("SkillTip/Name").TextGUIRendererComponent.Text = d.name or ""
 		local kindParts = {}
 		if (d.kind or "") ~= "" then table.insert(kindParts, d.kind) end
 		if (d.cooldownText or "") ~= "" then
@@ -250,7 +279,22 @@ script TooltipLogic extends Logic
 		-- 전투 개편: 공격 타입(물리/마법)·속성을 속성색 글자로 (d.atk = P/M/물리/마법, d.elem = 속성 Id 또는 한글)
 		local tag = self:CombatTag(d.atk or "", d.elem or "")
 		if tag ~= "" then table.insert(kindParts, tag) end
-		self:E("SkillTip/Kind").TextGUIRendererComponent.Text = table.concat(kindParts, "  ·  ")
+		-- 타이틀: 왼쪽 아이콘(72) + 오른쪽 이름·종류 줄. 글자 묶음이 아이콘보다 낮으면 아이콘 가운데에 맞춘다
+		local textX = 100
+		local textW = w - textX - 16
+		local nameE = self:E("SkillTip/Name")
+		local kindE = self:E("SkillTip/Kind")
+		local nameH = self:FitText(nameE, d.name or "", textW, 32)
+		local kindStr = table.concat(kindParts, "  ·  ")
+		local kindH = 0
+		if kindStr ~= "" then kindH = self:FitText(kindE, kindStr, textW, 26) else kindE.TextGUIRendererComponent.Text = "" end
+		local blockH = nameH + (kindH > 0 and (4 + kindH) or 0)
+		local headerH = math.max(72, blockH)
+		local top = self.PadTop + (headerH - blockH) / 2
+		nameE.UITransformComponent.anchoredPosition = Vector2(textX, -top)
+		kindE.UITransformComponent.anchoredPosition = Vector2(textX, -(top + nameH + 4))
+		local iconBg = self:E("SkillTip/IconBg")
+		if isvalid(iconBg) then iconBg.UITransformComponent.anchoredPosition = Vector2(16, -(self.PadTop + (headerH - 72) / 2)) end
 		local text = d.desc or ""
 		local breaks = d.breaks or {}
 		if #breaks > 0 then
@@ -259,15 +303,10 @@ script TooltipLogic extends Logic
 			text = text .. "<b><color=#8FBFFF>이번 판 돌파</color></b>"
 			for _, b in ipairs(breaks) do text = text .. "\n· " .. b end
 		end
-		local textW = w - 36
 		local te = self:E("SkillTip/Body/Text")
-		local tg = te.TextGUIRendererComponent
-		tg.Text = text
-		local th = math.max(24, tg:GetPreferredHeight(text, textW))
-		te.UITransformComponent.RectSize = Vector2(textW, th)
-		local bodyH = th + 24
-		self:E("SkillTip/Body").UITransformComponent.RectSize = Vector2(w - 8, bodyH)
-		self:Finish(target, "SkillTip", w, 96 + bodyH + 4)
+		local th = self:FitText(te, text, w - 36, 24)
+		te.UITransformComponent.anchoredPosition = Vector2(14, 0)
+		self:Layout(target, "SkillTip", w, headerH, th)
 	end
 
 	@ExecSpace("ClientOnly")
