@@ -533,10 +533,11 @@ script RegionSelectLogic extends Logic
 		for fl = (section - 1) * self.SectionSize + 1, section * self.SectionSize do total = total + self:StarCount(sm[fl] or 0) end
 		local maxStars = self:Threshold(3)
 		local first = (section - 1) * self.SectionSize + 1
-		self:SetText("sectionTitle", "구간별 보상", nil)
+		-- 제목은 목록 머리글과 같은 구역 표기("{n}구역 누적 보상"), 평소 안내 줄은 비움(받기 결과 같은 잠깐 메시지만 표시)
+		self:SetText("sectionTitle", tostring(section) .. "구역 누적 보상", nil)
 		self:SetText("sectionCountPill/sectionCount", tostring(total) .. " / " .. tostring(maxStars), nil)
 		if (self._T.hintTime or 0) <= 0 then
-			self:SetText("sectionHint", tostring(first) .. "~" .. tostring(self:SectionLast(section)) .. "번째 지역", nil)
+			self:SetText("sectionHint", "", nil)
 		end
 		local fill = self:E("sectionGauge/sectionGaugeFill")
 		if isvalid(fill) then fill.SpriteGUIRendererComponent.FillAmount = math.max(0, math.min(1, total / math.max(1, maxStars))) end
