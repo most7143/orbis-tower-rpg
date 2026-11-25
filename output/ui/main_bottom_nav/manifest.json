@@ -1,0 +1,108 @@
+{
+  "referenceResolution": [
+    1920,
+    1080
+  ],
+  "height": 156,
+  "width": 1920,
+  "tabWidth": 480,
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "filter": "Point",
+  "wrap": "Clamp",
+  "imageType": "Simple",
+  "textBaked": false,
+  "selectionSpriteCount": 1,
+  "slideDuration": 0.36,
+  "assets": [
+    {
+      "key": "platform_normal",
+      "file": "nav_platform_normal.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "3237c8459578444da8e28ac88875e77b"
+    },
+    {
+      "key": "platform_hover",
+      "file": "nav_platform_hover.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "17d114e8afa44912b525d4dd876d5fdc"
+    },
+    {
+      "key": "platform_pressed",
+      "file": "nav_platform_pressed.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "404512066de0498aaef6fe3524bcba94"
+    },
+    {
+      "key": "platform_disabled",
+      "file": "nav_platform_disabled.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "3237c8459578444da8e28ac88875e77b"
+    },
+    {
+      "key": "selector_normal",
+      "file": "nav_selector_normal.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "96d00a4b5e4148c4a81c05a47727567b"
+    },
+    {
+      "key": "selector_hover",
+      "file": "nav_selector_hover.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "e83aed93796640c4ac42e46382040271"
+    },
+    {
+      "key": "selector_pressed",
+      "file": "nav_selector_pressed.png",
+      "width": 394,
+      "height": 80,
+      "ruid": "e0eba98c86bc4a29abc68321543dabd5"
+    },
+    {
+      "key": "icon_lobby",
+      "file": "nav_icon_lobby.png",
+      "width": 57,
+      "height": 48,
+      "ruid": "6ec576a4c8ee4ea39aa33c2b639f4ba4"
+    },
+    {
+      "key": "icon_character",
+      "file": "nav_icon_character.png",
+      "width": 63,
+      "height": 54,
+      "ruid": "4b739d3bc2b64c0783df086b7a35db64"
+    },
+    {
+      "key": "icon_growth",
+      "file": "nav_icon_growth.png",
+      "width": 48,
+      "height": 45,
+      "ruid": "a6646e8bb7da40d98f8b842ee3aed650"
+    },
+    {
+      "key": "icon_draw",
+      "file": "nav_icon_draw.png",
+      "width": 51,
+      "height": 42,
+      "ruid": "8c381448918d4af4a0abb0881786ec75"
+    },
+    {
+      "key": "backdrop",
+      "file": "nav_backdrop.png",
+      "width": 1,
+      "height": 1,
+      "ruid": "112a141206b44349afb007781aa275d3"
+    }
+  ],
+  "visibleHeight": 92,
+  "bottomBleed": 64,
+  "currentTabInputEnabled": false
+}

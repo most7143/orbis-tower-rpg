@@ -3,6 +3,8 @@ script TowerRunManager extends Component
 
 	-- 몬스터 모델 / 배치 위치 (월드 단위)
 	property string MonsterModelId = "towerstarpixie"
+	-- 스킬 V2: 받는 피해 증가(흉터·표식·쇼다운) 합계 최대 배율 (사용자 확정 7)
+	property number V2VulnCap = 1.3
 	property Vector3 PlayerPos = Vector3(-1.0, 0.2, 0)
 	property Vector3 MonsterPos = Vector3(-0.4, -0.04, 0)
 	property string LobbyMapName = "Lobby"
@@ -828,7 +830,33 @@ script TowerRunManager extends Component
 		-- 비숍 헤븐즈 도어: dur초 동안 파티원이 한 번씩 쓰러짐을 무시하고 체력 1로 버틴다.
 		self._T.wardUntil = _UtilLogic.ElapsedSeconds + dur
 		self._T.wardUsed = {}
+		self._T.wardPct = 0
 		log("[VRF] duo death ward " .. tostring(dur) .. "s")
+	end
+
+	@ExecSpace("ServerOnly")
+	method void SetDeathWardPct(number dur, number pct)
+		-- 스킬 V2 헤븐즈 도어 생명의 축복: dur초 동안 파티원이 쓰러지면 한 번 HP pct%로 되살아난다.
+		self:SetDeathWard(dur)
+		self._T.wardPct = pct
+	end
+
+	@ExecSpace("ServerOnly")
+	method number WardHp(number maxHp)
+		-- 쓰러짐 무시로 남길 체력 (생명의 축복이면 최대 체력 %, 아니면 1).
+		return math.max(1, math.floor(maxHp * (self._T.wardPct or 0) / 100 + 0.5))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ResurrectPct(Entity e)
+		-- 스킬 V2 비숍 리저렉션: 쓰러지려는 파티원을 되살릴 체력 % (없으면 0).
+		for _, h in ipairs(self:Heroes()) do
+			if h.JobId == "Bishop" and h.Active then
+				local pct = h:ResurrectPct(self, e)
+				if pct > 0 then return pct end
+			end
+		end
+		return 0
 	end
 
 	@ExecSpace("ServerOnly")
@@ -925,8 +953,29 @@ script TowerRunManager extends Component
 		if b.n <= 0 then
 			if (b.serial or 0) ~= 0 then _EffectService:RemoveEffect(b.serial) end
 			self._T.blocks[e] = nil
-			if b.owner ~= nil and isvalid(b.owner) then b.owner:OnShellBroken() end
+			if b.owner ~= nil and isvalid(b.owner) then
+				b.owner:OnShellBroken()
+				b.owner:OnShellEnd(e)
+			end
 		end
+		return true
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean HasBlock(Entity e)
+		-- 스킬 V2: 막기(보호막)가 남아 있는지.
+		local b = (self._T.blocks or {})[e]
+		return b ~= nil and b.n > 0 and _UtilLogic.ElapsedSeconds <= b.till
+	end
+
+	@ExecSpace("ServerOnly")
+	method boolean EndBlock(Entity e, Component owner)
+		-- 스킬 V2: owner가 건 보호막이 아직 남아 있으면 지금 없애고 true (시간이 다 됐을 때 '사라질 때' 효과용).
+		if self._T.blocks == nil or not isvalid(e) then return false end
+		local b = self._T.blocks[e]
+		if b == nil or b.owner ~= owner or _UtilLogic.ElapsedSeconds < b.till - 0.1 then return false end
+		if (b.serial or 0) ~= 0 then _EffectService:RemoveEffect(b.serial) end
+		self._T.blocks[e] = nil
 		return true
 	end
 
@@ -1302,7 +1351,12 @@ script TowerRunManager extends Component
 			return
 		end
 		if self:UseDeathWard(comp) then
-			self:SetMateHp(i, 1)
+			self:SetMateHp(i, self:WardHp(self:MateMax(i)))
+			return
+		end
+		local resPct = self:ResurrectPct(comp)
+		if resPct > 0 then
+			self:SetMateHp(i, math.max(1, math.floor(self:MateMax(i) * resPct / 100)))
 			return
 		end
 		self:SetMateDown(i, true)
@@ -1524,6 +1578,8 @@ script TowerRunManager extends Component
 					dieSound = ds:GetCell(i, "DieSoundRUID"),
 					move = ds:GetCell(i, "MoveRUID") or "",
 					range = math.max(1, math.min(3, math.floor(tonumber(ds:GetCell(i, "AttackRange") or "1") or 1))),
+					-- MonsterTable Scale: 몬스터 그림 크기 배율 (빈칸 = 1). 원본이 큰 몬스터를 다른 몬스터 키에 맞춘다
+					scale = math.max(0.1, tonumber(ds:GetCell(i, "Scale") or "") or 1),
 					-- MonsterTable Ranged = 1 이면 이 몬스터는 웨이브에서 항상 원거리
 					ranged = tonumber(ds:GetCell(i, "Ranged") or "0") == 1,
 					-- 전투 능력치 개편: 몬스터 공격 타입(P/M), 물리·마법 방어(빈칸 = 타입 기본), 속성 상성("Fire:W|Ice:R|Poison:N")
@@ -3742,6 +3798,7 @@ script TowerRunManager extends Component
 		self._T.slotKeyOf = {}
 		self._T.starCount = {}
 		self._T.buffs = {}
+		self._T.v2vuln = {}
 		self._T.cd = {}
 		self:ClearBurn()
 		self._T.shield = 0
@@ -3800,7 +3857,10 @@ script TowerRunManager extends Component
 		if bg == nil or bg == "" then bg = self._T.defaultBg end
 		if self.FloorBgRUID ~= (bg or "") then self.FloorBgRUID = bg or "" end
 		local bgEnt = self.Entity:GetChildByName("Background")
-		if isvalid(bgEnt) and isvalid(bgEnt.BackgroundComponent) and bg ~= "" and bgEnt.BackgroundComponent.TemplateRUID ~= bg then
+		-- 층 확장: "sprite:<RUID>" = 원본 back 합성 배경. 템플릿은 그대로 두고 클라이언트 FloorBackdrop이 화면을 덮는다
+		if string.sub(bg or "", 1, 7) == "sprite:" then
+			log("[VRF] floor look sprite bg " .. tostring(self.Floor) .. " -> " .. bg)
+		elseif isvalid(bgEnt) and isvalid(bgEnt.BackgroundComponent) and bg ~= "" and bgEnt.BackgroundComponent.TemplateRUID ~= bg then
 			bgEnt.BackgroundComponent:ChangeBackgroundByTemplateRUID(bg)
 			log("[VRF] floor look bg " .. tostring(self.Floor) .. " -> " .. bg)
 		end
@@ -4045,7 +4105,8 @@ script TowerRunManager extends Component
 		end
 		-- 대기열 없이 바로 나온 정예·보스도 같은 표시 (정예 이름표, 보스 1.5배)
 		if willBoss then
-			monster.TransformComponent.Scale = Vector3(self.BossScale, self.BossScale, 1)
+			local bs = self.BossScale * (info.scale or 1)
+			monster.TransformComponent.Scale = Vector3(bs, bs, 1)
 			if self._T.bossOf == nil then self._T.bossOf = {} end
 			self._T.bossOf[monster] = true
 			-- 보스 개편 B3·B5: 보스전 수치·속성 덮어쓰기 + 기믹 시작 (필드보스는 예고 강타만)
@@ -4140,6 +4201,12 @@ script TowerRunManager extends Component
 		self._T.waveSpawned = (self._T.waveSpawned or 0) + 1
 		if self._T.infoOf == nil then self._T.infoOf = {} end
 		self._T.infoOf[monster] = info
+		-- MonsterTable Scale (빈칸 = 1): 원본이 큰 몬스터를 줄인다. 체력바·피격 위치는 Scale.y를 곱해 따라온다
+		local ls = info.scale or 1
+		if ls ~= 1 then
+			monster.TransformComponent.Scale = Vector3(ls, ls, 1)
+			log("[VRF] monster scale " .. tostring(info.name) .. " scale=" .. tostring(ls))
+		end
 		-- 웨이브의 마지막(웨이브 크기번째) 몬스터: 정예 스테이지 = 정예(이름표), 보스 스테이지 마지막 웨이브 = 보스(1.5배)
 		if self:IsEliteStage() and self._T.waveSpawned >= (self._T.waveSize or 1) then
 			if self._T.eliteOf == nil then self._T.eliteOf = {} end
@@ -4148,7 +4215,7 @@ script TowerRunManager extends Component
 			if self.StageKind == "boss" then
 				if (self._T.waveNo or 1) >= self.WavesPerStage then
 					self._T.bossOf[monster] = true
-					monster.TransformComponent.Scale = Vector3(self.BossScale, self.BossScale, 1)
+					monster.TransformComponent.Scale = Vector3(self.BossScale * ls, self.BossScale * ls, 1)
 				else
 					-- 보스 스테이지의 앞 웨이브 마지막 몬스터는 일반
 					self._T.eliteOf[monster] = nil
@@ -4846,11 +4913,47 @@ script TowerRunManager extends Component
 	end
 
 	@ExecSpace("ServerOnly")
+	method boolean AddVuln(Entity e, string kind, number pct, number sec)
+		-- 스킬 V2: 몬스터 e에 '받는 피해 증가' 디버프 (kind = scar 흉터 / mark 표식 / showdown 쇼다운). 같은 종류는 큰 값·갱신.
+		-- 돌려주는 값: 새로 걸렸는지 (그림 표시용).
+		if not isvalid(e) or pct <= 0 then return false end
+		if self._T.v2vuln == nil then self._T.v2vuln = {} end
+		local m = self._T.v2vuln[e.Id]
+		if m == nil then
+			m = {}
+			self._T.v2vuln[e.Id] = m
+		end
+		local now = _UtilLogic.ElapsedSeconds
+		local cur = m[kind]
+		local fresh = cur == nil or cur.till <= now
+		local v = pct
+		if not fresh and cur.pct > v then v = cur.pct end
+		m[kind] = { pct = v, till = now + sec }
+		return fresh
+	end
+
+	@ExecSpace("ServerOnly")
+	method number VulnMul(Entity e)
+		-- 스킬 V2: 몬스터 e가 받는 피해 배율 = 종류별 (1 + %) 곱, 최대 V2VulnCap.
+		if not isvalid(e) or self._T.v2vuln == nil then return 1 end
+		local m = self._T.v2vuln[e.Id]
+		if m == nil then return 1 end
+		local now = _UtilLogic.ElapsedSeconds
+		local mul = 1
+		for _, v in pairs(m) do
+			if v.till > now then mul = mul * (1 + v.pct / 100) end
+		end
+		return math.min(self.V2VulnCap, mul)
+	end
+
+	@ExecSpace("ServerOnly")
 	method integer FinalDouble(integer damage)
 		-- 각인 핵심 '섬멸': 확률로 최종 피해 2배. 피해 숫자를 띄우기 전에 불러 뜨는 숫자도 2배가 되게 한다.
 		-- 전투 개편: 숫자를 띄우기 직전 관문이므로 속성·공격 타입 배율(CombatMul)도 여기서 한 번 곱한다.
 		if damage > 0 then
 			local cmul = self:CombatMul(self._T.cmTarget or self._T.monster)
+			-- 스킬 V2: 파티 피해 증가 버프(PartyDmg) × 대상이 받는 피해 증가(흉터·표식·쇼다운 곱, 최대 V2VulnCap배)
+			cmul = cmul * (1 + self:SkillValue("PartyDmg") / 100) * self:VulnMul(self._T.cmTarget or self._T.monster)
 			if cmul ~= 1 then damage = math.max(1, math.floor(damage * cmul + 0.5)) end
 		end
 		local chance = self:Bonus("FinalDouble")
@@ -5040,7 +5143,12 @@ script TowerRunManager extends Component
 		end
 		-- 비숍 헤븐즈 도어: 한 번 쓰러짐 무시
 		if self:UseDeathWard(self._T.player) then
-			self.PlayerHp = 1
+			self.PlayerHp = self:WardHp(self.PlayerMaxHp)
+			return
+		end
+		local resPct = self:ResurrectPct(self._T.player)
+		if resPct > 0 then
+			self.PlayerHp = math.max(1, math.floor(self.PlayerMaxHp * resPct / 100))
 			return
 		end
 		-- 2인 편성: 동료가 살아 있으면 메인만 쓰러지고 전투는 계속된다 (웨이브를 끝내면 일어남)
@@ -7415,7 +7523,8 @@ script TowerRunManager extends Component
 			self._T.monInfo = ni
 			if self._T.infoOf == nil then self._T.infoOf = {} end
 			self._T.infoOf[monster] = ni
-			monster.TransformComponent.Scale = Vector3(row.scale, row.scale, 1)
+			local rs = row.scale * (info.scale or 1)
+			monster.TransformComponent.Scale = Vector3(rs, rs, 1)
 			self.MonsterLabel = row.name
 			if mech ~= nil then mech:Begin(true, row.mech1, row.mech2, self:WeakText(ni.elem), (self._T.bossCfg or {})["TimeLimit"] or 180) end
 			log("[VRF] boss mode spawn " .. row.id .. " step=" .. tostring(self.BossRunStep) .. " hp=" .. tostring(self.MonsterMaxHp) .. " atk=" .. tostring(self.MonsterAtk) .. " defP=" .. tostring(self._T.monsterDefP) .. " defM=" .. tostring(self._T.monsterDefM) .. " evade=" .. tostring(row.evade) .. " elem=" .. row.elem)
@@ -7459,6 +7568,7 @@ script TowerRunManager extends Component
 				if self._T.infoOf == nil then self._T.infoOf = {} end
 				self._T.infoOf[m] = info
 				self._T.summonOf[m] = true
+				if (info.scale or 1) ~= 1 then m.TransformComponent.Scale = Vector3(info.scale, info.scale, 1) end
 				local mc = m:GetComponent("script.TowerMonster")
 				if mc ~= nil then
 					mc.MoveRUID = info.move or ""

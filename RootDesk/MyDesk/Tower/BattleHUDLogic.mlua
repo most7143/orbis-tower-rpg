@@ -293,7 +293,7 @@ script BattleHUDLogic extends Logic
 				end
 			end
 		end
-		local kinds = { Main = "주력기", Sub = "보조기", Tech = "기술", Hyper = "하이퍼", V1 = "5차", V2 = "5차", V3 = "5차", Ult = "궁극기" }
+		local kinds = { Main = "액티브", Sub = "액티브", Tech = "액티브", Hyper = "하이퍼", P2 = "패시브", P3 = "패시브", Ult = "궁극기" }
 		local ss = _DataService:GetTable("CharSkillSlotTable")
 		if ss ~= nil then
 			for i = 1, ss:GetRowCount() do

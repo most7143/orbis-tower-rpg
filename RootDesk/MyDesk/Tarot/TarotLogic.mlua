@@ -526,7 +526,8 @@ script TarotLogic extends Logic
 		local key = sk.slotKey or ""
 		if key == "Passive" then return "passive" end
 		if key == "Hyper" then return "hyper" end
-		if key == "V1" or key == "V2" or key == "V3" or key == "Ult" then return "fifth" end
+		if key == "P2" or key == "P3" then return "passive" end
+		if key == "Ult" then return "fifth" end
 		if key ~= "" then return "active" end
 		if (sk.grade or 0) == 5 then return "hyper" end
 		if (sk.grade or 0) >= 6 then return "fifth" end

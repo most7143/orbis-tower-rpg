@@ -1,0 +1,66 @@
+@Component
+script FloorBackdrop extends Component
+
+	-- 층 확장(2026-11-25): 메이커 배경 템플릿이 없는 원본 맵(오디움·도원경·아르테리아·카르시온 등)은
+	-- 원본 back 조각을 한 장으로 합성해 올린 스프라이트를 이 엔티티로 화면 가득 보여 준다.
+	-- 서버 TowerRunManager.FloorBgRUID 가 "sprite:<RUID>" 이면 표시, 아니면 숨긴다 (배경 템플릿 층은 BackgroundComponent 그대로).
+	-- BackgroundComponent.Type/SpriteRUID 는 스크립트에서 바꿀 수 없어서(실행 중 읽기 전용) 이 방식을 쓴다.
+
+	-- 합성 배경 원본 크기 (월드 단위, 1600x900px ÷ 100)
+	property number ImageWidth = 16
+	property number ImageHeight = 9
+	-- 화면보다 살짝 크게 덮는 비율 (가장자리 틈 방지)
+	property number CoverMargin = 1.02
+	-- 시험용: 비어 있지 않으면 탑 관리자 없이도 이 RUID를 표시 (시험 맵 전용)
+	property string TestRUID = ""
+
+	@ExecSpace("ClientOnly")
+	method void OnBeginPlay()
+		-- 처음에는 숨긴다 (층 값이 오면 표시).
+		self._T.shown = ""
+		self.Entity:SetVisible(false, false, false)
+		log("[VRF] FloorBackdrop begin map=" .. tostring(self.Entity.CurrentMap and self.Entity.CurrentMap.Name))
+	end
+
+	@ExecSpace("ClientOnly")
+	method string WantedRUID()
+		-- 지금 보여야 할 합성 배경 RUID ("" = 숨김).
+		if self.TestRUID ~= "" then return self.TestRUID end
+		local map = self.Entity.CurrentMap
+		if not isvalid(map) then return "" end
+		local mgr = map:GetComponent("script.TowerRunManager")
+		if mgr == nil then return "" end
+		local bg = mgr.FloorBgRUID or ""
+		if string.sub(bg, 1, 7) == "sprite:" then return string.sub(bg, 8) end
+		return ""
+	end
+
+	@ExecSpace("ClientOnly")
+	method void OnUpdate(number delta)
+		-- 원하는 배경으로 바꾸고, 카메라 화면 한가운데에 화면을 덮는 크기로 맞춘다.
+		local ruid = self:WantedRUID()
+		if ruid ~= self._T.shown then
+			self._T.shown = ruid
+			if ruid == "" then
+				self.Entity:SetVisible(false, false, false)
+			else
+				self.Entity.SpriteRendererComponent.SpriteRUID = ruid
+				self.Entity:SetVisible(true, false, false)
+			end
+			log("[VRF] FloorBackdrop show=" .. (ruid == "" and "-" or ruid))
+		end
+		if ruid == "" then return end
+		local w = _UILogic.ScreenWidth
+		local h = _UILogic.ScreenHeight
+		if w <= 0 or h <= 0 then return end
+		local a = _UILogic:ScreenToWorldPosition(Vector2(0, 0))
+		local b = _UILogic:ScreenToWorldPosition(Vector2(w, h))
+		local viewW = math.abs(b.x - a.x)
+		local viewH = math.abs(b.y - a.y)
+		if viewW <= 0 or viewH <= 0 then return end
+		local s = math.max(viewW / self.ImageWidth, viewH / self.ImageHeight) * self.CoverMargin
+		local tr = self.Entity.TransformComponent
+		tr.Position = Vector3((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, tr.Position.z)
+		tr.Scale = Vector3(s, s, 1)
+	end
+end

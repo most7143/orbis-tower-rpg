@@ -312,7 +312,7 @@ script SkillTestManager extends Component
 			for ruid in string.gmatch(caster, "[^|]+") do table.insert(parts, ruid .. "@" .. tostring(sk.fxScale)) end
 			caster = table.concat(parts, "|")
 		end
-		if tp ~= nil then tp:PlayAttackMotion(0, sk.actionFrames, sk.actionTime, caster, sk.useSound or "", player.PlayerComponent.UserId) end
+		if tp ~= nil then tp:PlayAttackMotion(0, sk.actionFrames, sk.actionTime, caster, sk.useSound or "", "", false, 1, player.PlayerComponent.UserId) end
 		-- 타격 시점: 동작 데이터의 음수→양수 전환 순간 (TowerPlayer와 같은 규칙, 없으면 HitDelay)
 		local hitDelay = self.HitDelay
 		if tp ~= nil then
@@ -476,7 +476,7 @@ script SkillTestManager extends Component
 		local tp = player:GetComponent("script.TowerPlayer")
 		local delay = self.HitDelay
 		if tp ~= nil then
-			tp:PlayAttackMotion(0, r.actionFrames or "", r.actionTime or 0.8, r.casterFx or "", r.useSound or "", player.PlayerComponent.UserId)
+			tp:PlayAttackMotion(0, r.actionFrames or "", r.actionTime or 0.8, r.casterFx or "", r.useSound or "", r.fxId or "", false, 1, player.PlayerComponent.UserId)
 			local ht = tp:HitTimeOf(r.actionFrames or "")
 			if ht > 0 then delay = ht end
 		end
@@ -500,7 +500,7 @@ script SkillTestManager extends Component
 		if not isvalid(player) or not isvalid(monster) then return end
 		local left = hc._T.valCharge or 0
 		local tp = player:GetComponent("script.TowerPlayer")
-		if tp ~= nil then tp:PlayAttackMotion(0, "", 0.6, "", "", player.PlayerComponent.UserId) end
+		if tp ~= nil then tp:PlayAttackMotion(0, "", 0.6, "", "", "", false, 1, player.PlayerComponent.UserId) end
 		self:Later(function()
 			if not isvalid(self._T.monster) then return end
 			local target = self._T.monster

@@ -90,6 +90,20 @@ script HeroCombat extends Component
 	-- 발할라: 시전 시 ValhallaCharges회 충전 (돌파 2면 ValhallaChargesUp). 직접 공격 스킬 적중마다 1회 써서 0.3초 뒤 추가타.
 	-- 충전을 다 써야 쿨타임이 돈다. 돌파 1 콤보 40%, 돌파 3 충전 반환 50%, 돌파 4 자상 50%, 돌파 5 1회 발동(충전량만큼 피해 배수, 쿨타임 3초)
 	property integer ValhallaCharges = 5
+	-- 스킬 V2 (히어로): 발할라 검격 최대 횟수, 검격 2타 시각(초), 검격 피격 그림(레이징 블로우 hit/0 재사용), 흉터 지속(초)
+	property integer V2ValhallaCharges = 8
+	property number V2ValhallaHit1 = 0.06
+	property number V2ValhallaHit2 = 0.18
+	property string V2ValhallaHitFx = "c04bd755e6334f8eb47a3c5037795cf7"
+	property number V2ScarSec = 5
+	property string V2ScarMobFx = "009c13421b474ba08094d6171994fd25"
+	property string V2AffectedFx = "d960b518dd634c5f9c8dc0183f7ad7a6"
+	-- 파이널 어택 피격 그림 (3차 1100002 / 4차~ 1120013 hit/0), 공간의 상처 (400011074 effect·hit/0)
+	property string V2FinalHitFx = "ea8937495a8746c3bb0dd94e4307177b"
+	property string V2AdvFinalHitFx = "7e50e9e144dd4d7eaa0413111a2f10fe"
+	property string V2RiftFx = "0fd0109325b34c28bf41f6d13bac720e"
+	property string V2RiftHitFx = "6e1dc88ad07c4893938a6c4e5d72e54e"
+	property number V2RiftDelay = 0.48
 	-- 콤보 데스폴트: 시전 그림 2번째(공간 가르기, 9aac6392)만 크게. 타격 6회는 그 그림이 하얗게 터지는 순간(1.86초)부터 0.12초 간격
 	property string DeathfaultCastRUID = "fa4309d8353440ca8abe6f6992fb7106"
 	property string DeathfaultSlashRUID = "9aac6392c97e4b7f96899d3b02de1cf9"
@@ -465,7 +479,10 @@ script HeroCombat extends Component
 					casterFx = at:GetCell(i, "CasterFx") or "", fx = at:GetCell(i, "HitFx") or "", fxScale = tonumber(at:GetCell(i, "FxScale")) or 1, mobFx = at:GetCell(i, "MobFx") or "",
 					policy = at:GetCell(i, "HitPolicy") or "per_hit", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
 					hitGap = tonumber(at:GetCell(i, "HitGap")) or 0.12, hitY = tonumber(at:GetCell(i, "HitY")) or 0.45,
-					targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)) }
+					targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)),
+					-- 스킬 V2: 서버 기준 첫 타 시각·타수·타 간격(ms), 시전 연출 시간표 Id
+					hitMs = tonumber(at:GetCell(i, "HitMs")) or 0, hitCount = math.floor(tonumber(at:GetCell(i, "HitCount")) or 0),
+					hitGapMs = tonumber(at:GetCell(i, "HitGapMs")) or 0, fxId = at:GetCell(i, "FxId") or "" }
 			end
 		end
 		local js = _DataService:GetTable("JobSkillTable")
@@ -480,8 +497,10 @@ script HeroCombat extends Component
 				p.chance = num("Chance")
 				p.pct = num("Pct")
 				p.hits = math.max(1, math.floor(num("ProcHits")))
+				if (p.hitCount or 0) > 0 then p.hits = p.hitCount end
 				self._T.skills[id] = { id = id, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Proc", kind = js:GetCell(i, "SkillType") or "",
-					cooldown = num("Cooldown"), buffTime = num("BuffTime"), mana = num("Mana"), comboUse = math.floor(num("ComboUse")), comboBonus = num("ComboBonus"), bleed = math.floor(num("Bleed")), proc = p }
+					cooldown = num("Cooldown"), buffTime = num("BuffTime"), mana = num("Mana"), comboUse = math.floor(num("ComboUse")), comboBonus = num("ComboBonus"), bleed = math.floor(num("Bleed")), proc = p,
+					type1 = js:GetCell(i, "Type1") or "", v1 = num("V1"), type2 = js:GetCell(i, "Type2") or "", v2 = num("V2") }
 			end
 		end
 	end
@@ -671,7 +690,8 @@ script HeroCombat extends Component
 		self._T.pExtra = p.extra or {}
 		self.UltMax = mgr.UltGaugeMax
 		local pcts = {}
-		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "V1", "V2", "V3", "Ult" }) do
+		-- 스킬 V2: 8칸 = 패시브1(고유 패시브) + P2·P3(패시브 스킬) + 액티브1~3 + 하이퍼 + 궁극기
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "P2", "P3", "Ult" }) do
 			local id = self:Alias(mgr, (d.slots or {})[key] or "")
 			if id ~= "" and self._T.skills[id] ~= nil then
 				table.insert(self._T.equip, id)
@@ -1189,7 +1209,8 @@ script HeroCombat extends Component
 			local best = nil
 			for _, sk in ipairs(skills) do
 				-- 콤보 데스폴트: 콤보 5 이상일 때만 시전
-				local comboOk = sk.id ~= "H13" or (not self:Has("H13", 2) and self.Combo >= (sk.comboUse or 5))
+				-- 스킬 V2: 콤보 데스폴트는 콤보가 모자라도 있는 만큼 소모해 시전 (돌파 2는 위의 우선 시전 경로)
+			local comboOk = sk.id ~= "H13" or not self:Has("H13", 2)
 				if sk.trigger == "Skill" and comboOk and (self._T.cd[sk.id] or 0) <= 0 and self.Mana >= self:CastCost(sk) then
 					if best == nil or self:CastCost(sk) > self:CastCost(best) then best = sk end
 				end
@@ -1284,6 +1305,17 @@ script HeroCombat extends Component
 			fx = p.fx or "", fxScale = p.fxScale or 1, policy = p.policy or "per_hit", hitSound = p.hitSound or "", useSound = p.useSound or "",
 			gap = (p.hitGap or 0.12) / (1 + speed / 100), hitY = p.hitY or 0.45, mobFx = p.mobFx or "", targets = p.targets or 1,
 			actionFrames = self:ScaleFrames(p.actionFrames or "", speed), actionTime = (p.actionTime or 0.8) / (1 + speed / 100), casterFx = self:TagScale(p.casterFx or "", p.fxScale or 1) }
+		-- 스킬 V2: 타격 시각·간격은 원본 데이터에서 뽑은 ms (공격 속도 배율을 연출·동작·타격에 똑같이 곱한다)
+		local rate = 1 + speed / 100
+		if (p.hitMs or 0) > 0 then
+			r.hitMs = p.hitMs / rate
+			r.fxId = p.fxId or ""
+			r.fxRate = rate
+			if (p.hitGapMs or 0) > 0 then r.gap = p.hitGapMs / 1000 / rate end
+		elseif (p.fxId or "") ~= "" then
+			r.fxId = p.fxId
+			r.fxRate = rate
+		end
 		-- HitPolicy "random": 시전·히트 이펙트와 소리 목록이 같은 순서로 변형 묶음 (예: 콤보 인스팅트 400011074/075/076).
 		-- 시전마다 하나를 골라 그 번호의 이펙트·소리를 함께 쓴다.
 		if p.policy == "random" then
@@ -1589,8 +1621,8 @@ script HeroCombat extends Component
 			log("[VRF] coma stage=" .. tostring(stage) .. " used=" .. tostring(used))
 		elseif id == "H10" then
 			-- 발할라: 충전을 최대치로 새로 채움. 4-G 보완: 쿨타임은 시전 순간부터 (돌파 5 '1회 발동'만 충전을 다 쓴 뒤부터)
-			local n = self.ValhallaCharges
-			if self:Has(id, 2) then n = self.ValhallaChargesUp end
+			local n = self.V2ValhallaCharges
+			if self:Has(id, 2) then n = math.max(n, self.ValhallaChargesUp) end
 			self._T.cd.H10 = self:Has(id, 5) and 0 or self:Cooldown(sk)
 			if self:Has(id, 5) then
 				-- 돌파 5: 동작 없이 1회 충전, 피해 = 충전량 배수
@@ -1688,11 +1720,12 @@ script HeroCombat extends Component
 			r.summon = true
 		elseif id == "H13" then
 			-- 기본: 가진 콤보를 전부 소비 (시전 조건 콤보 5 이상)
-			local n = self.Combo
+			-- 스킬 V2: 콤보 최대 ComboUse(6)개 소모, 1개당 피해 +ComboBonus(15)% (모자라면 있는 만큼)
+			local n = math.min(self.Combo, math.max(1, sk.comboUse or 6))
 			local used = self:UseCombo(n)
 			if not used then n = 0 end
+			local bonus = n * (sk.comboBonus or 15)
 			-- 돌파 1: 소비한 콤보 1당 피해 +20%
-			local bonus = 0
 			if self:Has(id, 1) then bonus = bonus + n * self.DeathfaultComboPct end
 			-- 돌파 3: 타수 +4
 			local hits = math.max(1, p.hits or 1)
@@ -1742,6 +1775,7 @@ script HeroCombat extends Component
 		elseif id == "H15" then
 			r.instinct = true
 		end
+		self:MakeCastV2(sk, r)
 		-- 재발동: 같은 스킬이 한 번 더 (브랜디쉬·오라 블레이드 기본, 슬래시 블러스트는 돌파 '연쇄 베기')
 		local rc = self:RecastChanceOf(id)
 		if rc > 0 and #r.hitDmg > 0 and _UtilLogic:RandomDouble() * 100 < rc then
@@ -1766,6 +1800,146 @@ script HeroCombat extends Component
 		if sk.kind == "검술" then self:OnSwordCast(r) end
 		log("[VRF] hero cast " .. id .. " hits=" .. tostring(#r.hitDmg) .. " sum=" .. tostring(self:SumHits(r)) .. " combo=" .. tostring(self.Combo) .. " mana=" .. tostring(math.floor(self.Mana)))
 		return r
+	end
+
+	@ExecSpace("ServerOnly")
+	method void MakeCastV2(table sk, table r)
+		-- 스킬 V2 (히어로): 새 칸 구조의 효과 — 액티브1 콤보 확정, 레이징 블로우 강화, 액티브3·하이퍼 콤보 소모, 버프 칸, 파이널 어택·공간의 상처.
+		local id = sk.id
+		local p = sk.proc
+		local mgr = self._T.mgr
+		if id == "H21" then self:AddHits(r, p.hits, p.pct, 0, false) end
+		-- 액티브1: 적중 시 콤보 +1 확정 (나머지는 FinishCasts의 확률 획득)
+		if id == "H01" or id == "H02" or id == "H21" or id == "H08" then
+			if r.comboGain == nil then r.comboGain = 1 end
+		end
+		-- 레이징 블로우: 마지막 타 크리티컬, 콤보 최대치면 115% · 마지막 2타 크리티컬 (돌파 1 '폭풍의 검격'은 그대로)
+		if id == "H08" and not self:Has(id, 1) then
+			local n = #r.hitDmg
+			local full = self.Combo >= self:ComboCap()
+			local pct = p.pct
+			if full then pct = 115 end
+			r.hitDmg = {}
+			r.hitCrit = {}
+			for i = 1, n do
+				local st = self:Strike(id, pct, 0, true, i == n or (full and i == n - 1))
+				table.insert(r.hitDmg, st.dmg)
+				table.insert(r.hitCrit, st.crit)
+			end
+			r.v2Enhanced = full
+			-- 패시브3 콤보 인스팅트: 콤보 8 이상이면 공간의 상처 (생성 + 480ms부터 3타, 간격 60ms)
+			local rk = self._T.skills["H33"]
+			if rk ~= nil and self:Equipped("H33") and self.Combo >= 8 then
+				r.v2Rift = true
+				for k = 1, math.max(1, rk.proc.hits) do
+					local st = self:Strike("H33", rk.proc.pct, 0, true, false)
+					table.insert(r.after, { delay = self.V2RiftDelay + (k - 1) * 0.06, dmg = st.dmg, fx = self.V2RiftHitFx, targets = r.targets })
+				end
+			end
+		end
+		-- 공간의 상처: 레이징 블로우 돌파 1을 얻어 위 분기를 건너뛴 경우에도 콤보 8 이상이면 발동 (2026-11-25 수정)
+		if id == "H08" and self:Has(id, 1) and not r.v2Rift then
+			local rk2 = self._T.skills["H33"]
+			if rk2 ~= nil and self:Equipped("H33") and self.Combo >= 8 then
+				r.v2Rift = true
+				if r.after == nil then r.after = {} end
+				for k = 1, math.max(1, rk2.proc.hits) do
+					local st = self:Strike("H33", rk2.proc.pct, 0, true, false)
+					table.insert(r.after, { delay = self.V2RiftDelay + (k - 1) * 0.06, dmg = st.dmg, fx = self.V2RiftHitFx, targets = r.targets })
+				end
+			end
+		end
+		if r.v2Rift then log("[VRF] v2 rift H33 n=" .. tostring(#(r.after or {}))) end
+		-- 하이퍼 레이지 업라이징: 4타로 (돌파 2 '연쇄 분출'은 그대로)
+		if id == "H09" and not self:Has(id, 2) and #r.hitDmg < p.hits then
+			local b = 0
+			if self:Has(id, 1) then b = 60 end
+			r.hitDmg = {}
+			r.hitCrit = {}
+			self:AddHits(r, p.hits, p.pct, b, false)
+		end
+		-- 액티브3·하이퍼 콤보 소모: 오라 블레이드·인사이징 2개(+25%), 레이지 업라이징 전부(+12%) — 데스폴트는 자기 분기에서
+		if (id == "H07" or id == "H06" or id == "H09") and #r.hitDmg > 0 then
+			local n = math.min(self.Combo, math.max(0, sk.comboUse or 0))
+			local mul = 1
+			if n > 0 and self:UseCombo(n) then
+				mul = 1 + n * (sk.comboBonus or 0) / 100
+				r.consumed = true
+			else
+				n = 0
+			end
+			-- 인사이징: 일반 몬스터(보스 아님) 피해 +30%
+			if id == "H06" and mgr ~= nil and mgr.StageKind ~= "boss" then mul = mul * 1.3 end
+			if mul ~= 1 then
+				for i, d in ipairs(r.hitDmg) do r.hitDmg[i] = math.max(1, math.floor(d * mul + 0.5)) end
+			end
+			r.comboSpent = n
+			log("[VRF] v2 combo spend id=" .. id .. " n=" .. tostring(n) .. " mul=" .. string.format("%.2f", mul))
+		end
+		-- 콤보 데스폴트: 시전 그림은 시간표(SkillFxTable H13)로
+		if id == "H13" then r.casterFx = "" end
+		-- 액티브2 버프 칸
+		if id == "H30" or id == "H22" or id == "H10" then r.buff = true end
+		-- 패시브2 파이널 어택: 액티브·하이퍼 적중 후 확률로 추가타 (원 스킬 마지막 타 + 120ms)
+		local slot = (self._T.slotOf or {})[id]
+		if #r.hitDmg > 0 and (slot == "Main" or slot == "Sub" or slot == "Tech" or slot == "Hyper") then
+			local fid = ""
+			if self:Equipped("H32") then fid = "H32" elseif self:Equipped("H31") then fid = "H31" end
+			local fsk = self._T.skills[fid]
+			if fsk ~= nil and _UtilLogic:RandomDouble() * 100 < fsk.proc.chance then
+				local fx = self.V2FinalHitFx
+				if fid == "H32" then fx = self.V2AdvFinalHitFx end
+				local last = (#r.hitDmg - 1) * (r.gap or 0.06) + 0.12
+				for k = 1, math.max(1, fsk.proc.hits) do
+					local st = self:Strike(fid, fsk.proc.pct, 0, true, false)
+					table.insert(r.after, { delay = last + (k - 1) * 0.09, dmg = st.dmg, fx = fx, targets = 1 })
+				end
+				log("[VRF] v2 final attack " .. fid .. " after " .. id)
+			end
+		end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyBuffV2(table sk, number dur)
+		-- 스킬 V2 버프 칸: 파티 피해 증가(PartyDmg)·받는 피해 감소·크리티컬·흉터. 콤보 최대치에서 시전하면 지속 +50%.
+		local mgr = self._T.mgr
+		local id = sk.id
+		if mgr == nil or (sk.type1 or "") == "" then return end
+		if self.Combo >= self:ComboCap() then
+			dur = dur * 1.5
+			self._T.till[id] = self:Now() + dur
+		end
+		for _, e in ipairs({ { sk.type1, sk.v1 }, { sk.type2, sk.v2 } }) do
+			local key = e[1] or ""
+			local v = e[2] or 0
+			if key == "Scar" then
+				self._T.till.H22v2 = self:Now() + dur
+				self._T.scarPct = v
+			elseif key ~= "" and v > 0 then
+				mgr:AddBuff("v2" .. key .. id, key, v, dur, 0)
+			end
+		end
+		-- 발할라: 콤보 즉시 최대치
+		if id == "H10" then
+			self.Combo = self:ComboCap()
+			self:UpdateOrb()
+		end
+		-- 스피릿 블레이드: 아군 몸에 affected 1회 (버프 적용 시각 = 원본 동작 음수 합 180ms)
+		if id == "H30" then
+			for _, h in ipairs(mgr:Heroes()) do
+				if isvalid(h.Entity) then _EffectService:PlayEffectAttached(self.V2AffectedFx, h.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
+			end
+		end
+		log("[VRF] v2 buff " .. id .. " " .. tostring(sk.type1) .. "=" .. tostring(sk.v1) .. " " .. tostring(sk.type2) .. "=" .. tostring(sk.v2) .. " dur=" .. string.format("%.1f", dur))
+	end
+
+	@ExecSpace("ServerOnly")
+	method void ApplyScar(Entity target)
+		-- 스카링 소드 흉터: 받는 피해 증가(곱연산 '흉터' 칸, 갱신). 새로 걸리거나 끝나 갈 때만 머리 위 그림.
+		local mgr = self._T.mgr
+		if mgr == nil or not isvalid(target) then return end
+		local fresh = mgr:AddVuln(target, "scar", self._T.scarPct or 6, self.V2ScarSec)
+		if fresh then _EffectService:PlayEffectAttached(self.V2ScarMobFx, target, Vector3(0, self._T.monTop or 1, 0), 0, Vector3(1, 1, 1), false) end
 	end
 
 	@ExecSpace("ServerOnly")
@@ -1933,9 +2107,13 @@ script HeroCombat extends Component
 		end
 		-- 재발동으로 다시 쏜 발사체는 타격만
 		if r.hitsOnly then return end
+		-- 스킬 V2: 공간의 상처 (콤보 인스팅트 패시브) — 첫 타 위치에 고정, 타격은 r.after (상처 생성 + 480ms)
+		if r.v2Rift and self:Alive(target) then
+			_EffectService:PlayEffect(self.V2RiftFx, target, self:HitPos(target, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true })
+		end
 		for _, a in ipairs(r.after) do
 			local info = a
-			_TimerService:SetTimerOnce(function() self:ApplyExtra(target, info.dmg, info.fx, false, r.hitSound, r.targets or 1) end, info.delay)
+			_TimerService:SetTimerOnce(function() self:ApplyExtra(target, info.dmg, info.fx, false, r.hitSound, info.targets or r.targets or 1) end, info.delay)
 		end
 		-- 재발동: 이번 타수가 끝난 뒤 같은 스킬 한 번 더
 		if r.recast ~= nil then
@@ -2054,14 +2232,15 @@ script HeroCombat extends Component
 		if h == 1 then r.splashHit = splash end
 		mgr:ApplyRolledDamage(frontDmg)
 		if crit then mgr:OnPlayerCrit() end
+		-- 스킬 V2: 스카링 소드 지속 중 히어로에게 베인 적에게 흉터 (받는 피해 증가, 곱연산 칸)
+		if self:On("H22v2") and self:Alive(target) then self:ApplyScar(target) end
 		for _, e in ipairs(splash) do
 			if not isvalid(e) or e.TransformComponent == nil then continue end
 			if show and r.fx ~= "" then
 				local list = {}
 				for ruid in string.gmatch(r.fx, "[^|]+") do table.insert(list, ruid) end
 				local ruid = list[(h - 1) % #list + 1]
-				local wp = e.TransformComponent.WorldPosition
-				_EffectService:PlayEffect(ruid, e, Vector3(wp.x, wp.y + self._T.monMid, wp.z), 0, Vector3(r.fxScale, r.fxScale, 1), false, { FlipX = true })
+				_EffectService:PlayEffect(ruid, e, self:HitPos(e, 0, 0), 0, Vector3(r.fxScale, r.fxScale, 1), false, { FlipX = true })
 			end
 			mgr:ApplySplashDamage(e, dmg, crit, (h - 1) * self.HitNumGap)
 		end
@@ -2095,11 +2274,7 @@ script HeroCombat extends Component
 			if not isvalid(e) or e.TransformComponent == nil then continue end
 			if first ~= "" then
 				local pos = nil
-				if i == 1 then pos = self:HitPos(e, 0.08, 0.06)
-				else
-					local wp = e.TransformComponent.WorldPosition
-					pos = Vector3(wp.x + 0.08, wp.y + self._T.monMid + 0.06, wp.z)
-				end
+				pos = self:HitPos(e, 0.08, 0.06)
 				_EffectService:PlayEffect(first, e, pos, 0, Vector3(1, 1, 1), false, { FlipX = true })
 			end
 			if i == 1 then
@@ -2130,7 +2305,11 @@ script HeroCombat extends Component
 				local vt = 1
 				local vsk = self._T.skills["H10"]
 				if vsk ~= nil then vt = vsk.proc.targets or 1 end
-				local hit = self:ApplyExtra(target, dmg, "", crit, "d6b71bed8f0d450fb1fe81ba80a05362", vt)
+				-- 스킬 V2: 검격 2타 (생성 + 60ms / 180ms, 원본 attackDelay 120), 두 타 모두 레이징 블로우 hit/0
+				local hit = self:ApplyExtra(target, dmg, self.V2ValhallaHitFx, crit, "d6b71bed8f0d450fb1fe81ba80a05362", vt)
+				_TimerService:SetTimerOnce(function()
+					if self:Alive(target) then self:ApplyExtra(target, dmg, self.V2ValhallaHitFx, crit, "d6b71bed8f0d450fb1fe81ba80a05362", vt) end
+				end, self.V2ValhallaHit2 - self.V2ValhallaHit1)
 				if combo then self:AddCombo(1) end
 				-- 돌파 4: 맞은 몬스터마다 확률로 자상 1중첩
 				if bleed then
@@ -2138,7 +2317,7 @@ script HeroCombat extends Component
 						if _UtilLogic:RandomDouble() * 100 < self.ValhallaBleedChance then self:AddBleedTo(1, "H10", e) end
 					end
 				end
-			end, 0.3)
+			end, self.V2ValhallaHit1)
 		end, delay)
 	end
 
@@ -2156,6 +2335,7 @@ script HeroCombat extends Component
 		if id == "H11" and self:Has(id, 4) then dur = dur + self.EpicDurUp end
 		self._T.till[id] = self:Now() + dur
 		local power = self:BuffPower(id)
+		self:ApplyBuffV2(sk, dur)
 		if id == "H05" then
 			local v = 25 * power
 			mgr:AddBuff("heroH05", "AtkPct", v, dur, 0)
@@ -3079,8 +3259,7 @@ script HeroCombat extends Component
 			mgr:ApplyRolledDamage(d1)
 			for _, e in ipairs(splash) do
 				if not isvalid(e) or e.TransformComponent == nil then continue end
-				local wp = e.TransformComponent.WorldPosition
-				_EffectService:PlayEffect(hitFx, e, Vector3(wp.x, wp.y + self._T.monMid, wp.z), 0, Vector3(1, 1, 1), false, { FlipX = true })
+				_EffectService:PlayEffect(hitFx, e, self:HitPos(e, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = true })
 				mgr:ApplySplashDamage(e, dmg, crit, 0)
 			end
 			mgr:ClearHitSrc(prevSrc)

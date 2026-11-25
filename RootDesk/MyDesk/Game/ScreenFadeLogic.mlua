@@ -149,7 +149,10 @@ script ScreenFadeLogic extends Logic
 		-- 탑 층 모습 준비 확인: 배경 템플릿이 서버 값(FloorBgRUID)과 같고, 바닥 타일셋이 FloorTileSet으로 바뀌었고, 둘 다 미리 불러오기가 끝났는지.
 		if not isvalid(map) then return false end
 		local wantBg = mgr.FloorBgRUID or ""
-		if wantBg ~= "" then
+		if string.sub(wantBg, 1, 7) == "sprite:" then
+			-- 층 확장: 원본 back 합성 배경(FloorBackdrop 스프라이트) — 템플릿 비교 대신 스프라이트 미리 불러오기만 기다린다
+			if not self:PreloadReady("bg", string.sub(wantBg, 8)) then return false end
+		elseif wantBg ~= "" then
 			local bgEnt = map:GetChildByName("Background")
 			if isvalid(bgEnt) and isvalid(bgEnt.BackgroundComponent) then
 				local bc = bgEnt.BackgroundComponent

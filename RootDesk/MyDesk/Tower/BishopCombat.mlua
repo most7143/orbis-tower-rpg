@@ -64,7 +64,25 @@ script BishopCombat extends Component
 	property number HitNumGap = 0.18
 	property number SoundVolume = 0.7
 	-- 연출 리소스 (메이플 스킬 팩)
-	property string ShellRepeatRUID = "ec0acf34d59043f695f43c55222a7b0e"
+	property string ShellRepeatRUID = "7ce7db40234e42028c8f05a8eba57667"
+	-- 스킬 V2: 힐(2차) 원본 클립 effect / affected, 패시브2 홀리 파운틴(3차)·홀리 워터(4차~) 설치 클립, 패시브3 리저렉션 빛
+	property string HealCastRUID = "ce80510e32bf4e948dc43e2d054f8283"
+	property string HealAllyRUID = "5c530ea362ca456ba54e0a9d157ed4ab"
+	property string FountainTileRUID = "276eeaae79544e9ebdedb167de203dd8"
+	property string FountainAllyRUID = "955c1391cc5a4ae2912547b233f1b624"
+	property string WaterTileRUID = "c1af11597bfe4f61ae3bd3c188e8994d"
+	property string WaterAllyRUID = "0cd3e18bc3c44c59b35255bc375732e0"
+	property string ResurrectRUID = "4ca8b06651724cacb2d9a1cf779e6954"
+	-- 패시브2: 성수 소모·기준 HP(%)·재사용(초) / 힐 기준 HP(%)·회복(%) / 매직쉘 4차 막기·지속·사라질 때 회복 / 헤븐즈 도어 부활 HP(%)
+	property integer HolyFountainCost = 3
+	property number HolyFountainLine = 60
+	property number HolyFountainCd = 6
+	property number HealLine = 80
+	property number HealPct = 12
+	property integer ShellBlocksT4 = 5
+	property number ShellTimeT4 = 12
+	property number ShellEndHealPct = 8
+	property number WardPct = 30
 	property string HealAffectedRUID = "ab42514ac987474289817c576332f67a"
 	property string OrbHitRUID = "341a2fd02d0343cfa64da45970aa7cf2"
 
@@ -117,7 +135,10 @@ script BishopCombat extends Component
 				acts[at:GetCell(i, "SkillId")] = { actionFrames = at:GetCell(i, "ActionFrames") or "", actionTime = tonumber(at:GetCell(i, "ActionTime")) or 0.6,
 					casterFx = at:GetCell(i, "CasterFx") or "", fx = at:GetCell(i, "HitFx") or "", fxScale = tonumber(at:GetCell(i, "FxScale")) or 1, mobFx = at:GetCell(i, "MobFx") or "",
 					policy = at:GetCell(i, "HitPolicy") or "per_hit", useSound = at:GetCell(i, "UseSound") or "", hitSound = at:GetCell(i, "HitSound") or "",
-					gap = tonumber(at:GetCell(i, "HitGap")) or 0.12, targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)) }
+					gap = tonumber(at:GetCell(i, "HitGap")) or 0.12, targets = math.max(1, math.floor(tonumber(at:GetCell(i, "Targets")) or 1)),
+					-- 스킬 V2: 서버 기준 첫 타 시각·타수·타 간격(ms), 시전 연출 시간표 Id
+					hitMs = tonumber(at:GetCell(i, "HitMs")) or 0, hitCount = math.floor(tonumber(at:GetCell(i, "HitCount")) or 0),
+					hitGapMs = tonumber(at:GetCell(i, "HitGapMs")) or 0, fxId = at:GetCell(i, "FxId") or "" }
 			end
 		end
 		local js = _DataService:GetTable("JobSkillTable")
@@ -130,7 +151,8 @@ script BishopCombat extends Component
 				local function num(col) return tonumber(js:GetCell(i, col)) or 0 end
 				local a = acts[id] or { actionFrames = "", actionTime = 0.6, casterFx = "", fx = "", fxScale = 1, mobFx = "", policy = "per_hit", useSound = "", hitSound = "", gap = 0.12, targets = 1 }
 				self._T.skills[id] = { id = id, name = js:GetCell(i, "Name"), trigger = js:GetCell(i, "Trigger") or "Skill", cooldown = num("Cooldown"), buffTime = num("BuffTime"),
-					mana = num("Mana"), comboUse = math.floor(num("ComboUse")), comboBonus = num("ComboBonus"), pct = num("Pct"), hits = math.max(1, math.floor(num("ProcHits"))), a = a }
+					mana = num("Mana"), comboUse = math.floor(num("ComboUse")), comboBonus = num("ComboBonus"), pct = num("Pct"), hits = math.max(1, math.floor(num("ProcHits"))), a = a,
+					type1 = js:GetCell(i, "Type1") or "", v1 = num("V1") }
 				self._T.skillCount = self._T.skillCount + 1
 			end
 		end
@@ -160,6 +182,9 @@ script BishopCombat extends Component
 		t.till = {}
 		t.infinity = nil
 		t.mgr = nil
+		-- 스킬 V2: 패시브2 성수 설치 재사용, 패시브3 리저렉션을 쓴 층
+		t.holyCd = 0
+		t.resFloor = -1
 		self.SummonLeft = 0
 		self.Active = false
 		self.Mana = 0
@@ -216,7 +241,7 @@ script BishopCombat extends Component
 				for ruid in string.gmatch(field or "", "[^|]+") do table.insert(list, ruid) end
 			end
 		end
-		for _, ruid in ipairs({ self.ShellRepeatRUID, self.HealAffectedRUID, self.OrbHitRUID }) do table.insert(list, ruid) end
+		for _, ruid in ipairs({ self.ShellRepeatRUID, self.HealAffectedRUID, self.OrbHitRUID, self.HealCastRUID, self.HealAllyRUID, self.FountainTileRUID, self.FountainAllyRUID, self.WaterTileRUID, self.WaterAllyRUID, self.ResurrectRUID }) do table.insert(list, ruid) end
 		local tp = self.Entity:GetComponent("script.TowerPlayer")
 		if tp ~= nil and tp:Uid() ~= "" then self:PreloadFx(table.concat(list, "|"), tp:Uid()) end
 		log("[VRF] bishop run equip=" .. table.concat(self._T.equip, ","))
@@ -264,7 +289,7 @@ script BishopCombat extends Component
 		self._T.pExtra = p.extra or {}
 		self.UltMax = mgr.UltGaugeMax
 		local pcts = {}
-		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "V1", "V2", "V3", "Ult" }) do
+		for _, key in ipairs({ "Main", "Sub", "Tech", "Hyper", "P2", "P3", "Ult" }) do
 			local id = self:Alias(mgr, (d.slots or {})[key] or "")
 			if id ~= "" and self._T.skills[id] ~= nil then
 				table.insert(self._T.equip, id)
@@ -680,6 +705,8 @@ script BishopCombat extends Component
 		local mul = (1 + (starPow + bonusPct + mgr:AccessoryBonus(self.Entity, "SkillDmg")) / 100) * (1 + self:HolyAtkPct() / 100) * (1 + self:DefDownPct() / 100)
 		-- 5-F: 망토 잠재능력 칸 스킬 피해 (기본 공격 id "" 는 제외)
 		mul = mul * (1 + self:SlotPotPct(id) / 100)
+		-- 스킬 V2 패시브3 리저렉션: 비숍 피해 +V1%
+		if self:Equipped("B32") then mul = mul * (1 + (self._T.skills.B32.v1 or 0) / 100) end
 		local crit = _UtilLogic:RandomDouble() * 100 < mgr:ActorCrit(self.Entity) + starCrit
 		if crit then mul = mul * (mgr:ActorCritDmg(self.Entity) + starCrit * 2) / 100 end
 		return { dmg = math.max(1, math.floor(base * mul + 0.5)), crit = crit }
@@ -692,8 +719,21 @@ script BishopCombat extends Component
 		local r = { hero = true, id = sk.id, sk = sk, hitDmg = {}, hitCrit = {}, fx = a.fx, fxScale = a.fxScale, mobFx = a.mobFx, policy = a.policy,
 			hitSound = a.hitSound, useSound = a.useSound, gap = a.gap, targets = a.targets,
 			actionFrames = a.actionFrames, actionTime = a.actionTime * (1 - math.min(0.5, self:Star(sk.id, "StarTempo") / 100)), casterFx = a.casterFx }
+		-- 스킬 V2: 원본에서 뽑은 타격 시각(서버가 직접 타격)·타 간격·시전 연출 시간표 (공격 속도 배율을 같이 곱함)
+		if (a.hitMs or 0) > 0 or (a.fxId or "") ~= "" then
+			local rate = 1 / math.max(0.5, 1 - math.min(0.5, self:Star(sk.id, "StarTempo") / 100))
+			r.fxId = a.fxId or ""
+			r.fxRate = rate
+			if (a.hitMs or 0) > 0 then r.hitMs = a.hitMs / rate end
+			if (a.hitGapMs or 0) > 0 then r.gap = a.hitGapMs / 1000 / rate end
+		end
 		if sk.id == "B05" then
 			r.feather = true
+			return r
+		end
+		-- 스킬 V2: 궁극기 프레이 — 게이지로 시전, 타격 시각(버프 적용)에 파티 피해 증가 + 기존 기도 효과
+		if sk.id == "B12" and self._T.ultId == "B12" then
+			r.prayUlt = true
 			return r
 		end
 		-- 헤븐즈 도어 돌파 3 '맨손의 기적': 캐릭터 동작 없이
@@ -730,6 +770,8 @@ script BishopCombat extends Component
 		end
 		if sk.id == "B10" then
 			r.ward = self.HeavensWardTime
+			-- 스킬 V2: 생명의 축복 지속 = 스킬표 BuffTime (15초)
+			if (sk.buffTime or 0) > 0 then r.ward = sk.buffTime end
 			if self:Has("B10", 1) then bonus = bonus + 60 end
 			if self:Has("B10", 4) then r.resurrect = true end
 		end
@@ -850,7 +892,7 @@ script BishopCombat extends Component
 		local pray = self._T.skills.B12
 		local prayChance = 10
 		if self:Has("B12", 1) then prayChance = 16 end
-		if pray ~= nil and self:Learned("B12") and (self._T.cd.B12 or 0) <= 0 and not self:On("B12") and _UtilLogic:RandomDouble() * 100 < prayChance then
+		if pray ~= nil and self._T.ultId ~= "B12" and self:Learned("B12") and (self._T.cd.B12 or 0) <= 0 and not self:On("B12") and _UtilLogic:RandomDouble() * 100 < prayChance then
 			self._T.cd.B12 = self:Cooldown(pray)
 			self:StartPray(mgr, pray)
 			if (self._T.hidden or {}).B12 then log("[VRF] passive proc job=" .. self.JobId .. " id=B12") end
@@ -993,6 +1035,13 @@ script BishopCombat extends Component
 	method void ApplyCast(Component mgr, table r, Entity target)
 		-- 시전 결과 적용 (TowerPlayer의 타격 순간). 지연 추가타는 잠시 뒤.
 		self._T.mgr = mgr
+		if r.prayUlt then
+			local sk = r.sk
+			self:StartPray(mgr, sk)
+			if (sk.v1 or 0) > 0 then mgr:AddBuff("v2PartyDmgB12", "PartyDmg", sk.v1, sk.buffTime, 0) end
+			log("[VRF] v2 pray ult partyDmg=" .. tostring(sk.v1) .. " dur=" .. tostring(sk.buffTime))
+			return
+		end
 		if (r.delay or 0) > 0 then
 			local info = r
 			local d = r.delay
@@ -1044,7 +1093,7 @@ script BishopCombat extends Component
 			end, 0.35)
 		end
 		if (r.ward or 0) > 0 then
-			mgr:SetDeathWard(r.ward)
+			mgr:SetDeathWardPct(r.ward, self.WardPct)
 			for _, e in ipairs(mgr:Actors()) do
 				if not mgr:IsDown(e) and (r.sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(r.sk.a.mobFx, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
 			end
@@ -1370,6 +1419,7 @@ script BishopCombat extends Component
 			for _, h in ipairs(mgr:Heroes()) do h:AddMana(self.ManaRegen * 0.5 * delta) end
 		end
 		self:TickShell(mgr)
+		self:TickHolyPassive(mgr, delta)
 		self:TickInfinity(mgr, delta)
 		self:TickSummon(mgr, delta)
 		self._T.statusTick = (self._T.statusTick or 0) - delta
@@ -1381,34 +1431,140 @@ script BishopCombat extends Component
 
 	@ExecSpace("ServerOnly")
 	method void TickShell(Component mgr)
-		-- 홀리 매직쉘(Guard): 쓰러지지 않은 파티원 중 체력 비율이 ShellHpLine% 미만인 쪽이 생기면 자동 발동.
+		-- 액티브2 자동 시전. 스킬 V2: 2차 힐(B20) = 아군 HP HealLine% 이하일 때 파티 HealPct% 회복.
+		-- 3차~ 홀리 매직쉘 = 전투 중 보호막 없는 아군이 있으면 파티 전원 회복 + 보호막(3차 3회·8초, 4차 5회·12초, 사라질 때 HP 8%).
 		if not self:Learned("B04") or (self._T.cd.B04 or 0) > 0 or mgr.RunState ~= "FIGHT" then return end
-		local low = mgr:LowestAlly()
-		if not isvalid(low) then return end
-		if mgr:ActorHp(low) >= mgr:ActorMaxHp(low) * self.ShellHpLine / 100 then return end
 		local sk = self._T.skills.B04
+		local alive = {}
+		for _, e in ipairs(mgr:Actors()) do
+			if not mgr:IsDown(e) then table.insert(alive, e) end
+		end
+		if #alive == 0 then return end
+		local isHeal = self:DataId("B04") == "B20"
+		local face = { FlipX = self.Entity.TransformComponent.Scale.x > 0 }
+		if isHeal then
+			local low = mgr:LowestAlly()
+			if not isvalid(low) or mgr:ActorHp(low) > mgr:ActorMaxHp(low) * self.HealLine / 100 then return end
+			self._T.cd.B04 = self:Cooldown(sk)
+			_EffectService:PlayEffectAttached(self.HealCastRUID, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, face)
+			local pct = self.HealPct
+			_TimerService:SetTimerOnce(function()
+				for _, e in ipairs(alive) do
+					if isvalid(e) and not mgr:IsDown(e) then
+						mgr:HealActor(e, mgr:ActorMaxHp(e) * pct / 100)
+						_EffectService:PlayEffectAttached(self.HealAllyRUID, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+					end
+				end
+			end, 0.54)
+			self:Sfx(sk.a.useSound)
+			log("[VRF] v2 bishop heal party pct=" .. tostring(pct) .. " low=" .. low.Name)
+			return
+		end
+		local need = false
+		for _, e in ipairs(alive) do
+			if not mgr:HasBlock(e) then need = true end
+		end
+		if not need then return end
 		self._T.cd.B04 = self:Cooldown(sk)
 		local blocks = self.ShellBlocks
-		if self:Has("B04", 1) then blocks = 5 end
 		local dur = sk.buffTime
-		if self:Has("B04", 2) then dur = 15 end
-		-- 돌파 3 '모두의 방패': 위기의 1명이 아니라 파티 전원
-		local list = { low }
-		if self:Has("B04", 3) then
-			list = {}
+		local enh = (self._T.tier or 0) >= 4
+		if enh then
+			blocks = self.ShellBlocksT4
+			dur = self.ShellTimeT4
+		end
+		if self:Has("B04", 1) then blocks = blocks + 2 end
+		if self:Has("B04", 2) then dur = dur + 5 end
+		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, face) end
+		self:Sfx(sk.a.useSound)
+		-- 원본 적용 시각 300ms (holyshield 음수 합)
+		_TimerService:SetTimerOnce(function()
+			if mgr.RunState ~= "FIGHT" then return end
+			for _, e in ipairs(alive) do
+				if isvalid(e) and not mgr:IsDown(e) then
+					mgr:AddBlockFor(e, blocks, dur, self.ShellRepeatRUID, self)
+					self:HealTo(e, self.ShellHealPct)
+					if enh then
+						local who = e
+						_TimerService:SetTimerOnce(function()
+							if isvalid(who) and mgr:EndBlock(who, self) then self:OnShellEnd(who) end
+						end, dur)
+					end
+				end
+			end
+		end, 0.3)
+		log("[VRF] v2 bishop magic shell n=" .. tostring(#alive) .. " blocks=" .. tostring(blocks) .. " dur=" .. tostring(dur) .. " enh=" .. tostring(enh))
+		if (self._T.hidden or {}).B04 then log("[VRF] passive proc job=" .. self.JobId .. " id=B04") end
+	end
+
+	@ExecSpace("ServerOnly")
+	method void OnShellEnd(Entity e)
+		-- 스킬 V2: 매직쉘 4차 강화 — 보호막이 깨지거나 시간이 다 돼 사라질 때 그 아군 HP 8% 회복.
+		if (self._T.tier or 0) < 4 or not isvalid(e) then return end
+		self:HealTo(e, self.ShellEndHealPct)
+		log("[VRF] v2 bishop shell end heal " .. e.Name)
+	end
+
+	@ExecSpace("ServerOnly")
+	method void TickHolyPassive(Component mgr, number delta)
+		-- 스킬 V2 패시브2: 아군 HP HolyFountainLine% 이하 → 성수 3 소모해 자동 설치 (재사용 6초, 캐릭터 동작 없음).
+		-- 3차 홀리 파운틴(B30): 샘 8초, 1초마다 파티 3%. 4차~ 홀리 워터(B31): 성배, 0.27초에 가장 다친 아군 15% + 5초간 파티 초당 2%.
+		self._T.holyCd = math.max(0, (self._T.holyCd or 0) - delta)
+		local id = ""
+		if self:Equipped("B31") then id = "B31" elseif self:Equipped("B30") then id = "B30" end
+		if id == "" or self._T.holyCd > 0 or mgr.RunState ~= "FIGHT" or self.HolyWater < self.HolyFountainCost then return end
+		local low = mgr:LowestAlly()
+		if not isvalid(low) or mgr:ActorHp(low) > mgr:ActorMaxHp(low) * self.HolyFountainLine / 100 then return end
+		local sk = self._T.skills[id]
+		self._T.holyCd = self.HolyFountainCd
+		self.HolyWater = self.HolyWater - self.HolyFountainCost
+		local wp = low.TransformComponent.WorldPosition
+		local tile = self.FountainTileRUID
+		local ally = self.FountainAllyRUID
+		if id == "B31" then
+			tile = self.WaterTileRUID
+			ally = self.WaterAllyRUID
+		end
+		local dur = math.max(1, sk.buffTime or 5)
+		local serial = _EffectService:PlayEffect(tile, self.Entity, Vector3(wp.x, wp.y, wp.z), 0, Vector3(1, 1, 1), true)
+		_TimerService:SetTimerOnce(function() _EffectService:RemoveEffect(serial) end, dur)
+		local pct = sk.pct
+		local function healAll()
+			if mgr.RunState ~= "FIGHT" then return end
 			for _, e in ipairs(mgr:Actors()) do
-				if not mgr:IsDown(e) then table.insert(list, e) end
+				if not mgr:IsDown(e) then
+					mgr:HealActor(e, mgr:ActorMaxHp(e) * pct / 100)
+					_EffectService:PlayEffectAttached(ally, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+				end
 			end
 		end
-		for _, e in ipairs(list) do
-			mgr:AddBlockFor(e, blocks, dur, self.ShellRepeatRUID, self)
-			self:HealTo(e, self.ShellHealPct)
+		if id == "B31" then
+			local first = sk.v1
+			_TimerService:SetTimerOnce(function()
+				if isvalid(low) and not mgr:IsDown(low) then
+					mgr:HealActor(low, mgr:ActorMaxHp(low) * first / 100)
+					_EffectService:PlayEffectAttached(ally, low, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+				end
+			end, 0.27)
 		end
-		if (sk.a.casterFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.casterFx, self.Entity, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false, { FlipX = self.Entity.TransformComponent.Scale.x > 0 }) end
-		if (sk.a.mobFx or "") ~= "" then _EffectService:PlayEffectAttached(sk.a.mobFx, low, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false) end
-		self:Sfx(sk.a.useSound)
-		log("[VRF] bishop magic shell -> " .. low.Name .. " hp=" .. tostring(mgr:ActorHp(low)))
-		if (self._T.hidden or {}).B04 then log("[VRF] passive proc job=" .. self.JobId .. " id=B04") end
+		for k = 1, math.floor(dur) do
+			_TimerService:SetTimerOnce(healAll, k)
+		end
+		log("[VRF] v2 bishop holy passive " .. id .. " at=" .. low.Name .. " left=" .. tostring(self.HolyWater) .. " dur=" .. tostring(dur))
+	end
+
+	@ExecSpace("ServerOnly")
+	method number ResurrectPct(Component mgr, Entity e)
+		-- 스킬 V2 패시브3 리저렉션(B32): 층마다 1번, 쓰러지려는 아군을 HP V(Pct)%로 되살리고 2초 무적(막기). 쓰면 회복 %, 못 쓰면 0.
+		if not self:Equipped("B32") or not isvalid(e) then return 0 end
+		local fl = mgr.Floor * 1000 + 0
+		if self._T.resFloor == fl then return 0 end
+		self._T.resFloor = fl
+		local sk = self._T.skills.B32
+		_EffectService:PlayEffectAttached(self.ResurrectRUID, e, Vector3(0, 0, 0), 0, Vector3(1, 1, 1), false)
+		mgr:AddBlockFor(e, 99, 2, "", nil)
+		log("[VRF] v2 bishop resurrection " .. e.Name .. " floor=" .. tostring(mgr.Floor) .. " pct=" .. tostring(sk.pct))
+		return sk.pct
 	end
 
 	@ExecSpace("ServerOnly")

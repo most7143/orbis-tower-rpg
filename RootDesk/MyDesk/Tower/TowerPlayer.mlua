@@ -30,6 +30,14 @@ script TowerPlayer extends AttackComponent
 	-- 표창 그림은 원점이 모서리(-3,-3)라 그림이 위·앞으로 치우쳐 그려진다 → 아래·뒤로 보정
 	property string ProjectileLooks = "NightLord:598f25c8b05f4542a36f0ba339191246:0:1:-0.17:-0.17,Bishop:d393500fd23f4537a2dd1f65089fc4a1:0:0.5:0:0"
 	property Vector3 ProjectileOffset = Vector3(0, 0.35, 0)
+	-- 스킬 V2 쉐도우 파트너(나이트로드 패시브2): 켜지면 캐릭터 뒤에 분신이 붙어 공격을 PartnerDelay초 늦게 같은 동작으로 따라한다
+	@Sync
+	property boolean PartnerOn = false
+	property number PartnerDelay = 0.09
+	property Vector3 PartnerOffset = Vector3(-0.22, 0.05, 0)
+	property number PartnerFxAlpha = 0.6
+	-- 원본 4111002 special/<몸 동작> 클립 (MSW 원본 팩 skill/411.img/skill/4111002)
+	property string PartnerClips = "alert:07002b4e493048e9a5f857b02e3ba51c,dead:55b24d5e74074e638770aa5266190028,shoot1:f72d242125aa40f09bce04b9881b1423,shoot2:05969cc0bb60409ebb4c1b4ef059eb0a,shootF:1760108d7e904933a91168b568f91a9d,stabO1:8736f22509854a2a873a12da0bdea57a,stabO2:087ddd3b2038432d8477a9ce1d2a4977,stabOF:087d665af45a4c7994fe652eb0ad16a1,stabT1:df7c1492de864fea852ce8f4aa45de58,stabT2:2fdbfcd7056d45fb80009e1f79d3f404,stabTF:86a6af2b709245e7a6da1ec30ce67ff3,stand1:f4aba8c33f204125a231595006d84b4a,swingO1:edfb3dd0204f49e1a5dfac95520439b8,swingO2:07531c9679d44f7992d7c66871b5f551,swingO3:fc164d4b226e4a22bab992992cdfdd4c,swingOF:1e8698fd912644f28458031b25a62827,swingP1:115a328173d840c2ab3757c6816eae78,swingP2:e2d1a0a592ec485c8af9cf82e8bdf9ca,swingPF:8d3c203a44b4486aae2b19133ca794ab,swingT1:04fec532f4f74ffb9741ebafe2526201,swingT2:af61463a604f437bb9e5c782992622fb,swingT3:15a76a6ee450459a97fe44e3ad9283d0,swingTF:9212c14c063e4d4ca27dc1cb1dfc5edf,walk1:74c3a6b4f33e481ebdd241d1cd92370e"
 
 	method string Uid()
 		-- 이 캐릭터의 클라이언트 통신 대상: 플레이어면 자기 UserId, 동료면 주인 플레이어 UserId.
@@ -45,6 +53,8 @@ script TowerPlayer extends AttackComponent
 		if not isvalid(target) then return end
 		-- 발동한 직업 스킬 중 아바타 액션이 있는 마지막 스킬의 메이플 동작으로 이번 공격 모션을 바꾼다
 		local frames, dur, caster = "", 0, ""
+		-- 스킬 V2: 시전 연출 시간표(SkillFxTable FxId)와 서버 기준 타격 시각(HitMs, 초)
+		local fxId, hitMs, fxRate = "", 0, 1
 		local sounds = {}
 		local extra = {}
 		for _, r in ipairs(procs) do
@@ -52,6 +62,9 @@ script TowerPlayer extends AttackComponent
 				frames = r.actionFrames
 				dur = r.actionTime or 0.8
 				caster = r.casterFx or ""
+				fxId = r.fxId or ""
+				hitMs = r.hitMs or 0
+				fxRate = r.fxRate or 1
 			elseif r.casterFx ~= nil and r.casterFx ~= "" then
 				-- 동작 없이 기본 공격에 동반하는 스킬(콤보 인스팅트 균열 등)의 캐릭터 이펙트도 함께
 				table.insert(extra, r.casterFx)
@@ -64,6 +77,7 @@ script TowerPlayer extends AttackComponent
 			if caster ~= "" then table.insert(extra, 1, caster) end
 			caster = table.concat(extra, "|")
 		end
+		self._T.v2fx = { fxId = fxId, hitMs = hitMs, rate = fxRate }
 		self:QueueHit(target, false, damage, critRate, critDmg, frames, dur, caster)
 		self._T.pending[self.HitSeq].procs = procs
 	end
@@ -90,11 +104,16 @@ script TowerPlayer extends AttackComponent
 		self.HitSeq = self.HitSeq + 1
 		-- 실제 타격 시점이 늦은 동작(앞쪽 음수 프레임이 긴 스킬)은 서버 대기 시간도 그만큼 늘린다
 		local timeout = math.max(self.HitTimeout, self:HitTimeOf(actionFrames) + 0.5)
+		-- 스킬 V2: HitMs가 있으면 서버가 시전 순간부터 그 시각에 직접 타격한다 (클라이언트 왕복 없이 → 시전 연출과 hit가 같은 지연)
+		local v2 = self._T.v2fx or {}
+		self._T.v2fx = nil
+		local serverHit = (v2.hitMs or 0) > 0
+		if serverHit then timeout = v2.hitMs / 1000 end
 		self._T.pending[self.HitSeq] = { seq = self.HitSeq, target = target, miss = miss, damage = damage, critRate = critRate, critDmg = critDmg, t = _UtilLogic.ElapsedSeconds, timer = timeout }
 		local controller = self.Entity.PlayerControllerComponent
 		if isvalid(controller) then controller.LookDirectionX = 1 end
 		if not isvalid(self.Entity.PlayerComponent) and (actionFrames == nil or actionFrames == "") then self:MemberAttackState() end
-		self:PlayAttackMotion(self.HitSeq, actionFrames, actionTime, casterFx, self._T.castSounds or "", self:Uid())
+		self:PlayAttackMotion(self.HitSeq, actionFrames, actionTime, casterFx, self._T.castSounds or "", v2.fxId or "", serverHit, v2.rate or 1, self:Uid())
 		self._T.castSounds = ""
 	end
 
@@ -307,6 +326,75 @@ script TowerPlayer extends AttackComponent
 	end
 
 	@ExecSpace("ClientOnly")
+	method void OnSyncProperty(string name, any value)
+		-- 스킬 V2: 쉐도우 파트너 분신 붙이기/떼기.
+		if name == "PartnerOn" then self:PartnerStand(value == true) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method string PartnerClip(string action)
+		-- 분신 몸 동작 클립 (없으면 stand1).
+		if self._T.partnerMap == nil then
+			self._T.partnerMap = {}
+			for entry in string.gmatch(self.PartnerClips, "[^,]+") do
+				local k, v = string.match(entry, "^([^:]+):(.+)$")
+				if k ~= nil then self._T.partnerMap[k] = v end
+			end
+		end
+		return self._T.partnerMap[action] or self._T.partnerMap.stand1 or ""
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PartnerStand(boolean on)
+		-- 분신 대기 그림(special/stand1 반복)을 캐릭터 뒤에 붙이거나 뗀다.
+		if (self._T.partnerSerial or 0) ~= 0 then
+			_EffectService:RemoveEffect(self._T.partnerSerial)
+			self._T.partnerSerial = 0
+		end
+		if not on or not self.PartnerOn then return end
+		local face = self.Entity.TransformComponent.Scale.x >= 0 and 1 or -1
+		-- 분신은 반투명(PartnerFxAlpha). 순서는 아바타와 같은 OrderInLayer + 로컬 Z +0.001(같은 순서에서는 Z가 큰 쪽이 뒤) → 본인 아바타 뒤가 보장된다.
+		-- Z 없이 같은 순서로 두면 분신이 본인 위에 그려지는 프레임이 있었다(2026-11-25 메이커 확인)
+		local opts = { FlipX = face > 0, Alpha = self.PartnerFxAlpha }
+		local ar = self.Entity.AvatarRendererComponent
+		if isvalid(ar) then
+			opts.SortingLayer = ar.SortingLayer
+			opts.OrderInLayer = ar.OrderInLayer
+		end
+		self._T.partnerSerial = _EffectService:PlayEffectAttached(self:PartnerClip("stand1"), self.Entity, Vector3(self.PartnerOffset.x * face, self.PartnerOffset.y, 0.001), 0, Vector3(1, 1, 1), true, opts)
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PartnerFollow(string actionFrames, number actionTime, string casterFx, string fxId, number fxRate)
+		-- 분신이 같은 공격을 따라한다: 몸 동작(첫 프레임 동작 이름의 special 클립) + 시전 이펙트·시간표를 뒤쪽 위치·반투명으로.
+		if not self.PartnerOn or not isvalid(self.Entity) then return end
+		local face = self.Entity.TransformComponent.Scale.x >= 0 and 1 or -1
+		local action = string.match(actionFrames or "", "^([^:|]+)") or "swingO1"
+		local ar = self.Entity.AvatarRendererComponent
+		local opts = { FlipX = face > 0, Alpha = self.PartnerFxAlpha }
+		if isvalid(ar) then
+			opts.SortingLayer = ar.SortingLayer
+			opts.OrderInLayer = ar.OrderInLayer
+		end
+		local off = Vector3(self.PartnerOffset.x * face, self.PartnerOffset.y, 0.001)
+		if (self._T.partnerSerial or 0) ~= 0 then
+			_EffectService:RemoveEffect(self._T.partnerSerial)
+			self._T.partnerSerial = 0
+		end
+		_EffectService:PlayEffectAttached(self:PartnerClip(action), self.Entity, off, 0, Vector3(1, 1, 1), false, opts)
+		self._T.partnerSeq = (self._T.partnerSeq or 0) + 1
+		local mySeq = self._T.partnerSeq
+		_TimerService:SetTimerOnce(function() if self._T.partnerSeq == mySeq then self:PartnerStand(true) end end, math.max(0.3, actionTime or 0.4))
+		for entry in string.gmatch(casterFx or "", "[^|]+") do
+			local ruid = string.match(entry, "^([^@]+)")
+			_EffectService:PlayEffectAttached(ruid, self.Entity, off, 0, Vector3(1, 1, 1), false, { FlipX = face > 0, Alpha = self.PartnerFxAlpha })
+		end
+		if fxId ~= nil and fxId ~= "" then self:PlaySkillFx(fxId, fxRate or 1, { dx = self.PartnerOffset.x, dy = self.PartnerOffset.y, alpha = self.PartnerFxAlpha }) end
+		self._T.pfLog = (self._T.pfLog or 0) + 1
+		if self._T.pfLog <= 4 then log("[VRF] v2 partner follow action=" .. action .. " fx=" .. tostring(fxId)) end
+	end
+
+	@ExecSpace("ClientOnly")
 	method void FaceRight()
 		-- 아바타 방향을 오른쪽으로 (엔티티 반전 대신 사용해야 무기 잔상·이펙트 방향이 함께 맞는다).
 		if isvalid(self.Entity.PlayerComponent) then return end
@@ -386,7 +474,7 @@ script TowerPlayer extends AttackComponent
 	end
 
 	@ExecSpace("Client")
-	method void PlayAttackMotion(integer seq, string actionFrames, number actionTime, string casterFx, string castSounds)
+	method void PlayAttackMotion(integer seq, string actionFrames, number actionTime, string casterFx, string castSounds, string fxId, boolean serverHit, number fxRate)
 		-- 아바타 공격 모션은 플레이어 소유 클라이언트에서 상태를 바꿔 재생한다 (이때 엔진 무기 공격 소리도 재생).
 		-- 직업 스킬이 발동하면 기본 공격 대신 그 스킬의 메이플 동작 프레임 순서를 한 번 재생한다.
 		-- 바로 그 순간(또는 HitSyncDelay 뒤)에 서버에 타격 적용을 요청한다.
@@ -414,6 +502,15 @@ script TowerPlayer extends AttackComponent
 			self:SetBodySelector(true)
 			sc:ChangeState("ATTACK")
 		end
+		-- 스킬 V2: 시전 연출 시간표 재생 (받은 순간 = 0ms)
+		if fxId ~= nil and fxId ~= "" then self:PlaySkillFx(fxId, fxRate or 1, nil) end
+		-- 스킬 V2 쉐도우 파트너: PartnerDelay초 뒤 같은 동작
+		if self.PartnerOn then
+			local af, at, cf, fi, fr = actionFrames, actionTime, casterFx, fxId, fxRate
+			_TimerService:SetTimerOnce(function() self:PartnerFollow(af, at, cf, fi, fr) end, self.PartnerDelay)
+		end
+		-- 서버가 HitMs에 직접 타격하는 스킬은 요청을 보내지 않는다
+		if serverHit then return end
 		-- 타격 시점: 메이플 동작 데이터에서 음수 프레임이 끝나고 양수로 바뀌는 순간 (없으면 HitSyncDelay)
 		local delay = self.HitSyncDelay
 		local ht = self:HitTimeOf(actionFrames)
@@ -423,6 +520,124 @@ script TowerPlayer extends AttackComponent
 		else
 			self:RequestHit(seq)
 		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method table SkillFxRows(string fxId)
+		-- 스킬 V2: SkillFxTable에서 이 FxId의 시간표 행 목록 (처음 한 번 읽어 둔다).
+		if self._T.fxRows == nil then
+			self._T.fxRows = {}
+			local t = _DataService:GetTable("SkillFxTable")
+			if t ~= nil then
+				for i = 1, t:GetRowCount() do
+					local id = t:GetCell(i, "FxId") or ""
+					if id ~= "" then
+						local ox, oy = string.match(t:GetCell(i, "Offset") or "", "^%s*(-?[%d%.]*)%s*,%s*(-?[%d%.]*)")
+						local row = { at = (tonumber(t:GetCell(i, "AtMs")) or 0) / 1000, kind = t:GetCell(i, "Kind") or "cast", clip = t:GetCell(i, "Clip") or "",
+							layer = t:GetCell(i, "Layer") or "front", flip = t:GetCell(i, "Flip") or "face", ox = (tonumber(ox) or 0) / 100, oy = (tonumber(oy) or 0) / 100,
+							scale = tonumber(t:GetCell(i, "Scale")) or 1, dur = (tonumber(t:GetCell(i, "DurMs")) or 0) / 1000, loop = t:GetCell(i, "LoopClip") or "" }
+						if self._T.fxRows[id] == nil then self._T.fxRows[id] = {} end
+						table.insert(self._T.fxRows[id], row)
+					end
+				end
+			end
+		end
+		return self._T.fxRows[fxId] or {}
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PlaySkillFx(string fxId, number rate, table shift)
+		-- 스킬 V2: 시전 연출 시간표 재생. 받은 순간 = 0ms, rate(공격 속도 배율)만큼 시각을 줄인다.
+		-- Kind: cast(캐릭터에 붙음) · castFix(시전 위치 고정) · attachLoop(붙는 반복, DurMs 뒤 제거) · shake(카메라 흔들기, Scale=세기)
+		local rows = self:SkillFxRows(fxId)
+		if #rows == 0 then return end
+		local r0 = math.max(0.1, rate or 1)
+		for _, row in ipairs(rows) do
+			local ev = row
+			if ev.at <= 0 then
+				self:PlayFxRow(ev, r0, shift)
+			else
+				_TimerService:SetTimerOnce(function() if isvalid(self.Entity) then self:PlayFxRow(ev, r0, shift) end end, ev.at / r0)
+			end
+		end
+		self._T.fxLog = (self._T.fxLog or 0) + 1
+		if self._T.fxLog <= 12 then log("[VRF] skill fx " .. fxId .. " rows=" .. tostring(#rows) .. " rate=" .. string.format("%.2f", r0)) end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void PlayFxRow(table ev, number rate, table shift)
+		-- 시간표 한 줄 재생 (원본 그림은 왼쪽 기준 → 오른쪽을 보면 FlipX). shift = 분신용 추가 위치·투명도 {dx, dy, alpha} (없으면 nil).
+		local face = self.Entity.TransformComponent.Scale.x
+		if face == 0 then face = 1 end
+		local flipX = face > 0
+		if ev.flip == "none" then flipX = false end
+		local opts = { FlipX = flipX, PlayRate = rate }
+		local ar = self.Entity.AvatarRendererComponent
+		if isvalid(ar) then
+			opts.SortingLayer = ar.SortingLayer
+			if ev.layer == "back" then opts.OrderInLayer = ar.OrderInLayer - 2 else opts.OrderInLayer = ar.OrderInLayer + 2 end
+		end
+		local sc = Vector3(ev.scale, ev.scale, 1)
+		local dx = ev.ox
+		local dy = ev.oy
+		if shift ~= nil then
+			dx = dx + (shift.dx or 0)
+			dy = dy + (shift.dy or 0)
+			opts.Alpha = shift.alpha or 1
+			if isvalid(ar) then opts.OrderInLayer = ar.OrderInLayer - 1 end
+			if ev.kind == "shake" then return end
+		end
+		if face < 0 then dx = -dx end
+		if ev.kind == "dash" then
+			-- 스킬 V2 돌진(바이퍼): 아바타 몸만 앞으로 Offset x만큼 DurMs 동안 나갔다가 0.3초 안에 원위치 (편성 위치는 그대로)
+			self:DashVisual(dx, math.max(0.05, ev.dur / rate), 0.3)
+			return
+		end
+		if ev.kind == "shake" then
+			local cam = _CameraService:GetCurrentCameraComponent()
+			if isvalid(cam) then cam:ShakeCamera(ev.scale, math.max(0.1, ev.dur)) end
+		elseif ev.kind == "castFix" then
+			local wp = self.Entity.TransformComponent.WorldPosition
+			_EffectService:PlayEffect(ev.clip, self.Entity, Vector3(wp.x + dx, wp.y + dy, wp.z), 0, sc, false, opts)
+		elseif ev.kind == "attachLoop" then
+			local serial = _EffectService:PlayEffectAttached(ev.clip, self.Entity, Vector3(dx, dy, 0), 0, sc, true, opts)
+			if ev.dur > 0 then _TimerService:SetTimerOnce(function() _EffectService:RemoveEffect(serial) end, ev.dur) end
+		else
+			_EffectService:PlayEffectAttached(ev.clip, self.Entity, Vector3(dx, dy, 0), 0, sc, false, opts)
+		end
+	end
+
+	@ExecSpace("ClientOnly")
+	method void DashVisual(number dist, number outSec, number backSec)
+		-- 아바타 몸 엔티티의 로컬 위치를 dist(월드 단위)까지 outSec 동안 밀었다가 backSec 동안 0으로 되돌린다 (보이는 것만, 판정·위치 영향 없음).
+		local ar = self.Entity.AvatarRendererComponent
+		if not isvalid(ar) then return end
+		local body = ar:GetBodyEntity()
+		if not isvalid(body) then return end
+		-- 오른쪽을 보면 아바타 루트(몸의 부모)가 Scale.x = -1로 뒤집혀 몸의 로컬 +x가 화면 왼쪽이 된다 → 부모 방향을 곱해 화면상 앞(dist 부호)으로 나가게 한다
+		local par = body.Parent
+		if isvalid(par) and par.TransformComponent ~= nil and par.TransformComponent.Scale.x < 0 then dist = -dist end
+		if self._T.dashTimer ~= nil then _TimerService:ClearTimer(self._T.dashTimer) end
+		local base = self._T.dashBase or body.TransformComponent.Position
+		self._T.dashBase = base
+		local t0 = _UtilLogic.ElapsedSeconds
+		self._T.dashTimer = _TimerService:SetTimerRepeat(function()
+			if not isvalid(body) then return end
+			local t = _UtilLogic.ElapsedSeconds - t0
+			local x = 0
+			if t < outSec then
+				x = dist * (t / outSec)
+			elseif t < outSec + backSec then
+				x = dist * (1 - (t - outSec) / backSec)
+			else
+				body.TransformComponent.Position = base
+				_TimerService:ClearTimer(self._T.dashTimer)
+				self._T.dashTimer = nil
+				return
+			end
+			body.TransformComponent.Position = Vector3(base.x + x, base.y, base.z)
+		end, 1 / 60)
+		log("[VRF] v2 dash visual dist=" .. string.format("%.2f", dist) .. " out=" .. string.format("%.2f", outSec))
 	end
 
 	method number HitTimeOf(string frames)

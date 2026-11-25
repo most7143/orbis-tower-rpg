@@ -75,9 +75,9 @@ script LobbyUILogic extends Logic
 			local row = self.floorList:GetChildByName("Floor" .. tostring(i))
 			if isvalid(row) then self:Bind(row.ButtonComponent, function() self:SelectFloor(index) end) end
 		end
-		self:Bind(self.btnGrowth, function() _GrowthUILogic:Open() end)
-		self:Bind(self.btnGacha, function() _CharGachaUILogic:Open() end)
-		self:Bind(self.btnAchieve, function() _CharacterUILogic:Open() end)
+		self:Bind(self.btnGrowth, function() _MainNavUILogic:SelectTab(3) end)
+		self:Bind(self.btnGacha, function() _MainNavUILogic:SelectTab(4) end)
+		self:Bind(self.btnAchieve, function() _MainNavUILogic:SelectTab(2) end)
 		self:Bind(self.btnSkillTest, function() self:OnSkillTest() end)
 		-- 버튼 상태 연출 (호버·눌림·비활성: 글자색, 눌림 시 아이콘·글자 2px 아래로)
 		self._T.menu = {}
